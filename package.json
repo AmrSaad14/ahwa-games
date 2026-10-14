@@ -1,0 +1,45 @@
+{
+  "name": "ahwa-domino",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Online multiplayer domino, tawla, chess and ludo at a 3D coffeehouse table. Node game server + web/Android/iOS client.",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev:server": "tsx watch server/index.ts",
+    "dev:client": "node scripts/build-client.mjs --watch",
+    "build": "node scripts/build-client.mjs && node scripts/build-server.mjs",
+    "build:client": "node scripts/build-client.mjs",
+    "build:server": "node scripts/build-server.mjs",
+    "start": "node --no-warnings=ExperimentalWarning dist/server.cjs",
+    "test": "tsx --test --test-concurrency=1 tests/engine.test.ts tests/games.test.ts tests/server.test.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "cap:android": "npm run build:client && cap sync android && cap open android",
+    "cap:ios": "npm run build:client && cap sync ios && cap open ios",
+    "cap:assets": "capacitor-assets generate --assetPath resources",
+    "cap:permissions": "node scripts/native-permissions.mjs",
+    "howto": "node scripts/record-howto.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/app": "^6.0.1",
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^6.1.2",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/haptics": "^6.0.1",
+    "@capacitor/ios": "^6.1.2",
+    "@capacitor/share": "^6.0.2",
+    "@types/node": "^22.9.0",
+    "@types/three": "^0.160.0",
+    "@types/ws": "^8.5.12",
+    "esbuild": "^0.24.0",
+    "three": "0.160.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

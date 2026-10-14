@@ -1,0 +1,416 @@
+import crypto from 'node:crypto';
+import { GAMES, GameId, MODES, MODE_PLAYERS, Mode, defaultTarget, gameOf, targetOptions, teamOf } from '../shared/engine';
+import type { C2S, Emote, IceServer, S2C } from '../shared/protocol';
+import { ECONOMY, giftByKind } from '../shared/gifts';
+import { EMOTES } from '../shared/protocol';
+import { Table } from '../shared/table';
+import { BoardTable } from '../shared/boardtable';
+import type { BoardAction } from '../shared/games/defs';
+
+/** Any game table: domino has its own; chess, tawla and ludo share the board-game table. */
+type Room = Table | BoardTable;
+import { Limiter, Tokens, checkPassword, hashPassword } from './auth';
+import { Store, UserRow } from './db';
+
+export interface Conn {
+  send(msg: S2C): void;
+  close(code: number, reason: string): void;
+  ip: string;
+}
+
+interface Session { conn: Conn; uid: string | null; msgs: Limiter }
+interface QEntry { uid: string; since: number }
+
+export interface HubOptions {
+  turnMs: number; botFillMs: number; nextRoundMs: number; botDelay: [number, number]; lobbyAfterMatchMs: number; msgsPer5s?: number;
+  stunUrls?: string[]; turnUrls?: string[]; turnSecret?: string;
+  autoMoveMs?: number; chessClockMs?: number;
+}
+
+const CODE_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
+const cleanName = (s: unknown) => String(s ?? '').replace(/[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩<>]/g, '').trim().slice(0, 14);
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/;
+
+/** Everything live on the server: who is connected, the matchmaking queues and every table. */
+export class Hub {
+  private sessions = new Set<Session>();
+  private byUser = new Map<string, Session>();
+  private tables = new Map<string, Room>();
+  private byCode = new Map<string, Room>();
+  private userTable = new Map<string, Room>();
+  private queues = Object.fromEntries(MODES.map(m => [m, [] as QEntry[]])) as Record<Mode, QEntry[]>;
+  private emptySince = new Map<string, number>();
+  private authLimiter = new Limiter(10, 60_000);
+  private giftLimiter = new Limiter(1, 1200);
+  private reportLimiter = new Limiter(10, 60 * 60_000);
+  private ticker: ReturnType<typeof setInterval>;
+
+  constructor(private store: Store, private tokens: Tokens, private opts: HubOptions) {
+    this.ticker = setInterval(() => { this.matchmake(); this.sweep(); }, 1000);
+  }
+
+  stop() { clearInterval(this.ticker); this.tables.forEach(t => t.close()); }
+
+  stats() { return { connections: this.sessions.size, tables: this.tables.size, queued: MODES.map(m => this.queues[m].length).reduce((a, b) => a + b, 0) }; }
+
+  /* ---------------- connections ---------------- */
+
+  connect(conn: Conn): Session {
+    const s: Session = { conn, uid: null, msgs: new Limiter(this.opts.msgsPer5s ?? 60, 5000) };
+    this.sessions.add(s);
+    return s;
+  }
+
+  disconnect(s: Session) {
+    this.sessions.delete(s);
+    if (!s.uid || this.byUser.get(s.uid) !== s) return;
+    this.byUser.delete(s.uid);
+    this.dequeue(s.uid);
+    this.userTable.get(s.uid)?.setOnline(s.uid, false);
+  }
+
+  handle(s: Session, raw: string) {
+    if (!s.msgs.allow('m')) { s.conn.close(4008, 'rate_limited'); return; }
+    let m: C2S;
+    try { m = JSON.parse(raw); } catch { return; }
+    if (!m || typeof m !== 'object' || typeof (m as { t?: unknown }).t !== 'string') return;
+    if (m.t === 'ping') return s.conn.send({ t: 'pong', c: Number(m.c) || 0, now: Date.now() });
+    if (m.t === 'hello') return this.hello(s, m.token);
+    if (!s.uid) return s.conn.send({ t: 'err', code: 'not_ready' });
+    const uid = s.uid;
+    const err = (code: string) => s.conn.send({ t: 'err', code });
+    const table = this.userTable.get(uid);
+    switch (m.t) {
+      case 'profile': {
+        const u = this.store.get(uid)!;
+        const name = m.name !== undefined ? cleanName(m.name) || u.name : u.name;
+        const ch = m.ch !== undefined && Number.isInteger(m.ch) && m.ch >= 0 && m.ch <= 5 ? m.ch : u.ch;
+        this.store.setProfile(uid, name, ch);
+        if (table && table.phase === 'lobby') table.join({ uid, name, ch, bot: false, rating: this.store.ratingOf(uid, gameOf(table.mode)) });
+        return this.sendUser(uid);
+      }
+      case 'register': {
+        if (!this.authLimiter.allow(s.conn.ip)) return err('slow_down');
+        const email = String(m.email || '').trim().toLowerCase(), pw = String(m.pw || '');
+        if (!EMAIL_RE.test(email)) return err('bad_email');
+        if (pw.length < 6 || pw.length > 128) return err('weak_password');
+        const u = this.store.get(uid)!;
+        if (u.email) return err('already_registered');
+        if (this.store.byEmail(email)) return err('email_taken');
+        this.store.setCredentials(uid, email, hashPassword(pw));
+        return this.sendUser(uid);
+      }
+      case 'login': {
+        if (!this.authLimiter.allow(s.conn.ip)) return err('slow_down');
+        const u = this.store.byEmail(String(m.email || '').trim().toLowerCase());
+        if (!u || !checkPassword(String(m.pw || ''), u.pw)) return err('bad_login');
+        this.detach(s);
+        return this.attach(s, u);
+      }
+      case 'logout': {
+        this.detach(s);
+        return this.attach(s, this.newGuest());
+      }
+      case 'delete': {
+        this.detach(s);
+        this.store.deleteUser(uid);
+        return this.attach(s, this.newGuest());
+      }
+      case 'quick': {
+        if (!MODES.includes(m.mode)) return err('bad_mode');
+        if (table) this.leaveTable(uid);
+        this.dequeue(uid);
+        this.queues[m.mode].push({ uid, since: Date.now() });
+        this.sendQueue(m.mode);
+        return this.matchmake();
+      }
+      case 'cancel': this.dequeue(uid); return s.conn.send({ t: 'queue', mode: null, count: 0, need: 0, botsAt: 0, now: Date.now() });
+      case 'create': {
+        if (!MODES.includes(m.mode)) return err('bad_mode');
+        const target = targetOptions(m.mode).includes(m.target) ? m.target : defaultTarget(m.mode);
+        this.dequeue(uid);
+        if (table) this.leaveTable(uid);
+        const t = this.newTable(m.mode, target, true);
+        const u = this.store.get(uid)!;
+        t.join({ uid, name: u.name, ch: u.ch, bot: false, rating: this.store.ratingOf(uid, gameOf(m.mode)) });
+        this.userTable.set(uid, t);
+        return this.pushView(t, uid);
+      }
+      case 'join': {
+        const code = String(m.code || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const t = this.byCode.get(code);
+        if (!t || t.closed) return err('room_not_found');
+        if (table && table !== t) this.leaveTable(uid);
+        this.dequeue(uid);
+        const u = this.store.get(uid)!;
+        const r = t.join({ uid, name: u.name, ch: u.ch, bot: false, rating: this.store.ratingOf(uid, gameOf(t.mode)) });
+        if (typeof r === 'string') return err(r);
+        this.userTable.set(uid, t);
+        return this.pushView(t, uid);
+      }
+      case 'leave': {
+        this.dequeue(uid);
+        if (table) this.leaveTable(uid);
+        return s.conn.send({ t: 'left' });
+      }
+      case 'setup': {
+        if (!table) return err('no_table');
+        const mode = m.mode && MODES.includes(m.mode) ? m.mode : undefined;
+        if (mode && gameOf(mode) !== gameOf(table.mode)) return err('bad_mode');
+        const target = m.target !== undefined && targetOptions(mode ?? table.mode).includes(m.target) ? m.target : undefined;
+        const e = table.setup(uid, mode, target); return e ? err(e) : undefined;
+      }
+      case 'bot': { if (!table) return err('no_table'); const e = table.addBot(uid, Number(m.seat)); return e ? err(e) : undefined; }
+      case 'kick': {
+        if (!table) return err('no_table');
+        const victim = table.seats[Number(m.seat)];
+        const e = table.kick(uid, Number(m.seat));
+        if (e) return err(e);
+        if (victim && !victim.bot) { this.userTable.delete(victim.uid); this.byUser.get(victim.uid)?.conn.send({ t: 'left' }); }
+        return;
+      }
+      case 'start': { if (!table) return err('no_table'); const e = table.start(uid); return e ? err(e) : undefined; }
+      case 'act': {
+        if (!table) return err('no_table');
+        const a = m.a as Record<string, unknown>;
+        if (!a || typeof a !== 'object' || typeof a.t !== 'string') return err('bad_action');
+        let e: string | null;
+        if (table instanceof Table) {
+          e = table.act(uid, a.t === 'play' ? { t: 'play', id: Number(a.id), e: a.e as 'L' | 'R' | 'C' | undefined } : a.t === 'draw' ? { t: 'draw' } : { t: 'pass' });
+        } else {
+          // keep only the fields each kind of move uses, as numbers
+          const n = (x: unknown) => Number(x);
+          const clean: BoardAction | null =
+            a.t === 'move' ? { t: 'move', from: n(a.from), to: n(a.to), promo: (['q', 'r', 'b', 'n'] as const).find(p => p === a.promo) } :
+            a.t === 'step' ? { t: 'step', from: n(a.from), to: n(a.to) } :
+            a.t === 'pawn' ? { t: 'pawn', i: n(a.i) } : a.t === 'roll' ? { t: 'roll' } : a.t === 'pass' ? { t: 'pass' } : null;
+          e = clean ? table.act(uid, clean) : 'bad_action';
+        }
+        if (e) { err(e); this.pushView(table, uid); }
+        return;
+      }
+      case 'emote': { if (table && EMOTES.includes(m.k)) table.emote(uid, m.k); return; }
+      case 'lb': {
+        const game: GameId = m.game && GAMES.includes(m.game) ? m.game : 'domino';
+        const lb = this.store.leaderboard(uid, game);
+        return s.conn.send({ t: 'lb', game, rows: lb.rows, me: lb.me });
+      }
+      case 'gift': {
+        if (!table) return err('no_table');
+        const from = table.seatOf(uid), to = Number(m.to), target = table.seats[to];
+        const g = giftByKind(String(m.k));
+        if (!g || from < 0 || !target || to === from) return err('bad_gift');
+        if (target.bot) return err('gift_bot');
+        if (!this.giftLimiter.allow(uid)) return err('slow_down');
+        if (!this.store.sendGift(uid, target.uid, g.k, g.price)) return err('not_enough_coins');
+        for (const p of table.seats) if (p && !p.bot && this.userTable.get(p.uid) === table) this.byUser.get(p.uid)?.conn.send({ t: 'gift', from, to, k: g.k });
+        this.sendUser(uid); this.sendUser(target.uid);
+        return;
+      }
+      case 'voice': { table?.setMic(uid, !!m.on); return; }
+      case 'rtc': {
+        // pass an audio offer/answer to one other person at the same table who is in voice chat
+        if (!table || !m.data || typeof m.data.sdp !== 'string' || m.data.sdp.length > 20_000) return;
+        const from = table.seatOf(uid), target = table.seats[Number(m.to)];
+        if (from < 0 || !target || target.bot || !target.mic || !table.seats[from]?.mic) return;
+        if (this.userTable.get(target.uid) !== table) return;
+        const type = m.data.type === 'answer' ? 'answer' : 'offer';
+        this.byUser.get(target.uid)?.conn.send({ t: 'rtc', from, data: { type, sdp: m.data.sdp, table: table.id } });
+        return;
+      }
+      case 'report': {
+        if (!table) return err('no_table');
+        const about = table.seats[Number(m.seat)];
+        if (!about || about.bot || about.uid === uid) return err('bad_report');
+        if (!this.reportLimiter.allow(uid)) return err('slow_down');
+        this.store.report(uid, about.uid, String(m.reason || '').slice(0, 40), table.id);
+        return;
+      }
+    }
+  }
+
+  /* ---------------- identity ---------------- */
+
+  private newGuest(): UserRow {
+    return this.store.createGuest('Player' + Math.floor(1000 + Math.random() * 9000), Math.floor(Math.random() * 5));
+  }
+
+  private hello(s: Session, token: unknown) {
+    if (s.uid) return;
+    const id = this.tokens.verify(token);
+    const u = (id && this.store.get(id)) || this.newGuest();
+    this.attach(s, u);
+  }
+
+  private attach(s: Session, u: UserRow) {
+    const prev = this.byUser.get(u.id);
+    if (prev && prev !== s) { prev.uid = null; prev.conn.close(4001, 'replaced'); }
+    s.uid = u.id;
+    this.byUser.set(u.id, s);
+    this.store.touch(u.id);
+    const bonus = this.store.claimDaily(u.id);
+    const fresh = this.store.get(u.id) ?? u;
+    s.conn.send({ t: 'welcome', user: this.store.publicUser(fresh), token: this.tokens.issue(u.id), now: Date.now(), ice: this.iceFor(u.id) });
+    if (bonus) s.conn.send({ t: 'bonus', coins: bonus });
+    const t = this.userTable.get(u.id);
+    if (t && !t.closed) { t.setOnline(u.id, true); this.pushView(t, u.id); }
+  }
+
+  private detach(s: Session) {
+    if (!s.uid) return;
+    const uid = s.uid;
+    this.dequeue(uid);
+    if (this.userTable.has(uid)) this.leaveTable(uid);
+    this.byUser.delete(uid);
+    s.uid = null;
+  }
+
+  /** STUN servers plus short-lived TURN credentials (coturn "use-auth-secret" scheme). */
+  private iceFor(uid: string): IceServer[] {
+    const out: IceServer[] = [];
+    if (this.opts.stunUrls?.length) out.push({ urls: this.opts.stunUrls });
+    if (this.opts.turnUrls?.length && this.opts.turnSecret) {
+      const username = `${Math.floor(Date.now() / 1000) + 24 * 3600}:${uid}`;
+      const credential = crypto.createHmac('sha1', this.opts.turnSecret).update(username).digest('base64');
+      out.push({ urls: this.opts.turnUrls, username, credential });
+    }
+    return out;
+  }
+
+  private sendUser(uid: string) {
+    const u = this.store.get(uid); const s = this.byUser.get(uid);
+    if (u && s) s.conn.send({ t: 'user', user: this.store.publicUser(u) });
+  }
+
+  /* ---------------- tables ---------------- */
+
+  private newTable(mode: Mode, target: number, isPrivate: boolean): Room {
+    let code: string | null = null;
+    if (isPrivate) {
+      do { code = Array.from({ length: 5 }, () => CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)]).join(''); } while (this.byCode.has(code));
+    }
+    const opts = {
+      id: crypto.randomUUID(), code, mode, target, private: isPrivate,
+      turnMs: this.opts.turnMs, nextRoundMs: this.opts.nextRoundMs, botDelay: this.opts.botDelay, offlineGraceMs: 8000, lobbyAfterMatchMs: this.opts.lobbyAfterMatchMs,
+      autoMoveMs: this.opts.autoMoveMs, chessClockMs: this.opts.chessClockMs,
+    };
+    const hooks = {
+      changed: (tb: Room) => this.broadcast(tb),
+      emote: (tb: Room, seat: number, k: Emote) => this.emote(tb, seat, k),
+      matchEnd: (tb: Room, res: { team: number; scores: number[]; deltas: (number | null)[] }) => this.onMatchEnd(tb, res),
+      closed: (tb: Room) => this.onClosed(tb),
+    };
+    const t: Room = gameOf(mode) === 'domino' ? new Table(opts, hooks) : new BoardTable(opts, hooks);
+    this.tables.set(t.id, t);
+    if (code) this.byCode.set(code, t);
+    return t;
+  }
+
+  private leaveTable(uid: string) {
+    const t = this.userTable.get(uid);
+    this.userTable.delete(uid);
+    t?.leave(uid);
+  }
+
+  private pushView(t: Room, uid: string) {
+    const s = this.byUser.get(uid);
+    if (s && this.userTable.get(uid) === t) s.conn.send({ t: 'table', view: t.view(uid) });
+  }
+
+  private broadcast(t: Room) {
+    for (const seat of t.seats) if (seat && !seat.bot) this.pushView(t, seat.uid);
+  }
+
+  private emote(t: Room, seat: number, k: Emote) {
+    for (const s of t.seats) if (s && !s.bot && this.userTable.get(s.uid) === t) this.byUser.get(s.uid)?.conn.send({ t: 'emote', seat, k });
+  }
+
+  private onMatchEnd(t: Room, res: { team: number; scores: number[]; deltas: (number | null)[] }) {
+    const game = gameOf(t.mode);
+    const players = t.seats.map(s => s && { uid: s.bot ? null : s.uid, bot: s.bot, rating: s.rating });
+    if (!t.isPrivate) {
+      // Elo against the average rating of the other side(s). Computer players count as 1000.
+      t.seats.forEach((s, i) => {
+        if (!s || s.bot) return;
+        const myTeam = teamOf(t.mode, i);
+        const opp = t.seats.filter((o, j) => o && teamOf(t.mode, j) !== myTeam).map(o => (o!.bot ? 1000 : o!.rating));
+        const avg = opp.reduce((a, b) => a + b, 0) / Math.max(1, opp.length);
+        const expected = 1 / (1 + Math.pow(10, (avg - s.rating) / 400));
+        const won = myTeam === res.team, draw = res.team < 0;
+        const played = this.store.ratingsOf(s.uid)?.[game]?.games ?? 0;
+        const k = played < 20 ? 40 : 28;
+        res.deltas[i] = Math.round(k * ((draw ? 0.5 : won ? 1 : 0) - expected));
+        this.store.recordResult(s.uid, res.deltas[i], won, game);
+        this.sendUser(s.uid);
+      });
+    } else {
+      t.seats.forEach((s, i) => { if (s && !s.bot) { this.store.recordResult(s.uid, null, teamOf(t.mode, i) === res.team, game); this.sendUser(s.uid); } });
+    }
+    // coins for everyone who played; more for the winners
+    t.seats.forEach((s, i) => { if (s && !s.bot) { this.store.addCoins(s.uid, teamOf(t.mode, i) === res.team ? ECONOMY.matchWin : ECONOMY.matchPlayed); this.sendUser(s.uid); } });
+    this.store.saveMatch({ id: t.id + ':' + Date.now(), mode: t.mode, private: t.isPrivate, players, scores: res.scores, team: res.team });
+  }
+
+  private onClosed(t: Room) {
+    this.tables.delete(t.id);
+    if (t.code) this.byCode.delete(t.code);
+    this.emptySince.delete(t.id);
+    for (const s of t.seats) {
+      if (s && !s.bot && this.userTable.get(s.uid) === t) {
+        this.userTable.delete(s.uid);
+        this.byUser.get(s.uid)?.conn.send({ t: 'left' });
+      }
+    }
+  }
+
+  /** Close tables nobody is connected to any more. */
+  private sweep() {
+    const now = Date.now();
+    for (const t of this.tables.values()) {
+      const online = t.seats.some(s => s && !s.bot && this.byUser.has(s.uid) && this.userTable.get(s.uid) === t);
+      if (online) { this.emptySince.delete(t.id); continue; }
+      const since = this.emptySince.get(t.id) ?? now;
+      this.emptySince.set(t.id, since);
+      if (now - since > 3 * 60_000) t.close();
+    }
+  }
+
+  /* ---------------- matchmaking ---------------- */
+
+  private dequeue(uid: string) {
+    for (const m of MODES) {
+      const i = this.queues[m].findIndex(q => q.uid === uid);
+      if (i >= 0) { this.queues[m].splice(i, 1); this.sendQueue(m); }
+    }
+  }
+
+  private sendQueue(mode: Mode) {
+    const q = this.queues[mode], need = MODE_PLAYERS[mode];
+    const botsAt = q.length ? q[0].since + this.opts.botFillMs : 0;
+    for (const e of q) this.byUser.get(e.uid)?.conn.send({ t: 'queue', mode, count: q.length, need, botsAt, now: Date.now() });
+  }
+
+  private matchmake() {
+    const now = Date.now();
+    for (const mode of MODES) {
+      const q = this.queues[mode], need = MODE_PLAYERS[mode];
+      // drop anyone who disconnected
+      for (let i = q.length - 1; i >= 0; i--) if (!this.byUser.has(q[i].uid)) q.splice(i, 1);
+      let formed = false;
+      while (q.length >= need || (q.length > 0 && now - q[0].since >= this.opts.botFillMs)) {
+        const group = q.splice(0, need);
+        const t = this.newTable(mode, defaultTarget(mode), false);
+        // spread people around the table; in team games keep strangers on opposite teams when possible
+        group.forEach(e => {
+          const u = this.store.get(e.uid)!;
+          t.join({ uid: e.uid, name: u.name, ch: u.ch, bot: false, rating: this.store.ratingOf(e.uid, gameOf(mode)) });
+          this.userTable.set(e.uid, t);
+        });
+        t.fillBots();
+        t.start(null);
+        formed = true;
+      }
+      if (formed || q.length) this.sendQueue(mode);
+    }
+  }
+}

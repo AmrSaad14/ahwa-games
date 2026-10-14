@@ -1,0 +1,1009 @@
+import './styles.css';
+import { App as CapApp } from '@capacitor/app';
+import { Share } from '@capacitor/share';
+import { Capacitor } from '@capacitor/core';
+import { CHESS_TIME, End, GAMES, GAME_MODES, GameId, MODES, Mode, TILES, canPlay, defaultTarget, endsFor, gameOf, targetOptions, teamOf } from '../../shared/engine';
+import type { Action, AnyView, BoardAction, BoardView, Emote, LeaderRow, PublicUser, S2C, TableView } from '../../shared/protocol';
+import { LUDO_COLORS } from './boards';
+import type { BoardUi, Pick } from './boards';
+import { BAR, OFF } from '../../shared/games/tawla';
+import { EMOTES } from '../../shared/protocol';
+import { CHAR_NAMES, Key, Lang, errText, getLang, num, rules, setLang, t } from './i18n';
+import { Net } from './net';
+import { Practice } from './practice';
+import { CHARS, TableScene, charColor } from './scene';
+import { prefs, sfx, unlockAudio } from './sound';
+import { Voice } from './voice';
+import { GIFTS, GiftKind, giftByKind } from '../../shared/gifts';
+
+/* ---------------- storage ---------------- */
+const store = {
+  get(k: string, d = '') { try { return localStorage.getItem('dom.' + k) ?? d; } catch { return d; } },
+  set(k: string, v: string) { try { localStorage.setItem('dom.' + k, v); } catch { /* private mode */ } },
+  del(k: string) { try { localStorage.removeItem('dom.' + k); } catch { /* ignore */ } },
+};
+
+/* ---------------- state ---------------- */
+type Screen = 'home' | 'friends' | 'lb' | 'settings' | 'rules';
+type Sheet = null | 'leave' | 'emotes' | 'delete' | 'player';
+const S = {
+  screen: 'home' as Screen,
+  sheet: null as Sheet,
+  online: false,
+  user: null as PublicUser | null,
+  mode: (MODES.includes(store.get('mode') as Mode) ? store.get('mode') : 'ffa2') as Mode,
+  target: 101,
+  queue: null as null | { mode: Mode; count: number; need: number; botsAt: number },
+  view: null as AnyView | null,
+  practice: null as Practice | null,
+  sel: null as number | null,
+  choose: null as End[] | null,
+  lb: null as null | { rows: LeaderRow[]; me: LeaderRow | null },
+  joinCode: '',
+  busy: false,
+  lastKey: -1,
+  bubbles: new Map<number, { k?: Emote; text?: string; until: number }>(),
+  player: -1,              // seat shown in the player sheet
+  game: (GAMES.includes(store.get('game') as GameId) ? store.get('game') : 'domino') as GameId,
+  boardSel: null as number | null,   // chess square / tawla point the player picked up
+  promo: null as null | { from: number; to: number },
+  lbGame: 'domino' as GameId,
+  reporting: false,
+};
+if (gameOf(S.mode) !== S.game) S.mode = GAME_MODES[S.game][0];
+S.target = defaultTarget(S.mode);
+S.lbGame = S.game;
+prefs.sound = store.get('sound', '1') === '1';
+prefs.vibrate = store.get('vibrate', '1') === '1';
+setLang((store.get('lang') as Lang) || (navigator.language?.startsWith('ar') ? 'ar' : 'en'));
+const localName = () => S.user?.name || store.get('name') || CHAR_NAMES[getLang()][localCh()];
+const localCh = () => S.user?.ch ?? (Number(store.get('ch', '0')) || 0);
+
+/* ---------------- dom helpers ---------------- */
+type Attrs = Record<string, unknown>;
+function h(tag: string, attrs: Attrs | null = null, ...kids: (Node | string | null | false | undefined)[]): HTMLElement {
+  const el = document.createElement(tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)) {
+    if (v === undefined || v === null || v === false) continue;
+    if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v as EventListener);
+    else if (k === 'class') el.className = String(v);
+    else if (k === 'style') el.setAttribute('style', String(v));
+    else if (v === true) el.setAttribute(k, '');
+    else el.setAttribute(k, String(v));
+  }
+  for (const c of kids) if (c !== null && c !== false && c !== undefined) el.append(c);
+  return el;
+}
+const btn = (label: string, onclick: () => void, cls = 'btn', extra: Attrs = {}) => h('button', { type: 'button', class: cls, onclick, ...extra }, label);
+const $ = (id: string) => document.getElementById(id)!;
+
+/* ---------------- net ---------------- */
+const net = new Net(() => store.get('token') || null);
+const scene = new TableScene($('scene') as HTMLCanvasElement);
+const voice = new Voice(m => net.send(m));
+voice.onChange = () => { renderLabels(true); updateVoiceButtons(); };
+(window as unknown as { __voice: Voice }).__voice = voice; // handy for debugging and tests
+
+/* players you blocked: their voice is muted and their emotes and gifts are hidden, in every game */
+const blocked = new Set<string>((() => { try { return JSON.parse(store.get('blocked', '[]')) as string[]; } catch { return []; } })());
+const saveBlocked = () => store.set('blocked', JSON.stringify([...blocked]));
+const isBlockedSeat = (seat: number) => { const p = S.view?.seats[seat]?.pid; return !!p && blocked.has(p); };
+
+net.onStatus(up => { S.online = up; render(); });
+net.on(onMessage);
+
+function onMessage(m: S2C) {
+  switch (m.t) {
+    case 'welcome':
+      store.set('token', m.token); S.user = m.user; voice.ice = m.ice ?? []; store.set('name', m.user.name); store.set('ch', String(m.user.ch));
+      // carry a name/character picked while offline over to the server
+      if (store.get('pendingProfile') === '1') { net.send({ t: 'profile', name: store.get('name'), ch: Number(store.get('ch', '0')) }); store.del('pendingProfile'); }
+      break;
+    case 'user': S.user = m.user; store.set('name', m.user.name); store.set('ch', String(m.user.ch)); break;
+    case 'err':
+      S.busy = false;
+      if (['not_your_turn', 'not_playing', 'can_play', 'choose_end'].includes(m.code)) break;
+      toast(errText(m.code));
+      break;
+    case 'queue': S.queue = m.mode ? { mode: m.mode, count: m.count, need: m.need, botsAt: m.botsAt } : null; break;
+    case 'table': if (!S.practice) { S.queue = null; S.busy = false; S.joinCode = ''; applyView(m.view); } return;
+    case 'left': if (!S.practice) { voice.leave(); S.view = null; S.sel = null; S.choose = null; S.sheet = null; S.screen = 'home'; } break;
+    case 'emote': if (!isBlockedSeat(m.seat)) showEmote(m.seat, m.k); return;
+    case 'bonus': toast(t('dailyBonus', { n: m.coins })); sfx.gift(); return;
+    case 'gift': if (!isBlockedSeat(m.from)) flyGift(m.from, m.to, m.k); return;
+    case 'rtc': voice.onSignal(m.from, m.data).catch(() => {}); return;
+    case 'lb': if (m.game === S.lbGame) S.lb = { rows: m.rows, me: m.me }; break;
+    default: return;
+  }
+  render();
+}
+
+function applyView(v: AnyView) {
+  const prev = S.view;
+  S.view = v;
+  if (!S.practice) {
+    voice.sync(v);
+    v.seats.forEach((s, i) => { if (s?.pid && blocked.has(s.pid) && !voice.muted.has(i)) voice.setMuted(i, true); });
+  }
+  if (v.game !== 'domino') { applyBoardView(prev, v); return; }
+  // keep a selection only while it is still valid
+  if (S.sel !== null && (v.phase !== 'play' || v.turn !== v.you || !v.hand.includes(S.sel))) { S.sel = null; S.choose = null; }
+  if (v.last && v.last.k !== S.lastKey && (!prev || prev.id === v.id)) {
+    S.lastKey = v.last.k;
+    const l = v.last;
+    if (l.auto && l.s === v.you && v.you >= 0) toast(t('autoPlayed'));
+    else if (l.forced && l.t === 'pass' && l.s === v.you && v.you >= 0) toast(t('autoPassed'));
+    if (l.t === 'play') { sfx.place(); scene.animate(l.s, 'play'); }
+    else if (l.t === 'draw') { sfx.draw(); scene.animate(l.s, 'draw'); }
+    else if (l.t === 'pass') {
+      sfx.pass(); scene.animate(l.s, 'pass');
+      const who = v.seats[l.s];
+      if (who && !isBlockedSeat(l.s)) S.bubbles.set(l.s, { text: 'جلا!', until: Date.now() + 2200 });
+    }
+    else if (l.t === 'round' || l.t === 'match') {
+      const won = v.result && v.result.team >= 0 && v.you >= 0 && v.result.team === teamOf(v.mode, v.you);
+      if (l.t === 'match' && v.match && v.you >= 0 && v.match.team === teamOf(v.mode, v.you)) sfx.matchWin(); else if (won) sfx.roundWin(); else sfx.roundLose();
+      if (l.s >= 0) scene.animate(l.s, 'win');
+    }
+  } else if (!prev || prev.id !== v.id) S.lastKey = v.last?.k ?? -1;
+  if (v.phase === 'play' && v.turn === v.you && (!prev || prev.turn !== v.you || prev.phase !== 'play')) sfx.yourTurn();
+  render();
+}
+
+/* ---------------- chess, tawla, ludo ---------------- */
+function boardFroms(v: BoardView): number[] {
+  if (v.chess) return [...new Set(v.chess.legal.map(m => m[0]))];
+  if (v.tawla) return [...new Set(v.tawla.steps.map(m => m[0]))];
+  return [];
+}
+function boardUi(v: BoardView): BoardUi {
+  if (v.chess) return { sel: S.boardSel, targets: S.boardSel === null ? [] : v.chess.legal.filter(m => m[0] === S.boardSel).map(m => m[1]) };
+  if (v.tawla) return { sel: S.boardSel, targets: S.boardSel === null ? [] : v.tawla.steps.filter(m => m[0] === S.boardSel).map(m => m[1]), movable: S.boardSel === null ? boardFroms(v) : [] };
+  if (v.ludo) return { sel: null, targets: v.ludo.movable };
+  return { sel: null, targets: [] };
+}
+function applyBoardView(prev: AnyView | null, v: BoardView) {
+  const mine = v.phase === 'play' && v.turn === v.you;
+  if (!mine) { S.boardSel = null; S.promo = null; }
+  else if (S.boardSel !== null && !boardFroms(v).includes(S.boardSel)) S.boardSel = null;
+  if (mine && v.tawla && S.boardSel === null) { const f = boardFroms(v); if (f.length && f.every(x => x === BAR)) S.boardSel = BAR; }
+  if (v.last && v.last.k !== S.lastKey && (!prev || prev.id === v.id)) {
+    S.lastKey = v.last.k;
+    const l = v.last;
+    if (l.auto && l.s === v.you && v.you >= 0) toast(t('autoPlayed'));
+    if (l.t === 'move' || l.t === 'step' || l.t === 'pawn') {
+      if (l.capture || l.hit || l.captured?.length) sfx.capture(); else sfx.place();
+      if (v.tawla?.variant === 'mahbousa' && l.hit && v.you >= 0) toast(l.s === v.you ? t('youTrapped') : t('gotTrapped'));
+      scene.animate(l.s, 'play');
+    } else if (l.t === 'roll') sfx.dice();
+    else if (l.t === 'pass') { sfx.pass(); if (l.forced && l.s === v.you) toast(t('noMovesPassed')); }
+    else if (l.t === 'end') {
+      if (v.phase === 'mend' && v.match && v.you >= 0 && v.match.team === v.you) sfx.matchWin();
+      else if (v.result && v.result.winner === v.you) sfx.roundWin(); else sfx.roundLose();
+      if (l.s >= 0) scene.animate(l.s, 'win');
+    }
+  } else if (!prev || prev.id !== v.id) S.lastKey = v.last?.k ?? -1;
+  if (mine && (!prev || prev.turn !== v.you || prev.phase !== 'play')) sfx.yourTurn();
+  render();
+}
+/** Taps on the 3D board. */
+function handlePick(p: Pick) {
+  const v = S.view;
+  if (!v || v.game === 'domino' || v.phase !== 'play' || v.turn !== v.you) return;
+  unlockAudio();
+  if (v.chess && p.kind === 'square') {
+    const c = v.chess;
+    if (S.boardSel !== null) {
+      const mv = c.legal.find(m => m[0] === S.boardSel && m[1] === p.sq);
+      if (mv) {
+        if (mv[2]) { S.promo = { from: mv[0], to: mv[1] }; return render(); }
+        act({ t: 'move', from: mv[0], to: mv[1] }); S.boardSel = null; return render();
+      }
+    }
+    S.boardSel = c.legal.some(m => m[0] === p.sq) && S.boardSel !== p.sq ? p.sq : null;
+    return render();
+  }
+  if (v.tawla && p.kind === 'point') {
+    const tw = v.tawla;
+    if (!tw.rolled) return;
+    if (S.boardSel !== null) {
+      const st = tw.steps.find(x => x[0] === S.boardSel && x[1] === p.p);
+      if (st) { act({ t: 'step', from: st[0], to: st[1] }); S.boardSel = null; return render(); }
+    }
+    const dests = [...new Set(tw.steps.filter(x => x[0] === p.p).map(x => x[1]))];
+    if (dests.length === 1 && S.boardSel !== p.p) { act({ t: 'step', from: p.p, to: dests[0] }); S.boardSel = null; return render(); }  // only one place to go
+    S.boardSel = dests.length && S.boardSel !== p.p ? p.p : null;
+    return render();
+  }
+  if (v.ludo) {
+    if (p.kind === 'pawn' && v.ludo.movable.includes(p.i)) act({ t: 'pawn', i: p.i });
+    else if (p.kind === 'dice' && v.ludo.die === null) act({ t: 'roll' });
+  }
+}
+scene.onPick = handlePick;
+/** Pressing a piece and moving: pick it up and show where it can go. */
+scene.onDragStart = p => {
+  const v = S.view;
+  if (!v || v.game === 'domino' || v.phase !== 'play' || v.turn !== v.you) return false;
+  let ok = false;
+  if (v.chess && p.kind === 'square') ok = v.chess.legal.some(m => m[0] === p.sq);
+  if (v.tawla && p.kind === 'point') ok = !!v.tawla.rolled && v.tawla.steps.some(x => x[0] === p.p);
+  if (!ok) return false;
+  unlockAudio();
+  S.boardSel = p.kind === 'square' ? p.sq : (p as { p: number }).p; S.promo = null;
+  render();
+  return true;
+};
+/** Letting go of a dragged piece: move it if that square or point is allowed. */
+scene.onDrop = (from, to) => {
+  const v = S.view;
+  let done = false;
+  if (v && v.game !== 'domino' && v.phase === 'play' && v.turn === v.you && to) {
+    if (v.chess && from.kind === 'square' && to.kind === 'square') {
+      const mv = v.chess.legal.find(m => m[0] === from.sq && m[1] === to.sq);
+      if (mv && mv[2]) { S.promo = { from: mv[0], to: mv[1] }; render(); return false; }
+      if (mv) { S.boardSel = null; act({ t: 'move', from: mv[0], to: mv[1] }); done = true; }
+    }
+    if (v.tawla && from.kind === 'point' && to.kind === 'point') {
+      const st = v.tawla.steps.find(x => x[0] === from.p && x[1] === to.p);
+      if (st) { S.boardSel = null; act({ t: 'step', from: st[0], to: st[1] }); done = true; }
+    }
+  }
+  if (!done) render();   // stays picked up, with its targets showing
+  return done;
+};
+
+/* ---------------- actions ---------------- */
+const inGame = () => !!S.view;
+function act(a: Action | BoardAction) {
+  if (S.practice) { S.practice.act(a); return; }
+  net.send({ t: 'act', a });
+}
+function sendEmote(k: Emote) {
+  S.sheet = null;
+  if (S.practice) S.practice.emote(k); else net.send({ t: 'emote', k });
+  render();
+}
+function showEmote(seat: number, k: Emote) {
+  S.bubbles.set(seat, { k, until: Date.now() + 2600 });
+  scene.animate(seat, 'emote');
+  sfx.pop();
+}
+function quick() {
+  unlockAudio();
+  if (!S.online) return toast(t('offline'));
+  store.set('mode', S.mode); store.set('game', gameOf(S.mode));
+  net.send({ t: 'quick', mode: S.mode });
+  S.queue = { mode: S.mode, count: 1, need: 0, botsAt: 0 };
+  render();
+}
+function startPractice(mode = S.mode) {
+  unlockAudio();
+  stopPractice();
+  S.queue = null;
+  // the how-to-play recorder (?rec) slows the computer down so every move can be captured
+  const pace = /[?&]rec\b/.test(location.search) ? { botDelay: [9000, 9500] as [number, number], turnMs: 600_000 } : undefined;
+  S.practice = new Practice(mode, localName(), localCh(), v => applyView(v), (seat, k) => showEmote(seat, k), pace);
+  S.practice.begin();
+}
+function stopPractice() { S.practice?.stop(); S.practice = null; }
+function leaveGame() {
+  voice.leave();
+  S.sheet = null; S.sel = null; S.choose = null; S.screen = 'home';
+  if (S.practice) { stopPractice(); S.view = null; render(); return; }
+  net.send({ t: 'leave' });
+  S.view = null; render();
+}
+const tileName = (id: number) => `${num(TILES[id][0])}|${num(TILES[id][1])}`;
+function tapTile(id: number) {
+  const v = S.view; if (!v || v.game !== 'domino' || v.phase !== 'play' || v.turn !== v.you) return;
+  unlockAudio();
+  if (S.sel === id) { S.sel = null; S.choose = null; return render(); }
+  if (v.open !== null && id !== v.open) { toast(t('openWith', { tile: tileName(v.open) })); return; }
+  const ends = endsFor(v.line, id);
+  if (!ends.length) return;
+  if (ends.length === 1) { S.sel = null; S.choose = null; act({ t: 'play', id, e: ends[0] }); return; }
+  S.sel = id; S.choose = ends; render();
+}
+function chooseEnd(e: End) {
+  if (S.sel === null) return;
+  const id = S.sel; S.sel = null; S.choose = null;
+  act({ t: 'play', id, e });
+  render();
+}
+scene.onGhost = chooseEnd;
+
+/* dragging a domino from your hand onto an open end of the line */
+let tileDrag: null | { id: number; pid: number; x: number; y: number; el: HTMLElement; ghost: HTMLElement | null; ends: End[] } = null;
+let dragEndedAt = 0;
+function pressTile(e: PointerEvent, id: number, el: HTMLElement) {
+  const v = S.view;
+  if (tileDrag || !v || v.game !== 'domino' || v.phase !== 'play' || v.turn !== v.you) return;
+  const ends = endsFor(v.line, id);
+  if (ends.length) tileDrag = { id, pid: e.pointerId, x: e.clientX, y: e.clientY, el, ghost: null, ends };
+}
+window.addEventListener('pointermove', e => {
+  const d = tileDrag; if (!d || d.pid !== e.pointerId) return;
+  if (!d.ghost) {
+    if (Math.hypot(e.clientX - d.x, e.clientY - d.y) < 10) return;
+    unlockAudio();
+    const r = d.el.getBoundingClientRect();
+    d.ghost = d.el.cloneNode(true) as HTMLElement;
+    d.ghost.classList.add('drag-tile'); d.ghost.classList.remove('sel', 'ok', 'dim');
+    d.ghost.style.width = r.width + 'px'; d.ghost.style.height = r.height + 'px';
+    document.body.append(d.ghost);
+    S.sel = d.id; S.choose = d.ends; render();   // glowing spots appear at every end it fits
+  }
+  const w = d.ghost.offsetWidth, h0 = d.ghost.offsetHeight;
+  d.ghost.style.transform = `translate(${e.clientX - w / 2}px, ${e.clientY - h0 * 0.75}px) scale(1.2)`;
+  d.ghost.classList.toggle('over', !!scene.ghostAt(e.clientX, e.clientY));
+});
+const dropTile = (e: PointerEvent) => {
+  const d = tileDrag; if (!d || d.pid !== e.pointerId) return;
+  tileDrag = null;
+  if (!d.ghost) return;   // just a tap: the click plays it
+  d.ghost.remove(); dragEndedAt = Date.now();
+  let end = e.type === 'pointerup' ? scene.ghostAt(e.clientX, e.clientY) : null;
+  // with only one place to go, letting go anywhere over the table plays it
+  if (!end && e.type === 'pointerup' && d.ends.length === 1 && e.clientY < window.innerHeight - 190) end = d.ends[0];
+  S.sel = null; S.choose = null;
+  const v = S.view;
+  if (end && v && v.game === 'domino' && v.phase === 'play' && v.turn === v.you) act({ t: 'play', id: d.id, e: end });
+  render();
+};
+window.addEventListener('pointerup', dropTile);
+window.addEventListener('pointercancel', dropTile);
+
+async function shareRoom(code: string) {
+  const text = t('shareText', { code: code.toUpperCase(), game: t(('game_' + gameOf(S.view?.mode ?? S.mode)) as Key) });
+  const url = Capacitor.isNativePlatform() ? undefined : `${location.origin}/#${code}`;
+  try { await Share.share({ title: t('brand'), text, url }); }
+  catch { copyText(code.toUpperCase()); }
+}
+function copyText(s: string) {
+  navigator.clipboard?.writeText(s).then(() => toast(t('copied')), () => toast(s));
+}
+
+let toastTimer: ReturnType<typeof setTimeout>;
+function toast(msg: string) {
+  const el = $('toast'); el.textContent = msg; el.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 3200);
+}
+
+/* ---------------- naming ---------------- */
+function seatName(v: AnyView, i: number) {
+  const s = v.seats[i]; if (!s) return '';
+  if (s.bot) return CHAR_NAMES[getLang()][s.ch];
+  return s.name || CHAR_NAMES[getLang()][s.ch];
+}
+const teamName = (team: number) => t(team === 0 ? 'teamA' : 'teamB');
+function sideName(v: TableView, team: number) {
+  if (v.mode === 'team') return teamName(team);
+  return seatName(v, team);
+}
+
+/* ---------------- rendering ---------------- */
+function render() {
+  const ui = $('ui'); ui.innerHTML = '';
+  const v = S.view;
+  if (v) {
+    scene.showTable(v, S.sel, S.choose, v.game === 'domino' ? undefined : boardUi(v));
+    if (v.phase === 'lobby') ui.append(roomScreen(v)); else ui.append(...(v.game === 'domino' ? gameScreen(v) : boardScreen(v)));
+    if (S.promo && v.game === 'chess') ui.append(promoSheet(v));
+  } else {
+    scene.showHome(localCh());
+    if (S.queue) ui.append(searchScreen());
+    else ui.append(topBar(), ({ home: homeScreen, friends: friendsScreen, lb: lbScreen, settings: settingsScreen, rules: rulesScreen })[S.screen]());
+  }
+  if (S.sheet === 'leave') ui.append(sheet(h('p', null, t('leaveConfirm')), h('div', { class: 'row' }, btn(t('stay'), () => { S.sheet = null; render(); }, 'btn alt'), btn(t('leaveYes'), leaveGame, 'btn danger'))));
+  if (S.sheet === 'emotes') ui.append(emoteSheet());
+  if (S.sheet === 'player' && v) { const ps = playerSheet(v); if (ps) ui.append(ps); }
+  if (S.sheet === 'delete') ui.append(sheet(h('p', null, t('deleteConfirm')), h('div', { class: 'row' }, btn(t('stay'), () => { S.sheet = null; render(); }, 'btn alt'),
+    btn(t('deleteYes'), () => { net.send({ t: 'delete' }); S.sheet = null; S.screen = 'home'; toast(t('deleted')); render(); }, 'btn danger'))));
+  if (!S.online && net.ready === false && inGame() && !S.practice) ui.append(h('div', { class: 'banner' }, t('reconnecting')));
+  renderLabels(true);
+}
+
+function topBar() {
+  const u = S.user;
+  return h('header', { class: 'topbar' },
+    S.screen !== 'home' ? btn('‹', () => { S.screen = 'home'; render(); }, 'iconbtn back', { 'aria-label': t('home') }) : h('h1', { class: 'brand' }, t('brand')),
+    h('div', { class: 'grow' }),
+    btn(getLang() === 'ar' ? 'EN' : 'ع', () => { const l: Lang = getLang() === 'ar' ? 'en' : 'ar'; setLang(l); store.set('lang', l); render(); }, 'chip', { 'aria-label': t('language') }),
+    h('button', { type: 'button', class: 'chip profile', onclick: () => { S.screen = 'settings'; render(); } },
+      h('span', { class: 'sw', style: `background:${charColor(localCh())}` }),
+      h('span', { class: 'pname' }, localName()),
+      u ? h('span', { class: 'muted' }, num(u.ratings?.[S.game]?.rating ?? 1000)) : null,
+      u ? h('span', { class: 'coins' }, '🪙 ' + num(u.coins)) : null),
+  );
+}
+
+const GAME_ICONS: Record<GameId, string> = {
+  domino: '<svg viewBox="0 0 48 48" aria-hidden="true"><rect x="13" y="3" width="22" height="42" rx="4" fill="#f4ecd8" stroke="#2a1d14" stroke-width="2"/><line x1="15" y1="24" x2="33" y2="24" stroke="#2a1d14" stroke-width="2"/><g fill="#2a1d14"><circle cx="19" cy="9" r="2.2"/><circle cx="29" cy="18" r="2.2"/><circle cx="19" cy="30" r="2.2"/><circle cx="29" cy="30" r="2.2"/><circle cx="19" cy="39" r="2.2"/><circle cx="29" cy="39" r="2.2"/></g></svg>',
+  tawla: '<svg viewBox="0 0 48 48" aria-hidden="true"><rect x="3" y="7" width="42" height="34" rx="4" fill="#7a4a26" stroke="#2a1d14" stroke-width="2"/><line x1="24" y1="7" x2="24" y2="41" stroke="#2a1d14" stroke-width="2"/><g fill="#e8d6a8"><path d="M7 9l3 13 3-13z"/><path d="M15 9l3 13 3-13z"/><path d="M27 39l3-13 3 13z"/><path d="M35 39l3-13 3 13z"/></g><circle cx="12" cy="34" r="4" fill="#f4ecd8" stroke="#2a1d14"/><circle cx="36" cy="14" r="4" fill="#2a1d14" stroke="#e8d6a8"/></svg>',
+  chess: '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M16 42h16l-2-6c4-2 6-6 5-11l-5-4 2-4-3-2-3 3c-6 1-10 6-10 12l5-2-1 6z" fill="#f4ecd8" stroke="#2a1d14" stroke-width="2" stroke-linejoin="round"/><rect x="13" y="41" width="22" height="4" rx="1.5" fill="#2a1d14"/><circle cx="25" cy="18" r="1.4" fill="#2a1d14"/></svg>',
+  ludo: '<svg viewBox="0 0 48 48" aria-hidden="true"><rect x="4" y="4" width="18" height="18" rx="3" fill="#c8402f"/><rect x="26" y="4" width="18" height="18" rx="3" fill="#2f8a4a"/><rect x="26" y="26" width="18" height="18" rx="3" fill="#e0b030"/><rect x="4" y="26" width="18" height="18" rx="3" fill="#2f6fb8"/><circle cx="24" cy="24" r="6" fill="#f4ecd8" stroke="#2a1d14" stroke-width="2"/></svg>',
+};
+function pickGame(g: GameId) {
+  S.game = g; store.set('game', g);
+  if (gameOf(S.mode) !== g) { S.mode = GAME_MODES[g][0]; store.set('mode', S.mode); }
+  S.target = defaultTarget(S.mode);
+  render();
+}
+function gamePicker() {
+  return h('div', { class: 'games', role: 'radiogroup', 'aria-label': t('chooseGame') }, ...GAMES.map(g => {
+    const b = h('button', { type: 'button', class: 'game', role: 'radio', 'aria-checked': String(S.game === g), onclick: () => pickGame(g) },
+      h('span', { class: 'gicon' }), h('b', null, t(('game_' + g) as Key)), h('span', { class: 'small' }, t(('gameHint_' + g) as Key)));
+    (b.firstChild as HTMLElement).innerHTML = GAME_ICONS[g];
+    return b;
+  }));
+}
+const targetLabel = (m: Mode, n: number) => gameOf(m) === 'tawla' ? t('pointsTo', { n }) : t('points', { n });
+
+function homeScreen() {
+  const modes = GAME_MODES[S.game];
+  const modeBtns = modes.length < 2 ? null : h('div', { class: 'modes', role: 'radiogroup' }, ...modes.map(m =>
+    h('button', { type: 'button', class: 'mode', role: 'radio', 'aria-checked': String(S.mode === m), onclick: () => { S.mode = m; store.set('mode', m); render(); } },
+      h('b', null, t(('mode_' + m) as Key)), h('span', null, t(('modeHint_' + m) as Key)))));
+  return h('section', { class: 'sheet-card home' },
+    gamePicker(),
+    modeBtns ?? h('p', { class: 'muted center small' }, t(('modeHint_' + S.mode) as Key)),
+    btn(t('quick'), quick, 'btn big', { disabled: !S.online }),
+    !S.online ? h('p', { class: 'note' }, net.ready ? t('connecting') : t('offline')) : null,
+    h('div', { class: 'row' },
+      btn(t('friends'), () => { S.screen = 'friends'; render(); }, 'btn tq', { disabled: !S.online }),
+      btn(t('practice'), () => startPractice(), 'btn alt')),
+    h('div', { class: 'row links' },
+      btn(t('leaderboard'), () => openLb(S.game), 'link'),
+      btn(t('rules'), () => { S.screen = 'rules'; render(); }, 'link'),
+      btn(t('settings'), () => { S.screen = 'settings'; render(); }, 'link')),
+  );
+}
+
+function searchScreen() {
+  const q = S.queue!;
+  const secs = q.botsAt ? Math.max(0, Math.ceil((q.botsAt - net.serverNow()) / 1000)) : 0;
+  return h('section', { class: 'sheet-card center' },
+    h('div', { class: 'spinner', 'aria-hidden': 'true' }, h('span'), h('span')),
+    h('h2', null, t('searching')),
+    h('p', { class: 'muted' }, t(('game_' + gameOf(q.mode)) as Key) + ' · ' + t(('mode_' + q.mode) as Key)),
+    q.need ? h('p', { id: 'q-count' }, t('found', { n: q.count, m: q.need })) : null,
+    q.botsAt ? h('p', { class: 'muted', id: 'q-bots' }, t('botsIn', { s: secs })) : null,
+    btn(t('cancel'), () => { net.send({ t: 'cancel' }); S.queue = null; render(); }, 'btn alt'));
+}
+
+function chips<T extends string | number>(values: readonly T[], cur: T, label: (v: T) => string, pick: (v: T) => void, disabled = false) {
+  return h('div', { class: 'chips', role: 'radiogroup' }, ...values.map(v =>
+    h('button', { type: 'button', class: 'chip', role: 'radio', 'aria-checked': String(v === cur), disabled, onclick: () => pick(v) }, label(v))));
+}
+
+function friendsScreen() {
+  const code = h('input', { type: 'text', id: 'join-code', maxlength: '5', placeholder: t('code'), autocomplete: 'off', autocapitalize: 'characters', value: S.joinCode }) as HTMLInputElement;
+  code.addEventListener('input', () => { code.value = code.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5); S.joinCode = code.value; });
+  const join = () => { if (code.value.length === 5) { unlockAudio(); net.send({ t: 'join', code: code.value.toLowerCase() }); } };
+  code.addEventListener('keydown', e => { if (e.key === 'Enter') join(); });
+  return h('section', { class: 'sheet-card' },
+    h('h2', null, t('joinRoom')),
+    h('div', { class: 'row' }, code, btn(t('join'), join, 'btn tq')),
+    h('hr'),
+    h('h2', null, t('createRoom')),
+    gamePicker(),
+    GAME_MODES[S.game].length > 1 ? chips(GAME_MODES[S.game], S.mode, m => t(('mode_' + m) as Key), m => { S.mode = m; S.target = defaultTarget(m); render(); }) : null,
+    targetOptions(S.mode).length > 1 ? h('label', { class: 'lab' }, t('target')) : null,
+    targetOptions(S.mode).length > 1 ? chips(targetOptions(S.mode), S.target, n => num(n), n => { S.target = n; render(); }) : null,
+    btn(t('create'), () => { unlockAudio(); net.send({ t: 'create', mode: S.mode, target: S.target }); }, 'btn big'));
+}
+
+function openLb(g: GameId) {
+  S.screen = 'lb'; S.lbGame = g; S.lb = null; net.send({ t: 'lb', game: g }); render();
+}
+function lbScreen() {
+  const rows = S.lb?.rows ?? [];
+  const row = (r: LeaderRow) => h('li', { class: r.me ? 'me' : '' },
+    h('span', { class: 'rank' }, num(r.rank)),
+    h('span', { class: 'sw', style: `background:${charColor(r.ch)}` }),
+    h('span', { class: 'nm' }, r.name),
+    h('span', { class: 'muted small' }, t('wins', { n: r.wins }) + ' · ' + t('games', { n: r.games })),
+    h('b', null, num(r.rating)));
+  return h('section', { class: 'sheet-card tall' },
+    h('h2', null, t('lbTitle')),
+    chips(GAMES, S.lbGame, g => t(('game_' + g) as Key), g => openLb(g)),
+    !S.lb ? h('p', { class: 'muted' }, t('connecting')) : rows.length ? h('ol', { class: 'lb' }, ...rows.map(row)) : h('p', { class: 'muted' }, t('lbEmpty')),
+    S.lb?.me && !rows.some(r => r.me) ? h('div', null, h('p', { class: 'lab' }, t('yourRank')), h('ol', { class: 'lb' }, row(S.lb.me))) : null);
+}
+
+/** A short looping recording of the game being played, with captions, in the player's language. */
+function howToGif(g: GameId): HTMLElement {
+  const img = h('img', { src: `howto/${g}-${getLang()}.gif`, alt: t('howToTitle') + ' · ' + t(('game_' + g) as Key), width: '300', height: '420', loading: 'lazy', decoding: 'async' }) as HTMLImageElement;
+  const fig = h('figure', { class: 'howto' }, img, h('figcaption', null, t('howToTitle')));
+  img.addEventListener('error', () => fig.remove());
+  return fig;
+}
+/** Rules lists hold section titles as lines starting with '## '. */
+function ruleSections(g: GameId): HTMLElement[] {
+  const out: HTMLElement[] = [];
+  let ul: HTMLElement | null = null;
+  for (const line of rules(g)) {
+    if (line.startsWith('## ')) { out.push(h('h3', { class: 'rules-h' }, line.slice(3))); ul = null; continue; }
+    if (!ul) { ul = h('ul', { class: 'rules' }); out.push(ul); }
+    ul.append(h('li', null, line));
+  }
+  return out;
+}
+function rulesScreen() {
+  return h('section', { class: 'sheet-card tall' }, h('h2', null, t('rules')),
+    chips(GAMES, S.game, g => t(('game_' + g) as Key), g => pickGame(g)),
+    howToGif(S.game),
+    ...ruleSections(S.game));
+}
+
+function settingsScreen() {
+  const u = S.user;
+  const name = h('input', { type: 'text', id: 'set-name', maxlength: '14', value: localName(), autocomplete: 'nickname' }) as HTMLInputElement;
+  const saveProfile = (ch = localCh()) => {
+    const nm = name.value.trim().slice(0, 14) || localName();
+    store.set('name', nm); store.set('ch', String(ch));
+    if (S.online) net.send({ t: 'profile', name: nm, ch }); else store.set('pendingProfile', '1');
+    if (S.user) S.user = { ...S.user, name: nm, ch };
+  };
+  name.addEventListener('change', () => { saveProfile(); toast(t('saved')); });
+  const charGrid = h('div', { class: 'chars' }, ...CHARS.map((_, i) =>
+    h('button', { type: 'button', class: 'chr', 'aria-pressed': String(localCh() === i), onclick: () => { saveProfile(i); render(); } },
+      h('span', { class: 'sw', style: `background:${charColor(i)}` }), h('span', null, CHAR_NAMES[getLang()][i]))));
+  const toggle = (label: string, on: boolean, set: (v: boolean) => void) => h('div', { class: 'setrow' }, h('span', null, label),
+    chips(['on', 'off'] as const, on ? 'on' : 'off', v => t(v), v => { set(v === 'on'); render(); }));
+  let account: HTMLElement;
+  if (u?.email) {
+    account = h('div', { class: 'stack' }, h('p', null, t('signedInAs', { email: u.email })),
+      btn(t('logout'), () => { store.del('token'); S.user = null; net.reconnect(); render(); }, 'btn alt'));
+  } else {
+    const email = h('input', { type: 'email', id: 'acc-email', placeholder: t('email'), autocomplete: 'email' }) as HTMLInputElement;
+    const pw = h('input', { type: 'password', id: 'acc-pw', placeholder: t('password'), autocomplete: 'current-password' }) as HTMLInputElement;
+    account = h('div', { class: 'stack' }, h('p', { class: 'muted' }, t('guestNote')), email, pw,
+      h('div', { class: 'row' },
+        btn(t('register'), () => net.send({ t: 'register', email: email.value, pw: pw.value }), 'btn', { disabled: !S.online }),
+        btn(t('login'), () => net.send({ t: 'login', email: email.value, pw: pw.value }), 'btn alt', { disabled: !S.online })));
+  }
+  return h('section', { class: 'sheet-card tall' },
+    h('h2', null, t('settings')),
+    h('label', { class: 'lab', for: 'set-name' }, t('name')), name,
+    h('span', { class: 'lab' }, t('character')), charGrid,
+    h('div', { class: 'setrow' }, h('span', null, t('language')),
+      chips(['ar', 'en'] as Lang[], getLang(), l => (l === 'ar' ? 'العربية' : 'English'), l => { setLang(l); store.set('lang', l); render(); })),
+    toggle(t('sound'), prefs.sound, x => { prefs.sound = x; store.set('sound', x ? '1' : '0'); }),
+    toggle(t('vibration'), prefs.vibrate, x => { prefs.vibrate = x; store.set('vibrate', x ? '1' : '0'); }),
+    h('hr'), h('h2', null, t('account')), account,
+    u ? h('p', { class: 'muted small' }, `${t('games', { n: u.games })} · ${t('wins', { n: u.wins })} · 🪙 ${num(u.coins)} · ${t('giftsReceived', { n: u.gifts })}`) : null,
+    u ? h('div', { class: 'ratings' }, h('span', { class: 'lab' }, t('ratingsTitle')), ...GAMES.map(g => {
+      const r = u.ratings?.[g];
+      return h('div', { class: 'setrow' }, h('span', null, t(('game_' + g) as Key)),
+        h('span', { class: 'muted small' }, r ? `${num(r.rating)} · ${t('games', { n: r.games })} · ${t('wins', { n: r.wins })}` : num(1000)));
+    })) : null,
+    blocked.size ? btn(t('unblockAll', { n: blocked.size }), () => { blocked.clear(); saveBlocked(); toast(t('saved')); render(); }, 'link') : null,
+    u ? btn(t('deleteAccount'), () => { S.sheet = 'delete'; render(); }, 'link danger-link') : null);
+}
+
+function roomScreen(v: AnyView) {
+  const host = v.you >= 0 && v.seats[v.you]?.host;
+  const seats = h('div', { class: 'seats' }, ...v.seats.map((s, i) => {
+    const row = h('div', { class: 'seat' },
+      h('span', { class: 'sw', style: s ? `background:${charColor(s.ch)}` : 'border:1px dashed var(--line)' }),
+      h('span', { class: 'nm' + (s ? '' : ' muted') }, s ? seatName(v, i) : t('empty')),
+      v.mode === 'team' ? h('span', { class: 'tag team' + (i % 2) }, teamName(i % 2)) : null,
+      s?.host ? h('span', { class: 'tag hl' }, t('host')) : null,
+      i === v.you ? h('span', { class: 'tag hl' }, t('you')) : null,
+      s?.bot ? h('span', { class: 'tag' }, t('bot')) : null);
+    if (host && !s) row.append(btn(t('addBot'), () => net.send({ t: 'bot', seat: i }), 'btn small alt'));
+    if (host && s && !s.host) row.append(btn(t('remove'), () => net.send({ t: 'kick', seat: i }), 'btn small alt'));
+    return row;
+  }));
+  const full = v.seats.every(Boolean);
+  return h('section', { class: 'sheet-card tall' },
+    h('div', { class: 'row between' }, h('h2', null, t('room')), btn(t('leave'), leaveGame, 'btn small alt')),
+    h('div', { class: 'codebig', dir: 'ltr' }, (v.code || '').toUpperCase()),
+    h('div', { class: 'row' }, btn(t('share'), () => shareRoom(v.code || ''), 'btn tq'), btn(t('copy'), () => copyText((v.code || '').toUpperCase()), 'btn alt')),
+    h('p', { class: 'lab' }, t(('game_' + gameOf(v.mode)) as Key)),
+    host && GAME_MODES[gameOf(v.mode)].length > 1 ? chips(GAME_MODES[gameOf(v.mode)], v.mode, m => t(('mode_' + m) as Key), m => net.send({ t: 'setup', mode: m }))
+      : h('p', { class: 'muted' }, t(('mode_' + v.mode) as Key) + (gameOf(v.mode) === 'domino' || gameOf(v.mode) === 'tawla' ? ' · ' + t('to', { n: v.target }) : '')),
+    host && targetOptions(v.mode).length > 1 ? chips(targetOptions(v.mode), v.target, n => targetLabel(v.mode, n), n => net.send({ t: 'setup', target: n })) : null,
+    seats,
+    host ? btn(t('start'), () => { unlockAudio(); net.send({ t: 'start' }); }, 'btn big', { disabled: !full }) : h('p', { class: 'muted center' }, t('waitHost')),
+    host && !full ? h('p', { class: 'muted small center' }, t('fillSeats')) : null);
+}
+
+function gameScreen(v: TableView): HTMLElement[] {
+  const myTurn = v.phase === 'play' && v.turn === v.you;
+  const teams = v.scores.map((sc, team) => {
+    const active = v.phase === 'play' && v.turn >= 0 && teamOf(v.mode, v.turn) === team;
+    const seat = v.mode === 'team' ? -1 : team;
+    const color = seat >= 0 && v.seats[seat] ? charColor(v.seats[seat]!.ch) : (team === 0 ? 'var(--brass)' : 'var(--tq)');
+    return h('div', { class: 'sc' + (active ? ' on' : '') }, h('span', { class: 'sw', style: `background:${color}` }), h('span', { class: 'nm' }, sideName(v, team)), h('b', null, num(sc)));
+  });
+  const hud = h('header', { class: 'hud' },
+    h('div', { class: 'row' },
+      btn('‹', () => { if (S.practice || v.phase !== 'play') leaveGame(); else { S.sheet = 'leave'; render(); } }, 'iconbtn back', { 'aria-label': t('leave') }),
+      h('div', { class: 'scores' }, ...teams)),
+    h('div', { class: 'meta muted small' }, `${t('round', { n: v.round })} · ${t('to', { n: v.target })}` + (v.mode === 'ffa2' || v.mode === 'ffa3' ? ' · ' + t('boneyard', { n: v.yard }) : '')));
+
+  // status line
+  let status = '', warn = false;
+  if (v.phase === 'play') {
+    if (myTurn) {
+      if (tileDrag?.ghost) status = t('dropOnSpot');
+      else if (S.choose) status = t('chooseEnd');
+      else if (v.line.f === null) status = v.open !== null ? t('openWith', { tile: tileName(v.open) }) : t('firstMove');
+      else if (canPlay(v.line, v.hand)) status = t('yourTurn');
+      else { status = t(v.yard ? 'mustDraw' : 'mustPass'); warn = true; }
+    } else if (v.turn >= 0) {
+      const l = v.last;
+      const pre = l && l.s >= 0 && l.s !== v.you && (l.t === 'draw' || l.t === 'pass') ? t(l.t === 'draw' ? 'drew' : 'passed', { name: seatName(v, l.s) }) + ' · ' : '';
+      status = pre + t('turnOf', { name: seatName(v, v.turn) });
+    }
+  }
+  const bottom = h('div', { class: 'bottom' },
+    h('div', { class: 'status' + (warn ? ' warn' : '') }, status),
+    myTurn && v.turnEndsAt && canPlay(v.line, v.hand) ? h('div', { class: 'timer-row' }, h('div', { class: 'timer', id: 'my-timer' }, h('i')), h('b', { id: 'my-secs', class: 'secs' })) : null,
+    S.choose && S.choose.length > 1 && S.sel !== null && v.line.fo && !tileDrag?.ghost ? h('div', { class: 'row center' }, ...S.choose.map(e =>
+      btn(t('endN', { n: e === 'L' ? (v.line.L.length ? v.line.L[v.line.L.length - 1][2] : v.line.fo![0]) : (v.line.R.length ? v.line.R[v.line.R.length - 1][2] : v.line.fo![1]) }), () => chooseEnd(e), 'btn alt small'))) : null,
+    h('div', { class: 'handbar' },
+      h('div', { class: 'sidebtns' },
+        btn('☺', () => { S.sheet = S.sheet === 'emotes' ? null : 'emotes'; render(); }, 'iconbtn', { 'aria-label': t('reactions') }),
+        ...voiceButtons()),
+      h('div', { class: 'hand' }, ...v.hand.map(id => {
+        const el = TableScene.tileEl(id);
+        if (myTurn) el.classList.add(endsFor(v.line, id).length && (v.open === null || v.open === id) ? 'ok' : 'dim');
+        if (S.sel === id) el.classList.add('sel');
+        if (tileDrag?.ghost && tileDrag.id === id) el.classList.add('lifted');
+        el.addEventListener('click', () => { if (Date.now() - dragEndedAt > 400) tapTile(id); });
+        el.addEventListener('pointerdown', e => pressTile(e, id, el));
+        return el;
+      })),
+      h('span', { class: 'act-space' })));
+  const out = [hud, bottom];
+  if ((v.phase === 'rend' || v.phase === 'mend') && v.result) out.push(resultSheet(v));
+  return out;
+}
+
+function resultSheet(v: TableView): HTMLElement {
+  const r = v.result!, mend = v.phase === 'mend', myTeam = v.you >= 0 ? teamOf(v.mode, v.you) : -1;
+  let head: string;
+  if (mend && v.match) {
+    const w = v.match.team;
+    head = v.mode === 'team' ? (w === myTeam ? t('teamMatchWin') : t('teamMatchLose', { team: teamName(w) })) : (w === myTeam ? t('matchWin') : t('matchLose', { name: seatName(v, w) }));
+  } else if (r.team < 0) head = t('blocked');
+  else head = v.mode === 'team' ? t('teamRoundWin', { team: teamName(r.team) }) : t('roundWin', { name: seatName(v, r.winner) });
+  const rows = v.seats.map((s, i) => s && h('div', { class: 'res-row' },
+    h('span', { class: 'sw', style: `background:${charColor(s.ch)}` }),
+    h('span', { class: 'nm' }, seatName(v, i)),
+    h('span', { class: 'mini' }, ...r.hands[i].map(id => TableScene.tileEl(id, 'div'))),
+    h('b', null, num(r.pips[i]))));
+  const secs = Math.max(0, Math.ceil((v.nextAt - net.serverNow()) / 1000));
+  const delta = mend && v.match && v.you >= 0 ? v.match.deltas[v.you] : null;
+  const actions = h('div', { class: 'row center' });
+  if (mend) {
+    if (S.practice) actions.append(btn(t('playAgain'), () => S.practice!.restart(), 'btn'), btn(t('home'), leaveGame, 'btn alt'));
+    else if (!v.private) actions.append(btn(t('playAgain'), () => { const m = v.mode; leaveGame(); S.mode = m; quick(); }, 'btn'), btn(t('home'), leaveGame, 'btn alt'));
+    else actions.append(btn(t('leave'), leaveGame, 'btn alt'));
+  }
+  return h('div', { class: 'overlay' }, h('div', { class: 'card' },
+    h('h2', null, head),
+    r.blocked && r.team >= 0 ? h('p', { class: 'muted' }, t('blocked')) : null,
+    h('div', { class: 'big' }, r.team >= 0 ? t('plus', { n: r.points }) : t('tie')),
+    delta !== null && delta !== undefined ? h('p', { class: delta >= 0 ? 'good' : 'bad' }, `${t('rating')} ${delta >= 0 ? '+' : '−'}${num(Math.abs(delta))}`) : null,
+    h('p', { class: 'lab' }, t('handsLeft')),
+    h('div', { class: 'res' }, ...rows),
+    !mend ? h('p', { class: 'muted', id: 'next-count' }, t('nextRound', { s: secs })) : v.private && !S.practice ? h('p', { class: 'muted', id: 'next-count' }, t('backToRoom', { s: secs })) : null,
+    actions));
+}
+
+/* ---------------- chess, tawla and ludo screens ---------------- */
+const TAWLA_COLORS = ['#efe4cc', '#6e1f17'];
+function seatSwatch(v: BoardView, seat: number) {
+  if (v.chess) return seat === v.chess.white ? '#efe4cc' : '#2a1a12';
+  if (v.tawla) return TAWLA_COLORS[seat];
+  if (v.ludo) return LUDO_COLORS[v.ludo.colors[seat]];
+  return charColor(v.seats[seat]?.ch ?? 0);
+}
+/** Chess time left for a seat right now. */
+function clockLeft(v: BoardView, seat: number) {
+  if (!v.clocks) return 0;
+  const running = v.phase === 'play' && v.turn === seat;
+  return Math.max(0, v.clocks[seat] - (running ? net.serverNow() - v.now : 0));
+}
+const fmtClock = (ms: number) => { const s = Math.ceil(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+
+function boardScreen(v: BoardView): HTMLElement[] {
+  const myTurn = v.phase === 'play' && v.turn === v.you;
+  const sides = v.seats.map((s, seat) => {
+    if (!s) return null;
+    const active = v.phase === 'play' && v.turn === seat;
+    let extra: HTMLElement | null = null;
+    if (v.chess) extra = h('b', { class: 'clock', id: 'clock-' + seat, dir: 'ltr' }, fmtClock(clockLeft(v, seat)));
+    else if (v.tawla) extra = h('b', null, num(v.scores[seat] ?? 0));
+    else if (v.ludo) extra = h('span', { class: 'muted small' }, `${num(v.ludo.pawns[seat].filter(p => p >= 56).length)}/${num(4)}`);
+    return h('div', { class: 'sc' + (active ? ' on' : ''), onclick: () => openPlayer(seat) },
+      h('span', { class: 'sw', style: `background:${seatSwatch(v, seat)};border:1px solid #0006` }),
+      h('span', { class: 'nm' }, seat === v.you ? t('you') : seatName(v, seat)), extra);
+  }).filter(Boolean) as HTMLElement[];
+  let meta = '';
+  if (v.tawla) meta = `${t(('mode_' + v.mode) as Key)} · ${t('gameN', { n: v.round })} · ${t('to', { n: v.target })} · ${t('pipsShort', { n: v.tawla.pips[Math.max(0, v.you)] })}`;
+  else if (v.chess) meta = t(('mode_' + v.mode) as Key) + ' · ' + t('moveN', { n: v.chess.moveNo });
+  else if (v.ludo) meta = t(('mode_' + v.mode) as Key) + (v.ludo.variant === 'master' && v.you >= 0 && !v.ludo.captures[v.you] ? ' · ' + t('masterNeedCapture') : '');
+  const hud = h('header', { class: 'hud' },
+    h('div', { class: 'row' },
+      btn('‹', () => { if (S.practice || v.phase !== 'play') leaveGame(); else { S.sheet = 'leave'; render(); } }, 'iconbtn back', { 'aria-label': t('leave') }),
+      h('div', { class: 'scores' }, ...sides)),
+    h('div', { class: 'meta muted small' }, meta));
+
+  // status line and the main button
+  let status = '', warn = false;
+  let action: HTMLElement | null = null;
+  if (v.phase === 'play') {
+    if (!myTurn) {
+      status = v.turn >= 0 ? t('turnOf', { name: seatName(v, v.turn) }) : '';
+      if (v.chess && v.chess.check >= 0) status = t('check') + ' · ' + status;
+    } else if (v.chess) {
+      status = v.chess.check >= 0 ? t('check') : t('chessYourMove');
+      warn = v.chess.check >= 0;
+    } else if (v.tawla) {
+      if (!v.tawla.rolled) { status = t('rollDice'); action = btn(t('roll'), () => act({ t: 'roll' }), 'btn big roll', { id: 'roll-btn' }); }
+      else if (!v.tawla.steps.length) { status = t('noMovesPassed'); warn = true; }
+      else {
+        status = S.boardSel === null ? t('pickChecker') : t('youRolled');
+        if (v.tawla.carry) status = t('gulCarry') + ' · ' + status;
+        else if (v.tawla.later?.length || (v.tawla.rolled[0] === v.tawla.rolled[1] && v.tawla.dice[0] !== v.tawla.rolled[0])) status = t('gulRun', { n: v.tawla.dice[0] ?? v.tawla.rolled[0] }) + ' · ' + status;
+        const sel = S.boardSel;
+        if (sel !== null && v.tawla.steps.some(x => x[0] === sel && x[1] === OFF))
+          action = btn(t('bearOff'), () => { act({ t: 'step', from: sel, to: OFF }); S.boardSel = null; render(); }, 'btn', { id: 'bearoff-btn' });
+      }
+    } else if (v.ludo) {
+      if (v.ludo.die === null) { status = t('rollDice'); action = btn(t('roll'), () => act({ t: 'roll' }), 'btn big roll', { id: 'roll-btn' }); }
+      else if (v.ludo.movable.length) status = t('rolledN', { n: v.ludo.die }) + ' · ' + t('pawnTap');
+      else { status = t('rolledN', { n: v.ludo.die }) + ' · ' + (v.ludo.die === 6 ? t('noMovesPassed') : t('needSix')); warn = true; }
+    }
+  }
+  const showTimer = myTurn && !v.chess && v.turnEndsAt;
+  const bottom = h('div', { class: 'bottom board-bottom' },
+    h('div', { class: 'status' + (warn ? ' warn' : '') }, status),
+    showTimer ? h('div', { class: 'timer-row' }, h('div', { class: 'timer', id: 'my-timer' }, h('i')), h('b', { id: 'my-secs', class: 'secs' })) : null,
+    v.chess && v.chess.captured.length ? capturedRow(v) : null,
+    h('div', { class: 'handbar' },
+      h('div', { class: 'sidebtns' },
+        btn('☺', () => { S.sheet = S.sheet === 'emotes' ? null : 'emotes'; render(); }, 'iconbtn', { 'aria-label': t('reactions') }),
+        ...voiceButtons()),
+      h('div', { class: 'board-act' }, action),
+      h('span', { class: 'act-space' })));
+  const out = [hud, bottom];
+  if ((v.phase === 'rend' || v.phase === 'mend') && v.result) out.push(boardResultSheet(v));
+  return out;
+}
+
+const PIECE_GLYPH: Record<string, string> = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚' };
+function capturedRow(v: BoardView) {
+  const c = v.chess!;
+  const byWhite = c.captured.filter(p => p === p.toLowerCase()), byBlack = c.captured.filter(p => p !== p.toLowerCase());
+  const line = (ps: string[], white: boolean) => h('span', { class: 'cap ' + (white ? 'cap-w' : 'cap-b') }, ps.map(p => PIECE_GLYPH[p.toLowerCase()]).join(''));
+  return h('div', { class: 'captured', dir: 'ltr' }, line(byBlack, true), line(byWhite, false));
+}
+
+function promoSheet(v: BoardView) {
+  const pr = S.promo!;
+  const white = v.chess?.you === 'w';
+  const pick = (p: 'q' | 'r' | 'b' | 'n') => { act({ t: 'move', from: pr.from, to: pr.to, promo: p }); S.promo = null; S.boardSel = null; render(); };
+  return h('div', { class: 'overlay', onclick: (e: Event) => { if (e.target === e.currentTarget) { S.promo = null; render(); } } },
+    h('div', { class: 'card' }, h('h2', null, t('promoteTo')),
+      h('div', { class: 'row center promo' }, ...(['q', 'r', 'b', 'n'] as const).map(p =>
+        btn(PIECE_GLYPH[p], () => pick(p), 'piece-btn' + (white ? ' w' : ' b'), { 'aria-label': p })))));
+}
+
+function boardResultSheet(v: BoardView): HTMLElement {
+  const r = v.result!, mend = v.phase === 'mend';
+  const me = v.you;
+  let head: string, sub = '';
+  if (r.winner < 0) head = t('drawGame');
+  else if (mend && v.match) head = v.match.team === me ? (v.tawla ? t('matchWin') : t('youWin')) : (v.tawla ? t('matchLose', { name: seatName(v, v.match.team) }) : t('winsGame', { name: seatName(v, v.match.team) }));
+  else head = r.winner === me ? t('youWin') : t('gameWin', { name: seatName(v, r.winner) });
+  const kindKey = ('res_' + r.kind) as Key;
+  if (r.kind === 'count') sub = t('res_count', { n: r.points });
+  else if (r.kind !== 'win') sub = t(kindKey);
+  const delta = mend && v.match && me >= 0 ? v.match.deltas[me] : null;
+  const actions = h('div', { class: 'row center' });
+  if (mend) {
+    if (S.practice) actions.append(btn(t('playAgain'), () => S.practice!.restart(), 'btn'), btn(t('home'), leaveGame, 'btn alt'));
+    else if (!v.private) actions.append(btn(t('playAgain'), () => { const m = v.mode; leaveGame(); S.mode = m; quick(); }, 'btn'), btn(t('home'), leaveGame, 'btn alt'));
+    else actions.append(btn(t('leave'), leaveGame, 'btn alt'));
+  }
+  const secs = Math.max(0, Math.ceil((v.nextAt - net.serverNow()) / 1000));
+  return h('div', { class: 'overlay' }, h('div', { class: 'card' },
+    h('h2', null, head),
+    sub ? h('p', { class: r.kind === 'mars' ? 'good' : 'muted' }, sub) : null,
+    v.tawla ? h('div', { class: 'big' }, v.scores.map(n => num(n)).join(' – ')) : null,
+    delta !== null && delta !== undefined ? h('p', { class: delta >= 0 ? 'good' : 'bad' }, `${t('rating')} ${delta >= 0 ? '+' : '−'}${num(Math.abs(delta))}`) : null,
+    !mend ? h('p', { class: 'muted', id: 'next-count' }, t('nextGame', { s: secs })) : v.private && !S.practice ? h('p', { class: 'muted', id: 'next-count' }, t('backToRoom', { s: secs })) : null,
+    actions));
+}
+
+function emoteSheet() {
+  return h('div', { class: 'emotes', role: 'dialog' }, ...EMOTES.map(k => btn(t(('emote_' + k) as Key), () => sendEmote(k), 'chip')));
+}
+
+function sheet(...kids: HTMLElement[]) { return h('div', { class: 'overlay' }, h('div', { class: 'card' }, ...kids)); }
+
+/* ---------------- voice chat ---------------- */
+function voiceButtons(): HTMLElement[] {
+  if (S.practice || !Voice.supported()) return [];
+  if (!voice.joined) return [btn('🎙', joinVoice, 'iconbtn voice-btn', { id: 'mic-btn', 'aria-label': t('joinVoice'), title: t('joinVoice') })];
+  return [
+    btn(voice.micMuted ? '🔇' : '🎙', () => voice.setMicMuted(!voice.micMuted), 'iconbtn voice-btn on' + (voice.micMuted ? ' muted' : ''), { id: 'mic-btn', 'aria-label': voice.micMuted ? t('unmuteMic') : t('muteMic'), 'aria-pressed': String(!voice.micMuted) }),
+    btn('✕', () => { voice.leave(); render(); }, 'iconbtn small-icon', { 'aria-label': t('leaveVoice'), title: t('leaveVoice') }),
+  ];
+}
+async function joinVoice() {
+  unlockAudio();
+  const r = await voice.join();
+  if (r === 'denied') toast(t('micDenied'));
+  else if (r === 'unsupported') toast(t('voiceUnsupported'));
+  else { toast(t('voiceJoined')); if (S.view) voice.sync(S.view); }
+  render();
+}
+function updateVoiceButtons() {
+  const b = document.getElementById('mic-btn');
+  if (b) b.classList.toggle('talking', voice.joined && !voice.micMuted && voice.talking(-1));
+}
+
+/* ---------------- players, gifts, blocking ---------------- */
+function openPlayer(seat: number) {
+  const v = S.view; if (!v || S.practice) return;
+  const s = v.seats[seat]; if (!s || seat === v.you) return;
+  S.player = seat; S.reporting = false; S.sheet = 'player'; render();
+}
+function playerSheet(v: AnyView): HTMLElement | null {
+  const seat = S.player, s = v.seats[seat];
+  if (!s) { S.sheet = null; return null; }
+  const close = () => { S.sheet = null; render(); };
+  const coins = S.user?.coins ?? 0;
+  const kids: (HTMLElement | null)[] = [
+    h('div', { class: 'row between' },
+      h('div', { class: 'row' }, h('span', { class: 'sw big-sw', style: `background:${charColor(s.ch)}` }),
+        h('div', { class: 'stack tight' }, h('b', null, seatName(v, seat)), h('span', { class: 'muted small' }, s.bot ? t('bot') : `${t('rating')} ${num(s.rating)}`))),
+      btn('✕', close, 'iconbtn small-icon', { 'aria-label': t('close') })),
+  ];
+  if (s.bot) kids.push(h('p', { class: 'muted' }, t('giftBot')));
+  else if (S.reporting) {
+    kids.push(h('p', null, t('reportWhy')), h('div', { class: 'chips' }, ...(['abuse', 'cheating', 'spam', 'name'] as const).map(r =>
+      btn(t(('report_' + r) as Key), () => { net.send({ t: 'report', seat, reason: r }); S.reporting = false; S.sheet = null; toast(t('reported')); render(); }, 'chip'))));
+  } else {
+    kids.push(
+      h('div', { class: 'row between' }, h('span', { class: 'lab' }, t('sendGift')), h('span', { class: 'coins' }, '🪙 ' + num(coins))),
+      h('div', { class: 'gifts' }, ...GIFTS.map(g => h('button', { type: 'button', class: 'gift', disabled: coins < g.price, onclick: () => sendGift(seat, g.k) },
+        h('span', { class: 'gi' }, g.icon), h('span', { class: 'gn' }, t(('gift_' + g.k) as Key)), h('span', { class: 'gp' }, '🪙 ' + num(g.price))))),
+      coins < GIFTS[0].price ? h('p', { class: 'muted small' }, t('earnCoins')) : null,
+      h('hr'),
+      voice.joined && s.mic ? btn(voice.muted.has(seat) ? t('unmutePlayer') : t('mutePlayer'), () => voice.setMuted(seat, !voice.muted.has(seat)), 'btn alt') : null,
+      h('div', { class: 'row' },
+        btn(blocked.has(s.pid) ? t('unblock') : t('block'), () => {
+          if (blocked.has(s.pid)) { blocked.delete(s.pid); voice.setMuted(seat, false); toast(t('unblocked')); }
+          else { blocked.add(s.pid); voice.setMuted(seat, true); toast(t('blockedMsg')); }
+          saveBlocked(); render();
+        }, 'btn alt'),
+        btn(t('report'), () => { S.reporting = true; render(); }, 'btn alt danger-text')));
+  }
+  return h('div', { class: 'overlay', onclick: (e: Event) => { if (e.target === e.currentTarget) close(); } }, h('div', { class: 'card player-card' }, ...kids.filter(Boolean) as HTMLElement[]));
+}
+function sendGift(seat: number, k: GiftKind) {
+  unlockAudio();
+  net.send({ t: 'gift', to: seat, k });
+  S.sheet = null; render();
+}
+/** Where a seat is on screen: above the character, or above your hand for your own seat. */
+function seatScreen(seat: number): { x: number; y: number } {
+  const v = S.view, pos = scene.posOf(seat);
+  if (v && pos === 0 && v.you >= 0) return { x: window.innerWidth / 2, y: window.innerHeight - 150 };
+  return (pos >= 0 && scene.headScreen(pos)) || { x: window.innerWidth / 2, y: window.innerHeight / 3 };
+}
+function flyGift(from: number, to: number, k: GiftKind) {
+  const g = giftByKind(k); const v = S.view; if (!g || !v) return;
+  const a = seatScreen(from), b = seatScreen(to);
+  const el = h('div', { class: 'gift-fly' }, g.icon);
+  el.style.left = a.x + 'px'; el.style.top = a.y + 'px';
+  document.body.append(el);
+  requestAnimationFrame(() => requestAnimationFrame(() => { el.style.transform = `translate(${b.x - a.x}px, ${b.y - a.y}px) scale(1.6)`; }));
+  setTimeout(() => { el.classList.add('land'); sfx.gift(); }, 900);
+  setTimeout(() => el.remove(), 1900);
+  scene.animate(from, 'play'); setTimeout(() => scene.animate(to, 'win'), 900);
+  const gift = `${t(('gift_' + k) as Key)} ${g.icon}`;
+  toast(to === v.you ? t('giftSentYou', { from: seatName(v, from), gift }) : t('giftSent', { from: seatName(v, from), to: seatName(v, to), gift }));
+}
+
+/* ---------------- labels over characters (per frame) ---------------- */
+const labels = [0, 1, 2, 3].map(pos => {
+  const d = h('div', { class: 'lbl', role: 'button', tabindex: '0' });
+  d.hidden = true; $('labels').append(d);
+  const open = () => { const seat = scene.seatAt(pos); if (seat >= 0) openPlayer(seat); };
+  d.addEventListener('click', open);
+  d.addEventListener('keydown', e => { if ((e as KeyboardEvent).key === 'Enter') open(); });
+  return d;
+});
+let lastSecond = -1;
+function renderLabels(content: boolean) {
+  const v = S.view;
+  labels.forEach((el, pos) => {
+    const seat = v ? scene.seatAt(pos) : -1;
+    const s = v && seat >= 0 ? v.seats[seat] : null;
+    // your own seat is shown in the score bar and the hand, so it gets no floating label
+    const mine = pos === 0 && !!v && v.you >= 0;
+    const myBubble = mine && (S.bubbles.get(v!.you)?.until ?? 0) > Date.now();
+    if (!v || !s || v.phase === 'lobby' || (mine && !myBubble)) { el.hidden = true; return; }
+    const p = scene.headScreen(pos);
+    if (!p) { el.hidden = true; return; }
+    if (content || !el.dataset.k) {
+      const bubble = S.bubbles.get(seat);
+      const showBubble = bubble && bubble.until > Date.now();
+      const talking = !!s.mic && voice.joined && !voice.muted.has(seat) && voice.talking(seat);
+      const key = [seatName(v, seat), s.count, s.away, s.online, v.turn, v.phase, showBubble ? (bubble!.text ?? bubble!.k) : '', getLang(), s.mic, talking, voice.muted.has(seat)].join('|');
+      if (el.dataset.k !== key) {
+        el.dataset.k = key;
+        el.innerHTML = '';
+        el.className = 'lbl' + (v.phase === 'play' && v.turn === seat ? ' on' : '') + (s.away || !s.online ? ' away' : '') + (talking ? ' talking' : '') + (S.practice ? ' static' : '');
+        if (s.mic) el.append(h('span', { class: 'mic', 'aria-label': t('inVoice') }, voice.muted.has(seat) ? '🔇' : '🎙'));
+        el.append(h('span', { class: 'n' }, seatName(v, seat) + (seat === v.you ? ` (${t('you')})` : '')));
+        if (!s.online && !s.bot) el.append(h('span', { class: 'c' }, t('offlineTag')));
+        else if (s.away) el.append(h('span', { class: 'c' }, t('away')));
+        if (!mine && v.game === 'domino') el.append(h('span', { class: 'c' }, t('tiles', { n: s.count })));
+        if (v.phase === 'play' && v.turn === seat && v.turnEndsAt && !(v.game === 'chess')) el.append(h('i', { class: 'bar' }));
+        if (showBubble) el.append(h('span', { class: 'bubble', dir: 'auto' }, bubble!.text ?? t(('emote_' + bubble!.k) as Key)));
+      }
+    }
+    el.hidden = false;
+    el.style.left = Math.max(60, Math.min(window.innerWidth - 60, p.x)) + 'px';
+    el.style.top = Math.max(96, p.y) + 'px';
+  });
+  // timers
+  if (v && v.phase === 'play' && v.turnEndsAt && v.game !== 'chess') {
+    const left = Math.max(0, v.turnEndsAt - net.serverNow());
+    const frac = Math.min(1, left / v.turnMs);
+    document.querySelectorAll<HTMLElement>('.lbl.on .bar, #my-timer i').forEach(b => { b.style.width = (frac * 100).toFixed(1) + '%'; b.classList.toggle('low', left < 5000); });
+    const sec = Math.ceil(left / 1000);
+    const secsEl = document.getElementById('my-secs');
+    if (secsEl) { secsEl.textContent = t('secs', { s: sec }); secsEl.classList.toggle('low', left < 5000); }
+    if (v.turn === v.you && sec <= 3 && sec > 0 && sec !== lastSecond) { lastSecond = sec; sfx.tick(); }
+  }
+  // chess clocks
+  if (v && v.game === 'chess' && v.clocks) v.seats.forEach((_, seat) => {
+    const el = document.getElementById('clock-' + seat); if (!el) return;
+    const left = clockLeft(v, seat);
+    el.textContent = fmtClock(left);
+    el.classList.toggle('low', left < 30_000);
+    if (seat === v.you && v.turn === seat && v.phase === 'play' && left < 10_000) {
+      const sec = Math.ceil(left / 1000); if (sec !== lastSecond) { lastSecond = sec; sfx.tick(); }
+    }
+  });
+  // countdowns
+  const nc = document.getElementById('next-count');
+  if (nc && v) { const s = Math.max(0, Math.ceil((v.nextAt - net.serverNow()) / 1000)); nc.textContent = t(v.phase === 'rend' ? (v.game === 'domino' ? 'nextRound' : 'nextGame') : 'backToRoom', { s }); }
+  const qb = document.getElementById('q-bots');
+  if (qb && S.queue?.botsAt) qb.textContent = t('botsIn', { s: Math.max(0, Math.ceil((S.queue.botsAt - net.serverNow()) / 1000)) });
+}
+// expire emote bubbles
+setInterval(() => { const now = Date.now(); let ch = false; S.bubbles.forEach((b, k) => { if (b.until < now) { S.bubbles.delete(k); ch = true; } }); if (ch) renderLabels(true); }, 500);
+scene.onFrame = () => renderLabels(false);
+
+/* ---------------- platform ---------------- */
+CapApp.addListener('backButton', () => {
+  if (S.promo) { S.promo = null; return render(); }
+  if (S.sheet) { S.sheet = null; return render(); }
+  if (S.view) { if (S.practice || S.view.phase !== 'play') leaveGame(); else { S.sheet = 'leave'; render(); } return; }
+  if (S.queue) { net.send({ t: 'cancel' }); S.queue = null; return render(); }
+  if (S.screen !== 'home') { S.screen = 'home'; return render(); }
+  CapApp.minimizeApp().catch(() => {});
+}).catch(() => {});
+
+const hashCode = location.hash.replace('#', '');
+if (/^[a-z0-9]{5}$/i.test(hashCode)) { S.joinCode = hashCode.toUpperCase(); S.screen = 'friends'; }
+if ('serviceWorker' in navigator && location.protocol === 'https:' && !Capacitor.isNativePlatform()) navigator.serviceWorker.register('/sw.js').catch(() => {});
+
+// how-to-play recorder: with ?rec in the address a script can read the view and find board spots on screen
+if (/[?&]rec\b/.test(location.search)) (window as unknown as Record<string, unknown>).__ahwa = { view: () => S.view, spot: (p: Pick) => scene.spotScreen(p), ghost: (e: End) => scene.ghostScreen(e) };
+document.addEventListener('pointerdown', unlockAudio, { once: true });
+net.connect();
+render();

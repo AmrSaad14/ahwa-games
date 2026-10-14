@@ -1,0 +1,53 @@
+# One-command production setup: the game server plus Caddy for automatic HTTPS (needed for the store apps).
+#   cp .env.example .env   # set DOMAIN
+#   docker compose up -d --build
+services:
+  domino:
+    build: .
+    restart: unless-stopped
+    environment:
+      SECRET: ${SECRET:-}
+      TURN_SECONDS: ${TURN_SECONDS:-10}
+      BOT_FILL_SECONDS: ${BOT_FILL_SECONDS:-12}
+      CHESS_MINUTES: ${CHESS_MINUTES:-}
+      NEXT_ROUND_SECONDS: ${NEXT_ROUND_SECONDS:-7}
+      TRUST_PROXY: "1"
+      TURN_URLS: turn:${DOMAIN}:3478?transport=udp,turn:${DOMAIN}:3478?transport=tcp
+      TURN_SECRET: ${TURN_SECRET:?Set TURN_SECRET in .env}
+      ADMIN_KEY: ${ADMIN_KEY:-}
+    volumes:
+      - domino-data:/data
+    expose:
+      - "8080"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [domino]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+  # Relays voice chat audio when two phones can't connect directly (often the case on mobile data).
+  turn:
+    image: coturn/coturn:4.6.2
+    restart: unless-stopped
+    network_mode: host
+    command: >-
+      -n --log-file=stdout --no-cli --fingerprint
+      --use-auth-secret --static-auth-secret=${TURN_SECRET:?Set TURN_SECRET in .env}
+      --realm=${DOMAIN} --listening-port=3478 --min-port=49160 --max-port=49200
+      --no-tls --no-dtls --no-multicast-peers
+      --denied-peer-ip=10.0.0.0-10.255.255.255 --denied-peer-ip=172.16.0.0-172.31.255.255 --denied-peer-ip=192.168.0.0-192.168.255.255
+
+volumes:
+  domino-data:
+  caddy-data:
+  caddy-config:

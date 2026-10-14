@@ -1,0 +1,9 @@
+node_modules/
+dist/
+client/dist/
+data/
+android/
+ios/
+.env
+*.db
+*.db-*

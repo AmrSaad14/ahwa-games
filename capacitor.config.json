@@ -1,0 +1,9 @@
+{
+  "appId": "com.ahwa.domino",
+  "appName": "Ahwa Domino",
+  "webDir": "client/dist",
+  "backgroundColor": "#1b120c",
+  "server": { "androidScheme": "https" },
+  "android": { "allowMixedContent": false },
+  "ios": { "contentInset": "never" }
+}
