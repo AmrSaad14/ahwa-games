@@ -1,6 +1,6 @@
 {
   "appId": "com.ahwa.domino",
-  "appName": "Ahwa Domino",
+  "appName": "Ahwa Games",
   "webDir": "client/dist",
   "backgroundColor": "#1b120c",
   "server": { "androidScheme": "https" },

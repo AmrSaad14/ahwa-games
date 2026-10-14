@@ -1,0 +1,55 @@
+# Builds an installable Android APK of the game on every push to main (or from the Actions tab).
+# The APK is attached to the run as "ahwa-games-apk".
+#
+# Online play needs your game server's address baked in: set a repository variable named SERVER_URL
+# (Settings → Secrets and variables → Actions → Variables), e.g. https://games.example.com.
+# Without it the app still installs and practice against the computer works offline.
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build the game client
+        env:
+          SERVER_URL: ${{ vars.SERVER_URL }}
+        run: npm run build:client
+
+      - name: Create the Android project
+        run: |
+          npx cap add android
+          node scripts/native-permissions.mjs
+          npx capacitor-assets generate --android --assetPath resources || echo "icons: kept the defaults"
+          npx cap sync android
+
+      - name: Build the APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ahwa-games-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
