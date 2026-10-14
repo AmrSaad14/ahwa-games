@@ -1,5 +1,6 @@
 # Builds an installable Android APK of the game on every push to main (or from the Actions tab).
-# The APK is attached to the run as "ahwa-games-apk".
+# The APK is attached to the run as "ahwa-games-apk" and published on the Releases page as "Latest APK"
+# (tag apk-latest), so it can be downloaded straight to a phone.
 #
 # Online play needs your game server's address baked in: set a repository variable named SERVER_URL
 # (Settings → Secrets and variables → Actions → Variables), e.g. https://games.example.com.
@@ -10,6 +11,9 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: write   # to publish the APK as a release
 
 jobs:
   apk:
@@ -53,3 +57,12 @@ jobs:
           name: ahwa-games-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      - name: Publish as the latest APK release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk ahwa-games.apk
+          gh release delete apk-latest --yes --cleanup-tag || true
+          gh release create apk-latest ahwa-games.apk --title "Latest APK" --target "$GITHUB_SHA" --prerelease \
+            --notes "Built from ${GITHUB_SHA::7}. Install on Android: download ahwa-games.apk and allow installing from this source."
