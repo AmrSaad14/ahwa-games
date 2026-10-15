@@ -524,15 +524,20 @@ function stakeOutcome(mode: Mode, stake: number) {
   const n = MODE_PLAYERS[mode], winners = mode === 'team' ? 2 : 1;
   return { win: winnings(stake, winners, n - winners).net, lose: stake };
 }
-/** Stake chips (5K to 1M) and what's at stake; stakes you can't cover are greyed out. */
+/** The stake: a one-row stepper from 5K to 1M, with what a win and a loss mean; stakes you can't cover are skipped. */
 function stakePicker(mode: Mode, cur = S.stake, pick = (n: number) => { S.stake = n; store.set('stake', String(n)); render(); }, canEdit = true) {
   const coins = S.user?.coins ?? 0;
   const o = stakeOutcome(mode, cur);
+  const i = STAKES.indexOf(cur as typeof STAKES[number]);
+  const prev = i > 0 ? STAKES[i - 1] : null, next = i < STAKES.length - 1 ? STAKES[i + 1] : null;
+  const afford = (n: number | null) => n !== null && (!S.user || coins >= n);
   return h('div', { class: 'stake' },
-    h('div', { class: 'row between' }, h('span', { class: 'lab' }, t('stakeLabel')),
-      h('span', { class: 'small' }, h('span', { class: 'good' }, '+' + shortCoins(o.win)), ' / ', h('span', { class: 'bad' }, '−' + shortCoins(o.lose)))),
-    h('div', { class: 'chips stakes', role: 'radiogroup', 'aria-label': t('stakeLabel') }, ...STAKES.map(n =>
-      h('button', { type: 'button', class: 'chip', role: 'radio', 'aria-checked': String(n === cur), disabled: !canEdit || (!!S.user && coins < n), onclick: () => pick(n) }, shortCoins(n)))));
+    h('span', { class: 'lab' }, t('stakeLabel')),
+    h('div', { class: 'stepper', role: 'group', 'aria-label': t('stakeLabel') },
+      btn('−', () => prev !== null && pick(prev), 'iconbtn step', { disabled: !canEdit || prev === null, 'aria-label': '−' }),
+      h('b', { class: 'stake-val', dir: 'ltr', 'aria-live': 'polite' }, '🪙 ' + shortCoins(cur)),
+      btn('+', () => next !== null && pick(next), 'iconbtn step', { disabled: !canEdit || !afford(next), 'aria-label': '+' })),
+    h('span', { class: 'small stake-odds', dir: 'ltr' }, h('span', { class: 'good' }, '+' + shortCoins(o.win)), ' / ', h('span', { class: 'bad' }, '−' + shortCoins(o.lose))));
 }
 
 function openCoins() { S.screen = 'coins'; S.coinRows = wallet ? wallet.rows.slice() : null; if (S.online && !wallet) net.send({ t: 'coins' }); render(); }
@@ -585,8 +590,7 @@ function homeScreen() {
       h('div', { class: 'row links' },
         btn(t('coinsTitle'), openCoins, 'link'),
         btn(t('leaderboard'), () => openLb(S.game), 'link'),
-        btn(t('rules'), () => { S.screen = 'rules'; render(); }, 'link'),
-        btn(t('settings'), () => { S.screen = 'settings'; render(); }, 'link'))),
+        btn(t('rules'), () => { S.screen = 'rules'; render(); }, 'link'))),
   );
 }
 
@@ -899,7 +903,7 @@ function gameScreen(v: TableView): HTMLElement[] {
       h('div', { class: 'sidebtns' },
         btn('☺', () => { S.sheet = S.sheet === 'emotes' ? null : 'emotes'; render(); }, 'iconbtn', { 'aria-label': t('reactions') }),
         ...voiceButtons()),
-      h('div', { class: 'hand' }, ...v.hand.map(id => {
+      h('div', { class: 'hand' + (v.hand.length > 10 ? ' many' : '') }, ...v.hand.map(id => {
         const el = TableScene.tileEl(id);
         if (myTurn) el.classList.add(endsFor(v.line, id).length && (v.open === null || v.open === id) ? 'ok' : 'dim');
         if (S.sel === id) el.classList.add('sel');

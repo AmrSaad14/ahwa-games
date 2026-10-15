@@ -109,7 +109,7 @@ try {
   const b = await page();
   await step('friend joins with the code', async () => {
     await b.waitForSelector('.btn.big:not([disabled])');
-    await b.click('.row.links .link >> nth=-1'); // settings
+    await b.click('.topbar .chip.profile'); // settings
     await b.fill('#set-name', 'Mona');
     await b.press('#set-name', 'Enter');
     await b.click('.topbar .iconbtn');
