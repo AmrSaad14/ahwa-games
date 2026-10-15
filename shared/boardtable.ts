@@ -12,6 +12,7 @@ export interface BoardTableOptions {
   mode: Mode;
   target: number;
   private: boolean;
+  stake?: number;          // coins each player puts in; the server settles them
   turnMs: number;            // per-move time for tawla and ludo
   nextRoundMs: number;       // pause between games of a tawla match
   botDelay: [number, number];
@@ -40,6 +41,7 @@ export class BoardTable {
   mode: Mode;
   target: number;
   readonly isPrivate: boolean;
+  stake: number;
   seats: (Seat | null)[];
   phase: BoardView['phase'] = 'lobby';
   state: any = null;
@@ -61,7 +63,7 @@ export class BoardTable {
   private rnd = Math.random;
 
   constructor(public opts: BoardTableOptions, private hooks: BoardTableHooks) {
-    this.id = opts.id; this.code = opts.code; this.mode = opts.mode; this.target = opts.target; this.isPrivate = opts.private;
+    this.id = opts.id; this.code = opts.code; this.mode = opts.mode; this.target = opts.target; this.isPrivate = opts.private; this.stake = opts.stake ?? 0;
     this.game = gameOf(opts.mode) as BoardGameId;
     this.def = defFor(this.mode);
     this.seats = new Array(MODE_PLAYERS[this.mode]).fill(null);
@@ -140,10 +142,11 @@ export class BoardTable {
     return null;
   }
 
-  setup(byUid: string, mode?: Mode, target?: number): string | null {
+  setup(byUid: string, mode?: Mode, target?: number, stake?: number): string | null {
     if (byUid !== this.hostUid) return 'not_host';
     if (this.phase !== 'lobby') return 'in_progress';
     if (target !== undefined) this.target = target;
+    if (stake !== undefined) this.stake = stake;
     if (mode && mode !== this.mode) {
       if (gameOf(mode) !== this.game) return 'bad_mode';
       const people = this.seats.filter(Boolean) as Seat[];
@@ -320,7 +323,7 @@ export class BoardTable {
     const turn = this.phase === 'play' && this.state ? this.def.toMove(this.state) : -1;
     const clocks = this.clocks ? this.clocks.map((c, i) => (i === turn && this.phase === 'play' ? Math.max(0, c - (Date.now() - this.clockFrom)) : c)) : null;
     const v: BoardView = {
-      game: this.game, id: this.id, code: this.code, mode: this.mode, target: this.target, private: this.isPrivate, phase: this.phase, you,
+      game: this.game, id: this.id, code: this.code, mode: this.mode, target: this.target, private: this.isPrivate, stake: this.stake, phase: this.phase, you,
       seats: this.seats.map((s, i) => s && {
         name: s.name, ch: s.ch, bot: s.bot, away: s.away, online: s.online, count: 0, team: i, host: s.uid === this.hostUid,
         rating: s.rating, mic: !!s.mic && s.online, pid: s.bot ? '' : publicId(s.uid),

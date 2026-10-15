@@ -16,6 +16,7 @@ export interface TableOptions {
   mode: Mode;
   target: number;
   private: boolean;
+  stake?: number;          // coins each player puts in; the server settles them
   turnMs: number;          // time a person has for a move
   nextRoundMs: number;     // pause between rounds
   botDelay: [number, number];
@@ -50,6 +51,7 @@ export class Table {
   mode: Mode;
   target: number;
   readonly isPrivate: boolean;
+  stake: number;
   seats: (Seat | null)[];
   phase: TableView['phase'] = 'lobby';
   hands: number[][] = [];
@@ -74,7 +76,7 @@ export class Table {
   private lastPlayedValue: number[] = [];
 
   constructor(public opts: TableOptions, private hooks: TableHooks) {
-    this.id = opts.id; this.code = opts.code; this.mode = opts.mode; this.target = opts.target; this.isPrivate = opts.private;
+    this.id = opts.id; this.code = opts.code; this.mode = opts.mode; this.target = opts.target; this.isPrivate = opts.private; this.stake = opts.stake ?? 0;
     this.seats = new Array(MODE_PLAYERS[this.mode]).fill(null);
     this.scores = new Array(teamCount(this.mode)).fill(0);
   }
@@ -159,10 +161,11 @@ export class Table {
     return null;
   }
 
-  setup(byUid: string, mode?: Mode, target?: number): string | null {
+  setup(byUid: string, mode?: Mode, target?: number, stake?: number): string | null {
     if (byUid !== this.hostUid) return 'not_host';
     if (this.phase !== 'lobby') return 'in_progress';
     if (target !== undefined) this.target = target;
+    if (stake !== undefined) this.stake = stake;
     if (mode && mode !== this.mode) {
       if (!targetOptions(mode).includes(this.target)) this.target = defaultTarget(mode);
       const people = this.seats.filter(Boolean) as Seat[];
@@ -415,7 +418,7 @@ export class Table {
     const you = this.seatOf(uid);
     const reveal = this.phase === 'rend' || this.phase === 'mend';
     return {
-      game: 'domino', id: this.id, code: this.code, mode: this.mode, target: this.target, private: this.isPrivate, phase: this.phase, you,
+      game: 'domino', id: this.id, code: this.code, mode: this.mode, target: this.target, private: this.isPrivate, stake: this.stake, phase: this.phase, you,
       seats: this.seats.map((s, i) => s && {
         name: s.name, ch: s.ch, bot: s.bot, away: s.away, online: s.online, count: this.hands[i]?.length ?? 0,
         team: teamOf(this.mode, i), host: s.uid === this.hostUid, rating: s.rating, mic: !!s.mic && s.online, pid: s.bot ? '' : publicId(s.uid),

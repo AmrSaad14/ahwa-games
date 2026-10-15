@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import type { LeaderRow, PublicUser } from '../shared/protocol';
+import type { CoinRow, LeaderRow, PublicUser } from '../shared/protocol';
 import type { GameId } from '../shared/engine';
 import { ECONOMY } from '../shared/gifts';
 
@@ -43,6 +43,11 @@ export class Store {
         games INTEGER NOT NULL DEFAULT 0, wins INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, game)
       );
       CREATE INDEX IF NOT EXISTS ratings_board ON ratings(game, rating DESC);
+      CREATE TABLE IF NOT EXISTS coin_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, ts INTEGER NOT NULL, kind TEXT NOT NULL,
+        delta INTEGER NOT NULL, fee INTEGER NOT NULL DEFAULT 0, stake INTEGER NOT NULL DEFAULT 0, mode TEXT, balance INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS coin_log_user ON coin_log(user_id, id DESC);
       CREATE TABLE IF NOT EXISTS reports (
         id INTEGER PRIMARY KEY AUTOINCREMENT, from_id TEXT NOT NULL, about_id TEXT NOT NULL,
         reason TEXT NOT NULL, table_id TEXT NOT NULL, ts INTEGER NOT NULL
@@ -53,6 +58,10 @@ export class Store {
     if (!cols.has('coins')) this.db.exec(`ALTER TABLE users ADD COLUMN coins INTEGER NOT NULL DEFAULT ${ECONOMY.startCoins}`);
     if (!cols.has('gifts')) this.db.exec('ALTER TABLE users ADD COLUMN gifts INTEGER NOT NULL DEFAULT 0');
     if (!cols.has('bonus_day')) this.db.exec('ALTER TABLE users ADD COLUMN bonus_day TEXT');
+    // coins moved to stakes from 5K to 1M: older balances are scaled up once
+    if (!this.db.prepare("SELECT v FROM meta WHERE k = 'coins_v2'").get()) {
+      this.db.exec("UPDATE users SET coins = coins * 100; INSERT INTO meta (k, v) VALUES ('coins_v2', '1')");
+    }
   }
 
   secret(fromEnv: string): string {
@@ -67,7 +76,8 @@ export class Store {
   createGuest(name: string, ch: number): UserRow {
     const id = 'u' + crypto.randomBytes(9).toString('base64url');
     const now = Date.now();
-    this.db.prepare('INSERT INTO users (id, name, ch, created, seen) VALUES (?, ?, ?, ?, ?)').run(id, name, ch, now, now);
+    this.db.prepare('INSERT INTO users (id, name, ch, coins, created, seen) VALUES (?, ?, ?, ?, ?, ?)').run(id, name, ch, ECONOMY.startCoins, now, now);
+    this.logCoins(id, 'welcome', ECONOMY.startCoins);
     return this.get(id)!;
   }
 
@@ -89,6 +99,7 @@ export class Store {
     this.db.prepare('DELETE FROM gifts WHERE from_id = ? OR to_id = ?').run(id, id);
     this.db.prepare('DELETE FROM reports WHERE from_id = ?').run(id);
     this.db.prepare('DELETE FROM ratings WHERE user_id = ?').run(id);
+    this.db.prepare('DELETE FROM coin_log WHERE user_id = ?').run(id);
   }
 
   /** Gives the daily coin bonus once per (UTC) day. Returns the coins added, or 0. */
@@ -96,10 +107,39 @@ export class Store {
     const day = new Date().toISOString().slice(0, 10);
     const r = this.db.prepare('UPDATE users SET coins = coins + ?, bonus_day = ? WHERE id = ? AND (bonus_day IS NULL OR bonus_day <> ?)')
       .run(ECONOMY.dailyBonus, day, id, day);
-    return Number(r.changes) ? ECONOMY.dailyBonus : 0;
+    if (!Number(r.changes)) return 0;
+    this.logCoins(id, 'daily', ECONOMY.dailyBonus);
+    return ECONOMY.dailyBonus;
   }
 
-  addCoins(id: string, n: number) { this.db.prepare('UPDATE users SET coins = coins + ? WHERE id = ?').run(n, id); }
+  coinsOf(id: string) { return (this.db.prepare('SELECT coins FROM users WHERE id = ?').get(id) as { coins: number } | undefined)?.coins ?? 0; }
+
+  /** Adds (or with a negative n, takes) coins. */
+  addCoins(id: string, n: number) { if (n) this.db.prepare('UPDATE users SET coins = coins + ? WHERE id = ?').run(n, id); }
+
+  /** Writes a line in the player's coin history. */
+  logCoins(id: string, kind: string, delta: number, extra: { fee?: number; stake?: number; mode?: string } = {}) {
+    this.db.prepare('INSERT INTO coin_log (user_id, ts, kind, delta, fee, stake, mode, balance) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(id, Date.now(), kind, delta, extra.fee ?? 0, extra.stake ?? 0, extra.mode ?? null, this.coinsOf(id));
+  }
+
+  /** Takes the stake from every player at once, or from nobody if one of them can't cover it. */
+  takeStakes(ids: string[], stake: number): boolean {
+    this.db.exec('BEGIN');
+    try {
+      for (const id of ids) {
+        const r = this.db.prepare('UPDATE users SET coins = coins - ? WHERE id = ? AND coins >= ?').run(stake, id, stake);
+        if (!Number(r.changes)) { this.db.exec('ROLLBACK'); return false; }
+      }
+      this.db.exec('COMMIT');
+      return true;
+    } catch (e) { this.db.exec('ROLLBACK'); throw e; }
+  }
+
+  coinHistory(id: string, limit = 60): CoinRow[] {
+    return (this.db.prepare('SELECT ts, kind, delta, fee, stake, mode, balance FROM coin_log WHERE user_id = ? ORDER BY id DESC LIMIT ?').all(id, limit) as unknown as CoinRow[])
+      .map(r => ({ ...r, mode: r.mode ?? null }));
+  }
 
   /** Moves coins for a gift in one transaction. Returns false if the sender can't afford it. */
   sendGift(from: string, to: string, kind: string, price: number): boolean {
@@ -109,6 +149,7 @@ export class Store {
       if (!Number(r.changes)) { this.db.exec('ROLLBACK'); return false; }
       this.db.prepare('UPDATE users SET gifts = gifts + 1 WHERE id = ?').run(to);
       this.db.prepare('INSERT INTO gifts (from_id, to_id, kind, price, ts) VALUES (?, ?, ?, ?, ?)').run(from, to, kind, price, Date.now());
+      this.logCoins(from, 'gift', -price);
       this.db.exec('COMMIT');
       return true;
     } catch (e) { this.db.exec('ROLLBACK'); throw e; }

@@ -166,9 +166,9 @@ test('team game (2 vs 2) runs to the end', async () => {
 
 test('daily bonus, gifts between players, and coins', async () => {
   const a = await new Client().open(), b = await new Client().open();
-  assert.equal(a.last('bonus')?.coins, 100, 'daily bonus on first visit');
+  assert.equal(a.last('bonus')?.coins, 10_000, 'daily bonus on first visit');
   const start = a.last('welcome')!.user.coins;
-  assert.equal(start, 600);
+  assert.equal(start, 110_000);
   // a second visit the same day gives no bonus
   const a2 = await new Client().open(a.token);
   assert.equal(a2.last('bonus'), undefined);
@@ -186,14 +186,17 @@ test('daily bonus, gifts between players, and coins', async () => {
   a3.send({ t: 'gift', to: bSeat, k: 'rose' });
   await b.until(() => b.last('gift')?.k === 'rose');
   assert.equal(b.last('gift')!.from, a3.view!.you);
-  await a3.until(() => a3.last('user')?.user.coins === start - 30);
+  await a3.until(() => a3.last('user')?.user.coins === start - 3_000);
   await b.until(() => b.last('user')?.user.gifts === 1);
   // gifts to computer players are refused, and so are gifts you can't afford
   await new Promise(r => setTimeout(r, 1300));
   a3.send({ t: 'gift', to: 2, k: 'tea' });
   await a3.until(() => a3.last('err')?.code === 'gift_bot');
   a3.send({ t: 'gift', to: bSeat, k: 'diamond' });
-  await a3.until(() => a3.last('user')?.user.coins === start - 530);
+  await a3.until(() => a3.last('user')?.user.coins === start - 53_000);
+  await new Promise(r => setTimeout(r, 1300));
+  a3.send({ t: 'gift', to: bSeat, k: 'diamond' });
+  await a3.until(() => a3.last('user')?.user.coins === start - 103_000);
   await new Promise(r => setTimeout(r, 1300));
   a3.send({ t: 'gift', to: bSeat, k: 'diamond' });
   await a3.until(() => a3.last('err')?.code === 'not_enough_coins');
@@ -271,4 +274,44 @@ test('leaderboard and health endpoints answer', async () => {
   assert.equal(res.status, 200);
   assert.equal((await res.json()).ok, true);
   c.close();
+});
+
+test('stakes: the winner takes the loser\'s stake less 10%, and it shows in the coin history', async () => {
+  const a = await new Client().open(), b = await new Client().open();
+  const coins = (c: Client) => (c.last('user') ?? c.last('welcome'))!.user.coins;
+  const startA = coins(a), startB = coins(b);
+  // a stake you can't cover is refused
+  a.send({ t: 'quick', mode: 'ffa2', stake: 1_000_000 });
+  await a.until(() => a.last('err')?.code === 'not_enough_coins');
+  a.send({ t: 'create', mode: 'ffa2', target: 51, stake: 20_000 });
+  await a.until(() => a.view?.stake === 20_000 && !!a.view.code);
+  b.send({ t: 'join', code: a.view!.code! });
+  await a.until(() => a.view?.seats.filter(Boolean).length === 2);
+  a.autoplay = b.autoplay = true;
+  a.send({ t: 'start' });
+  await a.until(() => a.view?.phase === 'play');
+  assert.equal(coins(a), startA - 20_000, 'the stake is taken when the match starts');
+  await a.until(() => !!a.last('payout') && !!b.last('payout'), 120_000);
+  const pa = a.last('payout')!, pb = b.last('payout')!;
+  const [w, l] = pa.kind === 'win' ? [pa, pb] : [pb, pa];
+  assert.deepEqual([w.kind, w.delta, w.fee], ['win', 18_000, 2_000]);
+  assert.deepEqual([l.kind, l.delta], ['loss', -20_000]);
+  await a.until(() => coins(a) === startA + pa.delta); await b.until(() => coins(b) === startB + pb.delta);
+  a.send({ t: 'coins' });
+  await a.until(() => !!a.last('coins'));
+  const row = a.last('coins')!.rows[0];
+  assert.equal(row.kind, pa.kind); assert.equal(row.delta, pa.delta); assert.equal(row.mode, 'ffa2'); assert.equal(row.balance, coins(a));
+  a.close(); b.close();
+});
+
+test('stakes: walking out of a match loses the stake', async () => {
+  const p = await new Client().open();
+  const start = p.last('welcome')!.user.coins;
+  p.send({ t: 'quick', mode: 'ffa2', stake: 50_000 });
+  await p.until(() => p.view?.phase === 'play' && p.view.stake === 50_000);
+  p.send({ t: 'leave' });
+  await p.until(() => p.last('payout')?.kind === 'left');
+  assert.equal(p.last('payout')!.delta, -50_000);
+  await p.until(() => p.last('user')?.user.coins === start - 50_000);
+  p.close();
 });

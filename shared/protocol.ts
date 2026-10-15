@@ -36,6 +36,17 @@ export interface RoundResult {
   hands: number[][];   // revealed hands per seat
 }
 
+/** One line of a player's coin history. */
+export interface CoinRow {
+  ts: number;
+  kind: string;        // win | loss | draw | left | refund | daily | gift | welcome
+  delta: number;       // change to the balance (a win is the profit after the fee, a loss the stake)
+  fee: number;         // the game's 10% on a win
+  stake: number;
+  mode: string | null;
+  balance: number;     // balance after this line
+}
+
 export interface MatchResult {
   team: number;
   scores: number[];
@@ -49,6 +60,7 @@ export interface TableView {
   mode: Mode;
   target: number;
   private: boolean;
+  stake: number;       // coins each player puts in (0: friendly)
   phase: 'lobby' | 'play' | 'rend' | 'mend';
   you: number;
   seats: (SeatView | null)[];
@@ -78,6 +90,7 @@ export interface BoardView {
   mode: Mode;
   target: number;
   private: boolean;
+  stake: number;
   phase: 'lobby' | 'play' | 'rend' | 'mend';
   you: number;
   seats: (SeatView | null)[];
@@ -131,18 +144,19 @@ export type C2S =
   | { t: 'login'; email: string; pw: string }
   | { t: 'logout' }
   | { t: 'delete' }
-  | { t: 'quick'; mode: Mode }
+  | { t: 'quick'; mode: Mode; stake?: number }
   | { t: 'cancel' }
-  | { t: 'create'; mode: Mode; target: number }
+  | { t: 'create'; mode: Mode; target: number; stake?: number }
   | { t: 'join'; code: string }
   | { t: 'leave' }
-  | { t: 'setup'; mode?: Mode; target?: number }
+  | { t: 'setup'; mode?: Mode; target?: number; stake?: number }
   | { t: 'bot'; seat: number }
   | { t: 'kick'; seat: number }
   | { t: 'start' }
   | { t: 'act'; a: Action | BoardAction }
   | { t: 'emote'; k: Emote }
   | { t: 'lb'; game?: GameId }
+  | { t: 'coins' }
   | { t: 'gift'; to: number; k: GiftKind }
   | { t: 'voice'; on: boolean }
   | { t: 'rtc'; to: number; data: RtcSignal }
@@ -157,7 +171,9 @@ export type S2C =
   | { t: 'rtc'; from: number; data: RtcSignal }
   | { t: 'user'; user: PublicUser }
   | { t: 'err'; code: string }
-  | { t: 'queue'; mode: Mode | null; count: number; need: number; botsAt: number; now: number }
+  | { t: 'queue'; mode: Mode | null; count: number; need: number; botsAt: number; now: number; stake?: number }
+  | { t: 'coins'; rows: CoinRow[] }
+  | { t: 'payout'; kind: string; delta: number; fee: number; stake: number }
   | { t: 'table'; view: AnyView }
   | { t: 'left' }
   | { t: 'emote'; seat: number; k: Emote }

@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { GAMES, GameId, MODES, MODE_PLAYERS, Mode, defaultTarget, gameOf, targetOptions, teamOf } from '../shared/engine';
 import type { C2S, Emote, IceServer, S2C } from '../shared/protocol';
-import { ECONOMY, giftByKind } from '../shared/gifts';
+import { STAKES, giftByKind, isStake, winnings } from '../shared/gifts';
 import { EMOTES } from '../shared/protocol';
 import { Table } from '../shared/table';
 import { BoardTable } from '../shared/boardtable';
@@ -20,6 +20,8 @@ export interface Conn {
 
 interface Session { conn: Conn; uid: string | null; msgs: Limiter }
 interface QEntry { uid: string; since: number }
+/** Coins on a table for the match being played: who paid in, from which seat, and who has walked away. */
+interface Escrow { stake: number; mode: Mode; paid: Map<string, { seat: number; left: boolean }> }
 
 export interface HubOptions {
   turnMs: number; botFillMs: number; nextRoundMs: number; botDelay: [number, number]; lobbyAfterMatchMs: number; msgsPer5s?: number;
@@ -38,7 +40,10 @@ export class Hub {
   private tables = new Map<string, Room>();
   private byCode = new Map<string, Room>();
   private userTable = new Map<string, Room>();
-  private queues = Object.fromEntries(MODES.map(m => [m, [] as QEntry[]])) as Record<Mode, QEntry[]>;
+  /** Matchmaking queues, one per mode and stake ("ffa2|20000"). */
+  private queues = new Map<string, QEntry[]>();
+  private escrow = new Map<string, Escrow>();
+  private stopping = false;
   private emptySince = new Map<string, number>();
   private authLimiter = new Limiter(10, 60_000);
   private giftLimiter = new Limiter(1, 1200);
@@ -49,9 +54,9 @@ export class Hub {
     this.ticker = setInterval(() => { this.matchmake(); this.sweep(); }, 1000);
   }
 
-  stop() { clearInterval(this.ticker); this.tables.forEach(t => t.close()); }
+  stop() { this.stopping = true; clearInterval(this.ticker); this.tables.forEach(t => t.close()); }
 
-  stats() { return { connections: this.sessions.size, tables: this.tables.size, queued: MODES.map(m => this.queues[m].length).reduce((a, b) => a + b, 0) }; }
+  stats() { return { connections: this.sessions.size, tables: this.tables.size, queued: [...this.queues.values()].reduce((a, q) => a + q.length, 0) }; }
 
   /* ---------------- connections ---------------- */
 
@@ -118,19 +123,26 @@ export class Hub {
       }
       case 'quick': {
         if (!MODES.includes(m.mode)) return err('bad_mode');
+        const stake = isStake(m.stake) ? m.stake : STAKES[0];
+        if (this.store.coinsOf(uid) < stake) return err('not_enough_coins');
         if (table) this.leaveTable(uid);
         this.dequeue(uid);
-        this.queues[m.mode].push({ uid, since: Date.now() });
-        this.sendQueue(m.mode);
+        const key = m.mode + '|' + stake;
+        if (!this.queues.has(key)) this.queues.set(key, []);
+        this.queues.get(key)!.push({ uid, since: Date.now() });
+        this.sendQueue(key);
         return this.matchmake();
       }
       case 'cancel': this.dequeue(uid); return s.conn.send({ t: 'queue', mode: null, count: 0, need: 0, botsAt: 0, now: Date.now() });
+      case 'coins': return s.conn.send({ t: 'coins', rows: this.store.coinHistory(uid) });
       case 'create': {
         if (!MODES.includes(m.mode)) return err('bad_mode');
         const target = targetOptions(m.mode).includes(m.target) ? m.target : defaultTarget(m.mode);
+        const stake = isStake(m.stake) ? m.stake : STAKES[0];
+        if (this.store.coinsOf(uid) < stake) return err('not_enough_coins');
         this.dequeue(uid);
         if (table) this.leaveTable(uid);
-        const t = this.newTable(m.mode, target, true);
+        const t = this.newTable(m.mode, target, true, stake);
         const u = this.store.get(uid)!;
         t.join({ uid, name: u.name, ch: u.ch, bot: false, rating: this.store.ratingOf(uid, gameOf(m.mode)) });
         this.userTable.set(uid, t);
@@ -140,6 +152,7 @@ export class Hub {
         const code = String(m.code || '').toLowerCase().replace(/[^a-z0-9]/g, '');
         const t = this.byCode.get(code);
         if (!t || t.closed) return err('room_not_found');
+        if (t.seatOf(uid) < 0 && this.store.coinsOf(uid) < t.stake) return err('not_enough_coins');
         if (table && table !== t) this.leaveTable(uid);
         this.dequeue(uid);
         const u = this.store.get(uid)!;
@@ -158,7 +171,8 @@ export class Hub {
         const mode = m.mode && MODES.includes(m.mode) ? m.mode : undefined;
         if (mode && gameOf(mode) !== gameOf(table.mode)) return err('bad_mode');
         const target = m.target !== undefined && targetOptions(mode ?? table.mode).includes(m.target) ? m.target : undefined;
-        const e = table.setup(uid, mode, target); return e ? err(e) : undefined;
+        const stake = isStake(m.stake) ? m.stake : undefined;
+        const e = table.setup(uid, mode, target, stake); return e ? err(e) : undefined;
       }
       case 'bot': { if (!table) return err('no_table'); const e = table.addBot(uid, Number(m.seat)); return e ? err(e) : undefined; }
       case 'kick': {
@@ -169,7 +183,17 @@ export class Hub {
         if (victim && !victim.bot) { this.userTable.delete(victim.uid); this.byUser.get(victim.uid)?.conn.send({ t: 'left' }); }
         return;
       }
-      case 'start': { if (!table) return err('no_table'); const e = table.start(uid); return e ? err(e) : undefined; }
+      case 'start': {
+        if (!table) return err('no_table');
+        if (uid !== table.hostUid) return err('not_host');
+        if (table.phase !== 'lobby') return err('in_progress');
+        if (table.seats.some(x => !x)) return err('seats_empty');
+        // everyone puts their stake in before the first move
+        if (!this.takeStakes(table)) return err('player_short');
+        const e = table.start(uid);
+        if (e) { this.refundAll(table, false); return err(e); }
+        return;
+      }
       case 'act': {
         if (!table) return err('no_table');
         const a = m.a as Record<string, unknown>;
@@ -284,13 +308,13 @@ export class Hub {
 
   /* ---------------- tables ---------------- */
 
-  private newTable(mode: Mode, target: number, isPrivate: boolean): Room {
+  private newTable(mode: Mode, target: number, isPrivate: boolean, stake: number): Room {
     let code: string | null = null;
     if (isPrivate) {
       do { code = Array.from({ length: 5 }, () => CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)]).join(''); } while (this.byCode.has(code));
     }
     const opts = {
-      id: crypto.randomUUID(), code, mode, target, private: isPrivate,
+      id: crypto.randomUUID(), code, mode, target, private: isPrivate, stake,
       turnMs: this.opts.turnMs, nextRoundMs: this.opts.nextRoundMs, botDelay: this.opts.botDelay, offlineGraceMs: 8000, lobbyAfterMatchMs: this.opts.lobbyAfterMatchMs,
       autoMoveMs: this.opts.autoMoveMs, chessClockMs: this.opts.chessClockMs,
     };
@@ -309,7 +333,61 @@ export class Hub {
   private leaveTable(uid: string) {
     const t = this.userTable.get(uid);
     this.userTable.delete(uid);
+    if (t) this.forfeit(t, uid);
     t?.leave(uid);
+  }
+
+  /* ---------------- coins on the table ---------------- */
+
+  /** Takes every person's stake as the match starts. Computer players' stakes come from the game. */
+  private takeStakes(t: Room): boolean {
+    const people = t.seats.map((s, i) => ({ s, i })).filter(x => x.s && !x.s.bot);
+    if (!t.stake) return true;
+    if (!this.store.takeStakes(people.map(x => x.s!.uid), t.stake)) return false;
+    this.escrow.set(t.id, { stake: t.stake, mode: t.mode, paid: new Map(people.map(x => [x.s!.uid, { seat: x.i, left: false }])) });
+    people.forEach(x => this.sendUser(x.s!.uid));
+    return true;
+  }
+
+  /** Walking out of a match in progress loses the stake. */
+  private forfeit(t: Room, uid: string) {
+    const e = this.escrow.get(t.id), p = e?.paid.get(uid);
+    if (!e || !p || p.left) return;
+    p.left = true;
+    this.store.logCoins(uid, 'left', -e.stake, { stake: e.stake, mode: e.mode });
+    this.byUser.get(uid)?.conn.send({ t: 'payout', kind: 'left', delta: -e.stake, fee: 0, stake: e.stake });
+    this.sendUser(uid);
+  }
+
+  /** Gives the stakes back (a server restart, or a match that couldn't start). */
+  private refundAll(t: Room, log: boolean) {
+    const e = this.escrow.get(t.id); if (!e) return;
+    this.escrow.delete(t.id);
+    for (const [uid, p] of e.paid) {
+      if (p.left) continue;
+      this.store.addCoins(uid, e.stake);
+      if (log) this.store.logCoins(uid, 'refund', 0, { stake: e.stake, mode: e.mode });
+      this.sendUser(uid);
+    }
+  }
+
+  /** The winners take the losers' stakes, less the game's 10%. */
+  private settle(t: Room, team: number) {
+    const e = this.escrow.get(t.id); if (!e) return;
+    this.escrow.delete(t.id);
+    const won = (i: number) => teamOf(t.mode, i) === team;
+    const winners = t.seats.filter((_, i) => won(i)).length, losers = t.seats.length - winners;
+    const w = winnings(e.stake, winners, losers);
+    for (const [uid, p] of e.paid) {
+      if (p.left) continue;
+      let kind: string, delta: number, fee = 0;
+      if (team < 0) { kind = 'draw'; delta = 0; this.store.addCoins(uid, e.stake); }
+      else if (won(p.seat)) { kind = 'win'; delta = w.net; fee = w.fee; this.store.addCoins(uid, e.stake + w.net); }
+      else { kind = 'loss'; delta = -e.stake; }
+      this.store.logCoins(uid, kind, delta, { fee, stake: e.stake, mode: e.mode });
+      this.byUser.get(uid)?.conn.send({ t: 'payout', kind, delta, fee, stake: e.stake });
+      this.sendUser(uid);
+    }
   }
 
   private pushView(t: Room, uid: string) {
@@ -346,12 +424,16 @@ export class Hub {
     } else {
       t.seats.forEach((s, i) => { if (s && !s.bot) { this.store.recordResult(s.uid, null, teamOf(t.mode, i) === res.team, game); this.sendUser(s.uid); } });
     }
-    // coins for everyone who played; more for the winners
-    t.seats.forEach((s, i) => { if (s && !s.bot) { this.store.addCoins(s.uid, teamOf(t.mode, i) === res.team ? ECONOMY.matchWin : ECONOMY.matchPlayed); this.sendUser(s.uid); } });
+    this.settle(t, res.team);
     this.store.saveMatch({ id: t.id + ':' + Date.now(), mode: t.mode, private: t.isPrivate, players, scores: res.scores, team: res.team });
   }
 
   private onClosed(t: Room) {
+    // a match nobody finished: on a server restart everyone gets their stake back, otherwise those who walked away lose it
+    if (this.escrow.has(t.id)) {
+      if (this.stopping) this.refundAll(t, true);
+      else { for (const uid of this.escrow.get(t.id)!.paid.keys()) this.forfeit(t, uid); this.escrow.delete(t.id); }
+    }
     this.tables.delete(t.id);
     if (t.code) this.byCode.delete(t.code);
     this.emptySince.delete(t.id);
@@ -378,28 +460,34 @@ export class Hub {
   /* ---------------- matchmaking ---------------- */
 
   private dequeue(uid: string) {
-    for (const m of MODES) {
-      const i = this.queues[m].findIndex(q => q.uid === uid);
-      if (i >= 0) { this.queues[m].splice(i, 1); this.sendQueue(m); }
+    for (const [key, q] of this.queues) {
+      const i = q.findIndex(e => e.uid === uid);
+      if (i >= 0) { q.splice(i, 1); this.sendQueue(key); }
     }
   }
 
-  private sendQueue(mode: Mode) {
-    const q = this.queues[mode], need = MODE_PLAYERS[mode];
+  private sendQueue(key: string) {
+    const q = this.queues.get(key) ?? [];
+    const [mode, st] = key.split('|') as [Mode, string];
+    const need = MODE_PLAYERS[mode];
     const botsAt = q.length ? q[0].since + this.opts.botFillMs : 0;
-    for (const e of q) this.byUser.get(e.uid)?.conn.send({ t: 'queue', mode, count: q.length, need, botsAt, now: Date.now() });
+    for (const e of q) this.byUser.get(e.uid)?.conn.send({ t: 'queue', mode, count: q.length, need, botsAt, now: Date.now(), stake: Number(st) });
   }
 
   private matchmake() {
     const now = Date.now();
-    for (const mode of MODES) {
-      const q = this.queues[mode], need = MODE_PLAYERS[mode];
-      // drop anyone who disconnected
-      for (let i = q.length - 1; i >= 0; i--) if (!this.byUser.has(q[i].uid)) q.splice(i, 1);
+    for (const [key, q] of this.queues) {
+      const [mode, st] = key.split('|') as [Mode, string];
+      const stake = Number(st), need = MODE_PLAYERS[mode];
+      // drop anyone who disconnected or can no longer cover the stake
+      for (let i = q.length - 1; i >= 0; i--) {
+        if (!this.byUser.has(q[i].uid)) q.splice(i, 1);
+        else if (this.store.coinsOf(q[i].uid) < stake) { this.byUser.get(q[i].uid)?.conn.send({ t: 'err', code: 'not_enough_coins' }); q.splice(i, 1); }
+      }
       let formed = false;
       while (q.length >= need || (q.length > 0 && now - q[0].since >= this.opts.botFillMs)) {
         const group = q.splice(0, need);
-        const t = this.newTable(mode, defaultTarget(mode), false);
+        const t = this.newTable(mode, defaultTarget(mode), false, stake);
         // spread people around the table; in team games keep strangers on opposite teams when possible
         group.forEach(e => {
           const u = this.store.get(e.uid)!;
@@ -407,10 +495,12 @@ export class Hub {
           this.userTable.set(e.uid, t);
         });
         t.fillBots();
+        if (!this.takeStakes(t)) { group.forEach(e => { this.userTable.delete(e.uid); this.byUser.get(e.uid)?.conn.send({ t: 'err', code: 'not_enough_coins' }); }); t.close(); continue; }
         t.start(null);
         formed = true;
       }
-      if (formed || q.length) this.sendQueue(mode);
+      if (formed || q.length) this.sendQueue(key);
+      if (!q.length) this.queues.delete(key);
     }
   }
 }

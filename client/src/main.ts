@@ -2,8 +2,8 @@ import './styles.css';
 import { App as CapApp } from '@capacitor/app';
 import { Share } from '@capacitor/share';
 import { Capacitor } from '@capacitor/core';
-import { CHESS_TIME, End, GAMES, GAME_MODES, GameId, MODES, Mode, TILES, canPlay, defaultTarget, endsFor, gameOf, targetOptions, teamOf } from '../../shared/engine';
-import type { Action, AnyView, BoardAction, BoardView, Emote, LeaderRow, PublicUser, S2C, TableView } from '../../shared/protocol';
+import { CHESS_TIME, End, GAMES, GAME_MODES, GameId, MODES, MODE_PLAYERS, Mode, TILES, canPlay, defaultTarget, endsFor, gameOf, targetOptions, teamOf } from '../../shared/engine';
+import type { Action, AnyView, BoardAction, BoardView, CoinRow, Emote, LeaderRow, PublicUser, S2C, TableView } from '../../shared/protocol';
 import { LUDO_COLORS } from './boards';
 import type { BoardUi, Pick } from './boards';
 import { BAR, OFF } from '../../shared/games/tawla';
@@ -14,7 +14,7 @@ import { Practice } from './practice';
 import { CHARS, TableScene, charColor } from './scene';
 import { prefs, sfx, unlockAudio } from './sound';
 import { Voice } from './voice';
-import { GIFTS, GiftKind, giftByKind } from '../../shared/gifts';
+import { GIFTS, GiftKind, STAKES, giftByKind, isStake, shortCoins, winnings } from '../../shared/gifts';
 
 /* ---------------- storage ---------------- */
 const store = {
@@ -24,7 +24,7 @@ const store = {
 };
 
 /* ---------------- state ---------------- */
-type Screen = 'home' | 'friends' | 'lb' | 'settings' | 'rules';
+type Screen = 'home' | 'friends' | 'lb' | 'settings' | 'rules' | 'coins';
 type Sheet = null | 'leave' | 'emotes' | 'delete' | 'player';
 const S = {
   screen: 'home' as Screen,
@@ -33,7 +33,7 @@ const S = {
   user: null as PublicUser | null,
   mode: (MODES.includes(store.get('mode') as Mode) ? store.get('mode') : 'ffa2') as Mode,
   target: 101,
-  queue: null as null | { mode: Mode; count: number; need: number; botsAt: number },
+  queue: null as null | { mode: Mode; count: number; need: number; botsAt: number; stake?: number },
   view: null as AnyView | null,
   practice: null as Practice | null,
   sel: null as number | null,
@@ -49,6 +49,9 @@ const S = {
   promo: null as null | { from: number; to: number },
   lbGame: 'domino' as GameId,
   reporting: false,
+  stake: (isStake(Number(store.get('stake'))) ? Number(store.get('stake')) : STAKES[0]) as number,
+  coinRows: null as CoinRow[] | null,
+  payout: null as null | { kind: string; delta: number; fee: number; stake: number; table: string },
 };
 if (gameOf(S.mode) !== S.game) S.mode = GAME_MODES[S.game][0];
 S.target = defaultTarget(S.mode);
@@ -111,7 +114,7 @@ function onMessage(m: S2C) {
       if (['not_your_turn', 'not_playing', 'can_play', 'choose_end'].includes(m.code)) break;
       toast(errText(m.code));
       break;
-    case 'queue': S.queue = m.mode ? { mode: m.mode, count: m.count, need: m.need, botsAt: m.botsAt } : null; break;
+    case 'queue': S.queue = m.mode ? { mode: m.mode, count: m.count, need: m.need, botsAt: m.botsAt, stake: m.stake } : null; break;
     case 'table': if (!S.practice) { S.queue = null; S.busy = false; S.joinCode = ''; applyView(m.view); } return;
     case 'left': if (!S.practice) { voice.leave(); S.view = null; S.sel = null; S.choose = null; S.sheet = null; S.screen = 'home'; } break;
     case 'emote': if (!isBlockedSeat(m.seat)) showEmote(m.seat, m.k); return;
@@ -119,6 +122,12 @@ function onMessage(m: S2C) {
     case 'gift': if (!isBlockedSeat(m.from)) flyGift(m.from, m.to, m.k); return;
     case 'rtc': voice.onSignal(m.from, m.data).catch(() => {}); return;
     case 'lb': if (m.game === S.lbGame) S.lb = { rows: m.rows, me: m.me }; break;
+    case 'coins': S.coinRows = m.rows; break;
+    case 'payout':
+      S.payout = { ...m, table: S.view?.id ?? '' };
+      if (m.kind === 'left') toast(t('payoutLeft', { n: shortCoins(-m.delta) }));
+      if (m.kind === 'win') sfx.gift();
+      break;
     default: return;
   }
   render();
@@ -279,8 +288,9 @@ function quick() {
   unlockAudio();
   if (!S.online) return toast(t('offline'));
   store.set('mode', S.mode); store.set('game', gameOf(S.mode));
-  net.send({ t: 'quick', mode: S.mode });
-  S.queue = { mode: S.mode, count: 1, need: 0, botsAt: 0 };
+  if ((S.user?.coins ?? 0) < S.stake) return toast(t('needCoins', { n: shortCoins(S.stake) }));
+  net.send({ t: 'quick', mode: S.mode, stake: S.stake });
+  S.queue = { mode: S.mode, count: 1, need: 0, botsAt: 0, stake: S.stake };
   render();
 }
 function startPractice(mode = S.mode) {
@@ -399,9 +409,9 @@ function render() {
   } else {
     scene.showHome(localCh());
     if (S.queue) ui.append(searchScreen());
-    else ui.append(topBar(), ({ home: homeScreen, friends: friendsScreen, lb: lbScreen, settings: settingsScreen, rules: rulesScreen })[S.screen]());
+    else ui.append(topBar(), ({ home: homeScreen, friends: friendsScreen, lb: lbScreen, settings: settingsScreen, rules: rulesScreen, coins: coinsScreen })[S.screen]());
   }
-  if (S.sheet === 'leave') ui.append(sheet(h('p', null, t('leaveConfirm')), h('div', { class: 'row' }, btn(t('stay'), () => { S.sheet = null; render(); }, 'btn alt'), btn(t('leaveYes'), leaveGame, 'btn danger'))));
+  if (S.sheet === 'leave') ui.append(sheet(h('p', null, t('leaveConfirm')), v && v.stake && !S.practice ? h('p', { class: 'bad' }, t('leaveStake', { n: shortCoins(v.stake) })) : h('span'), h('div', { class: 'row' }, btn(t('stay'), () => { S.sheet = null; render(); }, 'btn alt'), btn(t('leaveYes'), leaveGame, 'btn danger'))));
   if (S.sheet === 'emotes') ui.append(emoteSheet());
   if (S.sheet === 'player' && v) { const ps = playerSheet(v); if (ps) ui.append(ps); }
   if (S.sheet === 'delete') ui.append(sheet(h('p', null, t('deleteConfirm')), h('div', { class: 'row' }, btn(t('stay'), () => { S.sheet = null; render(); }, 'btn alt'),
@@ -421,8 +431,8 @@ function topBar() {
     h('button', { type: 'button', class: 'chip profile', onclick: () => { S.screen = 'settings'; render(); } },
       h('span', { class: 'sw', 'data-ch': localCh(), style: `background-color:${charColor(localCh())}` }),
       h('span', { class: 'pname' }, localName()),
-      u ? h('span', { class: 'muted' }, num(u.ratings?.[S.game]?.rating ?? 1000)) : null,
-      u ? h('span', { class: 'coins' }, '🪙 ' + num(u.coins)) : null),
+      u ? h('span', { class: 'muted' }, num(u.ratings?.[S.game]?.rating ?? 1000)) : null),
+    u ? btn('🪙 ' + num(u.coins), openCoins, 'chip coins', { 'aria-label': t('coinsTitle') }) : null,
   );
 }
 
@@ -448,6 +458,51 @@ function gamePicker() {
 }
 const targetLabel = (m: Mode, n: number) => gameOf(m) === 'tawla' ? t('pointsTo', { n }) : t('points', { n });
 
+/** What a win and a loss mean in coins for a mode and stake. */
+function stakeOutcome(mode: Mode, stake: number) {
+  const n = MODE_PLAYERS[mode], winners = mode === 'team' ? 2 : 1;
+  return { win: winnings(stake, winners, n - winners).net, lose: stake };
+}
+/** Stake chips (5K to 1M) and what's at stake; stakes you can't cover are greyed out. */
+function stakePicker(mode: Mode, cur = S.stake, pick = (n: number) => { S.stake = n; store.set('stake', String(n)); render(); }, canEdit = true) {
+  const coins = S.user?.coins ?? 0;
+  const o = stakeOutcome(mode, cur);
+  return h('div', { class: 'stake' },
+    h('div', { class: 'row between' }, h('span', { class: 'lab' }, t('stakeLabel')),
+      h('span', { class: 'small' }, h('span', { class: 'good' }, '+' + shortCoins(o.win)), ' / ', h('span', { class: 'bad' }, '−' + shortCoins(o.lose)))),
+    h('div', { class: 'chips stakes', role: 'radiogroup', 'aria-label': t('stakeLabel') }, ...STAKES.map(n =>
+      h('button', { type: 'button', class: 'chip', role: 'radio', 'aria-checked': String(n === cur), disabled: !canEdit || (!!S.user && coins < n), onclick: () => pick(n) }, shortCoins(n)))));
+}
+
+function openCoins() { S.screen = 'coins'; S.coinRows = null; if (S.online) net.send({ t: 'coins' }); render(); }
+function coinsScreen() {
+  const u = S.user;
+  const rows = S.coinRows ?? [];
+  const when = (ts: number) => new Date(ts).toLocaleString(getLang() === 'ar' ? 'ar-EG' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const label = (r: CoinRow) => {
+    const what = t(('coin_' + r.kind) as Key);
+    const game = r.mode && MODES.includes(r.mode as Mode) ? t(('game_' + gameOf(r.mode as Mode)) as Key) + ' · ' + t(('mode_' + r.mode) as Key) : '';
+    return [what, game, r.stake ? t('stakeTag', { n: shortCoins(r.stake) }) : '', r.fee ? t('feeNote', { n: shortCoins(r.fee) }) : ''].filter(Boolean).join(' · ');
+  };
+  return h('section', { class: 'sheet-card tall coins-page' },
+    h('div', { class: 'row between' }, h('h2', null, t('coinsTitle')), u ? h('b', { class: 'coins big-coins' }, '🪙 ' + num(u.coins)) : null),
+    h('p', { class: 'muted small' }, t('coinsHow')),
+    h('p', { class: 'lab' }, t('coinsHistory')),
+    !S.online ? h('p', { class: 'muted' }, t('offline')) : !S.coinRows ? h('p', { class: 'muted' }, t('connecting')) : !rows.length ? h('p', { class: 'muted' }, t('coinsEmpty')) :
+      h('ol', { class: 'coin-log' }, ...rows.map(r => h('li', null,
+        h('span', { class: 'ci' }, r.delta > 0 ? '▲' : r.delta < 0 ? '▼' : '•'),
+        h('span', { class: 'cl' }, h('b', null, label(r)), h('span', { class: 'muted small' }, when(r.ts) + ' · ' + t('balanceAfter', { n: num(r.balance) }))),
+        h('b', { class: 'cd ' + (r.delta > 0 ? 'good' : r.delta < 0 ? 'bad' : 'muted'), dir: 'ltr' }, (r.delta > 0 ? '+' : r.delta < 0 ? '−' : '') + num(Math.abs(r.delta)))))));
+}
+/** The coin line on a result card, once the server has settled the stakes. */
+function payoutLine(v: AnyView): HTMLElement | null {
+  const p = S.payout;
+  if (!p || p.table !== v.id || v.phase !== 'mend') return null;
+  const n = shortCoins(Math.abs(p.delta));
+  const text = p.kind === 'win' ? t('payoutWin', { n, fee: shortCoins(p.fee) }) : p.kind === 'loss' ? t('payoutLoss', { n }) : p.kind === 'draw' ? t('payoutDraw', { n: shortCoins(p.stake) }) : t('payoutLeft', { n });
+  return h('p', { class: 'payout ' + (p.delta > 0 ? 'good' : p.delta < 0 ? 'bad' : 'muted') }, '🪙 ' + text);
+}
+
 function homeScreen() {
   const modes = GAME_MODES[S.game];
   const modeBtns = modes.length < 2 ? null : h('div', { class: 'modes', role: 'radiogroup' }, ...modes.map(m =>
@@ -459,12 +514,14 @@ function homeScreen() {
       gamePicker(),
       modeBtns ?? h('p', { class: 'muted center small' }, t(('modeHint_' + S.mode) as Key))),
     h('div', { class: 'home-act' },
+      stakePicker(S.mode),
       btn(t('quick'), quick, 'btn big', { disabled: !S.online }),
       !S.online ? h('p', { class: 'note' }, net.ready ? t('connecting') : t('offline')) : null,
       h('div', { class: 'row' },
         btn(t('friends'), () => { S.screen = 'friends'; render(); }, 'btn tq', { disabled: !S.online }),
         btn(t('practice'), () => startPractice(), 'btn alt')),
       h('div', { class: 'row links' },
+        btn(t('coinsTitle'), openCoins, 'link'),
         btn(t('leaderboard'), () => openLb(S.game), 'link'),
         btn(t('rules'), () => { S.screen = 'rules'; render(); }, 'link'),
         btn(t('settings'), () => { S.screen = 'settings'; render(); }, 'link'))),
@@ -477,7 +534,7 @@ function searchScreen() {
   return h('section', { class: 'sheet-card center' },
     h('div', { class: 'spinner', 'aria-hidden': 'true' }, h('span'), h('span')),
     h('h2', null, t('searching')),
-    h('p', { class: 'muted' }, t(('game_' + gameOf(q.mode)) as Key) + ' · ' + t(('mode_' + q.mode) as Key)),
+    h('p', { class: 'muted' }, t(('game_' + gameOf(q.mode)) as Key) + ' · ' + t(('mode_' + q.mode) as Key) + (q.stake ? ' · 🪙 ' + shortCoins(q.stake) : '')),
     q.need ? h('p', { id: 'q-count' }, t('found', { n: q.count, m: q.need })) : null,
     q.botsAt ? h('p', { class: 'muted', id: 'q-bots' }, t('botsIn', { s: secs })) : null,
     btn(t('cancel'), () => { net.send({ t: 'cancel' }); S.queue = null; render(); }, 'btn alt'));
@@ -502,7 +559,12 @@ function friendsScreen() {
     GAME_MODES[S.game].length > 1 ? chips(GAME_MODES[S.game], S.mode, m => t(('mode_' + m) as Key), m => { S.mode = m; S.target = defaultTarget(m); render(); }) : null,
     targetOptions(S.mode).length > 1 ? h('label', { class: 'lab' }, t('target')) : null,
     targetOptions(S.mode).length > 1 ? chips(targetOptions(S.mode), S.target, n => num(n), n => { S.target = n; render(); }) : null,
-    btn(t('create'), () => { unlockAudio(); net.send({ t: 'create', mode: S.mode, target: S.target }); }, 'btn big'));
+    stakePicker(S.mode),
+    btn(t('create'), () => {
+      unlockAudio();
+      if ((S.user?.coins ?? 0) < S.stake) return toast(t('needCoins', { n: shortCoins(S.stake) }));
+      net.send({ t: 'create', mode: S.mode, target: S.target, stake: S.stake });
+    }, 'btn big'));
 }
 
 function openLb(g: GameId) {
@@ -617,6 +679,7 @@ function roomScreen(v: AnyView) {
     host && GAME_MODES[gameOf(v.mode)].length > 1 ? chips(GAME_MODES[gameOf(v.mode)], v.mode, m => t(('mode_' + m) as Key), m => net.send({ t: 'setup', mode: m }))
       : h('p', { class: 'muted' }, t(('mode_' + v.mode) as Key) + (gameOf(v.mode) === 'domino' || gameOf(v.mode) === 'tawla' ? ' · ' + t('to', { n: v.target }) : '')),
     host && targetOptions(v.mode).length > 1 ? chips(targetOptions(v.mode), v.target, n => targetLabel(v.mode, n), n => net.send({ t: 'setup', target: n })) : null,
+    v.stake ? stakePicker(v.mode, v.stake, n => net.send({ t: 'setup', stake: n }), host) : null,
     seats,
     host ? btn(t('start'), () => { unlockAudio(); net.send({ t: 'start' }); }, 'btn big', { disabled: !full }) : h('p', { class: 'muted center' }, t('waitHost')),
     host && !full ? h('p', { class: 'muted small center' }, t('fillSeats')) : null);
@@ -634,7 +697,7 @@ function gameScreen(v: TableView): HTMLElement[] {
     h('div', { class: 'row' },
       btn('‹', () => { if (S.practice || v.phase !== 'play') leaveGame(); else { S.sheet = 'leave'; render(); } }, 'iconbtn back', { 'aria-label': t('leave') }),
       h('div', { class: 'scores' }, ...teams)),
-    h('div', { class: 'meta muted small' }, `${t('round', { n: v.round })} · ${t('to', { n: v.target })}` + (v.mode === 'ffa2' || v.mode === 'ffa3' ? ' · ' + t('boneyard', { n: v.yard }) : '')));
+    h('div', { class: 'meta muted small' }, `${t('round', { n: v.round })} · ${t('to', { n: v.target })}` + (v.mode === 'ffa2' || v.mode === 'ffa3' ? ' · ' + t('boneyard', { n: v.yard }) : '') + (v.stake ? ' · 🪙 ' + shortCoins(v.stake) : '')));
 
   // status line
   let status = '', warn = false;
@@ -693,13 +756,14 @@ function resultSheet(v: TableView): HTMLElement {
   const actions = h('div', { class: 'row center' });
   if (mend) {
     if (S.practice) actions.append(btn(t('playAgain'), () => S.practice!.restart(), 'btn'), btn(t('home'), leaveGame, 'btn alt'));
-    else if (!v.private) actions.append(btn(t('playAgain'), () => { const m = v.mode; leaveGame(); S.mode = m; quick(); }, 'btn'), btn(t('home'), leaveGame, 'btn alt'));
+    else if (!v.private) actions.append(btn(t('playAgain'), () => { const m = v.mode, st = v.stake; leaveGame(); S.mode = m; if (st) S.stake = st; quick(); }, 'btn'), btn(t('home'), leaveGame, 'btn alt'));
     else actions.append(btn(t('leave'), leaveGame, 'btn alt'));
   }
   return h('div', { class: 'overlay' }, h('div', { class: 'card' },
     h('h2', null, head),
     r.blocked && r.team >= 0 ? h('p', { class: 'muted' }, t('blocked')) : null,
     h('div', { class: 'big' }, r.team >= 0 ? t('plus', { n: r.points }) : t('tie')),
+    payoutLine(v),
     delta !== null && delta !== undefined ? h('p', { class: delta >= 0 ? 'good' : 'bad' }, `${t('rating')} ${delta >= 0 ? '+' : '−'}${num(Math.abs(delta))}`) : null,
     h('p', { class: 'lab' }, t('handsLeft')),
     h('div', { class: 'res' }, ...rows),
@@ -821,7 +885,7 @@ function boardResultSheet(v: BoardView): HTMLElement {
   const actions = h('div', { class: 'row center' });
   if (mend) {
     if (S.practice) actions.append(btn(t('playAgain'), () => S.practice!.restart(), 'btn'), btn(t('home'), leaveGame, 'btn alt'));
-    else if (!v.private) actions.append(btn(t('playAgain'), () => { const m = v.mode; leaveGame(); S.mode = m; quick(); }, 'btn'), btn(t('home'), leaveGame, 'btn alt'));
+    else if (!v.private) actions.append(btn(t('playAgain'), () => { const m = v.mode, st = v.stake; leaveGame(); S.mode = m; if (st) S.stake = st; quick(); }, 'btn'), btn(t('home'), leaveGame, 'btn alt'));
     else actions.append(btn(t('leave'), leaveGame, 'btn alt'));
   }
   const secs = Math.max(0, Math.ceil((v.nextAt - net.serverNow()) / 1000));
@@ -829,6 +893,7 @@ function boardResultSheet(v: BoardView): HTMLElement {
     h('h2', null, head),
     sub ? h('p', { class: r.kind === 'mars' || r.kind === 'mother' ? 'good' : 'muted' }, sub) : null,
     v.tawla ? h('div', { class: 'big' }, v.scores.map(n => num(n)).join(' – ')) : null,
+    payoutLine(v),
     delta !== null && delta !== undefined ? h('p', { class: delta >= 0 ? 'good' : 'bad' }, `${t('rating')} ${delta >= 0 ? '+' : '−'}${num(Math.abs(delta))}`) : null,
     !mend ? h('p', { class: 'muted', id: 'next-count' }, t('nextGame', { s: secs })) : v.private && !S.practice ? h('p', { class: 'muted', id: 'next-count' }, t('backToRoom', { s: secs })) : null,
     actions));
