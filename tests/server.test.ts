@@ -4,6 +4,7 @@ import WebSocket from 'ws';
 import { createServer } from '../server/index';
 import { config } from '../server/config';
 import { chooseMove } from '../shared/bot';
+import { normalizePhone } from '../server/login';
 import type { S2C, C2S, TableView, BoardView } from '../shared/protocol';
 
 let app: ReturnType<typeof createServer>;
@@ -11,7 +12,8 @@ let port = 0;
 
 before(async () => {
   app = createServer({ ...config, port: 0, host: '127.0.0.1', dbPath: ':memory:', staticDir: '/nonexistent',
-    turnMs: 3000, botFillMs: 300, nextRoundMs: 30, botDelay: [5, 10], lobbyAfterMatchMs: 200, msgsPer5s: 10000, chessClockMs: 15_000, autoMoveMs: 30 } as typeof config);
+    turnMs: 3000, botFillMs: 300, nextRoundMs: 30, botDelay: [5, 10], lobbyAfterMatchMs: 200, msgsPer5s: 10000, chessClockMs: 15_000, autoMoveMs: 30,
+    login: { ...config.login, sms: 'console' } } as typeof config);
   port = await app.listen();
 });
 after(async () => { await app.close(); });
@@ -314,4 +316,51 @@ test('stakes: walking out of a match loses the stake', async () => {
   assert.equal(p.last('payout')!.delta, -50_000);
   await p.until(() => p.last('user')?.user.coins === start - 50_000);
   p.close();
+});
+
+test('phone numbers: Egyptian mobiles with or without +20, Arabic digits too', () => {
+  assert.equal(normalizePhone('01012345678'), '+201012345678');
+  assert.equal(normalizePhone('+20 115 123 4567'), '+201151234567');
+  assert.equal(normalizePhone('٠١٢٢٣٤٥٦٧٨٩'), '+201223456789');
+  assert.equal(normalizePhone('00966501234567'), '+966501234567');
+  assert.equal(normalizePhone('0131234567'), null, 'not an Egyptian mobile');
+  assert.equal(normalizePhone('hello'), null);
+});
+
+test('sign in with a mobile number: the guest keeps their coins', async () => {
+  const a = await new Client().open();
+  const coins = a.last('welcome')!.user.coins;
+  assert.deepEqual(a.last('welcome')!.login, { google: false, phone: true });
+  a.send({ t: 'otp', phone: '01012345678' });
+  await a.until(() => a.last('otp')?.phone === '+201012345678');
+  a.send({ t: 'otpCheck', phone: '01012345678', code: app.phones.lastCode.get('+201012345678') === '000000' ? '111111' : '000000' });
+  await a.until(() => a.last('err')?.code === 'bad_code');
+  a.send({ t: 'otpCheck', phone: '01012345678', code: app.phones.lastCode.get('+201012345678')! });
+  await a.until(() => !!a.last('signedIn'));
+  assert.deepEqual(a.last('signedIn'), { t: 'signedIn', via: 'phone', fresh: true });
+  await a.until(() => a.last('user')?.user.phone === '+2010•••••678');
+  assert.equal(a.last('user')!.user.coins, coins);
+  // asking for another code straight away is refused (one a minute per number)
+  a.send({ t: 'otp', phone: '+201012345678' });
+  await a.until(() => a.last('err')?.code === 'slow_down');
+  a.close();
+});
+
+test('sign in with Google: a ticket opens the account linked to that Google id', async () => {
+  const a = await new Client().open();
+  a.send({ t: 'ticket', ticket: app.google.testTicket({ sub: 'g-123', email: 'amr@example.com', name: 'Amr' }) });
+  await a.until(() => a.last('signedIn')?.via === 'google');
+  await a.until(() => a.last('user')?.user.google === 'amr@example.com');
+  assert.equal(a.last('user')!.user.name, 'Amr', 'a PlayerNNNN guest name becomes the Google first name');
+  const id = a.uid;
+  // a used ticket doesn't work twice
+  const t = app.google.testTicket({ sub: 'g-123', email: 'amr@example.com', name: 'Amr' });
+  const b = await new Client().open();
+  b.send({ t: 'ticket', ticket: t });
+  await b.until(() => b.last('signedIn')?.fresh === false);
+  await b.until(() => b.msgs.filter(m => m.t === 'welcome').length === 2);
+  assert.equal(b.last('welcome')!.user.id, id, 'the second device opened the same account');
+  b.send({ t: 'ticket', ticket: t });
+  await b.until(() => b.last('err')?.code === 'ticket_expired');
+  a.close(); b.close();
 });

@@ -5,3 +5,4 @@ export const Share = { share: async (_o: unknown) => { throw new Error('not avai
 export const ImpactStyle = { Light: 'LIGHT', Medium: 'MEDIUM', Heavy: 'HEAVY' } as const;
 export type ImpactStyle = typeof ImpactStyle[keyof typeof ImpactStyle];
 export const Haptics = { impact: (_o: unknown) => Promise.reject(new Error('n/a')) };
+export const Browser = { open: async (_o: { url: string }) => { location.href = _o.url; }, close: async () => {} };

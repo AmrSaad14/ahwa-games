@@ -23,4 +23,19 @@ export const config = {
   adminKey: process.env.ADMIN_KEY || '',                  // lets you read player reports at /api/admin/reports?key=…
   trustProxy: process.env.TRUST_PROXY === '1',             // read client IPs from X-Forwarded-For (behind Caddy/nginx)
   maxConnectionsPerIp: num(process.env.MAX_CONNECTIONS_PER_IP, 20),
+  // Sign-in (see README → Sign-in with Google and a mobile number)
+  login: {
+    publicUrl: process.env.PUBLIC_URL || '',                // https address players reach this server on
+    appScheme: process.env.APP_SCHEME || 'ahwagames',
+    appName: process.env.APP_NAME || 'Ahwa Games',
+    googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+    googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+    sms: (process.env.SMS_PROVIDER || '') as 'twilio' | 'http' | 'console' | '',
+    twilioSid: process.env.TWILIO_ACCOUNT_SID || '',
+    twilioToken: process.env.TWILIO_AUTH_TOKEN || '',
+    twilioVerifySid: process.env.TWILIO_VERIFY_SID || '',
+    smsHttpUrl: process.env.SMS_HTTP_URL || '',
+    smsHttpToken: process.env.SMS_HTTP_TOKEN || '',
+    defaultCountry: process.env.DEFAULT_COUNTRY_CODE || '20',
+  },
 };

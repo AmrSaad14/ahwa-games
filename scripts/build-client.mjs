@@ -18,6 +18,7 @@ const stubs = process.env.CLIENT_STUBS === '1' ? {
   '@capacitor/app': path.join(root, 'tests/stubs/capacitor.ts'),
   '@capacitor/share': path.join(root, 'tests/stubs/capacitor.ts'),
   '@capacitor/haptics': path.join(root, 'tests/stubs/capacitor.ts'),
+  '@capacitor/browser': path.join(root, 'tests/stubs/capacitor.ts'),
 } : undefined;
 
 const options = {

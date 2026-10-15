@@ -1,6 +1,7 @@
 import './styles.css';
 import { App as CapApp } from '@capacitor/app';
 import { Share } from '@capacitor/share';
+import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 import { CHESS_TIME, End, GAMES, GAME_MODES, GameId, MODES, MODE_PLAYERS, Mode, TILES, canPlay, defaultTarget, endsFor, gameOf, targetOptions, teamOf } from '../../shared/engine';
 import type { Action, AnyView, BoardAction, BoardView, CoinRow, Emote, LeaderRow, PublicUser, S2C, TableView } from '../../shared/protocol';
@@ -9,7 +10,7 @@ import type { BoardUi, Pick } from './boards';
 import { BAR, OFF } from '../../shared/games/tawla';
 import { EMOTES } from '../../shared/protocol';
 import { CHAR_NAMES, Key, Lang, errText, getLang, num, rules, setLang, t } from './i18n';
-import { Net } from './net';
+import { Net, httpBase } from './net';
 import { Practice } from './practice';
 import { CHARS, TableScene, charColor } from './scene';
 import { prefs, sfx, unlockAudio } from './sound';
@@ -31,7 +32,7 @@ const store = {
 
 /* ---------------- state ---------------- */
 type Screen = 'home' | 'friends' | 'lb' | 'settings' | 'rules' | 'coins';
-type Sheet = null | 'leave' | 'emotes' | 'delete' | 'player';
+type Sheet = null | 'leave' | 'emotes' | 'delete' | 'player' | 'signin';
 const S = {
   screen: 'home' as Screen,
   sheet: null as Sheet,
@@ -57,6 +58,9 @@ const S = {
   reporting: false,
   stake: (isStake(Number(store.get('stake'))) ? Number(store.get('stake')) : STAKES[0]) as number,
   coinRows: null as CoinRow[] | null,
+  login: { google: false, phone: false },
+  otpPhone: null as string | null,     // number a sign-in code was sent to
+  phoneDraft: '',
   payout: null as null | { kind: string; delta: number; fee: number; stake: number; table: string },
 };
 if (gameOf(S.mode) !== S.game) S.mode = GAME_MODES[S.game][0];
@@ -112,7 +116,10 @@ net.on(onMessage);
 function onMessage(m: S2C) {
   switch (m.t) {
     case 'welcome':
-      store.set('token', m.token); S.user = m.user; voice.ice = m.ice ?? []; store.set('name', m.user.name); store.set('ch', String(m.user.ch));
+      store.set('token', m.token); S.user = m.user; voice.ice = m.ice ?? [];
+      S.login = m.login ?? { google: false, phone: false };
+      if (pendingTicket) { net.send({ t: 'ticket', ticket: pendingTicket }); pendingTicket = null; }
+      else if (!signedIn(m.user) && (S.login.google || S.login.phone) && !store.get('signinAsked') && !S.view) S.sheet = 'signin'; store.set('name', m.user.name); store.set('ch', String(m.user.ch));
       // carry a name/character picked while offline over to the server
       if (store.get('pendingProfile') === '1') { net.send({ t: 'profile', name: store.get('name'), ch: Number(store.get('ch', '0')) }); store.del('pendingProfile'); }
       break;
@@ -131,6 +138,12 @@ function onMessage(m: S2C) {
     case 'rtc': voice.onSignal(m.from, m.data).catch(() => {}); return;
     case 'lb': if (m.game === S.lbGame) S.lb = { rows: m.rows, me: m.me }; break;
     case 'coins': S.coinRows = m.rows; break;
+    case 'otp': S.otpPhone = m.phone; toast(t('codeSentTo', { phone: m.phone })); break;
+    case 'signedIn':
+      S.otpPhone = null; S.phoneDraft = ''; store.set('signinAsked', '1');
+      if (S.sheet === 'signin') S.sheet = null;
+      toast(t('signedInOk')); sfx.gift();
+      break;
     case 'payout':
       S.payout = { ...m, table: S.view?.id ?? '' };
       if (m.kind === 'left') toast(t('payoutLeft', { n: shortCoins(-m.delta) }));
@@ -453,6 +466,7 @@ function render() {
   }
   if (S.sheet === 'leave') ui.append(sheet(h('p', null, t('leaveConfirm')), v && v.stake ? h('p', { class: 'bad' }, t('leaveStake', { n: shortCoins(v.stake) })) : h('span'), h('div', { class: 'row' }, btn(t('stay'), () => { S.sheet = null; render(); }, 'btn alt'), btn(t('leaveYes'), leaveGame, 'btn danger'))));
   if (S.sheet === 'emotes') ui.append(emoteSheet());
+  if (S.sheet === 'signin' && !v) ui.append(signInSheet());
   if (S.sheet === 'player' && v) { const ps = playerSheet(v); if (ps) ui.append(ps); }
   if (S.sheet === 'delete') ui.append(sheet(h('p', null, t('deleteConfirm')), h('div', { class: 'row' }, btn(t('stay'), () => { S.sheet = null; render(); }, 'btn alt'),
     btn(t('deleteYes'), () => { net.send({ t: 'delete' }); S.sheet = null; S.screen = 'home'; toast(t('deleted')); render(); }, 'btn danger'))));
@@ -650,6 +664,71 @@ function rulesScreen() {
     ...ruleSections(S.game));
 }
 
+/* ---------------- signing in: Google and mobile number ---------------- */
+let pendingTicket: string | null = null;
+const signedIn = (u: PublicUser | null) => !!u && !!(u.google || u.phone || u.email);
+function sendTicket(ticket: string) {
+  if (net.ready) net.send({ t: 'ticket', ticket }); else pendingTicket = ticket;
+}
+// the web version comes back from Google as ?ticket=…
+{
+  const q = new URLSearchParams(location.search), tk = q.get('ticket');
+  if (tk) { pendingTicket = tk; q.delete('ticket'); history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash); }
+}
+// the phone apps come back as ahwagames://auth?ticket=…
+CapApp.addListener('appUrlOpen', ({ url }: { url: string }) => {
+  if (!url.startsWith('ahwagames://auth')) return;
+  const tk = new URL(url.replace(/^ahwagames:\/\//, 'https://x/')).searchParams.get('ticket');
+  Browser.close().catch(() => {});
+  if (tk) sendTicket(tk);
+});
+function googleSignIn() {
+  unlockAudio();
+  if (!S.online) return toast(t('offline'));
+  store.set('signinAsked', '1');
+  const native = Capacitor.isNativePlatform();
+  const url = httpBase() + '/auth/google/start?to=' + (native ? 'app' : 'web');
+  if (native) Browser.open({ url }).catch(() => toast(t('err_generic'))); else location.href = url;
+}
+const GOOGLE_G = '<svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>';
+/** The sign-in choices: Google, and a mobile number with a code by SMS. */
+function signInOptions(): HTMLElement {
+  const u = S.user;
+  const box = h('div', { class: 'signin stack' });
+  if (S.login.google && !u?.google) {
+    const g = btn(t('withGoogle'), googleSignIn, 'btn google', { disabled: !S.online });
+    g.insertAdjacentHTML('afterbegin', GOOGLE_G);
+    box.append(g);
+  }
+  if (S.login.phone && !u?.phone) {
+    if (!S.otpPhone) {
+      const tel = h('input', { type: 'tel', id: 'phone', inputmode: 'tel', autocomplete: 'tel', placeholder: '01X XXXX XXXX', dir: 'ltr', value: S.phoneDraft, 'aria-label': t('phoneLabel') }) as HTMLInputElement;
+      tel.addEventListener('input', () => { S.phoneDraft = tel.value; });
+      const send = () => { if (tel.value.trim()) net.send({ t: 'otp', phone: tel.value }); };
+      tel.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+      box.append(h('label', { class: 'lab', for: 'phone' }, t('phoneLabel')), h('div', { class: 'row' }, tel, btn(t('sendCode'), send, 'btn tq', { disabled: !S.online })));
+    } else {
+      const code = h('input', { type: 'text', id: 'otp', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '6', placeholder: '••••••', dir: 'ltr', 'aria-label': t('codeLabel') }) as HTMLInputElement;
+      const check = () => net.send({ t: 'otpCheck', phone: S.otpPhone!, code: code.value });
+      code.addEventListener('input', () => { code.value = code.value.replace(/[^0-9٠-٩]/g, '').slice(0, 6); if (code.value.length === 6) check(); });
+      box.append(h('p', { class: 'muted small' }, t('codeSentTo', { phone: S.otpPhone })),
+        h('div', { class: 'row' }, code, btn(t('confirm'), check, 'btn tq')),
+        h('div', { class: 'row links' },
+          btn(t('resendCode'), () => net.send({ t: 'otp', phone: S.otpPhone! }), 'link'),
+          btn(t('changeNumber'), () => { S.otpPhone = null; render(); }, 'link')));
+      setTimeout(() => code.focus(), 50);
+    }
+  }
+  return box;
+}
+function signInSheet() {
+  const later = () => { store.set('signinAsked', '1'); S.sheet = null; render(); };
+  return h('div', { class: 'overlay' }, h('div', { class: 'card signin-card' },
+    h('h2', null, t('signInTitle')), h('p', { class: 'muted' }, t('signInHint')),
+    signInOptions(),
+    btn(t('playAsGuest'), later, 'link')));
+}
+
 function settingsScreen() {
   const u = S.user;
   const name = h('input', { type: 'text', id: 'set-name', maxlength: '14', value: localName(), autocomplete: 'nickname' }) as HTMLInputElement;
@@ -665,18 +744,23 @@ function settingsScreen() {
       h('span', { class: 'sw', 'data-ch': i, style: `background-color:${charColor(i)}` }), h('span', null, CHAR_NAMES[getLang()][i]))));
   const toggle = (label: string, on: boolean, set: (v: boolean) => void) => h('div', { class: 'setrow' }, h('span', null, label),
     chips(['on', 'off'] as const, on ? 'on' : 'off', v => t(v), v => { set(v === 'on'); render(); }));
-  let account: HTMLElement;
-  if (u?.email) {
-    account = h('div', { class: 'stack' }, h('p', null, t('signedInAs', { email: u.email })),
-      btn(t('logout'), () => { store.del('token'); S.user = null; net.reconnect(); render(); }, 'btn alt'));
-  } else {
+  const account = h('div', { class: 'stack' });
+  if (signedIn(u)) {
+    if (u!.google) account.append(h('p', null, '✓ ' + t('linkedGoogle', { v: u!.google })));
+    if (u!.phone) account.append(h('p', { dir: 'auto' }, '✓ ' + t('linkedPhone', { v: u!.phone })));
+    if (u!.email) account.append(h('p', null, '✓ ' + t('signedInAs', { email: u!.email })));
+  } else account.append(h('p', { class: 'muted' }, t('guestNote')));
+  // add the sign-in ways this account doesn't have yet (another phone can then open it with either)
+  account.append(signInOptions());
+  if (!u?.email) {
     const email = h('input', { type: 'email', id: 'acc-email', placeholder: t('email'), autocomplete: 'email' }) as HTMLInputElement;
     const pw = h('input', { type: 'password', id: 'acc-pw', placeholder: t('password'), autocomplete: 'current-password' }) as HTMLInputElement;
-    account = h('div', { class: 'stack' }, h('p', { class: 'muted' }, t('guestNote')), email, pw,
+    account.append(h('details', { class: 'use-email' }, h('summary', null, t('useEmail')), h('div', { class: 'stack' }, email, pw,
       h('div', { class: 'row' },
         btn(t('register'), () => net.send({ t: 'register', email: email.value, pw: pw.value }), 'btn', { disabled: !S.online }),
-        btn(t('login'), () => net.send({ t: 'login', email: email.value, pw: pw.value }), 'btn alt', { disabled: !S.online })));
+        btn(t('login'), () => net.send({ t: 'login', email: email.value, pw: pw.value }), 'btn alt', { disabled: !S.online })))));
   }
+  if (signedIn(u)) account.append(btn(t('logout'), () => { store.del('token'); S.user = null; net.reconnect(); render(); }, 'btn alt'));
   return h('section', { class: 'sheet-card tall' },
     h('h2', null, t('settings')),
     h('label', { class: 'lab', for: 'set-name' }, t('name')), name,

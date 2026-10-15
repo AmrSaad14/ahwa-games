@@ -163,6 +163,35 @@ These platforms terminate HTTPS for you, so you don't need Caddy there. Set `TRU
 | `TURN_URLS`, `TURN_SECRET` | set by Docker Compose | Voice relay address and shared secret. Without them voice still works on most Wi-Fi networks but often fails on mobile data |
 | `STUN_URLS` | Google public STUN | Servers phones use to find a direct audio route |
 | `ADMIN_KEY` | empty | Key for reading player reports at `/api/admin/reports?key=…` |
+| `PUBLIC_URL` | `https://DOMAIN` (Docker) | The address players reach the server on; Google sends players back to `PUBLIC_URL/auth/google/callback` |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | empty | Google sign-in (see below). The Google button only shows when both are set |
+| `SMS_PROVIDER` | empty | `twilio`, `http` or `console`. The mobile-number sign-in only shows when this is set up |
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_VERIFY_SID` | empty | For `SMS_PROVIDER=twilio` |
+| `SMS_HTTP_URL`, `SMS_HTTP_TOKEN` | empty | For `SMS_PROVIDER=http`: your own SMS gateway |
+| `DEFAULT_COUNTRY_CODE` | `20` | Calling code for numbers typed without one (`01012345678` → `+201012345678`) |
+
+### Sign-in with Google and a mobile number
+
+Players start as guests. From the first-launch card or **Settings → Account** they can sign in with Google or with their mobile number (a 6-digit code by SMS). Signing in keeps the guest's coins, ratings and name, and lets them open the same account on another phone. Email and password still work too.
+
+**Google** (free). In the [Google Cloud console](https://console.cloud.google.com/):
+
+1. Create a project (e.g. "Ahwa Games").
+2. **APIs & Services → OAuth consent screen**: user type *External*; app name, support email, the app logo; add your domain under *Authorized domains*; then **Publish app** so anyone can sign in (the `openid`, `email` and `profile` scopes need no Google review).
+3. **APIs & Services → Credentials → Create credentials → OAuth client ID**: type **Web application**. Add the redirect URI `https://YOUR-DOMAIN/auth/google/callback`.
+4. Put the client ID and secret in `.env` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, then `docker compose up -d`.
+
+The same web client serves the website and both phone apps: the app opens Google in the phone's browser, Google returns to your server, and the server opens the app again through the `ahwagames://` link (added by `scripts/native-permissions.mjs`). No Android key fingerprints or iOS client IDs are needed, so it keeps working whichever key signs the APK.
+
+**Mobile number** (each SMS costs money; pick one):
+
+- **Twilio Verify** (`SMS_PROVIDER=twilio`): create a Twilio account, buy nothing extra, and under *Verify → Services* create a service; set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and the service's `TWILIO_VERIFY_SID`. Twilio makes and checks the codes and blocks SMS fraud. Turn on the countries you need under *Verify → Settings → Geo permissions* (Egypt is off by default).
+- **Your own SMS gateway** (`SMS_PROVIDER=http`), e.g. an Egyptian bulk-SMS company with a sender name: the server POSTs `{"to": "+2010…", "text": "123456 is your Ahwa Games code…", "code": "123456"}` as JSON to `SMS_HTTP_URL` (with `Authorization: Bearer SMS_HTTP_TOKEN`). Point it at the gateway directly if it accepts that, or at a small adapter.
+- **Testing** (`SMS_PROVIDER=console`): no SMS is sent; codes are printed in the server log (`docker compose logs domino`).
+
+Limits against abuse: one code a minute and five an hour per number, ten an hour per IP, five tries per code, codes expire after 10 minutes.
+
+**App Store note:** Apple requires apps that offer Google sign-in to also offer an equally private option, in practice Sign in with Apple (App Review Guideline 4.8). Add it before submitting the iOS app; Android has no such rule.
 
 ### Scaling later
 

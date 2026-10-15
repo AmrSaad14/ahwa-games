@@ -11,6 +11,7 @@ import type { BoardAction } from '../shared/games/defs';
 type Room = Table | BoardTable;
 import { Limiter, Tokens, checkPassword, hashPassword } from './auth';
 import { Store, UserRow } from './db';
+import { GoogleSignIn, PhoneCodes, normalizePhone } from './login';
 
 export interface Conn {
   send(msg: S2C): void;
@@ -27,6 +28,7 @@ export interface HubOptions {
   turnMs: number; botFillMs: number; nextRoundMs: number; botDelay: [number, number]; lobbyAfterMatchMs: number; msgsPer5s?: number;
   stunUrls?: string[]; turnUrls?: string[]; turnSecret?: string;
   autoMoveMs?: number; chessClockMs?: number;
+  phones?: PhoneCodes; google?: GoogleSignIn; defaultCountry?: string;
 }
 
 const CODE_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
@@ -111,6 +113,29 @@ export class Hub {
         if (!u || !checkPassword(String(m.pw || ''), u.pw)) return err('bad_login');
         this.detach(s);
         return this.attach(s, u);
+      }
+      case 'otp': {
+        const phone = normalizePhone(m.phone, this.opts.defaultCountry);
+        if (!phone) return err('bad_phone');
+        if (!this.opts.phones) return err('phone_off');
+        this.opts.phones.send(phone, s.conn.ip).then(e => e ? err(e) : s.conn.send({ t: 'otp', phone }));
+        return;
+      }
+      case 'otpCheck': {
+        const phone = normalizePhone(m.phone, this.opts.defaultCountry);
+        if (!phone || !this.opts.phones) return err('bad_code');
+        if (!this.authLimiter.allow('otp:' + s.conn.ip)) return err('slow_down');
+        this.opts.phones.check(phone, m.code).then(ok => {
+          if (s.uid !== uid) return;
+          if (!ok) return err('bad_code');
+          this.signIn(s, 'phone', phone, null, null);
+        });
+        return;
+      }
+      case 'ticket': {
+        const p = this.opts.google?.take(m.ticket);
+        if (!p) return err('ticket_expired');
+        return this.signIn(s, 'google', p.sub, p.email, p.name);
       }
       case 'logout': {
         this.detach(s);
@@ -259,6 +284,34 @@ export class Hub {
     return this.store.createGuest('Player' + Math.floor(1000 + Math.random() * 9000), Math.floor(Math.random() * 5));
   }
 
+  /**
+   * Signing in with a phone number or Google: an account that already uses it is opened (as with email);
+   * otherwise it is added to the account in use, so a guest keeps their coins, ratings and name.
+   */
+  private signIn(s: Session, via: 'phone' | 'google', key: string, email: string | null, name: string | null) {
+    const uid = s.uid; if (!uid) return;
+    const existing = via === 'phone' ? this.store.byPhone(key) : this.store.byGoogle(key);
+    if (existing) {
+      if (existing.id !== uid) { this.detach(s); this.attach(s, existing); }
+      return s.conn.send({ t: 'signedIn', via, fresh: false });
+    }
+    const link = (id: string) => {
+      if (via === 'phone') this.store.setPhone(id, key); else this.store.setGoogle(id, key, email);
+      const u = this.store.get(id)!;
+      // a guest name like Player1234 becomes the Google first name
+      const clean = cleanName(name);
+      if (via === 'google' && clean && /^Player\d{4}$/.test(u.name)) this.store.setProfile(id, clean, u.ch);
+    };
+    const me = this.store.get(uid)!;
+    if (via === 'phone' ? me.phone : me.google_sub) {
+      // this account already has a different number / Google account: start a new account for this one
+      this.detach(s);
+      const u = this.newGuest(); link(u.id);
+      this.attach(s, this.store.get(u.id)!);
+    } else { link(uid); this.sendUser(uid); }
+    s.conn.send({ t: 'signedIn', via, fresh: true });
+  }
+
   private hello(s: Session, token: unknown) {
     if (s.uid) return;
     const id = this.tokens.verify(token);
@@ -274,7 +327,8 @@ export class Hub {
     this.store.touch(u.id);
     const bonus = this.store.claimDaily(u.id);
     const fresh = this.store.get(u.id) ?? u;
-    s.conn.send({ t: 'welcome', user: this.store.publicUser(fresh), token: this.tokens.issue(u.id), now: Date.now(), ice: this.iceFor(u.id) });
+    s.conn.send({ t: 'welcome', user: this.store.publicUser(fresh), token: this.tokens.issue(u.id), now: Date.now(), ice: this.iceFor(u.id),
+      login: { google: !!this.opts.google?.enabled, phone: !!this.opts.phones?.enabled } });
     if (bonus) s.conn.send({ t: 'bonus', coins: bonus });
     const t = this.userTable.get(u.id);
     if (t && !t.closed) { t.setOnline(u.id, true); this.pushView(t, u.id); }

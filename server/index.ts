@@ -7,6 +7,7 @@ import { config } from './config';
 import { Store } from './db';
 import { Tokens } from './auth';
 import { Hub } from './hub';
+import { GoogleSignIn, PhoneCodes, backToAppPage } from './login';
 import type { S2C } from '../shared/protocol';
 
 const MIME: Record<string, string> = {
@@ -18,7 +19,8 @@ const MIME: Record<string, string> = {
 export function createServer(opts = config) {
   const store = new Store(opts.dbPath);
   const tokens = new Tokens(store.secret(opts.secret));
-  const hub = new Hub(store, tokens, { turnMs: opts.turnMs, botFillMs: opts.botFillMs, nextRoundMs: opts.nextRoundMs, botDelay: opts.botDelay, lobbyAfterMatchMs: opts.lobbyAfterMatchMs, msgsPer5s: (opts as { msgsPer5s?: number }).msgsPer5s,
+  const phones = new PhoneCodes(opts.login), google = new GoogleSignIn(opts.login);
+  const hub = new Hub(store, tokens, { phones, google, defaultCountry: opts.login.defaultCountry, turnMs: opts.turnMs, botFillMs: opts.botFillMs, nextRoundMs: opts.nextRoundMs, botDelay: opts.botDelay, lobbyAfterMatchMs: opts.lobbyAfterMatchMs, msgsPer5s: (opts as { msgsPer5s?: number }).msgsPer5s,
     stunUrls: opts.stunUrls, turnUrls: opts.turnUrls, turnSecret: opts.turnSecret, autoMoveMs: opts.autoMoveMs, chessClockMs: opts.chessClockMs });
   const staticRoot = path.resolve(opts.staticDir);
   const perIp = new Map<string, number>();
@@ -46,6 +48,24 @@ export function createServer(opts = config) {
       const ok = !!opts.adminKey && key.length === opts.adminKey.length && crypto.timingSafeEqual(Buffer.from(key), Buffer.from(opts.adminKey));
       res.writeHead(ok ? 200 : 403, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
       return res.end(JSON.stringify(ok ? { reports: store.reports(200) } : { error: 'forbidden' }));
+    }
+    // Google sign-in: send the player to Google, then back to the game with a one-time ticket
+    if (url.pathname === '/auth/google/start') {
+      if (!google.enabled) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('Google sign-in is not set up on this server.'); }
+      res.writeHead(302, { Location: google.startUrl(url.searchParams.get('to') === 'app' ? 'app' : 'web'), 'Cache-Control': 'no-store' });
+      return res.end();
+    }
+    if (url.pathname === '/auth/google/callback') {
+      const code = url.searchParams.get('code'), state = url.searchParams.get('state') || '';
+      const page = (link: string, ok: boolean) => { res.writeHead(ok ? 200 : 400, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(backToAppPage(link, opts.login.appName, ok)); };
+      if (!code) return page('', false);
+      google.callback(code, state)
+        .then(({ to, ticket }) => {
+          if (to === 'web') { res.writeHead(302, { Location: google.webLink(ticket), 'Cache-Control': 'no-store' }); return res.end(); }
+          page(google.appLink(ticket), true);
+        })
+        .catch(e => { console.error('[google]', (e as Error).message); page('', false); });
+      return;
     }
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); return res.end(); }
     // static client
@@ -100,7 +120,7 @@ export function createServer(opts = config) {
   }, 25_000);
 
   return {
-    server, hub, store,
+    server, hub, store, phones, google,
     listen: () => new Promise<number>(r => server.listen(opts.port, opts.host, () => r((server.address() as { port: number }).port))),
     close: async () => {
       clearInterval(heartbeat); hub.stop();

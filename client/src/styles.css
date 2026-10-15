@@ -319,3 +319,12 @@ h2 { font-family: var(--display); color: var(--brass); margin: 0; font-size: 1.3
 .coin-log .cl b { font-weight: 600; font-size: .85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .coin-log .cd { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .payout { font-size: 1.05rem; }
+
+/* signing in */
+.signin { gap: 8px; }
+.btn.google { display: inline-flex; align-items: center; justify-content: center; gap: 10px; background: #fff; color: #1f1f1f; border: 1px solid #dadce0; }
+.signin input[type=tel], .signin #otp { flex: 1; min-width: 0; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
+.signin #otp { letter-spacing: .4em; text-align: center; font-size: 1.15rem; }
+.signin-card { max-width: 380px; display: flex; flex-direction: column; gap: 10px; }
+.use-email summary { cursor: pointer; color: var(--ink-dim); font-size: .85rem; padding: 4px 0; }
+.use-email[open] summary { margin-bottom: 8px; }

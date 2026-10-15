@@ -131,6 +131,8 @@ export interface PublicUser {
   wins: number;
   coins: number;
   gifts: number;       // gifts received
+  phone: string | null;   // signed-in mobile number, partly hidden
+  google: string | null;  // signed-in Google account (its email)
   ratings: Partial<Record<GameId, { rating: number; games: number; wins: number }>>;
 }
 
@@ -143,6 +145,9 @@ export type C2S =
   | { t: 'register'; email: string; pw: string }
   | { t: 'login'; email: string; pw: string }
   | { t: 'logout' }
+  | { t: 'otp'; phone: string }
+  | { t: 'otpCheck'; phone: string; code: string }
+  | { t: 'ticket'; ticket: string }
   | { t: 'delete' }
   | { t: 'quick'; mode: Mode; stake?: number }
   | { t: 'cancel' }
@@ -165,7 +170,9 @@ export type C2S =
 
 /** Server → client */
 export type S2C =
-  | { t: 'welcome'; user: PublicUser; token: string; now: number; ice: IceServer[] }
+  | { t: 'welcome'; user: PublicUser; token: string; now: number; ice: IceServer[]; login?: { google: boolean; phone: boolean } }
+  | { t: 'otp'; phone: string }
+  | { t: 'signedIn'; via: 'phone' | 'google'; fresh: boolean }
   | { t: 'bonus'; coins: number }
   | { t: 'gift'; from: number; to: number; k: GiftKind }
   | { t: 'rtc'; from: number; data: RtcSignal }

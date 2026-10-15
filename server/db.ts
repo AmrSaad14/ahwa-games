@@ -6,11 +6,13 @@ import crypto from 'node:crypto';
 import type { CoinRow, LeaderRow, PublicUser } from '../shared/protocol';
 import type { GameId } from '../shared/engine';
 import { ECONOMY } from '../shared/gifts';
+import { maskPhone } from './login';
 
 export interface UserRow {
   id: string; name: string; ch: number; email: string | null; pw: string | null;
   rating: number; games: number; wins: number; created: number; seen: number;
   coins: number; gifts: number; bonus_day: string | null;
+  phone: string | null; google_sub: string | null; google_email: string | null;
 }
 
 export class Store {
@@ -58,6 +60,9 @@ export class Store {
     if (!cols.has('coins')) this.db.exec(`ALTER TABLE users ADD COLUMN coins INTEGER NOT NULL DEFAULT ${ECONOMY.startCoins}`);
     if (!cols.has('gifts')) this.db.exec('ALTER TABLE users ADD COLUMN gifts INTEGER NOT NULL DEFAULT 0');
     if (!cols.has('bonus_day')) this.db.exec('ALTER TABLE users ADD COLUMN bonus_day TEXT');
+    if (!cols.has('phone')) this.db.exec('ALTER TABLE users ADD COLUMN phone TEXT');
+    if (!cols.has('google_sub')) this.db.exec('ALTER TABLE users ADD COLUMN google_sub TEXT; ALTER TABLE users ADD COLUMN google_email TEXT');
+    this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_phone ON users(phone) WHERE phone IS NOT NULL; CREATE UNIQUE INDEX IF NOT EXISTS users_google ON users(google_sub) WHERE google_sub IS NOT NULL');
     // coins moved to stakes from 5K to 1M: older balances are scaled up once
     if (!this.db.prepare("SELECT v FROM meta WHERE k = 'coins_v2'").get()) {
       this.db.exec("UPDATE users SET coins = coins * 100; INSERT INTO meta (k, v) VALUES ('coins_v2', '1')");
@@ -88,6 +93,11 @@ export class Store {
   byEmail(email: string): UserRow | undefined {
     return this.db.prepare('SELECT * FROM users WHERE email = ?').get(email) as UserRow | undefined;
   }
+
+  byPhone(phone: string): UserRow | undefined { return this.db.prepare('SELECT * FROM users WHERE phone = ?').get(phone) as UserRow | undefined; }
+  byGoogle(sub: string): UserRow | undefined { return this.db.prepare('SELECT * FROM users WHERE google_sub = ?').get(sub) as UserRow | undefined; }
+  setPhone(id: string, phone: string) { this.db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(phone, id); }
+  setGoogle(id: string, sub: string, email: string | null) { this.db.prepare('UPDATE users SET google_sub = ?, google_email = ? WHERE id = ?').run(sub, email, id); }
 
   touch(id: string) { this.db.prepare('UPDATE users SET seen = ? WHERE id = ?').run(Date.now(), id); }
   setProfile(id: string, name: string, ch: number) { this.db.prepare('UPDATE users SET name = ?, ch = ? WHERE id = ?').run(name, ch, id); }
@@ -208,4 +218,5 @@ export class Store {
   close() { this.db.close(); }
 }
 
-export const toPublic = (u: UserRow): PublicUser => ({ id: u.id, name: u.name, ch: u.ch, email: u.email, rating: u.rating, games: u.games, wins: u.wins, coins: u.coins, gifts: u.gifts, ratings: {} });
+export const toPublic = (u: UserRow): PublicUser => ({ id: u.id, name: u.name, ch: u.ch, email: u.email, rating: u.rating, games: u.games, wins: u.wins, coins: u.coins, gifts: u.gifts, ratings: {},
+  phone: u.phone ? maskPhone(u.phone) : null, google: u.google_sub ? (u.google_email || 'Google') : null });

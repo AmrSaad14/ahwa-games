@@ -2,11 +2,12 @@ import type { C2S, S2C } from '../../shared/protocol';
 
 declare const __SERVER_URL__: string;
 
-/** WebSocket URL: the build-time SERVER_URL for store apps, otherwise the page's own host. */
-export function socketUrl(): string {
-  const base = typeof __SERVER_URL__ === 'string' && __SERVER_URL__ ? __SERVER_URL__ : location.origin;
-  return base.replace(/^http/, 'ws').replace(/\/$/, '') + '/ws';
+/** The game server's https address: the build-time SERVER_URL for store apps, otherwise the page's own host. */
+export function httpBase(): string {
+  return (typeof __SERVER_URL__ === 'string' && __SERVER_URL__ ? __SERVER_URL__ : location.origin).replace(/\/$/, '');
 }
+/** WebSocket URL of the game server. */
+export function socketUrl(): string { return httpBase().replace(/^http/, 'ws') + '/ws'; }
 
 type Listener = (m: S2C) => void;
 

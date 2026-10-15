@@ -33,6 +33,6 @@ export class DemoWallet {
     } catch { /* storage blocked: the wallet lasts for this visit */ }
   }
   user(name: string, ch: number): PublicUser {
-    return { id: 'demo', name, ch, email: null, rating: 1000, games: 0, wins: 0, coins: this.coins, gifts: 0, ratings: {} };
+    return { id: 'demo', name, ch, email: null, rating: 1000, games: 0, wins: 0, coins: this.coins, gifts: 0, ratings: {}, phone: null, google: null };
   }
 }
