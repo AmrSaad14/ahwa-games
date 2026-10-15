@@ -47,6 +47,14 @@ function makeTileBody(): THREE.BufferGeometry {
   return geo;
 }
 
+const GFX_KEY = 'ahwa.gfx';
+/** Starting graphics level: what this device settled on before, else lighter on low-memory phones. */
+function initialGfx(): 0 | 1 | 2 {
+  try { const s = localStorage.getItem(GFX_KEY); if (s === '0' || s === '1' || s === '2') return Number(s) as 0 | 1 | 2; } catch { /* private mode */ }
+  const mem = (navigator as { deviceMemory?: number }).deviceMemory;
+  return mem !== undefined && mem <= 3 ? 1 : 2;
+}
+
 export class TableScene {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
@@ -81,6 +89,13 @@ export class TableScene {
   private yardLayout: { x: number; z: number; r: number; y: number }[] = [];
   private reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   private zoom = 1;                 // pinch / mouse-wheel zoom, 1 = default framing
+  /** Screen space covered by the HUD and controls (CSS px); the table is framed in what is left. */
+  private insets = { top: 0, right: 0, bottom: 0, left: 0 };
+  private frameKey = ''; private frame = { d: 20, ox: 0, oy: 0 };
+  private spot!: THREE.SpotLight;
+  /** Graphics level: 2 full, 1 lighter, 0 lightest. Steps down by itself when frames are slow, and is remembered. */
+  private gfx = initialGfx();
+  private perf = { sum: 0, n: 0, slow: 0 };
   private pinch = new Map<number, { x: number; y: number }>();
   private pinchStart = 0; private zoomStart = 1;
   onGhost: (e: End) => void = () => {};
@@ -148,9 +163,8 @@ export class TableScene {
 
   constructor(private canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = this.gfx === 2 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
@@ -162,7 +176,7 @@ export class TableScene {
     // the bulb over our table
     const spot = new THREE.SpotLight(0xffd59a, 200, 45, 0.78, 0.55, 1.4);
     spot.position.set(0.5, 15, 1.5); spot.target.position.set(0, 0, 0);
-    spot.castShadow = true; spot.shadow.mapSize.set(2048, 2048); spot.shadow.bias = -0.0004; spot.shadow.radius = 3;
+    spot.castShadow = true; spot.shadow.mapSize.setScalar(this.gfx === 2 ? 2048 : 1024); this.spot = spot; spot.shadow.bias = -0.0004; spot.shadow.radius = 3;
     s.add(spot, spot.target);
     const fill = new THREE.DirectionalLight(0xffe9cc, 0.35); fill.position.set(-10, 12, 18); s.add(fill);
 
@@ -239,6 +253,8 @@ export class TableScene {
     const end = (e: PointerEvent) => { this.pinch.delete(e.pointerId); if (this.pinch.size < 2) this.pinchStart = 0; };
     canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end);
     window.addEventListener('resize', () => this.resize());
+    window.visualViewport?.addEventListener('resize', () => this.resize());
+    if (typeof ResizeObserver === 'function') new ResizeObserver(() => this.resize()).observe(canvas);
     this.resize();
     const loop = (now: number) => { this.tick(now); requestAnimationFrame(loop); };
     requestAnimationFrame(loop);
@@ -463,43 +479,127 @@ export class TableScene {
 
   private resize() {
     const w = this.canvas.clientWidth || window.innerWidth, h = this.canvas.clientHeight || window.innerHeight;
+    // sharp on phones, but never more pixels than the level allows (a 4K or retina desktop would crawl otherwise)
+    const budget = [1.1e6, 2.1e6, 3.6e6][this.gfx], cap = [1, 1.5, 2][this.gfx];
+    const pr = Math.max(0.6, Math.min(cap, window.devicePixelRatio || 1, Math.sqrt(budget / Math.max(1, w * h))));
+    if (Math.abs(this.renderer.getPixelRatio() - pr) > 0.01) this.renderer.setPixelRatio(pr);
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
+    this.frameKey = '';
     this.placeCamera(0);
+  }
+
+  /** The HUD and controls cover these strips of the screen (CSS px); the table is framed in the rest. */
+  setInsets(i: { top: number; right: number; bottom: number; left: number }) {
+    const r = (n: number) => Math.max(0, Math.round(n));
+    const n = { top: r(i.top), right: r(i.right), bottom: r(i.bottom), left: r(i.left) };
+    if (n.top === this.insets.top && n.right === this.insets.right && n.bottom === this.insets.bottom && n.left === this.insets.left) return;
+    this.insets = n; this.frameKey = '';
+  }
+
+  /** Lower the graphics a step (slow device). */
+  private stepDownGfx() {
+    if (this.gfx === 0) return;
+    this.gfx = (this.gfx - 1) as 0 | 1;
+    try { localStorage.setItem(GFX_KEY, String(this.gfx)); } catch { /* private mode */ }
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    const sh = this.spot.shadow;
+    sh.mapSize.setScalar(1024); sh.map?.dispose(); (sh as { map: unknown }).map = null;
+    this.resize();
   }
 
   private placeCamera(sway: number) {
     const w = this.canvas.clientWidth || window.innerWidth, h = this.canvas.clientHeight || window.innerHeight;
-    const portrait = w / h < 0.9;
     const playing = !!this.view && this.view.phase !== 'lobby';
-    // board games are framed on their own board, from a little higher so it reads clearly
-    const g = playing ? this.view!.game : 'domino';
-    const boardHalf = g === 'chess' ? 4.9 : g === 'ludo' ? 5.7 : g === 'tawla' ? 6.0 : 0;
-    const boardDepth = g === 'tawla' ? 4.25 : boardHalf;            // tawla's box is wider than it is deep
-    // a landscape phone keeps the controls in a 200px panel on the right of board games
-    const phoneLand = w > h && h <= 600;
-    const side = playing && boardHalf && phoneLand ? 200 : 0;
-    const el = !playing ? 0.62 : boardHalf ? (portrait ? 1.2 : 1.12) : (portrait ? 1.08 : 0.98);
-    const vf = (this.camera.fov * Math.PI) / 180;
-    const effAspect = Math.max(0.5, (w - side) / h);
-    const hf = 2 * Math.atan(Math.tan(vf / 2) * effAspect);
-    const hw = !playing ? T + 4.5 : boardHalf ? boardHalf + (side ? 0.3 : 0) : T + 0.4;
-    // domino on a landscape phone leaves room at the top for the face of the player across the table
-    const hd = !playing ? T + 1.5 : boardHalf ? (phoneLand ? boardDepth + 0.8 : Math.min(boardHalf, 5)) : phoneLand ? T + 1.9 : T + 0.3;
-    const d = Math.max(hw / Math.tan(hf / 2), (hd * Math.sin(el) + 1.0) / Math.tan(vf / 2)) * (playing ? this.zoom : 1.05);
-    const tz = playing ? (portrait ? 0.4 : phoneLand && !boardHalf ? -1.4 : 0.1) : -1.5;
-    const ty = playing ? 0 : 1.5;
-    this.camera.position.set(Math.sin(sway) * d * 0.25, ty + d * Math.sin(el), tz + d * Math.cos(el));
-    this.camera.lookAt(Math.sin(sway) * 2, ty, tz);
-    // shift the picture: up a little under the top bar, and left of the control panel
-    const yOff = playing ? (portrait ? 0.07 : phoneLand ? (boardHalf ? -0.035 : -0.07) : 0.08) : -0.04;
-    this.camera.setViewOffset(w, h, side / 2, Math.round(h * yOff), w, h);
+    if (!playing) {
+      // the café, seen from the door: the menu card sits over the lower part
+      const portrait = w / h < 0.9, el = 0.62, vf = (this.camera.fov * Math.PI) / 180;
+      const hf = 2 * Math.atan(Math.tan(vf / 2) * Math.max(0.5, w / h));
+      const d = Math.max((T + 4.5) / Math.tan(hf / 2), ((T + 1.5) * Math.sin(el) + 1.0) / Math.tan(vf / 2)) * (portrait ? 0.92 : 1.05);
+      this.camera.position.set(Math.sin(sway) * d * 0.25, 1.5 + d * Math.sin(el), -1.5 + d * Math.cos(el));
+      this.camera.lookAt(Math.sin(sway) * 2, 1.5, -1.5);
+      this.camera.setViewOffset(w, h, 0, Math.round(h * -0.04), w, h);
+      this.camera.updateProjectionMatrix();
+      return;
+    }
+    const v = this.view!, g = v.game;
+    const portrait = w / h < 0.9;
+    const el = g === 'domino' ? (portrait ? 1.08 : 0.98) : (portrait ? 1.2 : 1.12);
+    const key = [w, h, g, el, this.zoom.toFixed(3), this.insets.top, this.insets.right, this.insets.bottom, this.insets.left, this.chars.map(c => (c ? 1 : 0)).join('')].join('|');
+    if (key !== this.frameKey) { this.frameKey = key; this.frame = this.fit(w, h, el, g); }
+    const { d, ox, oy } = this.frame;
+    this.camera.position.set(0, d * Math.sin(el), d * Math.cos(el));
+    this.camera.lookAt(0, 0, 0);
+    this.camera.setViewOffset(w, h, ox, oy, w, h);
     this.camera.updateProjectionMatrix();
+  }
+
+  /**
+   * Frames the table in the part of the screen the HUD and controls leave free: the camera backs off just enough
+   * for the points that matter (the table or board, and the faces across it) to fit, then the picture is shifted
+   * so they sit in the middle of that free area. Works for any screen shape, from a small phone to a 4K monitor.
+   */
+  private fit(w: number, h: number, el: number, g: string) {
+    const ins = this.insets;
+    const pad = Math.max(6, Math.min(w, h) * 0.025);
+    const fx0 = ins.left + pad, fx1 = w - ins.right - pad, fy0 = ins.top + pad;
+    const fw = Math.max(80, fx1 - fx0);
+    const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+    let sets: { pts: THREE.Vector3[]; under: number }[];
+    if (g === 'domino') {
+      const e = T - 0.2;
+      const far = [V(-e, 0, -e), V(e, 0, -e)];
+      // the faces of the players across and (on a wide screen) beside you
+      const wide = fw / Math.max(80, h - ins.top - ins.bottom) > 1.25;
+      this.chars.forEach((c, pos) => {
+        if (!c || pos === 0 || (!wide && pos !== 2)) return;
+        const P = this.seatPoint(pos);
+        far.push(V(P.x * (pos === 2 ? 1 : 0.86), HEAD_Y - 1.75 + 1.3, P.z));   // the top of the head, and a little room for the name
+      });
+      // best: the whole table, its empty near edge allowed under the hand. On a short screen that makes it too
+      // small, so then only the far side and the middle (where the tiles are played) must clear the hand.
+      sets = [{ pts: [...far, V(-e, 0, e), V(e, 0, e)], under: 0.45 }, { pts: [...far, V(-e, 0, 0.8), V(e, 0, 0.8)], under: 0 }];
+    } else {
+      const bw = g === 'chess' ? 4.9 : g === 'ludo' ? 5.7 : 6.0;
+      const bd = g === 'tawla' ? 4.25 : bw;
+      const pts: THREE.Vector3[] = [];
+      for (const x of [-bw, bw]) for (const z of [-bd, bd]) for (const y of [0, 0.5]) pts.push(V(x, y, z));
+      sets = [{ pts, under: 0 }];
+    }
+    const cam = this.camera;
+    const box = (d: number, pts: THREE.Vector3[]) => {
+      cam.position.set(0, d * Math.sin(el), d * Math.cos(el)); cam.lookAt(0, 0, 0);
+      cam.clearViewOffset(); cam.updateProjectionMatrix(); cam.updateMatrixWorld();
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      for (const p of pts) {
+        const q = this.v3.copy(p).project(cam);
+        const sx = (q.x + 1) / 2 * w, sy = (1 - q.y) / 2 * h;
+        x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy);
+      }
+      return { x0, x1, y0, y1 };
+    };
+    const solve = (set: { pts: THREE.Vector3[]; under: number }) => {
+      const fy1 = h - ins.bottom * (1 - set.under) - pad, fh = Math.max(80, fy1 - fy0);
+      let lo = 4, hi = 400;
+      for (let i = 0; i < 28; i++) {
+        const mid = (lo + hi) / 2, b = box(mid, set.pts);
+        if (b.x1 - b.x0 <= fw && b.y1 - b.y0 <= fh) hi = mid; else lo = mid;
+      }
+      return { d: hi, fy1, set };
+    };
+    const tries = sets.map(solve);
+    const best = tries.length > 1 && tries[0].d > tries[1].d * 1.12 ? tries[1] : tries[0];
+    const d = best.d * this.zoom;
+    const b = box(d, best.set.pts);
+    // shift so the picture's middle lands in the middle of the free area
+    return { d, ox: Math.round((b.x0 + b.x1) / 2 - (fx0 + fx1) / 2), oy: Math.round((b.y0 + b.y1) / 2 - (fy0 + best.fy1) / 2) };
   }
 
   private tick(now: number) {
     if (!this.portraitsDone) this.makePortraits();
-    const dt = Math.min(0.05, (now - this.lastT) / 1000); this.lastT = now; this.clock += dt;
+    const raw = (now - this.lastT) / 1000;
+    const dt = Math.min(0.05, raw); this.lastT = now; this.clock += dt;
+    this.watchSpeed(raw);
     const amp = this.reduce ? 0 : 1, t = this.clock;
     this.placeCamera(this.view || this.reduce ? 0 : Math.sin(t * 0.12) * 0.35);
     for (const c of this.chars) {
@@ -539,6 +639,16 @@ export class TableScene {
     if (this.ring.visible) (this.ring.material as THREE.MeshBasicMaterial).opacity = 0.5 + Math.sin(t * 3) * 0.3;
     this.renderer.render(this.scene, this.camera);
     this.onFrame();
+  }
+
+  /** Every ~2 s: if frames took over 45 ms on average twice running, lower the graphics a step. */
+  private watchSpeed(raw: number) {
+    if (raw <= 0 || raw > 0.5 || document.hidden) return;
+    const p = this.perf; p.sum += raw; p.n++;
+    if (p.sum < 2) return;
+    const avg = p.sum / p.n; p.sum = 0; p.n = 0;
+    p.slow = avg > 0.045 ? p.slow + 1 : 0;
+    if (p.slow >= 2) { p.slow = 0; this.stepDownGfx(); }
   }
 
   /** Small 2D tile for the hand and result lists. */

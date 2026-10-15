@@ -419,7 +419,7 @@ const dropTile = (e: PointerEvent) => {
   d.ghost.remove(); dragEndedAt = Date.now();
   let end = e.type === 'pointerup' ? scene.ghostAt(e.clientX, e.clientY) : null;
   // with only one place to go, letting go anywhere over the table plays it
-  if (!end && e.type === 'pointerup' && d.ends.length === 1 && e.clientY < window.innerHeight - 190) end = d.ends[0];
+  if (!end && e.type === 'pointerup' && d.ends.length === 1 && e.clientY < window.innerHeight - chrome.bottom) end = d.ends[0];
   S.sel = null; S.choose = null;
   const v = S.view;
   if (end && v && v.game === 'domino' && v.phase === 'play' && v.turn === v.you) act({ t: 'play', id: d.id, e: end });
@@ -477,6 +477,7 @@ function render() {
   if (S.sheet === 'delete') ui.append(sheet(h('p', null, t('deleteConfirm')), h('div', { class: 'row' }, btn(t('stay'), () => { S.sheet = null; render(); }, 'btn alt'),
     btn(t('deleteYes'), () => { net.send({ t: 'delete' }); S.sheet = null; S.screen = 'home'; toast(t('deleted')); render(); }, 'btn danger'))));
   if (!S.online && net.ready === false && inGame() && !S.practice) ui.append(h('div', { class: 'banner' }, t('reconnecting')));
+  measureChrome();
   renderLabels(true);
   const rot = document.getElementById('rotate');
   if (rot) { rot.querySelector('b')!.textContent = t('rotateTitle'); rot.querySelector('span')!.textContent = t('rotateHint'); }
@@ -575,7 +576,7 @@ function homeScreen() {
   const modeBtns = modes.length < 2 ? null : h('div', { class: 'modes', role: 'radiogroup' }, ...modes.map(m =>
     h('button', { type: 'button', class: 'mode', role: 'radio', 'aria-checked': String(S.mode === m), onclick: () => { S.mode = m; store.set('mode', m); render(); } },
       h('b', null, t(('mode_' + m) as Key)), h('span', null, t(('modeHint_' + m) as Key)))));
-  // two columns on a landscape phone: what to play on one side, how to play it on the other
+  // on landscape screens: what to play on one side, how to play it on the other, links under the first
   return h('section', { class: 'sheet-card home' },
     h('div', { class: 'home-pick' },
       gamePicker(),
@@ -586,11 +587,11 @@ function homeScreen() {
       DEMO ? h('p', { class: 'note' }, t('demoNote')) : !S.online ? h('p', { class: 'note' }, net.ready ? t('connecting') : t('offline')) : null,
       h('div', { class: 'row' },
         btn(t('friends'), () => { S.screen = 'friends'; render(); }, 'btn tq', { disabled: !S.online }),
-        btn(t('practice'), () => startPractice(), 'btn alt')),
-      h('div', { class: 'row links' },
-        btn(t('coinsTitle'), openCoins, 'link'),
-        btn(t('leaderboard'), () => openLb(S.game), 'link'),
-        btn(t('rules'), () => { S.screen = 'rules'; render(); }, 'link'))),
+        btn(t('practice'), () => startPractice(), 'btn alt'))),
+    h('div', { class: 'row links home-links' },
+      btn(t('coinsTitle'), openCoins, 'link'),
+      btn(t('leaderboard'), () => openLb(S.game), 'link'),
+      btn(t('rules'), () => { S.screen = 'rules'; render(); }, 'link')),
   );
 }
 
@@ -903,7 +904,7 @@ function gameScreen(v: TableView): HTMLElement[] {
       h('div', { class: 'sidebtns' },
         btn('☺', () => { S.sheet = S.sheet === 'emotes' ? null : 'emotes'; render(); }, 'iconbtn', { 'aria-label': t('reactions') }),
         ...voiceButtons()),
-      h('div', { class: 'hand' + (v.hand.length > 10 ? ' many' : '') }, ...v.hand.map(id => {
+      h('div', { class: 'hand' + (v.hand.length > 10 ? ' many' : ''), style: `--n:${Math.max(7, v.hand.length)}` }, ...v.hand.map(id => {
         const el = TableScene.tileEl(id);
         if (myTurn) el.classList.add(endsFor(v.line, id).length && (v.open === null || v.open === id) ? 'ok' : 'dim');
         if (S.sel === id) el.classList.add('sel');
@@ -1154,7 +1155,7 @@ function sendGift(seat: number, k: GiftKind) {
 /** Where a seat is on screen: above the character, or above your hand for your own seat. */
 function seatScreen(seat: number): { x: number; y: number } {
   const v = S.view, pos = scene.posOf(seat);
-  if (v && pos === 0 && v.you >= 0) return { x: window.innerWidth / 2, y: window.innerHeight - 150 };
+  if (v && pos === 0 && v.you >= 0) return { x: window.innerWidth / 2, y: window.innerHeight - Math.max(60, chrome.bottom * 0.6) };
   return (pos >= 0 && scene.headScreen(pos)) || { x: window.innerWidth / 2, y: window.innerHeight / 3 };
 }
 function flyGift(from: number, to: number, k: GiftKind) {
@@ -1172,6 +1173,38 @@ function flyGift(from: number, to: number, k: GiftKind) {
 }
 
 /* ---------------- labels over characters (per frame) ---------------- */
+/**
+ * How much of the screen the HUD and the controls cover, so the 3D table is framed in the space that is left
+ * (any phone, tablet, foldable or desktop window), and labels and drops keep clear of them.
+ */
+const chrome = { top: 0, right: 0, bottom: 0, left: 0 };
+function measureChrome() {
+  const W = window.innerWidth, H = window.innerHeight;
+  chrome.top = chrome.right = chrome.bottom = chrome.left = 0;
+  const shown = (el: Element) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? r : null; };
+  // the small round/match line under the scores may sit over the far edge of the picture; the score bar may not
+  const hud = document.querySelector('#ui .hud');
+  if (hud) for (const c of hud.children) { const r = !c.classList.contains('meta') && shown(c); if (r) chrome.top = Math.max(chrome.top, r.bottom); }
+  const bot = document.querySelector('#ui .bottom');
+  const br = bot && shown(bot);
+  if (bot && br) {
+    if (br.height > H * 0.55 && br.width < W * 0.45) {
+      // a control panel down the side (board games on a landscape phone)
+      if (br.left > W / 2) chrome.right = W - br.left; else chrome.left = br.right;
+    } else {
+      // domino: the turn line and timer may float over the table, the hand may not; a board stays clear of all of it
+      let top = H;
+      const hand = !bot.classList.contains('board-bottom') && bot.querySelector('.handbar');
+      const solid = hand ? [hand] : [...bot.children];
+      for (const c of solid) { const r = shown(c); if (r) top = Math.min(top, r.top); }
+      chrome.bottom = H - top;
+    }
+  }
+  scene.setInsets(chrome);
+}
+let resizeRaf = 0;
+window.addEventListener('resize', () => { cancelAnimationFrame(resizeRaf); resizeRaf = requestAnimationFrame(() => { measureChrome(); renderLabels(false); }); });
+
 const labels = [0, 1, 2, 3].map(pos => {
   const d = h('div', { class: 'lbl', role: 'button', tabindex: '0' });
   d.hidden = true; $('labels').append(d);
@@ -1211,8 +1244,10 @@ function renderLabels(content: boolean) {
       }
     }
     el.hidden = false;
-    el.style.left = Math.max(60, Math.min(window.innerWidth - 60, p.x)) + 'px';
-    el.style.top = Math.max(window.innerWidth > window.innerHeight && window.innerHeight <= 600 ? 66 : 96, p.y) + 'px';
+    // keep labels on screen, clear of the side panel, and below the score bar
+    const half = Math.min(el.offsetWidth / 2 + 6, window.innerWidth / 4);
+    el.style.left = Math.max(chrome.left + half, Math.min(window.innerWidth - chrome.right - half, p.x)) + 'px';
+    el.style.top = Math.max(chrome.top + el.offsetHeight + 4, p.y) + 'px';
   });
   // timers
   if (v && v.phase === 'play' && v.turnEndsAt && v.game !== 'chess') {

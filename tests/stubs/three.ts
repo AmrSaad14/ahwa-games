@@ -21,8 +21,8 @@ export class Object3D extends Obj {}
 export class Group extends Obj {}
 export class Scene extends Obj { background: any; fog: any; }
 export class Mesh extends Obj { isMesh = true; constructor(public geometry?: any, public material?: any) { super(); } }
-export class PerspectiveCamera extends Obj { aspect = 1; constructor(public fov = 50) { super(); } updateProjectionMatrix() {} setViewOffset() {} }
-class Light extends Obj { shadow = { mapSize: { set() {} }, camera: {}, bias: 0 }; }
+export class PerspectiveCamera extends Obj { aspect = 1; constructor(public fov = 50) { super(); } updateProjectionMatrix() {} setViewOffset(..._a: any[]) {} clearViewOffset() {} updateMatrixWorld() {} }
+class Light extends Obj { shadow: any = { mapSize: { set() {}, setScalar() {} }, camera: {}, bias: 0, map: null }; }
 export class SpotLight extends Light { target = new Obj(); } export class HemisphereLight extends Light {} export class DirectionalLight extends Light {} export class PointLight extends Light {}
 export class BufferGeometry { constructor(..._a: any[]) { return loose(this); } rotateX() { return this; } translate() { return this; } computeVertexNormals() {} } export class BoxGeometry extends BufferGeometry {} export class PlaneGeometry extends BufferGeometry {}
 export class RingGeometry extends BufferGeometry {} export class ExtrudeGeometry extends BufferGeometry { constructor(..._a: any[]) { super(); } } export class LatheGeometry extends BufferGeometry { constructor(..._a: any[]) { super(); } } export class ConeGeometry extends BufferGeometry { constructor(..._a: any[]) { super(); } } export class TubeGeometry extends BufferGeometry { constructor(..._a: any[]) { super(); } }
@@ -36,8 +36,8 @@ export class CanvasTexture { center = new Vector3(); rotation = 0; wrapS = 0; wr
 export class Color { constructor(public c?: any) { return loose(this); } }
 export class Fog { constructor(..._a: any[]) {} }
 export class Raycaster { setFromCamera() {} intersectObjects() { return []; } }
-export class WebGLRenderer { shadowMap: any = {}; outputColorSpace = ''; toneMapping = 0; toneMappingExposure = 1; constructor(_o?: any) {} setPixelRatio() {} setSize() {} render() {} }
-export const ACESFilmicToneMapping = 4, PCFSoftShadowMap = 2, SRGBColorSpace = 'srgb', RepeatWrapping = 1000, DoubleSide = 2;
+export class WebGLRenderer { shadowMap: any = {}; outputColorSpace = ''; toneMapping = 0; toneMappingExposure = 1; constructor(_o?: any) {} setPixelRatio() {} getPixelRatio() { return 1; } setSize() {} render() {} }
+export const ACESFilmicToneMapping = 4, PCFSoftShadowMap = 2, PCFShadowMap = 1, SRGBColorSpace = 'srgb', RepeatWrapping = 1000, DoubleSide = 2;
 export class Float32BufferAttribute { constructor(..._a: any[]) { return loose(this); } } export class Texture extends CanvasTexture {}
 export class CircleGeometry extends BufferGeometry {} export class CapsuleGeometry extends BufferGeometry {} export class IcosahedronGeometry extends BufferGeometry {}
 export class Quaternion { constructor(..._a: any[]) { return loose(this); } } export class Euler { constructor(..._a: any[]) { return loose(this); } } export class Matrix4 { constructor() { return loose(this); } }

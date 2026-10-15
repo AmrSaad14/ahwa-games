@@ -156,7 +156,7 @@ try {
     await c.waitForFunction(() => document.querySelectorAll('.sc').length === 4);
   });
   await step('leaderboard opens', async () => {
-    await a.click('.row.links .link >> nth=0');
+    await a.click('.home-links .link >> nth=0');
     await a.waitForSelector('.sheet-card h2');
     await a.screenshot({ path: path.join(shots, '8-leaderboard.png') });
   });
