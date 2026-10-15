@@ -318,3 +318,9 @@ test('chess modes have their own clocks', () => {
     t.close();
   }
 });
+
+test('mahbousa: trapping the mother (last checker on its start) wins a double game', () => {
+  const s = V.startPosition('mahbousa', 0);
+  s.c[1][0] = 1; s.c[0][0] = 1; s.pinned[0] = 1;   // player 1 starts on point 0: its last checker there is trapped
+  assert.deepEqual(V.winner(s), { winner: 0, points: 2, kind: 'mother' });
+});

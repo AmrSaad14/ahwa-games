@@ -4,17 +4,12 @@ import { layoutLine, previewPlacement } from '../../shared/layout';
 import type { AnyView, TableView } from '../../shared/protocol';
 import type { BoardGameId } from '../../shared/games/defs';
 import { BoardRenderer, BoardUi, ChessBoard, LudoBoard, Pick, TawlaBoard, initBoardEnvironment } from './boards';
+import { HEAD_Y, PEOPLE, makePerson } from './people';
 import { FLOOR_Y, Smoke, buildAhwa, canvasTex, makeChair, makeShisha, makeTable, makeTeaGlass } from './ahwa';
 
-export const CHARS = [
-  { k: 'fez', skin: 0xc68e62, shirt: 0xe6dcc6, acc: 0xb3261e },
-  { k: 'cap', skin: 0xa8714a, shirt: 0x2d4f7c, acc: 0x1d2f4d },
-  { k: 'phones', skin: 0x8d5a3b, shirt: 0x2f8f6a, acc: 0x2a2a2a },
-  { k: 'bun', skin: 0xd9a47c, shirt: 0xc7604a, acc: 0x3b2416 },
-  { k: 'beret', skin: 0xb98058, shirt: 0xe0b04c, acc: 0x5b3a8c },
-  { k: 'robot', skin: 0x9aa5ad, shirt: 0x56636d, acc: 0x3ad6c4 },
-] as const;
-export const charColor = (i: number) => '#' + CHARS[i].shirt.toString(16).padStart(6, '0');
+/** The six characters players pick from; the colour stands for them in lists and badges. */
+export const CHARS = PEOPLE;
+export const charColor = (i: number) => '#' + CHARS[i].swatch.toString(16).padStart(6, '0');
 
 const PIPS: Record<number, number[]> = { 0: [], 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
 
@@ -30,7 +25,7 @@ const SEAT_R = T + 2.0;
 export function positionsFor(n: number): number[] { return n === 2 ? [0, 2] : n === 3 ? [0, 1, 3] : [0, 1, 2, 3]; }
 
 type Anim = { type: 'play' | 'draw' | 'pass' | 'win' | 'emote'; t0: number; d: number };
-interface CharData { piv: THREE.Group; head: THREE.Group; arms: THREE.Group[]; phase: number; anim: Anim | null; active: boolean; ch: number; seat: number }
+interface CharData { piv: THREE.Group; head: THREE.Group; arms: THREE.Group[]; elbows: THREE.Group[]; phase: number; anim: Anim | null; active: boolean; ch: number; seat: number }
 
 /* ---------- realistic domino tile ---------- */
 const TILE_W = 1.94, TILE_D = 0.96, TILE_H = 0.3;
@@ -114,6 +109,42 @@ export class TableScene {
     return best;
   }
   onFrame: () => void = () => {};
+  /** Called once with a small face picture of each character (data URLs). */
+  onPortraits: (urls: string[]) => void = () => {};
+  private portraitsDone = false;
+
+  /** Draw each character's face into the corner of the canvas and copy it out, before the first real frame. */
+  private makePortraits() {
+    this.portraitsDone = true;
+    const r = this.renderer, el = (r as unknown as { domElement?: HTMLCanvasElement }).domElement;
+    if (!el || !el.height) return;
+    try {
+      const pr = r.getPixelRatio(), S = 96, px = Math.round(S * pr);
+      const sc = new THREE.Scene(); sc.background = new THREE.Color(0x3b2616);
+      sc.add(new THREE.HemisphereLight(0xffe2b8, 0x3a2416, 1.1));
+      const key = new THREE.DirectionalLight(0xffdcae, 2.2); key.position.set(2, 3, 4); sc.add(key);
+      const rim = new THREE.DirectionalLight(0xffc27a, 1.2); rim.position.set(-3, 2, -3); sc.add(rim);
+      const cam = new THREE.PerspectiveCamera(26, 1, 0.1, 50);
+      const out = document.createElement('canvas'); out.width = out.height = px;
+      const g2 = out.getContext('2d')!;
+      const size = r.getSize(new THREE.Vector2());
+      const urls: string[] = [];
+      r.setScissorTest(true); r.setViewport(0, 0, S, S); r.setScissor(0, 0, S, S);
+      PEOPLE.forEach((spec, i) => {
+        const p = makePerson(spec, String(i));
+        sc.add(p.group);
+        const hy = HEAD_Y - 1.75 + (spec.headwear === 'tarboosh' || spec.headwear === 'emma' ? 0.12 : 0) - 0.05;
+        cam.position.set(0.9, hy + 0.1, 4.1); cam.lookAt(0, hy, 0);
+        r.render(sc, cam);
+        g2.drawImage(el, 0, el.height - px, px, px, 0, 0, px, px);
+        urls.push(out.toDataURL('image/jpeg', 0.88));
+        sc.remove(p.group);
+        p.group.traverse(o => (o as THREE.Mesh).geometry?.dispose());
+      });
+      r.setScissorTest(false); r.setViewport(0, 0, size.x, size.y);
+      this.onPortraits(urls);
+    } catch { /* no faces: the colour dots stay */ }
+  }
 
   constructor(private canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -251,7 +282,7 @@ export class TableScene {
   headScreen(pos: number): { x: number; y: number } | null {
     const c = this.chars[pos];
     const P = this.seatPoint(pos);
-    if (c) { const d = c.userData as CharData; this.v3.set(c.position.x, c.position.y + (d.ch === 5 ? 4.7 : 4.2), c.position.z); }
+    if (c) { const d = c.userData as CharData; this.v3.set(c.position.x, c.position.y + HEAD_Y - 1.75 + 1.55, c.position.z); }
     else if (this.view && this.posToSeat[pos] >= 0) this.v3.set(P.x * 0.8, 0.5, P.z * 0.8);
     else return null;
     this.v3.project(this.camera);
@@ -309,62 +340,17 @@ export class TableScene {
   }
 
   private makeChar(i: number, regular = false): THREE.Group {
-    const c = CHARS[i];
-    const M = (col: number, o: THREE.MeshStandardMaterialParameters = {}) => new THREE.MeshStandardMaterial({ color: col, roughness: 0.7, ...o });
-    const g = new THREE.Group(), piv = new THREE.Group(); piv.position.y = -1.75; g.add(piv);
+    const p = makePerson(PEOPLE[i], String(i));
+    const g = p.group;
     g.add(makeChair());
-    const robot = c.k === 'robot';
-    const add = (parent: THREE.Object3D, geo: THREE.BufferGeometry, mat: THREE.Material, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); parent.add(m); return m; };
-    const shirt = M(c.shirt, robot ? { metalness: 0.5, roughness: 0.4 } : {});
-    add(piv, robot ? new THREE.BoxGeometry(2.4, 3.2, 1.8) : new THREE.CylinderGeometry(1.05, 1.45, 3.4, 20), shirt, 0, 1.7, 0);
-    add(piv, new THREE.CylinderGeometry(1.2, 1.2, 1.6, 16), M(0x2b2420), 0, -0.2, 0.6).rotation.x = Math.PI / 2; // lap
-    const head = new THREE.Group(); head.position.y = 4.3; piv.add(head);
-    const skin = M(c.skin, robot ? { metalness: 0.6, roughness: 0.35 } : {});
-    add(head, robot ? new THREE.BoxGeometry(1.9, 1.7, 1.7) : new THREE.SphereGeometry(1, 24, 18), skin);
-    if (robot) {
-      const glow = new THREE.MeshStandardMaterial({ color: c.acc, emissive: c.acc, emissiveIntensity: 0.9 });
-      add(head, new THREE.BoxGeometry(0.38, 0.22, 0.1), glow, -0.42, 0.15, 0.86);
-      add(head, new THREE.BoxGeometry(0.38, 0.22, 0.1), glow, 0.42, 0.15, 0.86);
-      add(head, new THREE.BoxGeometry(0.9, 0.12, 0.1), M(0x2a3035), 0, -0.4, 0.86);
-      add(head, new THREE.CylinderGeometry(0.05, 0.05, 0.7), M(0x56636d), 0, 1.15, 0);
-      add(head, new THREE.SphereGeometry(0.16, 12, 10), glow, 0, 1.55, 0);
-    } else {
-      const white = M(0xffffff, { roughness: 0.3 }), dark = M(0x1a1410, { roughness: 0.3 });
-      for (const x of [-0.36, 0.36]) { add(head, new THREE.SphereGeometry(0.2, 12, 10), white, x, 0.14, 0.86); add(head, new THREE.SphereGeometry(0.11, 10, 8), dark, x, 0.14, 1.04); }
-      add(head, new THREE.SphereGeometry(0.16, 12, 10), skin, 0, -0.12, 1);
-      const smile = add(head, new THREE.TorusGeometry(0.24, 0.045, 6, 16, Math.PI), dark, 0, -0.4, 0.9); smile.rotation.z = Math.PI;
-      const acc = M(c.acc);
-      if (c.k === 'fez') {
-        add(head, new THREE.CylinderGeometry(0.5, 0.64, 0.8, 20), acc, 0, 1.05, 0);
-        add(head, new THREE.SphereGeometry(0.12, 8, 8), dark, 0.45, 1.1, -0.15);
-        add(head, new THREE.BoxGeometry(0.8, 0.14, 0.16), dark, 0, -0.3, 0.97);
-      } else if (c.k === 'cap') {
-        add(head, new THREE.SphereGeometry(1.05, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), acc, 0, 0.08, 0);
-        add(head, new THREE.BoxGeometry(1.4, 0.08, 0.9), acc, 0, 0.22, 1.05);
-        add(head, new THREE.BoxGeometry(0.4, 0.25, 0.05), M(0xf4e9d0), 0, 0.55, 1);
-      } else if (c.k === 'phones') {
-        add(head, new THREE.SphereGeometry(1.03, 20, 10, 0, Math.PI * 2, 0, 1.1), acc);
-        add(head, new THREE.TorusGeometry(1.1, 0.09, 8, 24, Math.PI), M(0x3ad6c4));
-        for (const sx of [-1, 1]) { const cup = add(head, new THREE.CylinderGeometry(0.38, 0.38, 0.3, 16), M(0x3ad6c4), sx * 1.05, 0, 0); cup.rotation.z = Math.PI / 2; }
-      } else if (c.k === 'bun') {
-        const hh = add(head, new THREE.SphereGeometry(1.06, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.55), acc); hh.rotation.x = -0.35;
-        add(head, new THREE.SphereGeometry(0.45, 14, 12), acc, 0, 0.9, -0.7);
-        for (const sx of [-1, 1]) add(head, new THREE.SphereGeometry(0.1, 8, 8), M(0xd9a84e, { metalness: 0.8, roughness: 0.3 }), sx * 0.97, -0.38, 0.05);
-      } else if (c.k === 'beret') {
-        const b = add(head, new THREE.SphereGeometry(1.15, 24, 12), acc, 0.15, 0.88, -0.05); b.scale.set(1, 0.3, 1); b.rotation.z = -0.2;
-        for (const x of [-0.36, 0.36]) add(head, new THREE.TorusGeometry(0.26, 0.04, 6, 18), dark, x, 0.14, 1.02);
-      }
-    }
-    const arms = [-1, 1].map(sx => {
-      const ap = new THREE.Group(); ap.position.set(sx * (robot ? 1.45 : 1.25), 3.1, 0); ap.rotation.x = -1.1; piv.add(ap);
-      add(ap, new THREE.CylinderGeometry(0.28, 0.3, 2.1, 12), shirt, 0, -1.05, 0);
-      add(ap, new THREE.SphereGeometry(0.36, 12, 10), skin, 0, -2.25, 0);
-      return ap;
-    });
-    g.traverse(o => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
-    const data: CharData = { piv, head, arms, phase: Math.random() * 6, anim: null, active: false, ch: i, seat: -1 };
+    const data: CharData = { piv: p.piv, head: p.head, arms: p.arms, elbows: p.elbows, phase: Math.random() * 6, anim: null, active: false, ch: i, seat: -1 };
     g.userData = data;
-    if (regular) { arms[1].rotation.x = -1.6; } // holding a tea glass
+    if (regular) {
+      // holding a glass of tea
+      const tea = makeTeaGlass(); tea.scale.setScalar(0.75); tea.rotation.x = Math.PI / 2 + 0.45; tea.position.set(0, -0.35, -0.12);
+      p.hands[1].add(tea);
+      p.arms[1].rotation.x = -1.6;
+    }
     return g;
   }
 
@@ -498,19 +484,21 @@ export class TableScene {
     const effAspect = Math.max(0.5, (w - side) / h);
     const hf = 2 * Math.atan(Math.tan(vf / 2) * effAspect);
     const hw = !playing ? T + 4.5 : boardHalf ? boardHalf + (side ? 0.3 : 0) : T + 0.4;
-    const hd = !playing ? T + 1.5 : boardHalf ? (phoneLand ? boardDepth + 0.8 : Math.min(boardHalf, 5)) : T + 0.3;
+    // domino on a landscape phone leaves room at the top for the face of the player across the table
+    const hd = !playing ? T + 1.5 : boardHalf ? (phoneLand ? boardDepth + 0.8 : Math.min(boardHalf, 5)) : phoneLand ? T + 1.9 : T + 0.3;
     const d = Math.max(hw / Math.tan(hf / 2), (hd * Math.sin(el) + 1.0) / Math.tan(vf / 2)) * (playing ? this.zoom : 1.05);
-    const tz = playing ? (portrait ? 0.4 : 0.1) : -1.5;
+    const tz = playing ? (portrait ? 0.4 : phoneLand && !boardHalf ? -1.4 : 0.1) : -1.5;
     const ty = playing ? 0 : 1.5;
     this.camera.position.set(Math.sin(sway) * d * 0.25, ty + d * Math.sin(el), tz + d * Math.cos(el));
     this.camera.lookAt(Math.sin(sway) * 2, ty, tz);
     // shift the picture: up a little under the top bar, and left of the control panel
-    const yOff = playing ? (portrait ? 0.07 : phoneLand ? (boardHalf ? -0.035 : 0.06) : 0.08) : -0.04;
+    const yOff = playing ? (portrait ? 0.07 : phoneLand ? (boardHalf ? -0.035 : -0.07) : 0.08) : -0.04;
     this.camera.setViewOffset(w, h, side / 2, Math.round(h * yOff), w, h);
     this.camera.updateProjectionMatrix();
   }
 
   private tick(now: number) {
+    if (!this.portraitsDone) this.makePortraits();
     const dt = Math.min(0.05, (now - this.lastT) / 1000); this.lastT = now; this.clock += dt;
     const amp = this.reduce ? 0 : 1, t = this.clock;
     this.placeCamera(this.view || this.reduce ? 0 : Math.sin(t * 0.12) * 0.35);
@@ -522,6 +510,7 @@ export class TableScene {
       u.head.rotation.y = Math.sin(t * 0.5 + u.phase) * 0.2 * amp;
       u.head.rotation.x += ((u.active ? 0.3 : 0.06) - u.head.rotation.x) * 0.08;
       u.arms[0].rotation.x = -1.1; u.arms[1].rotation.x = -1.1; c.position.y = 0;
+      u.elbows[0].rotation.x = u.elbows[1].rotation.x = -0.45;
       if (u.anim) {
         const k = (t - u.anim.t0) / u.anim.d;
         if (k >= 1) u.anim = null;
@@ -530,13 +519,15 @@ export class TableScene {
         else if (u.anim.type === 'pass') u.head.rotation.y = Math.sin(k * Math.PI * 6) * 0.55 * (1 - k);
         else if (u.anim.type === 'emote') u.arms[1].rotation.x = -2.6 + Math.sin(k * Math.PI * 6) * 0.3;
         else if (u.anim.type === 'win') { c.position.y = Math.abs(Math.sin(k * Math.PI * 4)) * 0.8 * (1 - k * 0.5); u.arms[0].rotation.x = u.arms[1].rotation.x = -2.9; }
+        for (let a = 0; a < 2; a++) if (u.arms[a].rotation.x < -1.8) u.elbows[a].rotation.x = -0.15;
       }
     }
     for (const r of this.regulars) {
       const u = r.userData as CharData;
       u.piv.position.y = -1.75 + Math.sin(t * 1.3 + u.phase) * 0.03 * amp;
       u.head.rotation.y = Math.sin(t * 0.35 + u.phase) * 0.5 * amp;
-      u.arms[1].rotation.x = -1.6 - Math.max(0, Math.sin(t * 0.4 + u.phase)) * 0.8 * amp;
+      const sip = Math.max(0, Math.sin(t * 0.4 + u.phase)) * amp;
+      u.arms[1].rotation.x = -1.6 - sip * 0.5; u.elbows[1].rotation.x = -0.6 - sip * 1.1;
     }
     for (const m of this.boardG.children) {
       const d = m.userData.drop as number | undefined;

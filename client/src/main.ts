@@ -80,6 +80,12 @@ const $ = (id: string) => document.getElementById(id)!;
 /* ---------------- net ---------------- */
 const net = new Net(() => store.get('token') || null);
 const scene = new TableScene($('scene') as HTMLCanvasElement);
+// once the 3D characters are drawn, their faces replace the plain colour dots
+scene.onPortraits = urls => {
+  const st = document.createElement('style');
+  st.textContent = urls.map((u, i) => u ? `.sw[data-ch="${i}"]{background-image:url(${u});background-size:cover;background-position:center}` : '').join('\n');
+  document.head.append(st);
+};
 const voice = new Voice(m => net.send(m));
 voice.onChange = () => { renderLabels(true); updateVoiceButtons(); };
 (window as unknown as { __voice: Voice }).__voice = voice; // handy for debugging and tests
@@ -413,7 +419,7 @@ function topBar() {
     h('div', { class: 'grow' }),
     btn(getLang() === 'ar' ? 'EN' : 'ع', () => { const l: Lang = getLang() === 'ar' ? 'en' : 'ar'; setLang(l); store.set('lang', l); render(); }, 'chip', { 'aria-label': t('language') }),
     h('button', { type: 'button', class: 'chip profile', onclick: () => { S.screen = 'settings'; render(); } },
-      h('span', { class: 'sw', style: `background:${charColor(localCh())}` }),
+      h('span', { class: 'sw', 'data-ch': localCh(), style: `background-color:${charColor(localCh())}` }),
       h('span', { class: 'pname' }, localName()),
       u ? h('span', { class: 'muted' }, num(u.ratings?.[S.game]?.rating ?? 1000)) : null,
       u ? h('span', { class: 'coins' }, '🪙 ' + num(u.coins)) : null),
@@ -506,7 +512,7 @@ function lbScreen() {
   const rows = S.lb?.rows ?? [];
   const row = (r: LeaderRow) => h('li', { class: r.me ? 'me' : '' },
     h('span', { class: 'rank' }, num(r.rank)),
-    h('span', { class: 'sw', style: `background:${charColor(r.ch)}` }),
+    h('span', { class: 'sw', 'data-ch': r.ch, style: `background-color:${charColor(r.ch)}` }),
     h('span', { class: 'nm' }, r.name),
     h('span', { class: 'muted small' }, t('wins', { n: r.wins }) + ' · ' + t('games', { n: r.games })),
     h('b', null, num(r.rating)));
@@ -554,7 +560,7 @@ function settingsScreen() {
   name.addEventListener('change', () => { saveProfile(); toast(t('saved')); });
   const charGrid = h('div', { class: 'chars' }, ...CHARS.map((_, i) =>
     h('button', { type: 'button', class: 'chr', 'aria-pressed': String(localCh() === i), onclick: () => { saveProfile(i); render(); } },
-      h('span', { class: 'sw', style: `background:${charColor(i)}` }), h('span', null, CHAR_NAMES[getLang()][i]))));
+      h('span', { class: 'sw', 'data-ch': i, style: `background-color:${charColor(i)}` }), h('span', null, CHAR_NAMES[getLang()][i]))));
   const toggle = (label: string, on: boolean, set: (v: boolean) => void) => h('div', { class: 'setrow' }, h('span', null, label),
     chips(['on', 'off'] as const, on ? 'on' : 'off', v => t(v), v => { set(v === 'on'); render(); }));
   let account: HTMLElement;
@@ -592,7 +598,7 @@ function roomScreen(v: AnyView) {
   const host = v.you >= 0 && v.seats[v.you]?.host;
   const seats = h('div', { class: 'seats' }, ...v.seats.map((s, i) => {
     const row = h('div', { class: 'seat' },
-      h('span', { class: 'sw', style: s ? `background:${charColor(s.ch)}` : 'border:1px dashed var(--line)' }),
+      h('span', { class: 'sw', 'data-ch': s ? s.ch : undefined, style: s ? `background-color:${charColor(s.ch)}` : 'border:1px dashed var(--line)' }),
       h('span', { class: 'nm' + (s ? '' : ' muted') }, s ? seatName(v, i) : t('empty')),
       v.mode === 'team' ? h('span', { class: 'tag team' + (i % 2) }, teamName(i % 2)) : null,
       s?.host ? h('span', { class: 'tag hl' }, t('host')) : null,
@@ -678,7 +684,7 @@ function resultSheet(v: TableView): HTMLElement {
   } else if (r.team < 0) head = t('blocked');
   else head = v.mode === 'team' ? t('teamRoundWin', { team: teamName(r.team) }) : t('roundWin', { name: seatName(v, r.winner) });
   const rows = v.seats.map((s, i) => s && h('div', { class: 'res-row' },
-    h('span', { class: 'sw', style: `background:${charColor(s.ch)}` }),
+    h('span', { class: 'sw', 'data-ch': s.ch, style: `background-color:${charColor(s.ch)}` }),
     h('span', { class: 'nm' }, seatName(v, i)),
     h('span', { class: 'mini' }, ...r.hands[i].map(id => TableScene.tileEl(id, 'div'))),
     h('b', null, num(r.pips[i]))));
@@ -821,7 +827,7 @@ function boardResultSheet(v: BoardView): HTMLElement {
   const secs = Math.max(0, Math.ceil((v.nextAt - net.serverNow()) / 1000));
   return h('div', { class: 'overlay' }, h('div', { class: 'card' },
     h('h2', null, head),
-    sub ? h('p', { class: r.kind === 'mars' ? 'good' : 'muted' }, sub) : null,
+    sub ? h('p', { class: r.kind === 'mars' || r.kind === 'mother' ? 'good' : 'muted' }, sub) : null,
     v.tawla ? h('div', { class: 'big' }, v.scores.map(n => num(n)).join(' – ')) : null,
     delta !== null && delta !== undefined ? h('p', { class: delta >= 0 ? 'good' : 'bad' }, `${t('rating')} ${delta >= 0 ? '+' : '−'}${num(Math.abs(delta))}`) : null,
     !mend ? h('p', { class: 'muted', id: 'next-count' }, t('nextGame', { s: secs })) : v.private && !S.practice ? h('p', { class: 'muted', id: 'next-count' }, t('backToRoom', { s: secs })) : null,
@@ -869,7 +875,7 @@ function playerSheet(v: AnyView): HTMLElement | null {
   const coins = S.user?.coins ?? 0;
   const kids: (HTMLElement | null)[] = [
     h('div', { class: 'row between' },
-      h('div', { class: 'row' }, h('span', { class: 'sw big-sw', style: `background:${charColor(s.ch)}` }),
+      h('div', { class: 'row' }, h('span', { class: 'sw big-sw', 'data-ch': s.ch, style: `background-color:${charColor(s.ch)}` }),
         h('div', { class: 'stack tight' }, h('b', null, seatName(v, seat)), h('span', { class: 'muted small' }, s.bot ? t('bot') : `${t('rating')} ${num(s.rating)}`))),
       btn('✕', close, 'iconbtn small-icon', { 'aria-label': t('close') })),
   ];
@@ -961,7 +967,7 @@ function renderLabels(content: boolean) {
     }
     el.hidden = false;
     el.style.left = Math.max(60, Math.min(window.innerWidth - 60, p.x)) + 'px';
-    el.style.top = Math.max(96, p.y) + 'px';
+    el.style.top = Math.max(window.innerWidth > window.innerHeight && window.innerHeight <= 600 ? 66 : 96, p.y) + 'px';
   });
   // timers
   if (v && v.phase === 'play' && v.turnEndsAt && v.game !== 'chess') {

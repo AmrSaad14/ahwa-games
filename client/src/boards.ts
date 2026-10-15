@@ -33,7 +33,7 @@ function overlay(size: number, color: number, opacity: number) {
 // A warm "ahwa" reflection map (overhead lamp, doorway daylight) so polished wood, lacquer and plastic catch light.
 let ENV: THREE.Texture | null = null;
 const envMats = new Set<THREE.MeshStandardMaterial>();
-function phys(p: THREE.MeshPhysicalMaterialParameters & { envMapIntensity?: number }) {
+export function phys(p: THREE.MeshPhysicalMaterialParameters & { envMapIntensity?: number }) {
   const m = new THREE.MeshPhysicalMaterial(p);
   if (ENV) m.envMap = ENV;
   envMats.add(m);

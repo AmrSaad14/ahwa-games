@@ -38,6 +38,7 @@ export class Fog { constructor(..._a: any[]) {} }
 export class Raycaster { setFromCamera() {} intersectObjects() { return []; } }
 export class WebGLRenderer { shadowMap: any = {}; outputColorSpace = ''; toneMapping = 0; toneMappingExposure = 1; constructor(_o?: any) {} setPixelRatio() {} setSize() {} render() {} }
 export const ACESFilmicToneMapping = 4, PCFSoftShadowMap = 2, SRGBColorSpace = 'srgb', RepeatWrapping = 1000, DoubleSide = 2;
+export class Float32BufferAttribute { constructor(..._a: any[]) { return loose(this); } } export class Texture extends CanvasTexture {}
 export class CircleGeometry extends BufferGeometry {} export class CapsuleGeometry extends BufferGeometry {} export class IcosahedronGeometry extends BufferGeometry {}
 export class Quaternion { constructor(..._a: any[]) { return loose(this); } } export class Euler { constructor(..._a: any[]) { return loose(this); } } export class Matrix4 { constructor() { return loose(this); } }
 export class InstancedMesh extends Mesh {} export class Points extends Obj {} export class Line extends Obj {}

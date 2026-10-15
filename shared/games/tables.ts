@@ -10,6 +10,7 @@
 //
 // محبوسة: landing on a lone opposing checker traps (pins) it under yours until you move away;
 //   a point with two or more opposing checkers, or an opposing checker that is itself trapping, is closed.
+//   Trapping the opponent's last checker on their starting point («الأم», the mother) wins a double game.
 // ٣١: one checker holds a point; before moving a second checker off the start, the first one must get past
 //   the opponent's starting point; you may not build a wall of six points in a row in front of the opponent.
 //   The winner scores one point per opposing checker still on the board; the set is played to 31.
@@ -234,6 +235,11 @@ export function endTurn(s: TablesState): TablesState {
 }
 
 export function winner(s: TablesState): { winner: 0 | 1; points: number; kind: string } | null {
+  if (s.v === 'mahbousa') for (const p of [0, 1] as const) {
+    // the "mother": trapping the opponent's last checker on their starting point wins a double game
+    const o = (1 - p) as 0 | 1, start = pointOf(s.v, o, 24);
+    if (s.pinned[start] === o && s.c[o][start] === 1 && s.c[p][start] > 0) return { winner: p, points: 2, kind: 'mother' };
+  }
   for (const p of [0, 1] as const) {
     if (s.off[p] < 15) continue;
     const o = 1 - p;

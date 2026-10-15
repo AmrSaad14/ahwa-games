@@ -61,6 +61,7 @@ const en = {
     '## محبوسة',
     'All 15 checkers start on the point farthest from home; the two sides move toward each other.',
     'No hitting: landing on a lone opposing checker traps it underneath yours (محبوس) until you move away. Two checkers, or a trapping checker, close a point.',
+    'Trap the opponent\'s last checker on their starting point (the mother, الأم) and you win a double game straight away.',
     '## ٣١',
     'All 15 start in diagonally opposite corners and both sides race the same way round the board.',
     'One checker is enough to hold a point; you can\'t land where the opponent is. Your first checker must get past the opponent\'s starting point before a second one leaves.',
@@ -108,7 +109,7 @@ const en = {
   white: 'White', black: 'Black', check: 'Check!', chessYourMove: 'Your move', promoteTo: 'Promote to',
   pawnTap: 'Tap a glowing pawn', needSix: 'You need a 6 to bring a pawn out', rolledN: 'You rolled {n}', noMovesPassed: 'No moves, so the turn passed.',
   res_mate: 'Checkmate', res_time: 'Out of time', res_stalemate: 'Stalemate. It\'s a draw.', res_fifty: 'Draw by the 50-move rule', res_repetition: 'Draw by repetition', res_material: 'Draw. Not enough pieces to mate.',
-  res_mars: 'Mars! Double points', res_win: 'Win', drawGame: 'Draw', youWin: 'You win!', winsGame: '{name} wins', gameWin: '{name} wins the game', nextGame: 'Next game in {s}s',
+  res_mars: 'Mars! Double points', res_mother: 'The mother is trapped! Double points', res_win: 'Win', drawGame: 'Draw', youWin: 'You win!', winsGame: '{name} wins', gameWin: '{name} wins the game', nextGame: 'Next game in {s}s',
   dropOnSpot: 'Drop it on a glowing spot', rotateTitle: 'Turn your phone sideways', rotateHint: 'The games are played in landscape.', ratingsTitle: 'Ratings', moveN: 'Move {n}',
   rulesDomino: 'Domino', rulesTawla: 'Tawla', rulesChess: 'Chess', rulesLudo: 'Ludo',
   practiceTitle: 'Practice against the computer', reconnecting: 'Connection lost. Reconnecting…',
@@ -185,6 +186,7 @@ const ar: Dict = {
     '## محبوسة',
     'الـ١٥ قطعة يبدأوا على أبعد خانة من بيتك، وكل واحد ماشي ناحية التاني.',
     'مفيش ضرب: لو نزلت على قطعة لوحدها للخصم تحبسها تحتك لحد ما تتحرك. قطعتين أو قطعة حابسة يقفلوا الخانة.',
+    'لو حبست آخر قطعة للخصم في خانة البداية (الأم) تكسب الدور على طول بنقطتين.',
     '## ٣١',
     'الـ١٥ قطعة يبدأوا في ركنين متقابلين بالقطر، والاتنين ماشيين في نفس الاتجاه حوالين الطاولة.',
     'قطعة واحدة كفاية تمسك الخانة، وممنوع تنزل مكان الخصم. أول قطعة لازم تعدّي بداية الخصم قبل ما قطعة تانية تطلع.',
@@ -232,7 +234,7 @@ const ar: Dict = {
   white: 'الأبيض', black: 'الأسود', check: 'كش!', chessYourMove: 'دورك', promoteTo: 'رقِّ العسكري إلى',
   pawnTap: 'اضغط على قطعة مضيئة', needSix: 'محتاج ٦ عشان تطلع قطعة', rolledN: 'جالك {n}', noMovesPassed: 'مفيش حركة، فالدور عدّى.',
   res_mate: 'كش مات', res_time: 'الوقت خلص', res_stalemate: 'تعادل. الملك محاصر بدون كش.', res_fifty: 'تعادل بقاعدة الخمسين نقلة', res_repetition: 'تعادل بالتكرار', res_material: 'تعادل. القطع لا تكفي للمات.',
-  res_mars: 'مارس! نقاط مضاعفة', res_win: 'فوز', drawGame: 'تعادل', youWin: 'كسبت!', winsGame: '{name} كسب', gameWin: '{name} كسب الدور', nextGame: 'الدور الجاي بعد {s} ث',
+  res_mars: 'مارس! نقاط مضاعفة', res_mother: 'الأم اتحبست! نقاط مضاعفة', res_win: 'فوز', drawGame: 'تعادل', youWin: 'كسبت!', winsGame: '{name} كسب', gameWin: '{name} كسب الدور', nextGame: 'الدور الجاي بعد {s} ث',
   dropOnSpot: 'سيبها على مكان منوّر', rotateTitle: 'لف الموبايل بالعرض', rotateHint: 'الألعاب بتتلعب والموبايل بالعرض.', ratingsTitle: 'التصنيف', moveN: 'النقلة {n}',
   rulesDomino: 'دومينو', rulesTawla: 'طاولة', rulesChess: 'شطرنج', rulesLudo: 'لودو',
   practiceTitle: 'تدريب ضد الكمبيوتر', reconnecting: 'انقطع الاتصال. جارٍ إعادة الاتصال…',
@@ -247,8 +249,8 @@ const ar: Dict = {
 };
 
 export const CHAR_NAMES: Record<Lang, string[]> = {
-  en: ['Am Fathi', 'Captain Samy', 'Ziko', 'Mona', 'Nada', 'Robo'],
-  ar: ['عم فتحي', 'كابتن سامي', 'زيكو', 'منى', 'ندى', 'روبو'],
+  en: ['Am Fathi', 'Captain Samy', 'Ziko', 'Mona', 'Nada', 'Hajj Mahmoud'],
+  ar: ['عم فتحي', 'كابتن سامي', 'زيكو', 'منى', 'ندى', 'الحاج محمود'],
 };
 
 const dicts: Record<Lang, Dict> = { en, ar };
