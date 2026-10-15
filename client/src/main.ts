@@ -1178,13 +1178,20 @@ function flyGift(from: number, to: number, k: GiftKind) {
  * (any phone, tablet, foldable or desktop window), and labels and drops keep clear of them.
  */
 const chrome = { top: 0, right: 0, bottom: 0, left: 0 };
+/** the round/match line under the scores: the 3D picture may run under it, a name tag may not cover it */
+const metaBox = { left: 0, right: 0, bottom: 0 };
 function measureChrome() {
   const W = window.innerWidth, H = window.innerHeight;
   chrome.top = chrome.right = chrome.bottom = chrome.left = 0;
   const shown = (el: Element) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? r : null; };
   // the small round/match line under the scores may sit over the far edge of the picture; the score bar may not
   const hud = document.querySelector('#ui .hud');
-  if (hud) for (const c of hud.children) { const r = !c.classList.contains('meta') && shown(c); if (r) chrome.top = Math.max(chrome.top, r.bottom); }
+  metaBox.left = metaBox.right = metaBox.bottom = 0;
+  if (hud) for (const c of hud.children) {
+    const r = shown(c); if (!r) continue;
+    if (!c.classList.contains('meta')) chrome.top = Math.max(chrome.top, r.bottom);
+    else { const txt = document.createRange(); txt.selectNodeContents(c); const t = txt.getBoundingClientRect(); Object.assign(metaBox, { left: t.left - 6, right: t.right + 6, bottom: r.bottom }); }
+  }
   const bot = document.querySelector('#ui .bottom');
   const br = bot && shown(bot);
   if (bot && br) {
@@ -1246,8 +1253,10 @@ function renderLabels(content: boolean) {
     el.hidden = false;
     // keep labels on screen, clear of the side panel, and below the score bar
     const half = Math.min(el.offsetWidth / 2 + 6, window.innerWidth / 4);
-    el.style.left = Math.max(chrome.left + half, Math.min(window.innerWidth - chrome.right - half, p.x)) + 'px';
-    el.style.top = Math.max(chrome.top + el.offsetHeight + 4, p.y) + 'px';
+    const x = Math.max(chrome.left + half, Math.min(window.innerWidth - chrome.right - half, p.x));
+    const underMeta = x - half < metaBox.right && x + half > metaBox.left;
+    el.style.left = x + 'px';
+    el.style.top = Math.max((underMeta ? Math.max(chrome.top, metaBox.bottom) : chrome.top) + el.offsetHeight + 4, p.y) + 'px';
   });
   // timers
   if (v && v.phase === 'play' && v.turnEndsAt && v.game !== 'chess') {
