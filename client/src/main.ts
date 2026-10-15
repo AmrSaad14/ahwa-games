@@ -326,7 +326,7 @@ function demoMatch(mode: Mode, stake: number) {
   startPractice(mode, stake);
 }
 function demoSettle(mode: Mode, stake: number, team: number) {
-  if (!wallet) return;
+  if (!wallet || !stake) return;   // a practice game without a stake moves no coins
   const n = MODE_PLAYERS[mode], winners = mode === 'team' ? 2 : 1, w = winnings(stake, winners, n - winners);
   let kind: string, delta: number, fee = 0;
   if (team < 0) { kind = 'draw'; delta = 0; wallet.add('draw', stake, 0, { stake, mode }); }
@@ -1255,7 +1255,11 @@ if (/^[a-z0-9]{5}$/i.test(hashCode)) { S.joinCode = hashCode.toUpperCase(); S.sc
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !Capacitor.isNativePlatform()) navigator.serviceWorker.register('/sw.js').catch(() => {});
 
 // how-to-play recorder: with ?rec in the address a script can read the view and find board spots on screen
-if (/[?&]rec\b/.test(location.search)) (window as unknown as Record<string, unknown>).__ahwa = { view: () => S.view, spot: (p: Pick) => scene.spotScreen(p), ghost: (e: End) => scene.ghostScreen(e) };
+// recording hooks: ?rec for the how-to GIFs, ?promo for the promo video (the computer plays your seat)
+if (/[?&](rec|promo)\b/.test(location.search)) (window as unknown as Record<string, unknown>).__ahwa = {
+  view: () => S.view, spot: (p: Pick) => scene.spotScreen(p), ghost: (e: End) => scene.ghostScreen(e),
+  practice: (mode: Mode) => { startPractice(mode); const seat = S.practice?.table.seats[0]; if (seat) seat.away = true; S.practice?.table.refresh(); },
+};
 // the game is played in landscape: lock it where the browser allows (installed app, fullscreen)
 const lockLandscape = () => { try { (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.('landscape').catch(() => {}); } catch { /* not supported */ } };
 document.addEventListener('pointerdown', lockLandscape, { once: true });
