@@ -5,7 +5,7 @@ import type { AnyView, TableView } from '../../shared/protocol';
 import type { BoardGameId } from '../../shared/games/defs';
 import { BoardRenderer, BoardUi, ChessBoard, LudoBoard, Pick, TawlaBoard, initBoardEnvironment } from './boards';
 import { HEAD_Y, PEOPLE, makePerson } from './people';
-import { FLOOR_Y, Smoke, buildAhwa, canvasTex, makeChair, makeShisha, makeTable, makeTeaGlass } from './ahwa';
+import { FLOOR_Y, Smoke, TEX_HI, buildAhwa, canvasTex, makeChair, makeShisha, makeTable, makeTeaGlass } from './ahwa';
 
 /** The six characters players pick from; the colour stands for them in lists and badges. */
 export const CHARS = PEOPLE;
@@ -176,7 +176,7 @@ export class TableScene {
     // the bulb over our table
     const spot = new THREE.SpotLight(0xffd59a, 200, 45, 0.78, 0.55, 1.4);
     spot.position.set(0.5, 15, 1.5); spot.target.position.set(0, 0, 0);
-    spot.castShadow = true; spot.shadow.mapSize.setScalar(this.gfx === 2 ? 2048 : 1024); this.spot = spot; spot.shadow.bias = -0.0004; spot.shadow.radius = 3;
+    spot.castShadow = true; spot.shadow.mapSize.setScalar(this.gfx === 2 ? (TEX_HI > 1 && (this.renderer.capabilities?.maxTextureSize ?? 0) >= 8192 ? 3072 : 2048) : 1024); this.spot = spot; spot.shadow.bias = -0.0004; spot.shadow.radius = 3;
     s.add(spot, spot.target);
     const fill = new THREE.DirectionalLight(0xffe9cc, 0.35); fill.position.set(-10, 12, 18); s.add(fill);
 
@@ -334,7 +334,7 @@ export class TableScene {
         const pin = g.createRadialGradient(252, 124, 1, 256, 128, 13);
         pin.addColorStop(0, '#fff2c4'); pin.addColorStop(0.5, '#d4a347'); pin.addColorStop(1, '#7a5520');
         g.fillStyle = pin; g.beginPath(); g.arc(256, 128, 12, 0, Math.PI * 2); g.fill();
-      });
+      }, undefined, TEX_HI > 1 ? 1.5 : 1);
       m = new THREE.MeshStandardMaterial({ map: tx, roughness: 0.25 });
       this.faceMats.set(k, m);
     }
@@ -480,7 +480,7 @@ export class TableScene {
   private resize() {
     const w = this.canvas.clientWidth || window.innerWidth, h = this.canvas.clientHeight || window.innerHeight;
     // sharp on phones, but never more pixels than the level allows (a 4K or retina desktop would crawl otherwise)
-    const budget = [1.1e6, 2.1e6, 3.6e6][this.gfx], cap = [1, 1.5, 2][this.gfx];
+    const budget = [1.1e6, 2.2e6, 4.6e6][this.gfx], cap = [1, 1.6, 2.6][this.gfx];
     const pr = Math.max(0.6, Math.min(cap, window.devicePixelRatio || 1, Math.sqrt(budget / Math.max(1, w * h))));
     if (Math.abs(this.renderer.getPixelRatio() - pr) > 0.01) this.renderer.setPixelRatio(pr);
     this.renderer.setSize(w, h, false);

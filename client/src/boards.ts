@@ -2,7 +2,9 @@ import * as THREE from 'three';
 import type { BoardView } from '../../shared/protocol';
 import { BAR, OFF } from '../../shared/games/tawla';
 import { COLOR_OFFSET, HOME, LAP, TRACK } from '../../shared/games/ludo';
-import { canvasTex } from './ahwa';
+import { TEX_HI, canvasTex } from './ahwa';
+/** Board artwork: drawn at the device's texture detail (2x where there is memory for it). */
+const hiTex = (w: number, h: number, draw: (g: CanvasRenderingContext2D, w: number, h: number) => void) => canvasTex(w, h, draw, undefined, TEX_HI);
 
 /** What the player has selected and where it can go (chess squares, tawla points, ludo pawns). */
 export interface BoardUi { sel: number | null; targets: number[]; movable?: number[] }
@@ -83,7 +85,7 @@ function woodCanvas(w: number, h: number, base: string, dark: string, light: str
 }
 function texOf(c: HTMLCanvasElement, repeat?: [number, number]) {
   const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16;
   if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat[0], repeat[1]); }
   return t;
 }
@@ -286,7 +288,7 @@ export class ChessBoard implements BoardRenderer {
     frame.position.y = 0.15;
     // inlaid squares: maple and walnut veneers, each with its own piece of grain
     const lightW = woodCanvas(512, 512, '#e7cf9f', '#c7a46b', '#f6e6c4', 90, 5), darkW = woodCanvas(512, 512, '#5a321b', '#331a0c', '#7a4a2a', 110, 5);
-    const tex = canvasTex(1024, 1024, (g, w) => {
+    const tex = hiTex(1024, 1024, (g, w) => {
       const c = w / 8;
       for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) {
         const src = (r + f) % 2 ? lightW : darkW;
@@ -417,7 +419,7 @@ export class TawlaBoard implements BoardRenderer {
     // the playing fields: olive-wood veneer with inlaid points of walnut and red-stained wood
     const fieldW = woodCanvas(1024, 1024, '#d9bf8c', '#b8965d', '#ecd7aa', 140, 5);
     const darkW = woodCanvas(512, 512, '#3d2414', '#20110a', '#5a3820', 90, 4), redW = woodCanvas(512, 512, '#7a2418', '#4a0f0a', '#9a3a26', 90, 4);
-    const tex = canvasTex(1392, 936, (g, w, h) => {
+    const tex = hiTex(1392, 936, (g, w, h) => {
       const sx = w / TW, x0 = (x: number) => (x + TW / 2) * sx;
       g.fillStyle = '#2a120a'; g.fillRect(0, 0, w, h);
       const fieldL = x0(-TW / 2 + EDGE), barL = x0(this.barX() - BARW / 2), barR = x0(this.barX() + BARW / 2), fieldR = x0(TW / 2 - EDGE - TRAY);
@@ -597,6 +599,13 @@ export class TawlaBoard implements BoardRenderer {
 
 /* =================================================================== ludo */
 
+/** Soft round shadow under a pawn (the ludo card takes no cast shadows, see below). */
+const BLOB_GEO = new THREE.PlaneGeometry(0.66, 0.66);
+const BLOB_MAT = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, map: canvasTex(64, 64, (g, w) => {
+  const gr = g.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); gr.addColorStop(0, 'rgba(0,0,0,.5)'); gr.addColorStop(0.55, 'rgba(0,0,0,.28)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, w, w);
+}) });
+
 export const LUDO_COLORS = ['#c8402f', '#2f8a4a', '#e0b030', '#2f6fb8'];
 const CELL = 0.7;
 /** The 52 track squares as grid cells (column, row), clockwise from red's start. */
@@ -643,7 +652,7 @@ export class LudoBoard implements BoardRenderer {
 
   constructor() {
     const size = CELL * 15;
-    const tex = canvasTex(1050, 1050, (g, w) => {
+    const tex = hiTex(1050, 1050, (g, w) => {
       const c = w / 15;
       g.fillStyle = '#f6efdf'; g.fillRect(0, 0, w, w);
       // printed card laid on wood: a faint paper fibre texture under the print
@@ -678,8 +687,10 @@ export class LudoBoard implements BoardRenderer {
       const cup = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.3, 32), cupMat); cup.rotation.x = -Math.PI / 2;
       cup.position.copy(this.cellPos(bx + dx, by + dy)); cup.position.y = 0.303; this.root.add(cup);
     }));
-    const top = new THREE.Mesh(new THREE.PlaneGeometry(size, size), phys({ map: tex, roughness: 0.5, clearcoat: 0.35, clearcoatRoughness: 0.45, envMapIntensity: 0.15 }));
-    top.rotation.x = -Math.PI / 2; top.position.y = 0.301; top.receiveShadow = true;
+    // a matte printed card, lit evenly: no lamp glare, no hot spot and no shadows from the room across it,
+    // so every colour and square reads the same from corner to corner (pawns get their own soft contact shadow)
+    const top = new THREE.Mesh(new THREE.PlaneGeometry(size, size), phys({ map: tex, roughness: 0.92, metalness: 0, envMapIntensity: 0, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.42 }));
+    top.rotation.x = -Math.PI / 2; top.position.y = 0.301; top.receiveShadow = false;
     this.root.add(shadow(board), top, this.marks, this.pawns);
     this.top = top;
     this.pickables = [top];
@@ -712,6 +723,7 @@ export class LudoBoard implements BoardRenderer {
       const mat = this.pawnMats[s.colors[seat]];
       for (const geo of this.pawnGeo) g.add(new THREE.Mesh(geo, mat));
       g.position.copy(pos); shadow(g);
+      const blob = new THREE.Mesh(BLOB_GEO, BLOB_MAT); blob.rotation.x = -Math.PI / 2; blob.position.y = 0.004; blob.renderOrder = 1; g.add(blob);
       g.userData = { seat, i };
       const id = `${seat}:${i}`, prev = this.prevPos.get(id);
       if (newKey && prev && prev.distanceTo(pos) > 0.01) this.hops.push({ obj: g, from: prev, to: pos.clone(), t0: clock });

@@ -6,12 +6,25 @@ import * as THREE from 'three';
 export const FLOOR_Y = -3.6;
 
 type Draw = (g: CanvasRenderingContext2D, w: number, h: number) => void;
-export function canvasTex(w: number, h: number, draw: Draw, repeat?: [number, number]) {
-  const c = document.createElement('canvas'); c.width = w; c.height = h;
-  draw(c.getContext('2d')!, w, h);
+/**
+ * Texture detail for the game boards and tiles: drawn at 2x on capable devices (sharper print, pips and
+ * inlay up close), 1x on low-memory phones or once the device has stepped its graphics down.
+ */
+export const TEX_HI: number = (() => {
+  try { const s = localStorage.getItem('ahwa.gfx'); if (s === '0' || s === '1') return 1; } catch { /* private mode */ }
+  const mem = (navigator as { deviceMemory?: number }).deviceMemory;
+  return mem !== undefined && mem <= 4 ? 1 : 2;
+})();
+/** A canvas texture drawn in w×h units; `scale` draws it at that many pixels per unit (capped at 4096 px). */
+export function canvasTex(w: number, h: number, draw: Draw, repeat?: [number, number], scale = 1) {
+  const k = Math.max(1, Math.min(scale, 4096 / Math.max(w, h)));
+  const c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
+  const g = c.getContext('2d')!;
+  if (k !== 1) g.scale(c.width / w, c.height / h);
+  draw(g, w, h);
   const tx = new THREE.CanvasTexture(c);
   tx.colorSpace = THREE.SRGBColorSpace;
-  tx.anisotropy = 8;
+  tx.anisotropy = 16;   // three.js clamps this to what the GPU supports
   if (repeat) { tx.wrapS = tx.wrapT = THREE.RepeatWrapping; tx.repeat.set(repeat[0], repeat[1]); }
   return tx;
 }
