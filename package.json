@@ -26,6 +26,7 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@capacitor-community/admob": "6.2.0",
     "@capacitor/android": "^6.1.2",
     "@capacitor/app": "^6.0.1",
     "@capacitor/assets": "^3.0.5",

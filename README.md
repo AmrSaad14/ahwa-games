@@ -168,6 +168,7 @@ These platforms terminate HTTPS for you, so you don't need Caddy there. Set `TRU
 | `SMS_PROVIDER` | empty | `twilio`, `http` or `console`. The mobile-number sign-in only shows when this is set up |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_VERIFY_SID` | empty | For `SMS_PROVIDER=twilio` |
 | `SMS_HTTP_URL`, `SMS_HTTP_TOKEN` | empty | For `SMS_PROVIDER=http`: your own SMS gateway |
+| `ADS_SSV` | off | `1`: rewarded-ad coins are only paid when AdMob confirms the view to `/ads/ssv` (see Ads) |
 | `DEFAULT_COUNTRY_CODE` | `20` | Calling code for numbers typed without one (`01012345678` → `+201012345678`) |
 
 ### Sign-in with Google and a mobile number
@@ -192,6 +193,23 @@ The same web client serves the website and both phone apps: the app opens Google
 Limits against abuse: one code a minute and five an hour per number, ten an hour per IP, five tries per code, codes expire after 10 minutes.
 
 **App Store note:** Apple requires apps that offer Google sign-in to also offer an equally private option, in practice Sign in with Apple (App Review Guideline 4.8). Add it before submitting the iOS app; Android has no such rule.
+
+### Ads (AdMob)
+
+The phone apps show Google AdMob ads; the website shows none.
+
+- **Rewarded video:** the 🎬 +5K button (top bar and Coins page) plays a video; watching to the end adds **5,000 coins**, up to **10 a day** per player. It also appears when a player is short of coins for a stake.
+- **Between matches:** a full-screen ad after every third finished match, at most once every four minutes, only when leaving the result card. Never during play.
+- In the EU/UK the app first shows Google's consent form (set up a GDPR message under *AdMob → Privacy & messaging*); on iPhone it asks the iOS tracking question.
+
+Until you add your own IDs the apps show **Google's test ads**, which pay nothing. To earn:
+
+1. Create an [AdMob](https://admob.google.com) account and add the app (Android, and iOS later). Create two ad units per platform: **Rewarded** (reward: 5000 coins) and **Interstitial**.
+2. GitHub → *Settings → Secrets and variables → Actions → Variables*: set `ADMOB_APP_ID_ANDROID` (`ca-app-pub-…~…`), `ADMOB_ANDROID_REWARDED` and `ADMOB_ANDROID_INTERSTITIAL` (`ca-app-pub-…/…`). The next APK build uses them. For iOS builds set `ADMOB_APP_ID_IOS`, `ADMOB_IOS_REWARDED` and `ADMOB_IOS_INTERSTITIAL` when building on a Mac.
+3. **Make the reward cheat-proof:** in AdMob open the Rewarded ad unit → *Server-side verification* → callback URL `https://YOUR-DOMAIN/ads/ssv`, then set `ADS_SSV=1` in `.env`. Google then tells your server directly that the video was watched (signed with Google's key) and only then are coins added. Without it the server takes the app's word, which a modified app could fake (still capped at 10 a day).
+4. Host an `app-ads.txt` file on your website domain as AdMob shows you (put it in `client/public/app-ads.txt`), and link the app to its store listing once it's published.
+
+On Google Play, declare in *App content* that the app contains ads. Because players stake coins on games, answer the content-rating questionnaire's simulated gambling question with *yes*; coins can't be bought or cashed out.
 
 ### Scaling later
 

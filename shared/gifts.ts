@@ -14,6 +14,8 @@ export const giftByKind = (k: string) => GIFTS.find(g => g.k === k);
 export const ECONOMY = {
   startCoins: 100_000,
   dailyBonus: 10_000,
+  adReward: 5_000,      // coins for watching a rewarded video ad
+  adsPerDay: 10,
 };
 
 /** Coins each player puts on the table for one match (online games). */

@@ -19,6 +19,7 @@ const stubs = process.env.CLIENT_STUBS === '1' ? {
   '@capacitor/share': path.join(root, 'tests/stubs/capacitor.ts'),
   '@capacitor/haptics': path.join(root, 'tests/stubs/capacitor.ts'),
   '@capacitor/browser': path.join(root, 'tests/stubs/capacitor.ts'),
+  '@capacitor-community/admob': path.join(root, 'tests/stubs/capacitor.ts'),
 } : undefined;
 
 const options = {
@@ -32,7 +33,13 @@ const options = {
   entryNames: '[name]-[hash]',
   metafile: true,
   alias: stubs,
-  define: { __SERVER_URL__: JSON.stringify(process.env.SERVER_URL || ''), __DEMO__: JSON.stringify(process.env.DEMO === '1') },
+  define: { __SERVER_URL__: JSON.stringify(process.env.SERVER_URL || ''), __DEMO__: JSON.stringify(process.env.DEMO === '1'),
+    // AdMob ad units for the store apps (empty: Google's test ads)
+    __ADS__: JSON.stringify({
+      android: { rewarded: process.env.ADMOB_ANDROID_REWARDED || '', interstitial: process.env.ADMOB_ANDROID_INTERSTITIAL || '' },
+      ios: { rewarded: process.env.ADMOB_IOS_REWARDED || '', interstitial: process.env.ADMOB_IOS_INTERSTITIAL || '' },
+    }),
+  },
   logLevel: 'info',
   plugins: [{
     name: 'write-html',

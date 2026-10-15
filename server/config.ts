@@ -23,6 +23,8 @@ export const config = {
   adminKey: process.env.ADMIN_KEY || '',                  // lets you read player reports at /api/admin/reports?key=…
   trustProxy: process.env.TRUST_PROXY === '1',             // read client IPs from X-Forwarded-For (behind Caddy/nginx)
   maxConnectionsPerIp: num(process.env.MAX_CONNECTIONS_PER_IP, 20),
+  // Rewarded ads: ADS_SSV=1 once AdMob's server-side verification calls PUBLIC_URL/ads/ssv (README → Ads)
+  adsSsv: process.env.ADS_SSV === '1',
   // Sign-in (see README → Sign-in with Google and a mobile number)
   login: {
     publicUrl: process.env.PUBLIC_URL || '',                // https address players reach this server on

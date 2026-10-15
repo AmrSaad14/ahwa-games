@@ -25,6 +25,7 @@ export class DemoWallet {
     this.rows = this.rows.slice(0, 60);
     this.save();
   }
+  adsToday() { const d = new Date(); d.setUTCHours(0, 0, 0, 0); return this.rows.filter(r => r.kind === 'ad' && r.ts >= d.getTime()).length; }
   take(stake: number) { if (this.coins < stake) return false; this.coins -= stake; this.save(); return true; }
   private save(day?: string) {
     try {
@@ -33,6 +34,6 @@ export class DemoWallet {
     } catch { /* storage blocked: the wallet lasts for this visit */ }
   }
   user(name: string, ch: number): PublicUser {
-    return { id: 'demo', name, ch, email: null, rating: 1000, games: 0, wins: 0, coins: this.coins, gifts: 0, ratings: {}, phone: null, google: null };
+    return { id: 'demo', name, ch, email: null, rating: 1000, games: 0, wins: 0, coins: this.coins, gifts: 0, ratings: {}, phone: null, google: null, adsLeft: Math.max(0, 10 - this.adsToday()) };
   }
 }

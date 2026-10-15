@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { GAMES, GameId, MODES, MODE_PLAYERS, Mode, defaultTarget, gameOf, targetOptions, teamOf } from '../shared/engine';
 import type { C2S, Emote, IceServer, S2C } from '../shared/protocol';
-import { STAKES, giftByKind, isStake, winnings } from '../shared/gifts';
+import { ECONOMY, STAKES, giftByKind, isStake, winnings } from '../shared/gifts';
 import { EMOTES } from '../shared/protocol';
 import { Table } from '../shared/table';
 import { BoardTable } from '../shared/boardtable';
@@ -12,6 +12,7 @@ type Room = Table | BoardTable;
 import { Limiter, Tokens, checkPassword, hashPassword } from './auth';
 import { Store, UserRow } from './db';
 import { GoogleSignIn, PhoneCodes, normalizePhone } from './login';
+import { AdTickets } from './ads';
 
 export interface Conn {
   send(msg: S2C): void;
@@ -29,6 +30,7 @@ export interface HubOptions {
   stunUrls?: string[]; turnUrls?: string[]; turnSecret?: string;
   autoMoveMs?: number; chessClockMs?: number;
   phones?: PhoneCodes; google?: GoogleSignIn; defaultCountry?: string;
+  adsSsv?: boolean;
 }
 
 const CODE_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
@@ -46,6 +48,8 @@ export class Hub {
   private queues = new Map<string, QEntry[]>();
   private escrow = new Map<string, Escrow>();
   private stopping = false;
+  private adTickets = new AdTickets();
+  private adLimiter = new Limiter(1, 20_000);
   private emptySince = new Map<string, number>();
   private authLimiter = new Limiter(10, 60_000);
   private giftLimiter = new Limiter(1, 1200);
@@ -160,6 +164,17 @@ export class Hub {
       }
       case 'cancel': this.dequeue(uid); return s.conn.send({ t: 'queue', mode: null, count: 0, need: 0, botsAt: 0, now: Date.now() });
       case 'coins': return s.conn.send({ t: 'coins', rows: this.store.coinHistory(uid) });
+      case 'adStart': {
+        if (this.store.adsToday(uid) >= ECONOMY.adsPerDay) return err('ad_limit');
+        return s.conn.send({ t: 'adTicket', ticket: this.adTickets.issue(uid), ssv: !!this.opts.adsSsv });
+      }
+      case 'adWatched': {
+        // with server-side verification on, only AdMob's signed call (/ads/ssv) pays out
+        if (this.opts.adsSsv) return;
+        if (!this.adLimiter.allow(uid)) return err('slow_down');
+        if (!this.rewardAd(uid, String(m.ticket || ''))) return err('ad_limit');
+        return;
+      }
       case 'create': {
         if (!MODES.includes(m.mode)) return err('bad_mode');
         const target = targetOptions(m.mode).includes(m.target) ? m.target : defaultTarget(m.mode);
@@ -389,6 +404,19 @@ export class Hub {
     this.userTable.delete(uid);
     if (t) this.forfeit(t, uid);
     t?.leave(uid);
+  }
+
+  /* ---------------- rewarded ads ---------------- */
+
+  /** Pays for one watched ad. False if the ticket is unknown or used, or today's limit is reached. */
+  rewardAd(uid: string, ticket: string): boolean {
+    if (!this.store.get(uid) || !this.adTickets.take(ticket, uid)) return false;
+    if (this.store.adsToday(uid) >= ECONOMY.adsPerDay) return false;
+    this.store.addCoins(uid, ECONOMY.adReward);
+    this.store.logCoins(uid, 'ad', ECONOMY.adReward);
+    this.byUser.get(uid)?.conn.send({ t: 'adReward', coins: ECONOMY.adReward });
+    this.sendUser(uid);
+    return true;
   }
 
   /* ---------------- coins on the table ---------------- */

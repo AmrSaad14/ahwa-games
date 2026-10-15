@@ -146,6 +146,12 @@ export class Store {
     } catch (e) { this.db.exec('ROLLBACK'); throw e; }
   }
 
+  /** Rewarded ads watched today (UTC). */
+  adsToday(id: string): number {
+    const day = new Date(); day.setUTCHours(0, 0, 0, 0);
+    return Number((this.db.prepare("SELECT COUNT(*) AS c FROM coin_log WHERE user_id = ? AND kind = 'ad' AND ts >= ?").get(id, day.getTime()) as { c: number }).c);
+  }
+
   coinHistory(id: string, limit = 60): CoinRow[] {
     return (this.db.prepare('SELECT ts, kind, delta, fee, stake, mode, balance FROM coin_log WHERE user_id = ? ORDER BY id DESC LIMIT ?').all(id, limit) as unknown as CoinRow[])
       .map(r => ({ ...r, mode: r.mode ?? null }));
@@ -213,10 +219,10 @@ export class Store {
     return { rows: out, me };
   }
 
-  publicUser(u: UserRow): PublicUser { return { ...toPublic(u), ratings: this.ratingsOf(u.id) }; }
+  publicUser(u: UserRow): PublicUser { return { ...toPublic(u), ratings: this.ratingsOf(u.id), adsLeft: Math.max(0, ECONOMY.adsPerDay - this.adsToday(u.id)) }; }
 
   close() { this.db.close(); }
 }
 
-export const toPublic = (u: UserRow): PublicUser => ({ id: u.id, name: u.name, ch: u.ch, email: u.email, rating: u.rating, games: u.games, wins: u.wins, coins: u.coins, gifts: u.gifts, ratings: {},
+export const toPublic = (u: UserRow): PublicUser => ({ id: u.id, name: u.name, ch: u.ch, email: u.email, rating: u.rating, games: u.games, wins: u.wins, coins: u.coins, gifts: u.gifts, ratings: {}, adsLeft: 0,
   phone: u.phone ? maskPhone(u.phone) : null, google: u.google_sub ? (u.google_email || 'Google') : null });

@@ -16,6 +16,7 @@ import { CHARS, TableScene, charColor } from './scene';
 import { prefs, sfx, unlockAudio } from './sound';
 import { Voice } from './voice';
 import { DemoWallet } from './demowallet';
+import { adsSupported, afterMatch, initAds, showRewarded } from './ads';
 import { GIFTS, GiftKind, STAKES, giftByKind, isStake, shortCoins, winnings } from '../../shared/gifts';
 
 /** Demo build (no game server): stakes are played against the computer with a wallet kept in this browser. */
@@ -32,7 +33,7 @@ const store = {
 
 /* ---------------- state ---------------- */
 type Screen = 'home' | 'friends' | 'lb' | 'settings' | 'rules' | 'coins';
-type Sheet = null | 'leave' | 'emotes' | 'delete' | 'player' | 'signin';
+type Sheet = null | 'leave' | 'emotes' | 'delete' | 'player' | 'signin' | 'fakead';
 const S = {
   screen: 'home' as Screen,
   sheet: null as Sheet,
@@ -72,7 +73,7 @@ setLang((store.get('lang') as Lang) || (navigator.language?.startsWith('ar') ? '
 const localName = () => S.user?.name || store.get('name') || CHAR_NAMES[getLang()][localCh()];
 const localCh = () => S.user?.ch ?? (Number(store.get('ch', '0')) || 0);
 if (DEMO) { wallet = new DemoWallet(); S.user = wallet.user(localName(), localCh()); }
-const syncWallet = () => { if (wallet && S.user) S.user = { ...S.user, coins: wallet.coins }; };
+const syncWallet = () => { if (wallet && S.user) S.user = { ...S.user, coins: wallet.coins, adsLeft: Math.max(0, 10 - wallet.adsToday()) }; };
 
 /* ---------------- dom helpers ---------------- */
 type Attrs = Record<string, unknown>;
@@ -138,6 +139,8 @@ function onMessage(m: S2C) {
     case 'rtc': voice.onSignal(m.from, m.data).catch(() => {}); return;
     case 'lb': if (m.game === S.lbGame) S.lb = { rows: m.rows, me: m.me }; break;
     case 'coins': S.coinRows = m.rows; break;
+    case 'adTicket': playRewarded(m.ticket, m.ssv); return;
+    case 'adReward': toast(t('adRewarded', { n: shortCoins(m.coins) })); sfx.gift(); break;
     case 'otp': S.otpPhone = m.phone; toast(t('codeSentTo', { phone: m.phone })); break;
     case 'signedIn':
       S.otpPhone = null; S.phoneDraft = ''; store.set('signinAsked', '1');
@@ -310,7 +313,7 @@ function quick() {
   if (wallet) return demoMatch(S.mode, S.stake);
   if (!S.online) return toast(t('offline'));
   store.set('mode', S.mode); store.set('game', gameOf(S.mode));
-  if ((S.user?.coins ?? 0) < S.stake) return toast(t('needCoins', { n: shortCoins(S.stake) }));
+  if ((S.user?.coins ?? 0) < S.stake) return toast(t('needCoins', { n: shortCoins(S.stake) }) + (canWatchAd() ? ' ' + t('orWatchAd') : ''));
   net.send({ t: 'quick', mode: S.mode, stake: S.stake });
   S.queue = { mode: S.mode, count: 1, need: 0, botsAt: 0, stake: S.stake };
   render();
@@ -342,6 +345,7 @@ function demoForfeit() {
   toast(t('payoutLeft', { n: shortCoins(v.stake) }));
 }
 function practiceAgain() {
+  afterMatch();
   const v = S.view;
   if (wallet && v?.stake) { if (!wallet.take(v.stake)) return toast(t('needCoins', { n: shortCoins(v.stake) })); syncWallet(); }
   S.practice!.restart();
@@ -357,6 +361,7 @@ function startPractice(mode = S.mode, stake = 0) {
 }
 function stopPractice() { S.practice?.stop(); S.practice = null; }
 function leaveGame() {
+  if (S.view?.phase === 'mend') afterMatch();
   voice.leave();
   S.sheet = null; S.sel = null; S.choose = null; S.screen = 'home';
   if (S.practice) { demoForfeit(); stopPractice(); S.view = null; render(); return; }
@@ -467,6 +472,7 @@ function render() {
   if (S.sheet === 'leave') ui.append(sheet(h('p', null, t('leaveConfirm')), v && v.stake ? h('p', { class: 'bad' }, t('leaveStake', { n: shortCoins(v.stake) })) : h('span'), h('div', { class: 'row' }, btn(t('stay'), () => { S.sheet = null; render(); }, 'btn alt'), btn(t('leaveYes'), leaveGame, 'btn danger'))));
   if (S.sheet === 'emotes') ui.append(emoteSheet());
   if (S.sheet === 'signin' && !v) ui.append(signInSheet());
+  if (S.sheet === 'fakead') ui.append(fakeAdSheet());
   if (S.sheet === 'player' && v) { const ps = playerSheet(v); if (ps) ui.append(ps); }
   if (S.sheet === 'delete') ui.append(sheet(h('p', null, t('deleteConfirm')), h('div', { class: 'row' }, btn(t('stay'), () => { S.sheet = null; render(); }, 'btn alt'),
     btn(t('deleteYes'), () => { net.send({ t: 'delete' }); S.sheet = null; S.screen = 'home'; toast(t('deleted')); render(); }, 'btn danger'))));
@@ -487,6 +493,7 @@ function topBar() {
       h('span', { class: 'pname' }, localName()),
       u ? h('span', { class: 'muted' }, num(u.ratings?.[S.game]?.rating ?? 1000)) : null),
     u ? btn('🪙 ' + num(u.coins), openCoins, 'chip coins', { 'aria-label': t('coinsTitle') }) : null,
+    u ? adButton() : null,
   );
 }
 
@@ -541,6 +548,7 @@ function coinsScreen() {
   return h('section', { class: 'sheet-card tall coins-page' },
     h('div', { class: 'row between' }, h('h2', null, t('coinsTitle')), u ? h('b', { class: 'coins big-coins' }, '🪙 ' + num(u.coins)) : null),
     h('p', { class: 'muted small' }, t('coinsHow')),
+    canWatchAd() ? h('div', { class: 'row' }, adButton('btn tq', true), h('span', { class: 'muted small' }, t('adsLeft', { n: S.user!.adsLeft }))) : null,
     h('p', { class: 'lab' }, t('coinsHistory')),
     !S.online && !wallet ? h('p', { class: 'muted' }, t('offline')) : !S.coinRows ? h('p', { class: 'muted' }, t('connecting')) : !rows.length ? h('p', { class: 'muted' }, t('coinsEmpty')) :
       h('ol', { class: 'coin-log' }, ...rows.map(r => h('li', null,
@@ -662,6 +670,50 @@ function rulesScreen() {
     chips(GAMES, S.game, g => t(('game_' + g) as Key), g => pickGame(g)),
     howToGif(S.game),
     ...ruleSections(S.game));
+}
+
+/* ---------------- rewarded ads ---------------- */
+let adBusy = false;
+/** Ads pay on the phone apps (and in the demo, with a stand-in ad). */
+const canWatchAd = () => (adsSupported() || !!wallet) && (S.user?.adsLeft ?? 0) > 0;
+function watchAd() {
+  unlockAudio();
+  if (adBusy) return;
+  if (wallet) { S.sheet = 'fakead'; render(); return; }
+  if (!adsSupported()) return toast(t('adsAppOnly'));
+  if (!S.online) return toast(t('offline'));
+  adBusy = true;
+  net.send({ t: 'adStart' });
+  setTimeout(() => { adBusy = false; }, 15_000);
+}
+async function playRewarded(ticket: string, ssv: boolean) {
+  const ok = await showRewarded(S.user?.id ?? '', ticket);
+  adBusy = false;
+  if (!ok) return toast(t('adNotFinished'));
+  // with server-side verification the server pays when Google confirms; otherwise the app reports it
+  if (!ssv) net.send({ t: 'adWatched', ticket });
+}
+/** The coin button for an ad: "🎬 +5K". */
+function adButton(cls = 'chip ad-chip', long = false) {
+  if (!canWatchAd()) return null;
+  return btn(long ? '🎬 ' + t('watchAd', { n: shortCoins(5_000) }) : '🎬 +' + shortCoins(5_000), watchAd, cls, { 'aria-label': t('watchAd', { n: shortCoins(5_000) }), title: t('watchAd', { n: shortCoins(5_000) }) });
+}
+/** Demo only: a stand-in for the video, five seconds long. */
+function fakeAdSheet() {
+  const box = h('div', { class: 'card fakead' }, h('span', { class: 'tag' }, t('adTag')), h('h2', null, t('brand')), h('p', { class: 'muted' }, t('demoAdText')));
+  const count = h('b', { class: 'big' }, '5');
+  const close = btn(t('close'), () => {
+    S.sheet = null;
+    if (wallet && wallet.adsToday() < 10) { wallet.add('ad', 5_000, 5_000); syncWallet(); toast(t('adRewarded', { n: shortCoins(5_000) })); sfx.gift(); }
+    render();
+  }, 'btn', { disabled: true });
+  box.append(count, close);
+  let n = 5;
+  const tick = setInterval(() => {
+    n--; count.textContent = String(Math.max(0, n));
+    if (n <= 0) { clearInterval(tick); (close as HTMLButtonElement).disabled = false; count.textContent = '✓'; }
+  }, 1000);
+  return h('div', { class: 'overlay' }, box);
 }
 
 /* ---------------- signing in: Google and mobile number ---------------- */
@@ -1214,4 +1266,5 @@ document.addEventListener('pointerdown', lockLandscape, { once: true });
 }
 document.addEventListener('pointerdown', unlockAudio, { once: true });
 net.connect();
+initAds();
 render();

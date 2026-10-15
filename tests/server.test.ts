@@ -5,6 +5,8 @@ import { createServer } from '../server/index';
 import { config } from '../server/config';
 import { chooseMove } from '../shared/bot';
 import { normalizePhone } from '../server/login';
+import { verifySsv } from '../server/ads';
+import crypto from 'node:crypto';
 import type { S2C, C2S, TableView, BoardView } from '../shared/protocol';
 
 let app: ReturnType<typeof createServer>;
@@ -363,4 +365,40 @@ test('sign in with Google: a ticket opens the account linked to that Google id',
   b.send({ t: 'ticket', ticket: t });
   await b.until(() => b.last('err')?.code === 'ticket_expired');
   a.close(); b.close();
+});
+
+test('rewarded ads: 5K per watched ad, one reward per ticket, ten a day', async () => {
+  const a = await new Client().open();
+  const start = a.last('welcome')!.user.coins;
+  assert.equal(a.last('welcome')!.user.adsLeft, 10);
+  a.send({ t: 'adStart' });
+  await a.until(() => !!a.last('adTicket'));
+  const { ticket, ssv } = a.last('adTicket')!;
+  assert.equal(ssv, false);
+  a.send({ t: 'adWatched', ticket });
+  await a.until(() => a.last('adReward')?.coins === 5_000);
+  await a.until(() => a.last('user')?.user.coins === start + 5_000 && a.last('user')!.user.adsLeft === 9);
+  // the same ticket doesn't pay twice
+  await new Promise(r => setTimeout(r, 20_100));
+  a.send({ t: 'adWatched', ticket });
+  await a.until(() => a.last('err')?.code === 'ad_limit');
+  // the daily limit
+  for (let i = 0; i < 9; i++) app.hub.rewardAd(a.uid, (app.hub as unknown as { adTickets: { issue(u: string): string } }).adTickets.issue(a.uid));
+  await a.until(() => a.last('user')?.user.adsLeft === 0);
+  a.send({ t: 'adStart' });
+  await a.until(() => a.msgs.filter(m => m.t === 'err' && m.code === 'ad_limit').length === 2);
+  a.send({ t: 'coins' });
+  await a.until(() => !!a.last('coins'));
+  assert.equal(a.last('coins')!.rows.filter(r => r.kind === 'ad').length, 10);
+  a.close();
+}, );
+
+test('rewarded ads: AdMob\'s signed callback is checked', async () => {
+  const { privateKey, publicKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  const msg = 'ad_network=5450213213286189855&ad_unit=1234&custom_data=tk&reward_amount=1&reward_item=coins&timestamp=1&transaction_id=x&user_id=u1';
+  const sig = crypto.sign('sha256', Buffer.from(msg), privateKey).toString('base64url');
+  const ok = await verifySsv(`${msg}&signature=${sig}&key_id=3335741209`, publicKey);
+  assert.equal(ok?.get('user_id'), 'u1');
+  assert.equal(ok?.get('custom_data'), 'tk');
+  assert.equal(await verifySsv(`${msg.replace('u1', 'u2')}&signature=${sig}&key_id=3335741209`, publicKey), null, 'a changed callback is refused');
 });

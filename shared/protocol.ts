@@ -133,6 +133,7 @@ export interface PublicUser {
   gifts: number;       // gifts received
   phone: string | null;   // signed-in mobile number, partly hidden
   google: string | null;  // signed-in Google account (its email)
+  adsLeft: number;        // rewarded ads that still pay out today
   ratings: Partial<Record<GameId, { rating: number; games: number; wins: number }>>;
 }
 
@@ -162,6 +163,8 @@ export type C2S =
   | { t: 'emote'; k: Emote }
   | { t: 'lb'; game?: GameId }
   | { t: 'coins' }
+  | { t: 'adStart' }
+  | { t: 'adWatched'; ticket: string }
   | { t: 'gift'; to: number; k: GiftKind }
   | { t: 'voice'; on: boolean }
   | { t: 'rtc'; to: number; data: RtcSignal }
@@ -180,6 +183,8 @@ export type S2C =
   | { t: 'err'; code: string }
   | { t: 'queue'; mode: Mode | null; count: number; need: number; botsAt: number; now: number; stake?: number }
   | { t: 'coins'; rows: CoinRow[] }
+  | { t: 'adTicket'; ticket: string; ssv: boolean }
+  | { t: 'adReward'; coins: number }
   | { t: 'payout'; kind: string; delta: number; fee: number; stake: number }
   | { t: 'table'; view: AnyView }
   | { t: 'left' }

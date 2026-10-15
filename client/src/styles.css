@@ -328,3 +328,8 @@ h2 { font-family: var(--display); color: var(--brass); margin: 0; font-size: 1.3
 .signin-card { max-width: 380px; display: flex; flex-direction: column; gap: 10px; }
 .use-email summary { cursor: pointer; color: var(--ink-dim); font-size: .85rem; padding: 4px 0; }
 .use-email[open] summary { margin-bottom: 8px; }
+
+/* ads */
+.chip.ad-chip { color: var(--tq); border-color: rgba(58,163,146,.5); }
+.fakead { text-align: center; display: flex; flex-direction: column; gap: 10px; align-items: center; min-width: 280px; }
+.fakead .big { font-size: 2.2rem; font-variant-numeric: tabular-nums; }

@@ -37,9 +37,14 @@ jobs:
       - name: Build the game client
         env:
           SERVER_URL: ${{ vars.SERVER_URL }}
+          # AdMob ad units (empty: Google's test ads)
+          ADMOB_ANDROID_REWARDED: ${{ vars.ADMOB_ANDROID_REWARDED }}
+          ADMOB_ANDROID_INTERSTITIAL: ${{ vars.ADMOB_ANDROID_INTERSTITIAL }}
         run: npm run build:client
 
       - name: Create the Android project
+        env:
+          ADMOB_APP_ID_ANDROID: ${{ vars.ADMOB_APP_ID_ANDROID }}
         run: |
           npx cap add android
           node scripts/native-permissions.mjs
