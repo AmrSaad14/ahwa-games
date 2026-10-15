@@ -232,5 +232,73 @@ h2 { font-family: var(--display); color: var(--brass); margin: 0; font-size: 1.3
 /* how to play */
 .rules-h { font-family: var(--display); color: var(--brass); font-size: 1.05rem; margin: 14px 0 2px; }
 .howto { margin: 8px auto 4px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.howto img { width: min(220px, 64%); height: auto; border-radius: 14px; border: 1px solid var(--line); background: #1a100a; }
+.howto img { width: min(480px, 100%); height: auto; border-radius: 14px; border: 1px solid var(--line); background: #1a100a; }
 .howto figcaption { font-size: .78rem; color: var(--ink-dim); }
+
+/* ================= landscape (the game is played sideways) ================= */
+.home-pick, .home-act { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+/* portrait phone or narrow window on a touch device: ask to turn it */
+#rotate { display: none; }
+@media (orientation: portrait) and (pointer: coarse) and (max-width: 700px) {
+  #rotate { display: flex; position: fixed; inset: 0; z-index: 100; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+    padding: 24px; text-align: center; background: var(--room); color: var(--ink); }
+  #rotate b { font-family: var(--display); font-size: 1.4rem; color: var(--brass); }
+  #rotate span { color: var(--ink-dim); }
+  #rotate .phone { width: 46px; height: 80px; border: 3px solid var(--brass); border-radius: 10px; position: relative; animation: turn 2.4s ease-in-out infinite; }
+  #rotate .phone::after { content: ''; position: absolute; left: 50%; bottom: 5px; width: 10px; height: 3px; margin-left: -5px; border-radius: 2px; background: var(--brass); }
+}
+@keyframes turn { 0%, 25% { transform: rotate(0); } 55%, 100% { transform: rotate(-90deg); } }
+@media (prefers-reduced-motion: reduce) { #rotate .phone { animation: none; transform: rotate(-90deg); } }
+
+@media (orientation: landscape) and (max-height: 600px) {
+  .topbar { padding-top: calc(6px + var(--safe-t)); padding-bottom: 6px; }
+  .brand { font-size: 1.25rem; }
+  /* menus: a wide card under the top bar that scrolls inside */
+  .sheet-card, .sheet-card.tall { top: calc(52px + var(--safe-t)); bottom: calc(8px + var(--safe-b)); max-height: none;
+    width: min(760px, calc(100% - var(--gut-l) - var(--gut-r))); padding: 14px 16px; gap: 10px; border-radius: 18px; }
+  .sheet-card.center { justify-content: center; }
+  .sheet-card.home { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, .75fr); gap: 16px; align-items: start; width: min(860px, calc(100% - var(--gut-l) - var(--gut-r))); }
+  .home-pick { max-height: 100%; }
+  .home-act { position: sticky; top: 0; justify-content: center; min-height: 100%; }
+  .home-act .row { flex-wrap: wrap; }
+  .home-act .row .btn { flex: 1 1 120px; }
+  .home-act .links { justify-content: center; }
+  .game { padding: 6px 4px; }
+  .game .gicon { width: 30px; height: 30px; }
+  .game .small { display: none; }
+  .modes { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+  .mode { padding: 7px 10px; }
+  .mode span { font-size: .7rem; }
+  .btn.big { min-height: 48px; }
+  .card { max-width: 520px; padding: 14px 16px; gap: 8px; }
+  .overlay { padding-top: calc(8px + var(--safe-t)); padding-bottom: calc(8px + var(--safe-b)); }
+
+  /* playing: a slim top bar */
+  .hud { padding: calc(4px + var(--safe-t)) var(--gut-r) 6px var(--gut-l); gap: 2px; }
+  .hud .iconbtn { width: 38px; height: 38px; min-height: 38px; }
+  .sc { padding: 2px 8px; font-size: .78rem; }
+  .meta { font-size: .72rem; padding-inline-start: 46px; }
+
+  /* domino: a compact hand along the bottom */
+  .bottom { padding: 10px var(--gut-r) calc(6px + var(--safe-b)) var(--gut-l); gap: 4px; }
+  .status { font-size: .86rem; min-height: 1.2em; }
+  .timer-row { width: min(260px, 50%); }
+  .hand { min-height: 58px; gap: 5px; }
+  .tile { width: 28px; height: 56px; }
+  .sidebtns { flex-direction: row; }
+  .sidebtns .iconbtn { width: 40px; height: 40px; min-height: 40px; }
+
+  /* chess, tawla and ludo: board on the left, controls in a panel on the right */
+  .board-bottom { left: auto; top: calc(52px + var(--safe-t)); width: 200px; justify-content: center; gap: 10px;
+    padding: 10px calc(10px + var(--gut-r)) calc(10px + var(--safe-b)) 10px;
+    background: linear-gradient(90deg, rgba(20,13,8,0), rgba(20,13,8,.88) 22%); }
+  .board-bottom .status { font-size: .9rem; }
+  .board-bottom .timer-row { width: 100%; }
+  .board-bottom .handbar { flex-direction: column; align-items: stretch; gap: 10px; }
+  .board-bottom .board-act { order: -1; min-height: 0; }
+  .board-bottom .btn.roll { min-width: 0; width: 100%; }
+  .board-bottom .sidebtns { justify-content: center; }
+  .board-bottom .act-space { display: none; }
+  .board-bottom .captured { flex-direction: column; align-items: center; gap: 4px; }
+}

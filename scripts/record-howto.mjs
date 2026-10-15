@@ -15,7 +15,7 @@ const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 const outDir = path.join(root, 'client/public/howto');
 fs.mkdirSync(outDir, { recursive: true });
 const PORT = 8133;
-const W = 390, H = 844;
+const W = 844, H = 390;   // the game is played in landscape
 
 const CAPTIONS = {
   domino: {
@@ -79,7 +79,7 @@ async function record(game, lang) {
       let el = document.getElementById('howto-cap');
       if (!el) {
         el = document.createElement('div'); el.id = 'howto-cap';
-        el.style.cssText = 'position:fixed;left:14px;right:14px;top:78px;z-index:50;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:14px;background:rgba(24,14,8,.92);border:2px solid #d9a84e;color:#f6eddb;font:600 17px/1.35 "IBM Plex Sans Arabic",system-ui,sans-serif;box-shadow:0 8px 20px rgba(0,0,0,.5)';
+        el.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);width:min(520px,70%);top:54px;z-index:50;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:14px;background:rgba(24,14,8,.92);border:2px solid #d9a84e;color:#f6eddb;font:600 17px/1.35 "IBM Plex Sans Arabic",system-ui,sans-serif;box-shadow:0 8px 20px rgba(0,0,0,.5)';
         document.body.append(el);
       }
       el.dir = rtl ? 'rtl' : 'ltr';
@@ -109,7 +109,7 @@ async function record(game, lang) {
       await p.mouse.move(a.x, a.y - 60, { steps: 4 }); await snap(1, 150);
       const v = await view();
       const end = v.line.f === null ? null : await p.evaluate(() => window.__ahwa.ghost('R') || window.__ahwa.ghost('L'));
-      const b = end ?? { x: W / 2, y: 340 };
+      const b = end ?? { x: W / 2, y: Math.round(H * 0.42) };   // the middle of the table
       for (let i = 1; i <= 4; i++) { await p.mouse.move(a.x + (b.x - a.x) * i / 4, a.y - 60 + (b.y - a.y + 60) * i / 4, { steps: 3 }); await snap(1, 0); }
       await p.mouse.up();
     }
@@ -198,9 +198,9 @@ async function record(game, lang) {
   }
 
   await ctx.close();
-  // frames → GIF: 280 px wide, 4 frames a second, an optimised palette
+  // frames → GIF: 480 px wide, 4 frames a second, an optimised palette
   const out = path.join(outDir, `${game}-${lang}.gif`);
-  const filters = 'fps=4,scale=280:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle';
+  const filters = 'fps=4,scale=480:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle';
   execFileSync('ffmpeg', ['-loglevel', 'error', '-y', '-framerate', '4', '-i', path.join(frames, '%04d.png'), '-vf', filters, '-loop', '0', out]);
   fs.rmSync(frames, { recursive: true, force: true });
   console.log(`${path.relative(root, out)}  ${n} frames  ${(fs.statSync(out).size / 1024).toFixed(0)} KB`);

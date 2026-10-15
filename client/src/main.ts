@@ -402,6 +402,8 @@ function render() {
     btn(t('deleteYes'), () => { net.send({ t: 'delete' }); S.sheet = null; S.screen = 'home'; toast(t('deleted')); render(); }, 'btn danger'))));
   if (!S.online && net.ready === false && inGame() && !S.practice) ui.append(h('div', { class: 'banner' }, t('reconnecting')));
   renderLabels(true);
+  const rot = document.getElementById('rotate');
+  if (rot) { rot.querySelector('b')!.textContent = t('rotateTitle'); rot.querySelector('span')!.textContent = t('rotateHint'); }
 }
 
 function topBar() {
@@ -445,18 +447,21 @@ function homeScreen() {
   const modeBtns = modes.length < 2 ? null : h('div', { class: 'modes', role: 'radiogroup' }, ...modes.map(m =>
     h('button', { type: 'button', class: 'mode', role: 'radio', 'aria-checked': String(S.mode === m), onclick: () => { S.mode = m; store.set('mode', m); render(); } },
       h('b', null, t(('mode_' + m) as Key)), h('span', null, t(('modeHint_' + m) as Key)))));
+  // two columns on a landscape phone: what to play on one side, how to play it on the other
   return h('section', { class: 'sheet-card home' },
-    gamePicker(),
-    modeBtns ?? h('p', { class: 'muted center small' }, t(('modeHint_' + S.mode) as Key)),
-    btn(t('quick'), quick, 'btn big', { disabled: !S.online }),
-    !S.online ? h('p', { class: 'note' }, net.ready ? t('connecting') : t('offline')) : null,
-    h('div', { class: 'row' },
-      btn(t('friends'), () => { S.screen = 'friends'; render(); }, 'btn tq', { disabled: !S.online }),
-      btn(t('practice'), () => startPractice(), 'btn alt')),
-    h('div', { class: 'row links' },
-      btn(t('leaderboard'), () => openLb(S.game), 'link'),
-      btn(t('rules'), () => { S.screen = 'rules'; render(); }, 'link'),
-      btn(t('settings'), () => { S.screen = 'settings'; render(); }, 'link')),
+    h('div', { class: 'home-pick' },
+      gamePicker(),
+      modeBtns ?? h('p', { class: 'muted center small' }, t(('modeHint_' + S.mode) as Key))),
+    h('div', { class: 'home-act' },
+      btn(t('quick'), quick, 'btn big', { disabled: !S.online }),
+      !S.online ? h('p', { class: 'note' }, net.ready ? t('connecting') : t('offline')) : null,
+      h('div', { class: 'row' },
+        btn(t('friends'), () => { S.screen = 'friends'; render(); }, 'btn tq', { disabled: !S.online }),
+        btn(t('practice'), () => startPractice(), 'btn alt')),
+      h('div', { class: 'row links' },
+        btn(t('leaderboard'), () => openLb(S.game), 'link'),
+        btn(t('rules'), () => { S.screen = 'rules'; render(); }, 'link'),
+        btn(t('settings'), () => { S.screen = 'settings'; render(); }, 'link'))),
   );
 }
 
@@ -1004,6 +1009,14 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !Capacitor
 
 // how-to-play recorder: with ?rec in the address a script can read the view and find board spots on screen
 if (/[?&]rec\b/.test(location.search)) (window as unknown as Record<string, unknown>).__ahwa = { view: () => S.view, spot: (p: Pick) => scene.spotScreen(p), ghost: (e: End) => scene.ghostScreen(e) };
+// the game is played in landscape: lock it where the browser allows (installed app, fullscreen)
+const lockLandscape = () => { try { (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.('landscape').catch(() => {}); } catch { /* not supported */ } };
+document.addEventListener('pointerdown', lockLandscape, { once: true });
+{
+  const rot = h('div', { id: 'rotate', role: 'alert' },
+    h('div', { class: 'phone', 'aria-hidden': 'true' }), h('b', null, t('rotateTitle')), h('span', null, t('rotateHint')));
+  document.body.append(rot);
+}
 document.addEventListener('pointerdown', unlockAudio, { once: true });
 net.connect();
 render();

@@ -18,7 +18,7 @@ const server = spawn(process.execPath, ['dist/server.cjs'], {
 await new Promise(r => setTimeout(r, 800));
 const url = `http://127.0.0.1:${PORT}/`;
 const browser = await chromium.launch();
-const phone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true };
+const phone = { viewport: { width: 844, height: 390 }, deviceScaleFactor: 2, hasTouch: true };   // landscape phone
 const errors = [];
 const page = async () => {
   const ctx = await browser.newContext(phone);

@@ -486,20 +486,27 @@ export class TableScene {
     const w = this.canvas.clientWidth || window.innerWidth, h = this.canvas.clientHeight || window.innerHeight;
     const portrait = w / h < 0.9;
     const playing = !!this.view && this.view.phase !== 'lobby';
-    // looking down at the table from a seated player's eye line, a little higher on phones
     // board games are framed on their own board, from a little higher so it reads clearly
     const g = playing ? this.view!.game : 'domino';
     const boardHalf = g === 'chess' ? 4.9 : g === 'ludo' ? 5.7 : g === 'tawla' ? 6.0 : 0;
-    const el = !playing ? 0.62 : boardHalf ? (portrait ? 1.2 : 1.05) : (portrait ? 1.08 : 0.98);
-    const vf = (this.camera.fov * Math.PI) / 180, hf = 2 * Math.atan(Math.tan(vf / 2) * this.camera.aspect);
-    const hw = !playing ? T + 4.5 : boardHalf || T + 0.4;
-    const hd = !playing ? T + 1.5 : boardHalf ? Math.min(boardHalf, 5) : T + 0.3;
+    const boardDepth = g === 'tawla' ? 4.25 : boardHalf;            // tawla's box is wider than it is deep
+    // a landscape phone keeps the controls in a 200px panel on the right of board games
+    const phoneLand = w > h && h <= 600;
+    const side = playing && boardHalf && phoneLand ? 200 : 0;
+    const el = !playing ? 0.62 : boardHalf ? (portrait ? 1.2 : 1.12) : (portrait ? 1.08 : 0.98);
+    const vf = (this.camera.fov * Math.PI) / 180;
+    const effAspect = Math.max(0.5, (w - side) / h);
+    const hf = 2 * Math.atan(Math.tan(vf / 2) * effAspect);
+    const hw = !playing ? T + 4.5 : boardHalf ? boardHalf + (side ? 0.3 : 0) : T + 0.4;
+    const hd = !playing ? T + 1.5 : boardHalf ? (phoneLand ? boardDepth + 0.8 : Math.min(boardHalf, 5)) : T + 0.3;
     const d = Math.max(hw / Math.tan(hf / 2), (hd * Math.sin(el) + 1.0) / Math.tan(vf / 2)) * (playing ? this.zoom : 1.05);
     const tz = playing ? (portrait ? 0.4 : 0.1) : -1.5;
     const ty = playing ? 0 : 1.5;
     this.camera.position.set(Math.sin(sway) * d * 0.25, ty + d * Math.sin(el), tz + d * Math.cos(el));
     this.camera.lookAt(Math.sin(sway) * 2, ty, tz);
-    this.camera.setViewOffset(w, h, 0, Math.round(h * (playing ? (portrait ? 0.07 : 0.08) : -0.04)), w, h);
+    // shift the picture: up a little under the top bar, and left of the control panel
+    const yOff = playing ? (portrait ? 0.07 : phoneLand ? (boardHalf ? -0.035 : 0.06) : 0.08) : -0.04;
+    this.camera.setViewOffset(w, h, side / 2, Math.round(h * yOff), w, h);
     this.camera.updateProjectionMatrix();
   }
 
