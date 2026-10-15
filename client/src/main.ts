@@ -14,7 +14,13 @@ import { Practice } from './practice';
 import { CHARS, TableScene, charColor } from './scene';
 import { prefs, sfx, unlockAudio } from './sound';
 import { Voice } from './voice';
+import { DemoWallet } from './demowallet';
 import { GIFTS, GiftKind, STAKES, giftByKind, isStake, shortCoins, winnings } from '../../shared/gifts';
+
+/** Demo build (no game server): stakes are played against the computer with a wallet kept in this browser. */
+declare const __DEMO__: boolean;
+const DEMO = typeof __DEMO__ !== 'undefined' && __DEMO__;
+let wallet: DemoWallet | null = null;
 
 /* ---------------- storage ---------------- */
 const store = {
@@ -61,6 +67,8 @@ prefs.vibrate = store.get('vibrate', '1') === '1';
 setLang((store.get('lang') as Lang) || (navigator.language?.startsWith('ar') ? 'ar' : 'en'));
 const localName = () => S.user?.name || store.get('name') || CHAR_NAMES[getLang()][localCh()];
 const localCh = () => S.user?.ch ?? (Number(store.get('ch', '0')) || 0);
+if (DEMO) { wallet = new DemoWallet(); S.user = wallet.user(localName(), localCh()); }
+const syncWallet = () => { if (wallet && S.user) S.user = { ...S.user, coins: wallet.coins }; };
 
 /* ---------------- dom helpers ---------------- */
 type Attrs = Record<string, unknown>;
@@ -286,6 +294,7 @@ function showEmote(seat: number, k: Emote) {
 }
 function quick() {
   unlockAudio();
+  if (wallet) return demoMatch(S.mode, S.stake);
   if (!S.online) return toast(t('offline'));
   store.set('mode', S.mode); store.set('game', gameOf(S.mode));
   if ((S.user?.coins ?? 0) < S.stake) return toast(t('needCoins', { n: shortCoins(S.stake) }));
@@ -293,20 +302,51 @@ function quick() {
   S.queue = { mode: S.mode, count: 1, need: 0, botsAt: 0, stake: S.stake };
   render();
 }
-function startPractice(mode = S.mode) {
+/** Demo: put the stake in and play the computer for it. */
+function demoMatch(mode: Mode, stake: number) {
+  if (!wallet || !wallet.take(stake)) return toast(t('needCoins', { n: shortCoins(stake) }));
+  syncWallet();
+  store.set('mode', mode); store.set('game', gameOf(mode));
+  startPractice(mode, stake);
+}
+function demoSettle(mode: Mode, stake: number, team: number) {
+  if (!wallet) return;
+  const n = MODE_PLAYERS[mode], winners = mode === 'team' ? 2 : 1, w = winnings(stake, winners, n - winners);
+  let kind: string, delta: number, fee = 0;
+  if (team < 0) { kind = 'draw'; delta = 0; wallet.add('draw', stake, 0, { stake, mode }); }
+  else if (team === teamOf(mode, 0)) { kind = 'win'; delta = w.net; fee = w.fee; wallet.add('win', stake + w.net, w.net, { fee, stake, mode }); }
+  else { kind = 'loss'; delta = -stake; wallet.add('loss', 0, -stake, { stake, mode }); }
+  syncWallet();
+  S.payout = { kind, delta, fee, stake, table: S.practice?.table.id ?? '' };
+  if (kind === 'win') sfx.gift();
+}
+/** Walking out of a staked demo match loses the stake, as online. */
+function demoForfeit() {
+  const v = S.view;
+  if (!wallet || !v || !v.stake || (v.phase !== 'play' && v.phase !== 'rend')) return;
+  wallet.add('left', 0, -v.stake, { stake: v.stake, mode: v.mode });
+  syncWallet();
+  toast(t('payoutLeft', { n: shortCoins(v.stake) }));
+}
+function practiceAgain() {
+  const v = S.view;
+  if (wallet && v?.stake) { if (!wallet.take(v.stake)) return toast(t('needCoins', { n: shortCoins(v.stake) })); syncWallet(); }
+  S.practice!.restart();
+}
+function startPractice(mode = S.mode, stake = 0) {
   unlockAudio();
   stopPractice();
   S.queue = null;
   // the how-to-play recorder (?rec) slows the computer down so every move can be captured
   const pace = /[?&]rec\b/.test(location.search) ? { botDelay: [9000, 9500] as [number, number], turnMs: 600_000 } : undefined;
-  S.practice = new Practice(mode, localName(), localCh(), v => applyView(v), (seat, k) => showEmote(seat, k), pace);
+  S.practice = new Practice(mode, localName(), localCh(), v => applyView(v), (seat, k) => showEmote(seat, k), pace, stake, team => demoSettle(mode, stake, team));
   S.practice.begin();
 }
 function stopPractice() { S.practice?.stop(); S.practice = null; }
 function leaveGame() {
   voice.leave();
   S.sheet = null; S.sel = null; S.choose = null; S.screen = 'home';
-  if (S.practice) { stopPractice(); S.view = null; render(); return; }
+  if (S.practice) { demoForfeit(); stopPractice(); S.view = null; render(); return; }
   net.send({ t: 'leave' });
   S.view = null; render();
 }
@@ -411,7 +451,7 @@ function render() {
     if (S.queue) ui.append(searchScreen());
     else ui.append(topBar(), ({ home: homeScreen, friends: friendsScreen, lb: lbScreen, settings: settingsScreen, rules: rulesScreen, coins: coinsScreen })[S.screen]());
   }
-  if (S.sheet === 'leave') ui.append(sheet(h('p', null, t('leaveConfirm')), v && v.stake && !S.practice ? h('p', { class: 'bad' }, t('leaveStake', { n: shortCoins(v.stake) })) : h('span'), h('div', { class: 'row' }, btn(t('stay'), () => { S.sheet = null; render(); }, 'btn alt'), btn(t('leaveYes'), leaveGame, 'btn danger'))));
+  if (S.sheet === 'leave') ui.append(sheet(h('p', null, t('leaveConfirm')), v && v.stake ? h('p', { class: 'bad' }, t('leaveStake', { n: shortCoins(v.stake) })) : h('span'), h('div', { class: 'row' }, btn(t('stay'), () => { S.sheet = null; render(); }, 'btn alt'), btn(t('leaveYes'), leaveGame, 'btn danger'))));
   if (S.sheet === 'emotes') ui.append(emoteSheet());
   if (S.sheet === 'player' && v) { const ps = playerSheet(v); if (ps) ui.append(ps); }
   if (S.sheet === 'delete') ui.append(sheet(h('p', null, t('deleteConfirm')), h('div', { class: 'row' }, btn(t('stay'), () => { S.sheet = null; render(); }, 'btn alt'),
@@ -474,7 +514,7 @@ function stakePicker(mode: Mode, cur = S.stake, pick = (n: number) => { S.stake 
       h('button', { type: 'button', class: 'chip', role: 'radio', 'aria-checked': String(n === cur), disabled: !canEdit || (!!S.user && coins < n), onclick: () => pick(n) }, shortCoins(n)))));
 }
 
-function openCoins() { S.screen = 'coins'; S.coinRows = null; if (S.online) net.send({ t: 'coins' }); render(); }
+function openCoins() { S.screen = 'coins'; S.coinRows = wallet ? wallet.rows.slice() : null; if (S.online && !wallet) net.send({ t: 'coins' }); render(); }
 function coinsScreen() {
   const u = S.user;
   const rows = S.coinRows ?? [];
@@ -488,7 +528,7 @@ function coinsScreen() {
     h('div', { class: 'row between' }, h('h2', null, t('coinsTitle')), u ? h('b', { class: 'coins big-coins' }, '🪙 ' + num(u.coins)) : null),
     h('p', { class: 'muted small' }, t('coinsHow')),
     h('p', { class: 'lab' }, t('coinsHistory')),
-    !S.online ? h('p', { class: 'muted' }, t('offline')) : !S.coinRows ? h('p', { class: 'muted' }, t('connecting')) : !rows.length ? h('p', { class: 'muted' }, t('coinsEmpty')) :
+    !S.online && !wallet ? h('p', { class: 'muted' }, t('offline')) : !S.coinRows ? h('p', { class: 'muted' }, t('connecting')) : !rows.length ? h('p', { class: 'muted' }, t('coinsEmpty')) :
       h('ol', { class: 'coin-log' }, ...rows.map(r => h('li', null,
         h('span', { class: 'ci' }, r.delta > 0 ? '▲' : r.delta < 0 ? '▼' : '•'),
         h('span', { class: 'cl' }, h('b', null, label(r)), h('span', { class: 'muted small' }, when(r.ts) + ' · ' + t('balanceAfter', { n: num(r.balance) }))),
@@ -515,8 +555,8 @@ function homeScreen() {
       modeBtns ?? h('p', { class: 'muted center small' }, t(('modeHint_' + S.mode) as Key))),
     h('div', { class: 'home-act' },
       stakePicker(S.mode),
-      btn(t('quick'), quick, 'btn big', { disabled: !S.online }),
-      !S.online ? h('p', { class: 'note' }, net.ready ? t('connecting') : t('offline')) : null,
+      btn(t('quick'), quick, 'btn big', { disabled: !S.online && !DEMO }),
+      DEMO ? h('p', { class: 'note' }, t('demoNote')) : !S.online ? h('p', { class: 'note' }, net.ready ? t('connecting') : t('offline')) : null,
       h('div', { class: 'row' },
         btn(t('friends'), () => { S.screen = 'friends'; render(); }, 'btn tq', { disabled: !S.online }),
         btn(t('practice'), () => startPractice(), 'btn alt')),
@@ -695,7 +735,7 @@ function gameScreen(v: TableView): HTMLElement[] {
   });
   const hud = h('header', { class: 'hud' },
     h('div', { class: 'row' },
-      btn('‹', () => { if (S.practice || v.phase !== 'play') leaveGame(); else { S.sheet = 'leave'; render(); } }, 'iconbtn back', { 'aria-label': t('leave') }),
+      btn('‹', () => { if ((S.practice && !v.stake) || v.phase !== 'play') leaveGame(); else { S.sheet = 'leave'; render(); } }, 'iconbtn back', { 'aria-label': t('leave') }),
       h('div', { class: 'scores' }, ...teams)),
     h('div', { class: 'meta muted small' }, `${t('round', { n: v.round })} · ${t('to', { n: v.target })}` + (v.mode === 'ffa2' || v.mode === 'ffa3' ? ' · ' + t('boneyard', { n: v.yard }) : '') + (v.stake ? ' · 🪙 ' + shortCoins(v.stake) : '')));
 
@@ -755,7 +795,7 @@ function resultSheet(v: TableView): HTMLElement {
   const delta = mend && v.match && v.you >= 0 ? v.match.deltas[v.you] : null;
   const actions = h('div', { class: 'row center' });
   if (mend) {
-    if (S.practice) actions.append(btn(t('playAgain'), () => S.practice!.restart(), 'btn'), btn(t('home'), leaveGame, 'btn alt'));
+    if (S.practice) actions.append(btn(t('playAgain'), practiceAgain, 'btn'), btn(t('home'), leaveGame, 'btn alt'));
     else if (!v.private) actions.append(btn(t('playAgain'), () => { const m = v.mode, st = v.stake; leaveGame(); S.mode = m; if (st) S.stake = st; quick(); }, 'btn'), btn(t('home'), leaveGame, 'btn alt'));
     else actions.append(btn(t('leave'), leaveGame, 'btn alt'));
   }
@@ -806,7 +846,7 @@ function boardScreen(v: BoardView): HTMLElement[] {
   else if (v.ludo) meta = t(('mode_' + v.mode) as Key) + (v.ludo.variant === 'master' && v.you >= 0 && !v.ludo.captures[v.you] ? ' · ' + t('masterNeedCapture') : '');
   const hud = h('header', { class: 'hud' },
     h('div', { class: 'row' },
-      btn('‹', () => { if (S.practice || v.phase !== 'play') leaveGame(); else { S.sheet = 'leave'; render(); } }, 'iconbtn back', { 'aria-label': t('leave') }),
+      btn('‹', () => { if ((S.practice && !v.stake) || v.phase !== 'play') leaveGame(); else { S.sheet = 'leave'; render(); } }, 'iconbtn back', { 'aria-label': t('leave') }),
       h('div', { class: 'scores' }, ...sides)),
     h('div', { class: 'meta muted small' }, meta));
 
@@ -884,7 +924,7 @@ function boardResultSheet(v: BoardView): HTMLElement {
   const delta = mend && v.match && me >= 0 ? v.match.deltas[me] : null;
   const actions = h('div', { class: 'row center' });
   if (mend) {
-    if (S.practice) actions.append(btn(t('playAgain'), () => S.practice!.restart(), 'btn'), btn(t('home'), leaveGame, 'btn alt'));
+    if (S.practice) actions.append(btn(t('playAgain'), practiceAgain, 'btn'), btn(t('home'), leaveGame, 'btn alt'));
     else if (!v.private) actions.append(btn(t('playAgain'), () => { const m = v.mode, st = v.stake; leaveGame(); S.mode = m; if (st) S.stake = st; quick(); }, 'btn'), btn(t('home'), leaveGame, 'btn alt'));
     else actions.append(btn(t('leave'), leaveGame, 'btn alt'));
   }
@@ -1068,7 +1108,7 @@ scene.onFrame = () => renderLabels(false);
 CapApp.addListener('backButton', () => {
   if (S.promo) { S.promo = null; return render(); }
   if (S.sheet) { S.sheet = null; return render(); }
-  if (S.view) { if (S.practice || S.view.phase !== 'play') leaveGame(); else { S.sheet = 'leave'; render(); } return; }
+  if (S.view) { if ((S.practice && !S.view.stake) || S.view.phase !== 'play') leaveGame(); else { S.sheet = 'leave'; render(); } return; }
   if (S.queue) { net.send({ t: 'cancel' }); S.queue = null; return render(); }
   if (S.screen !== 'home') { S.screen = 'home'; return render(); }
   CapApp.minimizeApp().catch(() => {});

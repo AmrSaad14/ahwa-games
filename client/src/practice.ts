@@ -8,17 +8,18 @@ export class Practice {
   table: Table | BoardTable;
   static readonly ME = 'me';
 
-  constructor(mode: Mode, name: string, ch: number, onView: (v: AnyView) => void, onEmote: (seat: number, k: Emote) => void, pace?: { botDelay: [number, number]; turnMs: number }) {
+  constructor(mode: Mode, name: string, ch: number, onView: (v: AnyView) => void, onEmote: (seat: number, k: Emote) => void, pace?: { botDelay: [number, number]; turnMs: number },
+    stake = 0, onMatchEnd: (team: number) => void = () => {}) {
     const game = gameOf(mode);
     const opts = {
       id: 'practice-' + Date.now(), code: null, mode, target: defaultTarget(mode), private: true,
       turnMs: pace?.turnMs ?? 10_000, nextRoundMs: game === 'tawla' ? 4000 : 7000, botDelay: pace?.botDelay ?? [800, 1500] as [number, number], offlineGraceMs: 8000,
-      lobbyAfterMatchMs: 10 * 60_000,
+      lobbyAfterMatchMs: 10 * 60_000, stake,
     };
     const hooks = {
       changed: (t: Table | BoardTable) => onView(t.view(Practice.ME)),
       emote: (_t: unknown, seat: number, k: Emote) => onEmote(seat, k),
-      matchEnd: () => {},
+      matchEnd: (_t: unknown, res: { team: number }) => onMatchEnd(res.team),
       closed: () => {},
     };
     this.table = game === 'domino' ? new Table(opts, hooks) : new BoardTable(opts, hooks);

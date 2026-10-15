@@ -31,7 +31,7 @@ const options = {
   entryNames: '[name]-[hash]',
   metafile: true,
   alias: stubs,
-  define: { __SERVER_URL__: JSON.stringify(process.env.SERVER_URL || '') },
+  define: { __SERVER_URL__: JSON.stringify(process.env.SERVER_URL || ''), __DEMO__: JSON.stringify(process.env.DEMO === '1') },
   logLevel: 'info',
   plugins: [{
     name: 'write-html',
