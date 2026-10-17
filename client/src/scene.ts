@@ -108,7 +108,7 @@ export class TableScene {
   /** Graphics level: 2 full, 1 lighter, 0 lightest. Steps down by itself when frames are slow, and is remembered. */
   private gfx = initialGfx();
   private perf = { sum: 0, n: 0, slow: 0 };
-  /** Film look (depth of field, bloom, grade) on the top graphics level. */
+  /** Film look (glow on highlights, grade, vignette) on the top graphics level. Everything stays sharp. */
   private post: Post | null = null;
   private pinch = new Map<number, { x: number; y: number }>();
   private pinchStart = 0; private zoomStart = 1;
@@ -762,9 +762,8 @@ export class TableScene {
     this.ghostMat.opacity = 0.35 + Math.sin(t * 5) * 0.2;
     if (this.ring.visible) (this.ring.material as THREE.MeshBasicMaterial).opacity = 0.5 + Math.sin(t * 3) * 0.3;
     if (this.post) {
-      // the table and the people at it stay sharp; the rest of the café softens
-      const playing = !!this.view && this.view.phase !== 'lobby';
-      try { this.post.render(this.scene, this.camera, SEAT_R + 0.8, playing ? 0.9 : 1); }   // the players' chairs are the edge of the sharp zone
+      // the whole picture stays sharp: only a soft glow on highlights, a warm grade and a light vignette
+      try { this.post.render(this.scene, this.camera); }
       catch { this.post.dispose(); this.post = null; this.renderer.setRenderTarget(null); this.renderer.render(this.scene, this.camera); }
     } else this.renderer.render(this.scene, this.camera);
     this.onFrame();

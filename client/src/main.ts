@@ -1012,7 +1012,7 @@ function gameScreen(v: TableView): HTMLElement[] {
     h('div', { class: 'status' + (warn ? ' warn' : '') }, status),
     myTurn && v.turnEndsAt && canPlay(v.line, v.hand) ? h('div', { class: 'timer-row' }, h('div', { class: 'timer', id: 'my-timer' }, h('i')), h('b', { id: 'my-secs', class: 'secs' })) : null,
     S.choose && S.choose.length > 1 && S.sel !== null && v.line.fo && !tileDrag?.ghost ? h('div', { class: 'row center' }, ...S.choose.map(e =>
-      btn(t('endN', { n: e === 'L' ? (v.line.L.length ? v.line.L[v.line.L.length - 1][2] : v.line.fo![0]) : (v.line.R.length ? v.line.R[v.line.R.length - 1][2] : v.line.fo![1]) }), () => chooseEnd(e), 'btn alt small'))) : null,
+      btn(t(e === 'L' ? 'endL' : 'endR', { n: e === 'L' ? (v.line.L.length ? v.line.L[v.line.L.length - 1][2] : v.line.fo![0]) : (v.line.R.length ? v.line.R[v.line.R.length - 1][2] : v.line.fo![1]) }), () => chooseEnd(e), 'btn alt small'))) : null,
     h('div', { class: 'handbar' },
       h('div', { class: 'sidebtns' },
         btn('☺', () => { S.sheet = S.sheet === 'emotes' ? null : 'emotes'; render(); }, 'iconbtn', { 'aria-label': t('reactions') }),

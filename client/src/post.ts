@@ -2,9 +2,7 @@ import * as THREE from 'three';
 
 /*
  * The "film" look on capable devices, in one small pipeline (no extra packages):
- *  - the scene renders into an HDR, 4x-multisampled buffer with depth
- *  - depth of field: the table and its players stay sharp, the café around softly melts away,
- *    so the eye goes straight to the game (like a photo taken with a real lens)
+ *  - the scene renders into an HDR, 4x-multisampled buffer
  *  - bloom: the hanging bulbs, the brass and polished pieces glow a little
  *  - a gentle vignette and a warm grade, then filmic tone mapping and a touch of dither (no banding)
  * About 7 cheap passes, most at half or quarter resolution.
@@ -33,22 +31,14 @@ void main() {
 }`;
 
 const COMPOSITE = /* glsl */`
-uniform sampler2D sharp; uniform sampler2D soft; uniform sampler2D softer; uniform sampler2D depth;
-uniform mat4 projInv; uniform mat4 camWorld; uniform float tableR; uniform float dof;
+uniform sampler2D sharp; uniform sampler2D soft; uniform sampler2D softer;
 uniform float bloom; uniform float vignette; uniform vec2 aspect; uniform float seed;
 varying vec2 vUv;
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233)) + seed) * 43758.5453); }
 void main() {
   vec3 col = texture2D(sharp, vUv).rgb;
   vec3 s1 = texture2D(soft, vUv).rgb, s2 = texture2D(softer, vUv).rgb;
-  // depth of field, by where the pixel is in the room: the table top and everything on and above it
-  // stays sharp; the floor below it and the rest of the café (other tables, walls) go soft
-  vec4 v = projInv * vec4(vUv * 2.0 - 1.0, texture2D(depth, vUv).x * 2.0 - 1.0, 1.0);
-  vec3 w = (camWorld * vec4(v.xyz / v.w, 1.0)).xyz;
-  float below = smoothstep(0.6, 3.2, -w.y);
-  float away = smoothstep(tableR + 1.0, tableR + 7.0, length(w.xz));
-  float coc = dof * max(below, away);
-  col = coc < 0.5 ? mix(col, s1, coc * 2.0) : mix(s1, s2, coc * 2.0 - 1.0);
+  // everything stays sharp and clear (no depth of field); the blurred copies only feed the glow below
   // bloom: only real highlights (bulbs, glints) glow, so the boards stay crisp
   vec3 b = max(s1 - 2.2, 0.0) * 0.3 + max(s2 - 1.8, 0.0) * 0.5;
   col += b * bloom;
@@ -77,19 +67,15 @@ export class Post {
 
   constructor(private renderer: THREE.WebGLRenderer) {
     const caps = renderer.capabilities, ext = renderer.extensions;
-    if (!caps.isWebGL2 && !ext.has('WEBGL_depth_texture')) throw new Error('no depth textures');
     // HDR so the bulbs can be brighter than white (bloom); plain 8-bit where the GPU can't render half floats
     const hdr = caps.isWebGL2 && (ext.has('EXT_color_buffer_half_float') || ext.has('EXT_color_buffer_float'));
     this.main = new THREE.WebGLRenderTarget(1, 1, {
       type: hdr ? THREE.HalfFloatType : THREE.UnsignedByteType,
       samples: caps.isWebGL2 ? Math.min(4, caps.maxSamples ?? 4) : 0,
-      depthTexture: new THREE.DepthTexture(1, 1),
     });
     for (const r of [...this.half, ...this.quarter]) r.texture.type = hdr ? THREE.HalfFloatType : THREE.UnsignedByteType;
     this.comp = this.mat(COMPOSITE, {
       sharp: { value: this.main.texture }, soft: { value: this.half[0].texture }, softer: { value: this.quarter[0].texture },
-      depth: { value: this.main.depthTexture }, projInv: { value: new THREE.Matrix4() }, camWorld: { value: new THREE.Matrix4() },
-      tableR: { value: 6 }, dof: { value: 1 },
       bloom: { value: 1 }, vignette: { value: 0.32 }, aspect: { value: new THREE.Vector2(1, 1) }, seed: { value: 0 },
     });
     this.comp.toneMapped = true;
@@ -117,16 +103,11 @@ export class Post {
     this.comp.uniforms.aspect.value.set(a > 1 ? a : 1, a > 1 ? 1 : 1 / a).multiplyScalar(1 / Math.SQRT2 * 1.2);
   }
 
-  /**
-   * Draw a frame. The table (centred at the origin, top at y = 0, half-size `tableR`) stays sharp;
-   * `dof` 0..1 is how soft the rest of the room gets.
-   */
-  render(scene: THREE.Scene, camera: THREE.PerspectiveCamera, tableR: number, dof: number) {
+  /** Draw a frame: the scene, a soft glow on real highlights, a warm grade and a light vignette. */
+  render(scene: THREE.Scene, camera: THREE.PerspectiveCamera) {
     const r = this.renderer, prevTarget = r.getRenderTarget();
     const u = this.comp.uniforms;
-    camera.updateMatrixWorld();
-    u.projInv.value.copy(camera.projectionMatrixInverse); u.camWorld.value.copy(camera.matrixWorld);
-    u.tableR.value = tableR; u.dof.value = dof; u.seed.value = (u.seed.value + 0.618) % 10;
+    u.seed.value = (u.seed.value + 0.618) % 10;
 
     r.setRenderTarget(this.main); r.render(scene, camera);
     const pass = (m: THREE.ShaderMaterial, to: THREE.WebGLRenderTarget | null) => { this.quad.material = m; r.setRenderTarget(to); r.render(this.scene, this.cam); };
@@ -149,7 +130,6 @@ export class Post {
 
   dispose() {
     for (const r of [this.main, ...this.half, ...this.quarter]) r.dispose();
-    this.main.depthTexture?.dispose();
     this.down.dispose(); this.blur.dispose(); this.comp.dispose(); this.quad.geometry.dispose();
   }
 }
