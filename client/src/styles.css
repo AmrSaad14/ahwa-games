@@ -419,3 +419,10 @@ body:has(#ui .hud) .toast { top: calc(3.75rem + var(--safe-t)); }
 .chip.ad-chip { color: var(--tq); border-color: rgba(58,163,146,.5); }
 .fakead { text-align: center; display: flex; flex-direction: column; gap: 0.625rem; align-items: center; min-width: 17.5rem; }
 .fakead .big { font-size: 2.2rem; font-variant-numeric: tabular-nums; }
+
+/* zoom buttons: a slim column on the left edge of every game (the table is framed to their right) */
+.zoomctl { position: fixed; left: var(--gut-l); top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 0.5rem; pointer-events: auto; z-index: 1; }
+.zoomctl .iconbtn { width: 2.5rem; height: 2.5rem; min-height: 2.5rem; font-size: 1.25rem; line-height: 1; background: rgba(20,13,8,.72); backdrop-filter: blur(4px); }
+.zoomctl .reset { visibility: hidden; }
+.zoomctl.zoomed .reset { visibility: visible; border-color: var(--brass-dim); color: var(--brass); }
+@media (orientation: landscape) and (max-height: 380px) { .zoomctl { gap: 0.375rem; } .zoomctl .iconbtn { width: 2.5rem; height: 2.5rem; } }

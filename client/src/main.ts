@@ -189,6 +189,15 @@ function applyView(v: AnyView) {
   render();
 }
 
+/** Zoom buttons on the left edge of every game: closer, farther, and back to the whole table. */
+function zoomControls() {
+  return h('div', { class: 'zoomctl' + (scene.zoomed ? ' zoomed' : '') },
+    btn('+', () => scene.zoomIn(), 'iconbtn', { 'aria-label': t('zoomIn') }),
+    btn('−', () => scene.zoomOut(), 'iconbtn', { 'aria-label': t('zoomOut') }),
+    btn('⤢', () => scene.resetZoom(), 'iconbtn reset', { 'aria-label': t('zoomReset') }));
+}
+scene.onZoom = zoomed => document.querySelector('.zoomctl')?.classList.toggle('zoomed', zoomed);
+
 /* ---------------- chess, tawla, ludo ---------------- */
 /** Tawla: every place a checker on `from` can reach this turn: one die, or both dice on the same checker. */
 function tawlaDests(tw: NonNullable<BoardView['tawla']>, from: number): number[] {
@@ -924,7 +933,7 @@ function gameScreen(v: TableView): HTMLElement[] {
         return el;
       })),
       h('span', { class: 'act-space' })));
-  const out = [hud, bottom];
+  const out = [hud, bottom, zoomControls()];
   if ((v.phase === 'rend' || v.phase === 'mend') && v.result) out.push(resultSheet(v));
   return out;
 }
@@ -1039,7 +1048,7 @@ function boardScreen(v: BoardView): HTMLElement[] {
         ...voiceButtons()),
       h('div', { class: 'board-act' }, action),
       h('span', { class: 'act-space' })));
-  const out = [hud, bottom];
+  const out = [hud, bottom, zoomControls()];
   if ((v.phase === 'rend' || v.phase === 'mend') && v.result) out.push(boardResultSheet(v));
   return out;
 }
@@ -1202,6 +1211,9 @@ function measureChrome() {
     if (!c.classList.contains('meta')) chrome.top = Math.max(chrome.top, r.bottom);
     else { const txt = document.createRange(); txt.selectNodeContents(c); const t = txt.getBoundingClientRect(); Object.assign(metaBox, { left: t.left - 6, right: t.right + 6, bottom: r.bottom }); }
   }
+  // the zoom buttons on the left edge: the table is framed to their right
+  const zc = document.querySelector('#ui .zoomctl'), zr = zc && shown(zc);
+  if (zr) chrome.left = Math.max(chrome.left, zr.right);
   const bot = document.querySelector('#ui .bottom');
   const br = bot && shown(bot);
   if (bot && br) {

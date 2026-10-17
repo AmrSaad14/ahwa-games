@@ -89,7 +89,15 @@ export class TableScene {
   private posToSeat: number[] = [-1, -1, -1, -1];
   private yardLayout: { x: number; z: number; r: number; y: number }[] = [];
   private reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  private zoom = 1;                 // pinch / mouse-wheel zoom, 1 = default framing
+  private zoom = 1;                 // camera distance factor (>1 when the player zooms out), 1 = default framing
+  /** Player zoom: 1 = the whole table framed; above 1 a lens zoom (sharp, re-rendered) into part of it, below 1 backing off. */
+  private mag = 1; private magT = 1;
+  /** Where the zoomed-in view looks (screen px into the enlarged picture); 0,0 at the default framing. */
+  private pan = { x: 0, y: 0 }; private panT = { x: 0, y: 0 };
+  private panning: { id: number; x: number; y: number; moved: boolean } | null = null;
+  private pinchMid = { x: 0, y: 0 }; private magStart = 1;
+  /** Called when the zoom changes (to show or hide the reset button). */
+  onZoom: (zoomed: boolean) => void = () => {};
   /** Screen space covered by the HUD and controls (CSS px); the table is framed in what is left. */
   private insets = { top: 0, right: 0, bottom: 0, left: 0, clear: 0 };
   /** Domino: where the played tiles and the next places to play are (world, on the table), and a key of their extent. */
@@ -217,24 +225,51 @@ export class TableScene {
         const p = hit && this.board.pick(hit);
         if (this.press) { this.cancelPress(); return; }   // a second finger: pinch zoom, not a drag
         this.press = p && this.pinch.size === 0 ? { id: e.pointerId, x: e.clientX, y: e.clientY, from: p, dragging: false } : null;
+        if (!this.press) this.startPan(e);
         return;
       }
-      if (!this.ghosts.length) return;
-      const hit = this.ray.intersectObjects(this.ghosts, true)[0];
-      if (hit) { let o: THREE.Object3D | null = hit.object; while (o && !o.userData.end) o = o.parent; if (o) this.onGhost(o.userData.end as End); }
+      const hit = this.ghosts.length ? this.ray.intersectObjects(this.ghosts, true)[0] : undefined;
+      if (hit) { let o: THREE.Object3D | null = hit.object; while (o && !o.userData.end) o = o.parent; if (o) { this.onGhost(o.userData.end as End); return; } }
+      this.startPan(e);
     });
-    // zoom: mouse wheel on desktop, two-finger pinch on phones
-    const clampZoom = (z: number) => Math.min(1.5, Math.max(0.55, z));
-    canvas.addEventListener('wheel', e => { e.preventDefault(); this.zoom = clampZoom(this.zoom * Math.exp(e.deltaY * 0.0012)); }, { passive: false });
+    // zoom: mouse wheel on desktop, two-finger pinch on phones, both toward the point under the pointer
+    canvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      const r = canvas.getBoundingClientRect();
+      this.zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top, true);
+    }, { passive: false });
     canvas.addEventListener('pointerdown', e => {
       this.pinch.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (this.pinch.size === 2) { const [a, b] = [...this.pinch.values()]; this.pinchStart = Math.hypot(a.x - b.x, a.y - b.y); this.zoomStart = this.zoom; }
+      if (this.pinch.size === 2) {
+        const [a, b] = [...this.pinch.values()];
+        this.pinchStart = Math.hypot(a.x - b.x, a.y - b.y); this.magStart = this.magT;
+        this.pinchMid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        this.panning = null;
+      }
     });
     canvas.addEventListener('pointermove', e => {
-      if (!this.pinch.has(e.pointerId)) return;
-      this.pinch.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (this.pinch.size === 2 && this.pinchStart > 0) { const [a, b] = [...this.pinch.values()]; this.zoom = clampZoom(this.zoomStart * this.pinchStart / Math.max(1, Math.hypot(a.x - b.x, a.y - b.y))); }
+      if (this.pinch.has(e.pointerId)) {
+        this.pinch.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (this.pinch.size === 2 && this.pinchStart > 0) {
+          const [a, b] = [...this.pinch.values()], r = canvas.getBoundingClientRect();
+          const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+          const want = this.magStart * Math.hypot(a.x - b.x, a.y - b.y) / Math.max(1, this.pinchStart);
+          this.zoomAt(want / this.magT, mid.x - r.left, mid.y - r.top, true);
+          this.panBy(this.pinchMid.x - mid.x, this.pinchMid.y - mid.y);   // two fingers moving together slide the view
+          this.pinchMid = mid;
+          return;
+        }
+      }
+      // one finger (or the mouse) on the table, not on a piece: slide the zoomed-in view
+      const pn = this.panning;
+      if (pn && pn.id === e.pointerId) {
+        const dx = e.clientX - pn.x, dy = e.clientY - pn.y;
+        if (!pn.moved && Math.hypot(dx, dy) < 6) return;
+        pn.moved = true; pn.x = e.clientX; pn.y = e.clientY;
+        this.panBy(-dx, -dy);
+      }
     });
+    window.addEventListener('pointerup', e => { if (this.panning?.id === e.pointerId) this.panning = null; });
     // dragging chess pieces and tawla checkers
     window.addEventListener('pointermove', e => {
       const pr = this.press; if (!pr || pr.id !== e.pointerId || !this.board) return;
@@ -431,7 +466,7 @@ export class TableScene {
     for (const b of Object.values(this.boards)) b!.root.visible = false;
     this.board = null;
     this.glasses.visible = !(av && av.game === 'ludo' && av.phase !== 'lobby');
-    if (!av || av.phase === 'lobby') return;
+    if (!av || av.phase === 'lobby') { if (this.zoomed) this.resetZoom(); return; }
     if (av.game !== 'domino') {
       // chess, tawla or ludo: the game's own board sits on the table
       const g = av.game;
@@ -514,6 +549,45 @@ export class TableScene {
     this.placeCamera(0);
   }
 
+  /* ---------- player zoom ---------- */
+  private static readonly MAG_MIN = 0.7;
+  private static readonly MAG_MAX = 3;
+  private size() { return { w: this.canvas.clientWidth || window.innerWidth, h: this.canvas.clientHeight || window.innerHeight }; }
+  /** Keep the zoomed-in view inside the picture. */
+  private clampPan(p: { x: number; y: number }, mag: number) {
+    const { w, h } = this.size(), s = Math.max(1, mag);
+    p.x = Math.max(0, Math.min(w * (s - 1), p.x)); p.y = Math.max(0, Math.min(h * (s - 1), p.y));
+  }
+  /** Zoom by `factor` keeping the screen point (x, y) where it is. `now` skips the easing (pinch and wheel). */
+  zoomAt(factor: number, x: number, y: number, now = false) {
+    const m0 = this.magT, m1 = Math.min(TableScene.MAG_MAX, Math.max(TableScene.MAG_MIN, m0 * factor));
+    if (Math.abs(m1 - m0) < 1e-4) return;
+    const s0 = Math.max(1, m0), s1 = Math.max(1, m1);
+    // a point under the finger: its place in the unzoomed picture is (x + pan) / s; keep it under the finger
+    this.panT = { x: (x + this.panT.x) * s1 / s0 - x, y: (y + this.panT.y) * s1 / s0 - y };
+    this.magT = m1; this.clampPan(this.panT, m1);
+    if (now) { this.mag = this.magT; this.pan = { ...this.panT }; }
+    this.onZoom(this.zoomed);
+  }
+  private panBy(dx: number, dy: number) {
+    if (this.magT <= 1) return;
+    this.panT = { x: this.panT.x + dx, y: this.panT.y + dy }; this.clampPan(this.panT, this.magT);
+    this.pan = { ...this.panT };
+  }
+  private startPan(e: PointerEvent) {
+    if (this.pinch.size === 0 && this.magT > 1.01) this.panning = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
+  }
+  /** The zoom buttons: in and out around the middle of the table, and back to the whole table. */
+  zoomIn() { const c = this.centreOnScreen(); this.zoomAt(1.4, c.x, c.y); }
+  zoomOut() { const c = this.centreOnScreen(); this.zoomAt(1 / 1.4, c.x, c.y); }
+  resetZoom() { this.magT = 1; this.panT = { x: 0, y: 0 }; this.onZoom(false); }
+  get zoomed() { return Math.abs(this.magT - 1) > 0.01; }
+  /** The middle of what is on screen now (zooming the buttons keeps it there). */
+  private centreOnScreen() {
+    const { w, h } = this.size(), ins = this.insets;
+    return { x: (ins.left + w - ins.right) / 2, y: (ins.top + h - ins.clear) / 2 };
+  }
+
   /** The HUD and controls cover these strips of the screen (CSS px); the table is framed in the rest. */
   setInsets(i: { top: number; right: number; bottom: number; left: number; clear?: number }) {
     const r = (n: number) => Math.max(0, Math.round(n));
@@ -557,7 +631,9 @@ export class TableScene {
     const { d, ox, oy } = this.frame;
     this.camera.position.set(0, d * Math.sin(el), d * Math.cos(el));
     this.camera.lookAt(0, 0, 0);
-    this.camera.setViewOffset(w, h, ox, oy, w, h);
+    // the player's lens zoom: the same view drawn s times bigger, looking at the part `pan` points to
+    const s = Math.max(1, this.mag);
+    this.camera.setViewOffset(w * s, h * s, ox * s + this.pan.x, oy * s + this.pan.y, w, h);
     this.camera.updateProjectionMatrix();
   }
 
@@ -642,6 +718,13 @@ export class TableScene {
     const dt = Math.min(0.05, raw); this.lastT = now; this.clock += dt;
     this.watchSpeed(raw);
     const amp = this.reduce ? 0 : 1, t = this.clock;
+    // ease the zoom buttons' steps; pinch and wheel set it directly
+    if (Math.abs(this.mag - this.magT) > 1e-3 || Math.abs(this.pan.x - this.panT.x) > 0.5 || Math.abs(this.pan.y - this.panT.y) > 0.5) {
+      const k = this.reduce ? 1 : 1 - Math.exp(-Math.min(raw, 0.25) * 14);   // about a quarter of a second, at any frame rate
+      this.mag += (this.magT - this.mag) * k; this.pan.x += (this.panT.x - this.pan.x) * k; this.pan.y += (this.panT.y - this.pan.y) * k;
+      this.clampPan(this.pan, this.mag);
+    } else { this.mag = this.magT; this.pan = { ...this.panT }; }
+    this.zoom = this.mag < 1 ? 1 / this.mag : 1;
     this.placeCamera(this.view || this.reduce ? 0 : Math.sin(t * 0.12) * 0.35);
     for (const c of this.chars) {
       if (!c) continue;
