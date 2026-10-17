@@ -91,7 +91,10 @@ export class TableScene {
   private reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   private zoom = 1;                 // pinch / mouse-wheel zoom, 1 = default framing
   /** Screen space covered by the HUD and controls (CSS px); the table is framed in what is left. */
-  private insets = { top: 0, right: 0, bottom: 0, left: 0 };
+  private insets = { top: 0, right: 0, bottom: 0, left: 0, clear: 0 };
+  /** Domino: where the played tiles and the next places to play are (world, on the table), and a key of their extent. */
+  private chainPts: THREE.Vector3[] = [];
+  private chainKey = '';
   private frameKey = ''; private frame = { d: 20, ox: 0, oy: 0 };
   private spot!: THREE.SpotLight;
   /** Graphics level: 2 full, 1 lighter, 0 lightest. Steps down by itself when frames are slow, and is remembered. */
@@ -406,6 +409,22 @@ export class TableScene {
     this.rebuildBoard();
   }
 
+  /** Domino: the footprint of the line of play, plus where the next tile at each end would go. */
+  private measureChain(v: TableView) {
+    const placed = layoutLine(v.line, X_MAX);
+    if (placed.length) {
+      const any = TILES.findIndex(t => t[0] !== t[1]);
+      for (const e of ['L', 'R'] as End[]) placed.push(previewPlacement(v.line, any, e, X_MAX));
+    }
+    const r = (TILE_W / 2) * TS;
+    const pts: THREE.Vector3[] = [];
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (const p of placed) { x0 = Math.min(x0, p.x * TS - r); x1 = Math.max(x1, p.x * TS + r); z0 = Math.min(z0, p.y * TS - r); z1 = Math.max(z1, p.y * TS + r); }
+    if (placed.length) for (const x of [x0, x1]) for (const z of [z0, z1]) pts.push(new THREE.Vector3(x, TILE_H, z));
+    const key = placed.length ? [x0, x1, z0, z1].map(n => n.toFixed(1)).join(',') : '';
+    if (key !== this.chainKey) { this.chainKey = key; this.chainPts = pts; this.frameKey = ''; }
+  }
+
   private rebuildBoard() {
     this.boardG.clear(); this.propsG.clear(); this.ghosts = []; this.ring.visible = false;
     const av = this.view;
@@ -424,6 +443,7 @@ export class TableScene {
     }
     const v: TableView = av;
     const now = this.clock;
+    this.measureChain(v);
     for (const pl of layoutLine(v.line, X_MAX)) {
       const m = this.tile(pl.a, pl.b);
       m.position.set(pl.x, TILE_H / 2, pl.y); m.rotation.y = -pl.ang;
@@ -495,10 +515,11 @@ export class TableScene {
   }
 
   /** The HUD and controls cover these strips of the screen (CSS px); the table is framed in the rest. */
-  setInsets(i: { top: number; right: number; bottom: number; left: number }) {
+  setInsets(i: { top: number; right: number; bottom: number; left: number; clear?: number }) {
     const r = (n: number) => Math.max(0, Math.round(n));
-    const n = { top: r(i.top), right: r(i.right), bottom: r(i.bottom), left: r(i.left) };
-    if (n.top === this.insets.top && n.right === this.insets.right && n.bottom === this.insets.bottom && n.left === this.insets.left) return;
+    // clear: how much of the bottom the played domino tiles must stay above (the hand plus the turn line and timer)
+    const n = { top: r(i.top), right: r(i.right), bottom: r(i.bottom), left: r(i.left), clear: r(Math.max(i.clear ?? 0, i.bottom)) };
+    if (n.top === this.insets.top && n.right === this.insets.right && n.bottom === this.insets.bottom && n.left === this.insets.left && n.clear === this.insets.clear) return;
     this.insets = n; this.frameKey = '';
   }
 
@@ -531,7 +552,7 @@ export class TableScene {
     const v = this.view!, g = v.game;
     const portrait = w / h < 0.9;
     const el = g === 'domino' ? (portrait ? 1.08 : 0.98) : (portrait ? 1.2 : 1.12);
-    const key = [w, h, g, el, this.zoom.toFixed(3), this.insets.top, this.insets.right, this.insets.bottom, this.insets.left, this.chars.map(c => (c ? 1 : 0)).join('')].join('|');
+    const key = [w, h, g, el, this.zoom.toFixed(3), this.insets.top, this.insets.right, this.insets.bottom, this.insets.left, this.insets.clear, g === 'domino' ? this.chainKey : '', this.chars.map(c => (c ? 1 : 0)).join('')].join('|');
     if (key !== this.frameKey) { this.frameKey = key; this.frame = this.fit(w, h, el, g); }
     const { d, ox, oy } = this.frame;
     this.camera.position.set(0, d * Math.sin(el), d * Math.cos(el));
@@ -584,21 +605,35 @@ export class TableScene {
       }
       return { x0, x1, y0, y1 };
     };
+    // domino: every played tile and the places to play next must stay above the hand, the turn line and the timer
+    const chain = g === 'domino' ? this.chainPts : [];
+    const fyClear = h - ins.clear - pad;
+    /** The vertical shift that keeps everything in its band at distance d, or null if nothing does. */
+    const place = (d: number, set: { pts: THREE.Vector3[]; under: number }) => {
+      const fy1 = h - ins.bottom * (1 - set.under) - pad;
+      const b = box(d, set.pts), c = chain.length ? box(d, chain) : null;
+      const x0 = Math.min(b.x0, c?.x0 ?? Infinity), x1 = Math.max(b.x1, c?.x1 ?? -Infinity);
+      if (x1 - x0 > fw) return null;
+      const lo = fy0 - Math.min(b.y0, c?.y0 ?? Infinity);
+      const hi = Math.min(fy1 - b.y1, c ? fyClear - c.y1 : Infinity);
+      if (lo > hi) return null;
+      // centre in the free area when there is room to spare
+      const want = (fy0 + fy1) / 2 - (b.y0 + b.y1) / 2;
+      return { s: Math.max(lo, Math.min(hi, want)), ox: Math.round((x0 + x1) / 2 - (fx0 + fx1) / 2) };
+    };
     const solve = (set: { pts: THREE.Vector3[]; under: number }) => {
-      const fy1 = h - ins.bottom * (1 - set.under) - pad, fh = Math.max(80, fy1 - fy0);
       let lo = 4, hi = 400;
-      for (let i = 0; i < 28; i++) {
-        const mid = (lo + hi) / 2, b = box(mid, set.pts);
-        if (b.x1 - b.x0 <= fw && b.y1 - b.y0 <= fh) hi = mid; else lo = mid;
-      }
-      return { d: hi, fy1, set };
+      for (let i = 0; i < 28; i++) { const mid = (lo + hi) / 2; if (place(mid, set)) hi = mid; else lo = mid; }
+      return { d: hi, set };
     };
     const tries = sets.map(solve);
     const best = tries.length > 1 && tries[0].d > tries[1].d * 1.12 ? tries[1] : tries[0];
     const d = best.d * this.zoom;
-    const b = box(d, best.set.pts);
-    // shift so the picture's middle lands in the middle of the free area
-    return { d, ox: Math.round((b.x0 + b.x1) / 2 - (fx0 + fx1) / 2), oy: Math.round((b.y0 + b.y1) / 2 - (fy0 + best.fy1) / 2) };
+    const p = place(d, best.set);
+    if (p) return { d, ox: p.ox, oy: Math.round(-p.s) };
+    // zoomed in by the player: keep the middle of the table (or of the line of play) in the middle
+    const b = box(d, chain.length ? chain : best.set.pts), fy1 = h - ins.bottom * (1 - best.set.under) - pad;
+    return { d, ox: Math.round((b.x0 + b.x1) / 2 - (fx0 + fx1) / 2), oy: Math.round((b.y0 + b.y1) / 2 - (fy0 + Math.min(fy1, fyClear)) / 2) };
   }
 
   private tick(now: number) {

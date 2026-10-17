@@ -1187,12 +1187,12 @@ function flyGift(from: number, to: number, k: GiftKind) {
  * How much of the screen the HUD and the controls cover, so the 3D table is framed in the space that is left
  * (any phone, tablet, foldable or desktop window), and labels and drops keep clear of them.
  */
-const chrome = { top: 0, right: 0, bottom: 0, left: 0 };
+const chrome = { top: 0, right: 0, bottom: 0, left: 0, clear: 0 };
 /** the round/match line under the scores: the 3D picture may run under it, a name tag may not cover it */
 const metaBox = { left: 0, right: 0, bottom: 0 };
 function measureChrome() {
   const W = window.innerWidth, H = window.innerHeight;
-  chrome.top = chrome.right = chrome.bottom = chrome.left = 0;
+  chrome.top = chrome.right = chrome.bottom = chrome.left = chrome.clear = 0;
   const shown = (el: Element) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? r : null; };
   // the small round/match line under the scores may sit over the far edge of the picture; the score bar may not
   const hud = document.querySelector('#ui .hud');
@@ -1215,6 +1215,10 @@ function measureChrome() {
       const solid = hand ? [hand] : [...bot.children];
       for (const c of solid) { const r = shown(c); if (r) top = Math.min(top, r.top); }
       chrome.bottom = H - top;
+      // the played domino tiles stay above all of it: the hand, the turn line and the timer
+      let all = top;
+      for (const c of bot.children) { const r = shown(c); if (r) all = Math.min(all, r.top); }
+      chrome.clear = H - all;
     }
   }
   scene.setInsets(chrome);
