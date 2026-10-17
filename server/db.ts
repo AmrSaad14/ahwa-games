@@ -221,6 +221,11 @@ export class Store {
 
   publicUser(u: UserRow): PublicUser { return { ...toPublic(u), ratings: this.ratingsOf(u.id), adsLeft: Math.max(0, ECONOMY.adsPerDay - this.adsToday(u.id)) }; }
 
+  /** Rows changed since the database was opened (to skip backups when nothing happened). */
+  changes(): number { return Number((this.db.prepare('SELECT total_changes() AS n').get() as { n: number }).n); }
+  /** A consistent copy of the whole database in one file (safe while the game keeps running). */
+  snapshot(file: string) { fs.rmSync(file, { force: true }); this.db.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`); }
+
   close() { this.db.close(); }
 }
 

@@ -109,6 +109,27 @@ CLIENT_STUBS=1 npm run build && node tests/ui-smoke.mjs ./screenshots
 npm run build          # rebuild afterwards: CLIENT_STUBS swaps out three.js for the test
 ```
 
+## Free hosting for testing (Render)
+
+Until you rent a server, the game runs on Render's free plan, with no card needed. `render.yaml` describes everything:
+
+1. Sign in at render.com with GitHub and allow it to see this repository.
+2. Create a fine-grained GitHub token (GitHub → Settings → Developer settings → Fine-grained tokens) for **this repository only**,
+   with **Contents: Read and write**. The server uses it to back up the database.
+3. Render → **New → Blueprint** → pick this repository. Fill in `BACKUP_GITHUB_TOKEN` (the token) and
+   `GOOGLE_CLIENT_SECRET` (from `ahwa-signin.env`), then **Apply**.
+4. The server is at `https://kings-battle.onrender.com` (if Render gives a different address, set the repository
+   variable `SERVER_URL` to it so the APK connects there).
+5. For Google sign-in, add `https://<that address>/auth/google/callback` to the OAuth client's redirect URIs in Google Cloud.
+
+What to expect on the free plan:
+- It sleeps after 15 minutes with no players; the first player after that waits about a minute while it wakes.
+- Its disk is wiped on every restart, so the database is saved to a hidden `db-backup` release in this repository
+  every 3 minutes (when something changed) and when it shuts down, and restored when it starts (`server/backup.ts`).
+  At worst the last few minutes of play are lost if it crashes.
+- Ads: the app shows Google's test ads until it is published on Google Play. AdMob only serves real ads to apps
+  that are live in a store and approved.
+
 ## Host it (recommended: any Linux server with Docker)
 
 A small server is enough to start: 1 vCPU and 1 GB RAM handles hundreds of players at once.

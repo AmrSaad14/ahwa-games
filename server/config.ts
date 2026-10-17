@@ -25,9 +25,16 @@ export const config = {
   maxConnectionsPerIp: num(process.env.MAX_CONNECTIONS_PER_IP, 20),
   // Rewarded ads: ADS_SSV=1 once AdMob's server-side verification calls PUBLIC_URL/ads/ssv (README → Ads)
   adsSsv: process.env.ADS_SSV === '1',
+  // Hosts that wipe the disk on restart (free plans): back the database up to a private GitHub repo (server/backup.ts)
+  backup: {
+    repo: process.env.BACKUP_GITHUB_REPO || '',
+    token: process.env.BACKUP_GITHUB_TOKEN || '',
+    minutes: num(process.env.BACKUP_MINUTES, 3),
+    api: process.env.BACKUP_GITHUB_API || undefined,          // tests only: a stand-in for api.github.com / uploads.github.com
+  },
   // Sign-in (see README → Sign-in with Google and a mobile number)
   login: {
-    publicUrl: process.env.PUBLIC_URL || '',                // https address players reach this server on
+    publicUrl: process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '',   // https address players reach this server on (Render sets RENDER_EXTERNAL_URL)
     appScheme: process.env.APP_SCHEME || 'ahwagames',
     appName: process.env.APP_NAME || 'Kings Battle',
     googleClientId: process.env.GOOGLE_CLIENT_ID || '',

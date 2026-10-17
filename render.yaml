@@ -1,0 +1,28 @@
+# Render Blueprint: the free game server for Kings Battle (render.com → New → Blueprint → pick this repository).
+# Free web services sleep after 15 minutes without players and wipe their disk when they restart, so the
+# database is backed up to this private repository (a hidden "db-backup" release) and restored on start.
+# You fill in the two secrets marked "sync: false" when you create the Blueprint.
+services:
+  - type: web
+    name: kings-battle
+    runtime: docker
+    plan: free
+    region: frankfurt            # closest Render region to Egypt
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    autoDeploy: true             # every push to main redeploys (the database is saved first and restored after)
+    envVars:
+      - key: TRUST_PROXY
+        value: "1"
+      - key: BACKUP_GITHUB_REPO
+        value: AmrSaad14/ahwa-games
+      - key: BACKUP_GITHUB_TOKEN   # a fine-grained GitHub token for this repo with "Contents: read and write"
+        sync: false
+      - key: BACKUP_MINUTES
+        value: "3"
+      - key: GOOGLE_CLIENT_ID
+        value: 214034500520-ldtf42ql0n5r6i25id6fvkbcrqic6sjb.apps.googleusercontent.com
+      - key: GOOGLE_CLIENT_SECRET  # from the Google Cloud OAuth client (the ahwa-signin.env file)
+        sync: false
+      - key: ADMIN_KEY
+        generateValue: true

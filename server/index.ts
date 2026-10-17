@@ -9,6 +9,7 @@ import { Tokens } from './auth';
 import { Hub } from './hub';
 import { GoogleSignIn, PhoneCodes, backToAppPage } from './login';
 import { verifySsv } from './ads';
+import { GitHubBackup } from './backup';
 import type { S2C } from '../shared/protocol';
 
 const MIME: Record<string, string> = {
@@ -134,17 +135,57 @@ export function createServer(opts = config) {
   return {
     server, hub, store, phones, google,
     listen: () => new Promise<number>(r => server.listen(opts.port, opts.host, () => r((server.address() as { port: number }).port))),
-    close: async () => {
+    /** Stop the game (stakes in play are refunded); `last` runs just before the database closes (final backup). */
+    close: async (last?: () => Promise<void>) => {
       clearInterval(heartbeat); hub.stop();
       wss.clients.forEach(c => c.terminate());
-      await new Promise(r => server.close(r)); store.close();
+      await new Promise(r => server.close(r));
+      if (last) await last().catch(e => console.error('[backup]', (e as Error).message));
+      store.close();
     },
   };
 }
 
-if (require.main === module) {
+async function main() {
+  const b = config.backup;
+  const backup = b.repo && b.token ? new GitHubBackup(b.repo, b.token, b.api ? { api: b.api, uploads: b.api } : {}) : null;
+  // a fresh disk (free hosts after a restart): bring the players back first. If GitHub can't be reached, play
+  // on but never upload, so an empty database can't replace the real one.
+  let canSave = !!backup;
+  if (backup && !fs.existsSync(config.dbPath)) {
+    let ok = false;
+    for (let i = 0; i < 4 && !ok; i++) {
+      try { await backup.restore(config.dbPath); ok = true; }
+      catch (e) { console.error('[backup] restore failed:', (e as Error).message); await new Promise(r => setTimeout(r, 3000 * (i + 1))); }
+    }
+    if (!ok) { canSave = false; console.error('[backup] could not restore: running WITHOUT backups this time'); }
+  }
   const app = createServer();
-  app.listen().then(() => console.log(`Domino server listening on http://${config.host}:${config.port}`));
-  const shutdown = () => { console.log('Shutting down…'); app.close().then(() => process.exit(0)); setTimeout(() => process.exit(1), 5000); };
+  await app.listen();
+  console.log(`Kings Battle server listening on http://${config.host}:${config.port}${backup ? (canSave ? ' (backups on)' : ' (backups OFF)') : ''}`);
+
+  let savedAt = -1, saving: Promise<void> | null = null;
+  const save = async (force = false) => {
+    if (!backup || !canSave) return;
+    const n = app.store.changes();
+    if (!force && n === savedAt) return;
+    const tmp = config.dbPath + '.snapshot';
+    app.store.snapshot(tmp);
+    await backup.save(tmp);
+    fs.rmSync(tmp, { force: true });
+    savedAt = n;
+  };
+  const tick = () => { if (!saving) saving = save().catch(e => console.error('[backup] save failed:', (e as Error).message)).finally(() => { saving = null; }); };
+  if (backup && canSave) setInterval(tick, Math.max(1, b.minutes) * 60_000);
+
+  let stopping = false;
+  const shutdown = () => {
+    if (stopping) return; stopping = true;
+    console.log('Shutting down…');
+    setTimeout(() => process.exit(1), backup ? 25_000 : 5000);
+    app.close(async () => { await saving; if (app.store.changes() !== savedAt) await save(true); }).then(() => process.exit(0));
+  };
   process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);
 }
+
+if (require.main === module) main();

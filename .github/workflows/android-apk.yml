@@ -36,7 +36,7 @@ jobs:
 
       - name: Build the game client
         env:
-          SERVER_URL: ${{ vars.SERVER_URL }}
+          SERVER_URL: ${{ vars.SERVER_URL || 'https://kings-battle.onrender.com' }}   # the free Render server (render.yaml)
           # AdMob ad units (empty: Google's test ads)
           ADMOB_ANDROID_REWARDED: ${{ vars.ADMOB_ANDROID_REWARDED }}
           ADMOB_ANDROID_INTERSTITIAL: ${{ vars.ADMOB_ANDROID_INTERSTITIAL }}
