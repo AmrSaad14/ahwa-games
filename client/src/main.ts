@@ -177,7 +177,7 @@ function applyView(v: AnyView) {
     else if (l.t === 'pass') {
       sfx.pass(); scene.animate(l.s, 'pass');
       const who = v.seats[l.s];
-      if (who && !isBlockedSeat(l.s)) S.bubbles.set(l.s, { text: 'جلا!', until: Date.now() + 2200 });
+      if (who && !isBlockedSeat(l.s)) S.bubbles.set(l.s, { text: t('passShout'), until: Date.now() + 2200 });
     }
     else if (l.t === 'round' || l.t === 'match') {
       const won = v.result && v.result.team >= 0 && v.you >= 0 && v.result.team === teamOf(v.mode, v.you);
