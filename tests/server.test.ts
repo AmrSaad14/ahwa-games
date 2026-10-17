@@ -433,3 +433,33 @@ test('shop: a coin pack is credited once per purchase, the ad-free plan sets a d
   assert.equal(b.last('buyFailed')!.code, 'purchases_off');
   a.ws.close(); b.ws.close();
 });
+
+test('skin shop: buying takes the coins once and wears the skin; no coins or not owned is refused', async () => {
+  const a = await new Client().open();
+  assert.deepEqual(a.last('welcome')!.user.skins, []);
+  app.store.addCoins(a.uid, 200_000);   // a new player's 110K isn't enough for the cheapest tiles (150K)
+  const start = { coins: app.store.coinsOf(a.uid) };
+  // too expensive for a new player (1M+ needed for gold tiles after buying ebony)
+  a.send({ t: 'equipSkin', id: 'tiles_ebony' });
+  await a.until(() => a.msgs.some(m => m.t === 'err' && m.code === 'not_owned'));
+  a.send({ t: 'buySkin', id: 'tiles_ebony' });
+  await a.until(() => a.msgs.some(m => m.t === 'user' && m.user.skins.includes('tiles_ebony')));
+  const u = [...a.msgs].reverse().find(m => m.t === 'user') as Extract<S2C, { t: 'user' }>;
+  assert.equal(u.user.coins, start.coins - 150_000);
+  assert.equal(u.user.equip.tiles, 'tiles_ebony', 'a new skin is worn straight away');
+  // buying again costs nothing
+  a.msgs = [];
+  a.send({ t: 'buySkin', id: 'tiles_ebony' });
+  await a.until(() => a.msgs.some(m => m.t === 'user'));
+  assert.equal((a.last('user')!).user.coins, start.coins - 150_000);
+  // back to the free classic tiles
+  a.send({ t: 'equipSkin', id: 'tiles_ivory' });
+  await a.until(() => a.last('user')?.user.equip.tiles === 'tiles_ivory');
+  a.msgs = [];
+  a.send({ t: 'buySkin', id: 'tiles_gold' });   // 900K: more than this player has left
+  await a.until(() => a.msgs.some(m => m.t === 'err'));
+  assert.equal((a.last('err'))!.code, 'not_enough_coins');
+  a.send({ t: 'buySkin', id: 'no_such_skin' });
+  await a.until(() => a.msgs.some(m => m.t === 'err' && m.code === 'bad_skin'));
+  a.ws.close();
+});

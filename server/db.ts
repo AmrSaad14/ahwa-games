@@ -6,12 +6,13 @@ import crypto from 'node:crypto';
 import type { CoinRow, LeaderRow, PublicUser } from '../shared/protocol';
 import type { GameId } from '../shared/engine';
 import { ECONOMY } from '../shared/gifts';
+import { Equipped, skinById } from '../shared/skins';
 import { maskPhone } from './login';
 
 export interface UserRow {
   id: string; name: string; ch: number; email: string | null; pw: string | null;
   rating: number; games: number; wins: number; created: number; seen: number;
-  coins: number; gifts: number; bonus_day: string | null; ad_free_until: number;
+  coins: number; gifts: number; bonus_day: string | null; ad_free_until: number; equip: string | null;
   phone: string | null; google_sub: string | null; google_email: string | null;
 }
 
@@ -63,6 +64,8 @@ export class Store {
     if (!cols.has('phone')) this.db.exec('ALTER TABLE users ADD COLUMN phone TEXT');
     if (!cols.has('google_sub')) this.db.exec('ALTER TABLE users ADD COLUMN google_sub TEXT; ALTER TABLE users ADD COLUMN google_email TEXT');
     if (!cols.has('ad_free_until')) this.db.exec('ALTER TABLE users ADD COLUMN ad_free_until INTEGER NOT NULL DEFAULT 0');
+    if (!cols.has('equip')) this.db.exec('ALTER TABLE users ADD COLUMN equip TEXT');
+    this.db.exec('CREATE TABLE IF NOT EXISTS user_skins (user_id TEXT NOT NULL, skin TEXT NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (user_id, skin))');
     // every store purchase, so the same purchase can never be credited twice
     this.db.exec(`CREATE TABLE IF NOT EXISTS purchases (
       token TEXT PRIMARY KEY, user_id TEXT NOT NULL, product TEXT NOT NULL, order_id TEXT, ts INTEGER NOT NULL, coins INTEGER NOT NULL DEFAULT 0, until INTEGER NOT NULL DEFAULT 0)`);
@@ -223,7 +226,35 @@ export class Store {
     return { rows: out, me };
   }
 
-  publicUser(u: UserRow): PublicUser { return { ...toPublic(u), ratings: this.ratingsOf(u.id), adsLeft: Math.max(0, ECONOMY.adsPerDay - this.adsToday(u.id)) }; }
+  publicUser(u: UserRow): PublicUser { return { ...toPublic(u), ratings: this.ratingsOf(u.id), adsLeft: Math.max(0, ECONOMY.adsPerDay - this.adsToday(u.id)), skins: this.skinsOf(u.id) }; }
+
+  /** Skins this player bought in the shop. */
+  skinsOf(id: string): string[] { return (this.db.prepare('SELECT skin FROM user_skins WHERE user_id = ? ORDER BY ts').all(id) as { skin: string }[]).map(r => r.skin); }
+  /** Buy a skin with coins. Returns an error code, or null when bought. */
+  buySkin(id: string, skin: string): string | null {
+    const s = skinById(skin);
+    if (!s || s.price === 0) return 'bad_skin';
+    if (this.skinsOf(id).includes(skin)) return null;
+    if (this.coinsOf(id) < s.price) return 'not_enough_coins';
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare('INSERT INTO user_skins (user_id, skin, ts) VALUES (?, ?, ?)').run(id, skin, Date.now());
+      this.addCoins(id, -s.price); this.logCoins(id, 'skin', -s.price);
+      this.db.exec('COMMIT');
+    } catch (e) { this.db.exec('ROLLBACK'); throw e; }
+    this.equipSkin(id, skin);   // wear it straight away
+    return null;
+  }
+  /** Wear a skin the player owns (or a free one). */
+  equipSkin(id: string, skin: string): string | null {
+    const s = skinById(skin);
+    if (!s) return 'bad_skin';
+    if (s.price > 0 && !this.skinsOf(id).includes(skin)) return 'not_owned';
+    const u = this.get(id); if (!u) return 'bad_skin';
+    const equip = { ...parseEquip(u.equip), [s.cat]: skin };
+    this.db.prepare('UPDATE users SET equip = ? WHERE id = ?').run(JSON.stringify(equip), id);
+    return null;
+  }
 
   /** A store purchase seen before (same purchase token), or undefined. */
   purchase(token: string) { return this.db.prepare('SELECT * FROM purchases WHERE token = ?').get(token) as { user_id: string; product: string; coins: number; until: number } | undefined; }
@@ -249,5 +280,9 @@ export class Store {
   close() { this.db.close(); }
 }
 
-export const toPublic = (u: UserRow): PublicUser => ({ id: u.id, name: u.name, ch: u.ch, email: u.email, rating: u.rating, games: u.games, wins: u.wins, coins: u.coins, gifts: u.gifts, ratings: {}, adsLeft: 0, adFreeUntil: u.ad_free_until ?? 0,
+/** The equipped skins, stored as JSON. */
+export function parseEquip(raw: string | null | undefined): Equipped {
+  try { const o = JSON.parse(raw || '{}'); return o && typeof o === 'object' ? o as Equipped : {}; } catch { return {}; }
+}
+export const toPublic = (u: UserRow): PublicUser => ({ id: u.id, name: u.name, ch: u.ch, email: u.email, rating: u.rating, games: u.games, wins: u.wins, coins: u.coins, gifts: u.gifts, ratings: {}, adsLeft: 0, adFreeUntil: u.ad_free_until ?? 0, skins: [], equip: parseEquip(u.equip),
   phone: u.phone ? maskPhone(u.phone) : null, google: u.google_sub ? (u.google_email || 'Google') : null });

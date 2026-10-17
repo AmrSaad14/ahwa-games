@@ -5,7 +5,7 @@ import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 import { CHESS_TIME, End, GAMES, GAME_MODES, GameId, MODES, MODE_PLAYERS, Mode, TILES, canPlay, defaultTarget, endsFor, gameOf, targetOptions, teamOf } from '../../shared/engine';
 import type { Action, AnyView, BoardAction, BoardView, CoinRow, Emote, LeaderRow, PublicUser, S2C, TableView } from '../../shared/protocol';
-import { LUDO_COLORS } from './boards';
+import { ludoColor } from './boards';
 import type { BoardUi, Pick } from './boards';
 import { BAR, OFF } from '../../shared/games/tawla';
 import { EMOTES } from '../../shared/protocol';
@@ -18,6 +18,8 @@ import { Voice } from './voice';
 import { DemoWallet } from './demowallet';
 import { adsSupported, afterMatch, initAds, showRewarded } from './ads';
 import { billingSupported, buy, initBilling, purchaseDone, purchaseRefused, storePrice } from './billing';
+import { SKINS, SKIN_CATS, SkinCat, skinById, skinFor } from '../../shared/skins';
+import { CHESS_LOOKS, DICE_LOOKS, LUDO_LOOKS, TAWLA_LOOKS, TILE_LOOKS } from './looks';
 import { COIN_PACKS, GIFTS, GiftKind, NO_ADS, STAKES, giftByKind, isStake, shortCoins, winnings } from '../../shared/gifts';
 
 /** Demo build (no game server): stakes are played against the computer with a wallet kept in this browser. */
@@ -33,12 +35,14 @@ const store = {
 };
 
 /* ---------------- state ---------------- */
-type Screen = 'home' | 'friends' | 'lb' | 'settings' | 'rules' | 'coins';
-type Sheet = null | 'leave' | 'emotes' | 'delete' | 'player' | 'signin' | 'fakead' | 'interstitial' | 'checkout';
+type Screen = 'home' | 'friends' | 'lb' | 'settings' | 'rules' | 'coins' | 'skins';
+type Sheet = null | 'leave' | 'emotes' | 'delete' | 'player' | 'signin' | 'fakead' | 'interstitial' | 'checkout' | 'skinBuy';
 const S = {
   screen: 'home' as Screen,
   sheet: null as Sheet,
   checkout: null as string | null,   // demo: the product on the pretend payment sheet
+  skinCat: 'tiles' as SkinCat,       // the skin shop's open tab
+  skinBuy: null as string | null,    // the skin waiting for 'buy?' confirmation
   online: false,
   user: null as PublicUser | null,
   mode: (MODES.includes(store.get('mode') as Mode) ? store.get('mode') : 'ffa2') as Mode,
@@ -75,7 +79,7 @@ setLang((store.get('lang') as Lang) || (navigator.language?.startsWith('ar') ? '
 const localName = () => S.user?.name || store.get('name') || CHAR_NAMES[getLang()][localCh()];
 const localCh = () => S.user?.ch ?? (Number(store.get('ch', '0')) || 0);
 if (DEMO) { wallet = new DemoWallet(); S.user = wallet.user(localName(), localCh()); }
-const syncWallet = () => { if (wallet && S.user) S.user = { ...S.user, coins: wallet.coins, adsLeft: Math.max(0, 10 - wallet.adsToday()), adFreeUntil: wallet.adFreeUntil }; };
+const syncWallet = () => { if (wallet && S.user) S.user = { ...S.user, coins: wallet.coins, adsLeft: Math.max(0, 10 - wallet.adsToday()), adFreeUntil: wallet.adFreeUntil, skins: wallet.skins.slice(), equip: { ...wallet.equip } }; };
 
 /* ---------------- dom helpers ---------------- */
 type Attrs = Record<string, unknown>;
@@ -121,13 +125,14 @@ function onMessage(m: S2C) {
     case 'welcome':
       store.set('token', m.token); S.user = m.user; voice.ice = m.ice ?? [];
       S.login = m.login ?? { google: false, phone: false };
+      applySkins();
       initBilling(m.user.id, (product, token) => net.send({ t: 'buy', product, token }), () => { if (S.screen === 'coins') render(); });
       if (pendingTicket) { net.send({ t: 'ticket', ticket: pendingTicket }); pendingTicket = null; }
       else if (!signedIn(m.user) && (S.login.google || S.login.phone) && !store.get('signinAsked') && !S.view) S.sheet = 'signin'; store.set('name', m.user.name); store.set('ch', String(m.user.ch));
       // carry a name/character picked while offline over to the server
       if (store.get('pendingProfile') === '1') { net.send({ t: 'profile', name: store.get('name'), ch: Number(store.get('ch', '0')) }); store.del('pendingProfile'); }
       break;
-    case 'user': S.user = m.user; store.set('name', m.user.name); store.set('ch', String(m.user.ch)); break;
+    case 'user': S.user = m.user; store.set('name', m.user.name); store.set('ch', String(m.user.ch)); applySkins(); break;
     case 'err':
       S.busy = false;
       if (['not_your_turn', 'not_playing', 'can_play', 'choose_end'].includes(m.code)) break;
@@ -498,7 +503,7 @@ function render() {
   } else {
     scene.showHome(localCh());
     if (S.queue) ui.append(searchScreen());
-    else ui.append(topBar(), ({ home: homeScreen, friends: friendsScreen, lb: lbScreen, settings: settingsScreen, rules: rulesScreen, coins: coinsScreen })[S.screen]());
+    else ui.append(topBar(), ({ home: homeScreen, friends: friendsScreen, lb: lbScreen, settings: settingsScreen, rules: rulesScreen, coins: coinsScreen, skins: skinsScreen })[S.screen]());
   }
   if (S.sheet === 'leave') ui.append(sheet(h('p', null, t('leaveConfirm')), v && v.stake ? h('p', { class: 'bad' }, t('leaveStake', { n: shortCoins(v.stake) })) : h('span'), h('div', { class: 'row' }, btn(t('stay'), () => { S.sheet = null; render(); }, 'btn alt'), btn(t('leaveYes'), leaveGame, 'btn danger'))));
   if (S.sheet === 'emotes') ui.append(emoteSheet());
@@ -506,6 +511,7 @@ function render() {
   if (S.sheet === 'fakead') ui.append(fakeAdSheet());
   if (S.sheet === 'interstitial') ui.append(demoInterstitial());
   if (S.sheet === 'checkout' && S.checkout) ui.append(checkoutSheet(S.checkout));
+  if (S.sheet === 'skinBuy' && S.skinBuy) ui.append(skinBuySheet(S.skinBuy));
   if (S.sheet === 'player' && v) { const ps = playerSheet(v); if (ps) ui.append(ps); }
   if (S.sheet === 'delete') ui.append(sheet(h('p', null, t('deleteConfirm')), h('div', { class: 'row' }, btn(t('stay'), () => { S.sheet = null; render(); }, 'btn alt'),
     btn(t('deleteYes'), () => { net.send({ t: 'delete' }); S.sheet = null; S.screen = 'home'; toast(t('deleted')); render(); }, 'btn danger'))));
@@ -623,6 +629,7 @@ function homeScreen() {
         btn(t('friends'), () => { S.screen = 'friends'; render(); }, 'btn tq', { disabled: !S.online }),
         btn(t('practice'), () => startPractice(), 'btn alt'))),
     h('div', { class: 'row links home-links' },
+      btn(t('skinShop'), () => { S.screen = 'skins'; render(); }, 'link'),
       btn(t('coinsTitle'), openCoins, 'link'),
       btn(t('leaderboard'), () => openLb(S.game), 'link'),
       btn(t('rules'), () => { S.screen = 'rules'; render(); }, 'link')),
@@ -738,6 +745,80 @@ function adButton(cls = 'chip ad-chip', long = false) {
   return btn(long ? '🎬 ' + t('watchAd', { n: shortCoins(5_000) }) : '🎬 +' + shortCoins(5_000), watchAd, cls, { 'aria-label': t('watchAd', { n: shortCoins(5_000) }), title: t('watchAd', { n: shortCoins(5_000) }) });
 }
 /** Demo only: a stand-in for the video, five seconds long. */
+/* ---------------- the skin shop ---------------- */
+/** Skins this player owns and wears (from the server, or the demo wallet). */
+const ownedSkins = () => (wallet ? wallet.skins : S.user?.skins) ?? [];
+const equippedSkins = () => (wallet ? wallet.equip : S.user?.equip) ?? {};
+const wornSkin = (cat: SkinCat) => skinFor(cat, equippedSkins(), ownedSkins());
+/** Put the worn skins on the 3D table and the tiles in the hand; remembered for offline practice. */
+function applySkins() {
+  let worn = Object.fromEntries(SKIN_CATS.map(c => [c, wornSkin(c)])) as Record<SkinCat, string>;
+  // not signed in yet (offline practice): the skins worn last time
+  if (!S.user && !wallet) { try { worn = { ...worn, ...JSON.parse(store.get('skins') || '{}') }; } catch { /* none saved */ } }
+  scene.setSkins(worn);
+  const css = TILE_LOOKS[worn.tiles]?.css, root = document.documentElement.style;
+  if (css) { root.setProperty('--tile-face', css.face); root.setProperty('--tile-dot', css.dot); root.setProperty('--tile-groove', css.groove); root.setProperty('--ivory-edge', css.edge); }
+  store.set('skins', JSON.stringify(worn));
+}
+/** A small picture of a skin for its shop card. */
+function skinPreview(id: string) {
+  const s = skinById(id)!;
+  if (s.cat === 'tiles') {
+    const el = TableScene.tileEl(20, 'div'), css = TILE_LOOKS[id].css;   // the 5|6 tile
+    el.style.setProperty('--tile-face', css.face); el.style.setProperty('--tile-dot', css.dot); el.style.setProperty('--tile-groove', css.groove);
+    el.classList.add('skin-tile');
+    return h('div', { class: 'skin-pic' }, el);
+  }
+  if (s.cat === 'dice') {
+    const look = DICE_LOOKS[id];
+    const die = h('div', { class: 'skin-die' }, ...[0, 2, 4, 6, 8].map(i => h('i', { class: 'p' + i })));
+    die.style.setProperty('--die-face', look?.css.face ?? 'linear-gradient(145deg, #f6eedb, #e2d3b2)');
+    die.style.setProperty('--die-dot', look?.css.dot ?? '#1c1410');
+    return h('div', { class: 'skin-pic' }, die);
+  }
+  const bg = s.cat === 'tawla' ? TAWLA_LOOKS[id].css : s.cat === 'chess' ? CHESS_LOOKS[id].css : LUDO_LOOKS[id].css;
+  const board = h('div', { class: 'skin-board ' + s.cat });
+  board.style.background = bg;
+  return h('div', { class: 'skin-pic' }, board);
+}
+function skinsScreen() {
+  const cat = S.skinCat, owned = ownedSkins(), worn = wornSkin(cat);
+  const coins = S.user?.coins ?? 0;
+  const canShop = !!wallet || S.online;
+  return h('section', { class: 'sheet-card tall skins-page' },
+    h('div', { class: 'row between' }, h('h2', null, t('skinShop')), S.user ? btn('🪙 ' + num(coins), openCoins, 'chip coins') : null),
+    chips(SKIN_CATS, cat, c => t(('cat_' + c) as Key), c => { S.skinCat = c as SkinCat; render(); }),
+    h('div', { class: 'skins' }, ...SKINS.filter(s => s.cat === cat).map(s => {
+      const have = s.price === 0 || owned.includes(s.id), on = worn === s.id;
+      const action = on ? h('span', { class: 'in-use' }, '✓ ' + t('skinInUse'))
+        : have ? btn(t('skinUse'), () => equipSkin(s.id), 'btn alt', { disabled: !canShop })
+        : btn('🪙 ' + shortCoins(s.price), () => { S.skinBuy = s.id; S.sheet = 'skinBuy'; render(); }, 'btn', { disabled: !canShop });
+      return h('div', { class: 'skin' + (on ? ' on' : '') }, skinPreview(s.id), h('b', null, t(('skin_' + s.id) as Key)), action);
+    })),
+    !canShop ? h('p', { class: 'muted small' }, t('offline')) : null);
+}
+function equipSkin(id: string) {
+  if (wallet) { wallet.equipSkin(id); syncWallet(); applySkins(); return render(); }
+  net.send({ t: 'equipSkin', id });
+}
+function skinBuySheet(id: string) {
+  const s = skinById(id)!, coins = S.user?.coins ?? 0, short = s.price - coins;
+  const close = () => { S.sheet = null; S.skinBuy = null; render(); };
+  const buyIt = () => {
+    if (wallet) {
+      if (!wallet.take(s.price)) return;
+      wallet.add('skin', 0, -s.price); wallet.addSkin(id); syncWallet(); applySkins();
+    } else net.send({ t: 'buySkin', id });
+    sfx.gift(); toast(t('skinBought', { name: t(('skin_' + id) as Key) }));
+    close();
+  };
+  return sheet(skinPreview(id), h('h2', null, t(('skin_' + id) as Key)),
+    h('p', null, t('skinBuyQ', { n: shortCoins(s.price) })),
+    short > 0 ? h('p', { class: 'bad' }, t('skinNeedMore', { n: shortCoins(short) })) : h('span'),
+    h('div', { class: 'row' }, btn(t('cancel'), close, 'btn alt'),
+      short > 0 ? btn(t('getCoins'), () => { S.sheet = null; S.skinBuy = null; openCoins(); }, 'btn') : btn(t('skinBuy', { n: shortCoins(s.price) }), buyIt, 'btn')));
+}
+
 /* ---------------- ads after every game, and the shop ---------------- */
 const adFree = () => (S.user?.adFreeUntil ?? 0) > Date.now();
 const dateText = (ts: number) => new Date(ts).toLocaleDateString(getLang() === 'ar' ? 'ar-EG' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -1070,7 +1151,7 @@ const TAWLA_COLORS = ['#efe4cc', '#6e1f17'];
 function seatSwatch(v: BoardView, seat: number) {
   if (v.chess) return seat === v.chess.white ? '#efe4cc' : '#2a1a12';
   if (v.tawla) return TAWLA_COLORS[seat];
-  if (v.ludo) return LUDO_COLORS[v.ludo.colors[seat]];
+  if (v.ludo) return ludoColor(v.ludo.colors[seat]);
   return charColor(v.seats[seat]?.ch ?? 0);
 }
 /** Chess time left for a seat right now. */
@@ -1407,6 +1488,7 @@ function renderLabels(content: boolean) {
 // expire emote bubbles
 setInterval(() => { const now = Date.now(); let ch = false; S.bubbles.forEach((b, k) => { if (b.until < now) { S.bubbles.delete(k); ch = true; } }); if (ch) renderLabels(true); }, 500);
 scene.onFrame = () => renderLabels(false);
+applySkins();
 
 /* ---------------- platform ---------------- */
 CapApp.addListener('backButton', () => {

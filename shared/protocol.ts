@@ -135,6 +135,8 @@ export interface PublicUser {
   google: string | null;  // signed-in Google account (its email)
   adsLeft: number;        // rewarded ads that still pay out today
   adFreeUntil: number;    // ad-free plan paid until (ms since 1970); 0 = shows ads
+  skins: string[];        // skins bought in the shop (the free classic ones aren't listed)
+  equip: Partial<Record<'tiles' | 'dice' | 'tawla' | 'chess' | 'ludo', string>>;   // the skin chosen for each kind
   ratings: Partial<Record<GameId, { rating: number; games: number; wins: number }>>;
 }
 
@@ -168,6 +170,9 @@ export type C2S =
   | { t: 'adWatched'; ticket: string }
   /** A Google Play purchase to check and credit: a coin pack or the ad-free plan. */
   | { t: 'buy'; product: string; token: string }
+  /** The skin shop: buy a skin with coins, or wear one you own (or a free one). */
+  | { t: 'buySkin'; id: string }
+  | { t: 'equipSkin'; id: string }
   | { t: 'gift'; to: number; k: GiftKind }
   | { t: 'voice'; on: boolean }
   | { t: 'rtc'; to: number; data: RtcSignal }

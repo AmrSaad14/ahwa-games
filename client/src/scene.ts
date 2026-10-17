@@ -3,7 +3,8 @@ import { End, TILES } from '../../shared/engine';
 import { layoutLine, previewPlacement } from '../../shared/layout';
 import type { AnyView, TableView } from '../../shared/protocol';
 import type { BoardGameId } from '../../shared/games/defs';
-import { BoardRenderer, BoardUi, ChessBoard, LudoBoard, Pick, TawlaBoard, initBoardEnvironment } from './boards';
+import { BoardRenderer, BoardUi, ChessBoard, LudoBoard, Pick, TawlaBoard, initBoardEnvironment, setDiceLook } from './boards';
+import { CHESS_LOOKS, LUDO_LOOKS, TAWLA_LOOKS, TILE_LOOKS, TileLook } from './looks';
 import { HEAD_Y, PEOPLE, makePerson } from './people';
 import { Post } from './post';
 import { FLOOR_Y, Smoke, TEX_HI, buildAhwa, canvasTex, makeChair, makeShisha, makeTable, makeTeaGlass } from './ahwa';
@@ -79,6 +80,9 @@ export class TableScene {
   private v3 = new THREE.Vector3();
   private view: AnyView | null = null;
   private boards: Partial<Record<BoardGameId, BoardRenderer>> = {};
+  /** The player's shop skins: which look each kind uses. */
+  private skins = { tiles: 'tiles_ivory', dice: 'dice_ivory', tawla: 'tawla_walnut', chess: 'chess_wood', ludo: 'ludo_classic' };
+  private tileLook: TileLook = TILE_LOOKS.tiles_ivory;
   private glasses = new THREE.Group();   // tea glasses on the table corners (moved aside for the big ludo board)
   private board: BoardRenderer | null = null;
   private boardUi: BoardUi = { sel: null, targets: [] };
@@ -349,6 +353,29 @@ export class TableScene {
     return { x: ((this.v3.x + 1) / 2) * r.width + r.left, y: ((1 - this.v3.y) / 2) * r.height + r.top };
   }
 
+  /* ---------- shop skins ---------- */
+
+  /** Wear these skins (ids per kind). Rebuilds only what changed. */
+  setSkins(s: Partial<Record<'tiles' | 'dice' | 'tawla' | 'chess' | 'ludo', string>>) {
+    let rebuild = false;
+    if (s.tiles && s.tiles !== this.skins.tiles && TILE_LOOKS[s.tiles]) {
+      this.skins.tiles = s.tiles; this.tileLook = TILE_LOOKS[s.tiles];
+      this.faceMats.forEach(m => { m.map?.dispose(); m.dispose(); }); this.faceMats.clear();
+      this.bodyMat.color.setHex(this.tileLook.body); this.bodyMat.roughness = this.tileLook.rough; this.bodyMat.metalness = this.tileLook.metal; this.bodyMat.needsUpdate = true;
+      rebuild = true;
+    }
+    for (const k of ['dice', 'tawla', 'chess', 'ludo'] as const) {
+      if (!s[k] || s[k] === this.skins[k]) continue;
+      this.skins[k] = s[k]!;
+      if (k === 'dice') setDiceLook(s[k]!);
+      // boards are rebuilt with the new look the next time they are shown (dice live inside the tawla and ludo boards)
+      const drop = k === 'dice' ? (['tawla', 'ludo'] as const) : [k];
+      for (const g of drop) { const b = this.boards[g]; if (b) { this.scene.remove(b.root); delete this.boards[g]; } }
+      rebuild = true;
+    }
+    if (rebuild) this.rebuildBoard();
+  }
+
   /* ---------- tiles ---------- */
 
   private faceMat(a: number, b: number) {
@@ -356,19 +383,24 @@ export class TableScene {
     let m = this.faceMats.get(k);
     if (!m) {
       const tx = canvasTex(512, 256, g => {
-        // ivory face with a soft vignette
+        // the face (ivory by default, or the tile skin) with a soft vignette
+        const L = this.tileLook;
         const bg = g.createRadialGradient(256, 128, 40, 256, 128, 300);
-        bg.addColorStop(0, '#fbf5e6'); bg.addColorStop(1, '#ebdfc4');
+        bg.addColorStop(0, L.face[0]); bg.addColorStop(1, L.face[1]);
         g.fillStyle = bg; g.fillRect(0, 0, 512, 256);
+        if (L.veins) {
+          g.strokeStyle = L.veins; g.lineCap = 'round';
+          for (let i = 0; i < 6; i++) { g.lineWidth = 1 + (i % 3); g.beginPath(); let x = (i * 97) % 512, y = 0; g.moveTo(x, y); while (y < 256) { x += ((i * 37 + y) % 50) - 25; y += 28; g.lineTo(x, y); } g.stroke(); }
+        }
         // centre groove
-        g.fillStyle = '#9c8d70'; g.fillRect(253, 22, 5, 212);
+        g.fillStyle = L.groove; g.fillRect(253, 22, 5, 212);
         g.fillStyle = 'rgba(255,255,255,.7)'; g.fillRect(258, 22, 2, 212);
         // engraved pips
         [a, b].forEach((v, h) => PIPS[v].forEach(i => {
           // the pattern runs along the tile's length, as on a real domino (a 6 is two rows of three)
           const cx = h * 256 + 52 + Math.floor(i / 3) * 76, cy = 52 + (i % 3) * 76, r = 21;
           const pg = g.createRadialGradient(cx - 5, cy - 5, 2, cx, cy, r);
-          pg.addColorStop(0, '#000'); pg.addColorStop(0.8, '#1e140d'); pg.addColorStop(1, '#4a3a2a');
+          pg.addColorStop(0, L.pip[0]); pg.addColorStop(0.8, L.pip[1]); pg.addColorStop(1, L.pip[2]);
           g.fillStyle = pg; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
           g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, r + 1, 0.1 * Math.PI, 0.6 * Math.PI); g.stroke();
         }));
@@ -377,7 +409,7 @@ export class TableScene {
         pin.addColorStop(0, '#fff2c4'); pin.addColorStop(0.5, '#d4a347'); pin.addColorStop(1, '#7a5520');
         g.fillStyle = pin; g.beginPath(); g.arc(256, 128, 12, 0, Math.PI * 2); g.fill();
       }, undefined, TEX_HI > 1 ? 1.5 : 1);
-      m = new THREE.MeshStandardMaterial({ map: tx, roughness: 0.25 });
+      m = new THREE.MeshStandardMaterial({ map: tx, roughness: this.tileLook.rough, metalness: this.tileLook.metal });
       this.faceMats.set(k, m);
     }
     return m;
@@ -470,7 +502,7 @@ export class TableScene {
     if (av.game !== 'domino') {
       // chess, tawla or ludo: the game's own board sits on the table
       const g = av.game;
-      this.board = this.boards[g] ??= (() => { const r = g === 'chess' ? new ChessBoard() : g === 'tawla' ? new TawlaBoard() : new LudoBoard(); this.scene.add(r.root); return r; })();
+      this.board = this.boards[g] ??= (() => { const r = g === 'chess' ? new ChessBoard(CHESS_LOOKS[this.skins.chess]) : g === 'tawla' ? new TawlaBoard(TAWLA_LOOKS[this.skins.tawla]) : new LudoBoard(LUDO_LOOKS[this.skins.ludo]); this.scene.add(r.root); return r; })();
       this.board.root.visible = true;
       this.board.update(av, this.boardUi, this.clock);
       this.turnRing(av.turn);

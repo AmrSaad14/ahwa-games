@@ -178,6 +178,16 @@ export class Hub {
         if (!this.rewardAd(uid, String(m.ticket || ''))) return err('ad_limit');
         return;
       }
+      case 'buySkin': {
+        const e = this.store.buySkin(uid, String(m.id || ''));
+        if (e) return err(e);
+        return this.sendUser(uid);
+      }
+      case 'equipSkin': {
+        const e = this.store.equipSkin(uid, String(m.id || ''));
+        if (e) return err(e);
+        return this.sendUser(uid);
+      }
       case 'buy': {
         // a Google Play purchase: check it with Google, then credit it exactly once
         const product = String(m.product || ''), token = String(m.token || '');

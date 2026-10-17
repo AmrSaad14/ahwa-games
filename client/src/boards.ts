@@ -3,6 +3,7 @@ import type { BoardView } from '../../shared/protocol';
 import { BAR, OFF } from '../../shared/games/tawla';
 import { COLOR_OFFSET, HOME, LAP, TRACK } from '../../shared/games/ludo';
 import { TEX_HI, canvasTex } from './ahwa';
+import { CHESS_LOOKS, ChessLook, DICE_LOOKS, DiceLook, LUDO_LOOKS, LudoLook, TAWLA_LOOKS, TawlaLook } from './looks';
 /** Board artwork: drawn at the device's texture detail (2x where there is memory for it). */
 const hiTex = (w: number, h: number, draw: (g: CanvasRenderingContext2D, w: number, h: number) => void) => canvasTex(w, h, draw, undefined, TEX_HI);
 
@@ -62,6 +63,31 @@ export function initBoardEnvironment(renderer: THREE.WebGLRenderer) {
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 /** Wood grain on a canvas: long wavy fibres, growth rings and pores. */
+/** Polished stone: a base colour with soft veins. */
+function marbleCanvas(size: number, base: string, light: string, vein: string) {
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const g = c.getContext('2d')!;
+  const bg = g.createLinearGradient(0, 0, size, size); bg.addColorStop(0, light); bg.addColorStop(0.5, base); bg.addColorStop(1, light);
+  g.fillStyle = bg; g.fillRect(0, 0, size, size);
+  g.strokeStyle = vein; g.lineCap = 'round';
+  for (let i = 0; i < 9; i++) {
+    g.lineWidth = 1 + Math.random() * 3; g.beginPath();
+    let x = Math.random() * size, y = 0; g.moveTo(x, y);
+    while (y < size) { x += (Math.random() - 0.5) * 60; y += 20 + Math.random() * 40; g.lineTo(x, y); }
+    g.stroke();
+  }
+  return c;
+}
+/** A plain colour with a faint print texture (tournament boards). */
+function flatCanvas(size: number, base: string, speck: string) {
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const g = c.getContext('2d')!;
+  g.fillStyle = base; g.fillRect(0, 0, size, size);
+  g.globalAlpha = 0.18; g.fillStyle = speck;
+  for (let i = 0; i < 2500; i++) g.fillRect(Math.random() * size, Math.random() * size, 2, 2);
+  g.globalAlpha = 1;
+  return c;
+}
 function woodCanvas(w: number, h: number, base: string, dark: string, light: string, fibres = 120, wave = 6) {
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   const g = c.getContext('2d')!;
@@ -123,9 +149,12 @@ function roundedBox(size: number, r: number, seg = 5) {
 
 /* ---------------- dice (tawla and ludo) ---------------- */
 const dieMats = new Map<string, THREE.MeshPhysicalMaterial>();
+/** The equipped dice skin (null: the classic ivory / white dice). */
+let diceLook: DiceLook | null = null, diceKey = 'classic';
+export function setDiceLook(id: string) { diceLook = DICE_LOOKS[id] ?? null; diceKey = diceLook ? id : 'classic'; }
 const PIPS: Record<number, [number, number][]> = { 1: [[1, 1]], 2: [[0, 0], [2, 2]], 3: [[0, 0], [1, 1], [2, 2]], 4: [[0, 0], [2, 0], [0, 2], [2, 2]], 5: [[0, 0], [2, 0], [1, 1], [0, 2], [2, 2]], 6: [[0, 0], [2, 0], [0, 1], [2, 1], [0, 2], [2, 2]] };
 function dieFace(v: number, ivory: boolean) {
-  const key = v + (ivory ? 'i' : 'w');
+  const key = v + (ivory ? 'i' : 'w') + diceKey, look = diceLook;
   let m = dieMats.get(key);
   if (!m) {
     const draw = (bump: boolean) => {
@@ -134,7 +163,7 @@ function dieFace(v: number, ivory: boolean) {
       if (bump) { g.fillStyle = '#fff'; g.fillRect(0, 0, 256, 256); }
       else {
         const bg = g.createRadialGradient(128, 128, 30, 128, 128, 190);
-        bg.addColorStop(0, ivory ? '#f6eedb' : '#fbfaf6'); bg.addColorStop(1, ivory ? '#e6d8b8' : '#ebe8e0');
+        bg.addColorStop(0, look ? look.bg[0] : ivory ? '#f6eedb' : '#fbfaf6'); bg.addColorStop(1, look ? look.bg[1] : ivory ? '#e6d8b8' : '#ebe8e0');
         g.fillStyle = bg; g.fillRect(0, 0, 256, 256);
       }
       for (const [x, y] of PIPS[v]) {
@@ -142,7 +171,7 @@ function dieFace(v: number, ivory: boolean) {
         if (bump) { const gr = g.createRadialGradient(cx, cy, 0, cx, cy, r); gr.addColorStop(0, '#000'); gr.addColorStop(0.8, '#222'); gr.addColorStop(1, '#fff'); g.fillStyle = gr; }
         else {
           const gr = g.createRadialGradient(cx - r * 0.3, cy - r * 0.3, 1, cx, cy, r);
-          const col = v === 1 && !ivory ? ['#d23a2a', '#7a120c'] : ['#3a2a20', '#0b0705'];
+          const col = look ? (v === 1 && look.one ? look.one : look.pip) : v === 1 && !ivory ? ['#d23a2a', '#7a120c'] : ['#3a2a20', '#0b0705'];
           gr.addColorStop(0, col[0]); gr.addColorStop(1, col[1]); g.fillStyle = gr;
         }
         g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
@@ -150,7 +179,7 @@ function dieFace(v: number, ivory: boolean) {
       return c;
     };
     const map = texOf(draw(false)), bumpMap = new THREE.CanvasTexture(draw(true));
-    m = phys({ map, bumpMap, bumpScale: 2.5, roughness: 0.28, clearcoat: 0.8, clearcoatRoughness: 0.18, envMapIntensity: 0.7 });
+    m = phys({ map, bumpMap, bumpScale: 2.5, roughness: look?.rough ?? 0.28, metalness: look?.metal ?? 0, clearcoat: 0.8, clearcoatRoughness: 0.18, envMapIntensity: look?.metal ? 1.2 : 0.7 });
     dieMats.set(key, m);
   }
   return m;
@@ -267,11 +296,12 @@ export class ChessBoard implements BoardRenderer {
   private bySq = new Map<number, THREE.Object3D>();
   private dropTo: { sq: number; at: number } | null = null;
 
-  constructor() {
+  constructor(look: ChessLook = CHESS_LOOKS.chess_wood) {
     const B = SQ * 8, F = 0.55;   // playing area and frame width
+    const [fr0, fr1, fr2] = look.frame;
     // the frame: rosewood with a boxwood stringing line and engraved coordinates
     const frameTex = (() => {
-      const px = 1024, c = woodCanvas(px, px, '#4a2116', '#2a0f08', '#6e3424', 160, 4), g = c.getContext('2d')!;
+      const px = 1024, c = woodCanvas(px, px, fr0, fr1, fr2, 160, 4), g = c.getContext('2d')!;
       const k = px / (B + 2 * F), inner = F * k, sq = SQ * k;
       g.strokeStyle = '#e8cf9c'; g.lineWidth = 4; g.strokeRect(inner - 9, inner - 9, B * k + 18, B * k + 18);
       g.strokeStyle = '#1a0a05'; g.lineWidth = 2; g.strokeRect(inner - 15, inner - 15, B * k + 30, B * k + 30);
@@ -282,12 +312,15 @@ export class ChessBoard implements BoardRenderer {
       }
       return texOf(c);
     })();
-    const side = phys({ map: woodTex('#4a2116', '#2a0f08', '#6e3424', [2, 1]), roughness: 0.4, clearcoat: 0.6, envMapIntensity: 0.6 });
+    const side = phys({ map: woodTex(fr0, fr1, fr2, [2, 1]), roughness: 0.4, clearcoat: 0.6, envMapIntensity: 0.6 });
     const frameTop = phys({ map: frameTex, roughness: 0.4, clearcoat: 0.7, clearcoatRoughness: 0.3, envMapIntensity: 0.35 });
     const frame = new THREE.Mesh(new THREE.BoxGeometry(B + 2 * F, 0.3, B + 2 * F), [side, side, frameTop, side, side, side]);
     frame.position.y = 0.15;
     // inlaid squares: maple and walnut veneers, each with its own piece of grain
-    const lightW = woodCanvas(512, 512, '#e7cf9f', '#c7a46b', '#f6e6c4', 90, 5), darkW = woodCanvas(512, 512, '#5a321b', '#331a0c', '#7a4a2a', 110, 5);
+    // the squares: wood veneers, plain tournament colours, or polished marble
+    const sq = (w: [string, string, string], dark: boolean) => look.kind === 'wood' ? woodCanvas(512, 512, w[0], w[1], w[2], dark ? 110 : 90, 5)
+      : look.kind === 'marble' ? marbleCanvas(512, w[0], w[2], dark ? 'rgba(255,255,255,.28)' : 'rgba(90,90,100,.32)') : flatCanvas(512, w[0], w[1]);
+    const lightW = sq(look.light, false), darkW = sq(look.dark, true);
     const tex = hiTex(1024, 1024, (g, w) => {
       const c = w / 8;
       for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) {
@@ -412,16 +445,16 @@ export class TawlaBoard implements BoardRenderer {
   private dropTo: { p: number; at: number } | null = null;
   private clock = 0;
 
-  constructor() {
-    const sideMat = phys({ map: woodTex('#3a1a10', '#1e0b05', '#58291a', [3, 1]), roughness: 0.4, clearcoat: 0.7, envMapIntensity: 0.6 });
+  constructor(look: TawlaLook = TAWLA_LOOKS.tawla_walnut) {
+    const sideMat = phys({ map: woodTex(look.side[0], look.side[1], look.side[2], [3, 1]), roughness: 0.4, clearcoat: 0.7, envMapIntensity: 0.6 });
     const box = new THREE.Mesh(new THREE.BoxGeometry(TW, FIELD_Y, TD), sideMat);
     box.position.y = FIELD_Y / 2;
     // the playing fields: olive-wood veneer with inlaid points of walnut and red-stained wood
-    const fieldW = woodCanvas(1024, 1024, '#d9bf8c', '#b8965d', '#ecd7aa', 140, 5);
-    const darkW = woodCanvas(512, 512, '#3d2414', '#20110a', '#5a3820', 90, 4), redW = woodCanvas(512, 512, '#7a2418', '#4a0f0a', '#9a3a26', 90, 4);
+    const fieldW = woodCanvas(1024, 1024, look.field[0], look.field[1], look.field[2], 140, 5);
+    const darkW = woodCanvas(512, 512, look.pointA[0], look.pointA[1], look.pointA[2], 90, 4), redW = woodCanvas(512, 512, look.pointB[0], look.pointB[1], look.pointB[2], 90, 4);
     const tex = hiTex(1392, 936, (g, w, h) => {
       const sx = w / TW, x0 = (x: number) => (x + TW / 2) * sx;
-      g.fillStyle = '#2a120a'; g.fillRect(0, 0, w, h);
+      g.fillStyle = look.side[1]; g.fillRect(0, 0, w, h);
       const fieldL = x0(-TW / 2 + EDGE), barL = x0(this.barX() - BARW / 2), barR = x0(this.barX() + BARW / 2), fieldR = x0(TW / 2 - EDGE - TRAY);
       g.drawImage(fieldW, 0, 0, 1024, 1024, fieldL, EDGE * sx, barL - fieldL, h - 2 * EDGE * sx);
       g.drawImage(fieldW, 0, 0, 1024, 1024, barR, EDGE * sx, fieldR - barR, h - 2 * EDGE * sx);
@@ -433,11 +466,11 @@ export class TawlaBoard implements BoardRenderer {
           g.save(); g.beginPath(); g.moveTo(cx - half, yb); g.lineTo(cx + half, yb); g.lineTo(cx, yt); g.closePath(); g.clip();
           g.drawImage(src, Math.random() * 200, Math.random() * 200, 300, 300, cx - half, Math.min(yb, yt), half * 2, len);
           g.restore();
-          g.strokeStyle = '#efe0bd'; g.lineWidth = 2; g.beginPath(); g.moveTo(cx - half, yb); g.lineTo(cx, yt); g.lineTo(cx + half, yb); g.stroke();
+          g.strokeStyle = look.line; g.lineWidth = 2; g.beginPath(); g.moveTo(cx - half, yb); g.lineTo(cx, yt); g.lineTo(cx + half, yb); g.stroke();
         }
       }
       // the bearing-off tray is lined with dark felt
-      g.fillStyle = '#1f3a2a'; g.fillRect(x0(TW / 2 - EDGE - TRAY + 0.05), EDGE * sx, (TRAY - 0.1) * sx, h - 2 * EDGE * sx);
+      g.fillStyle = look.tray; g.fillRect(x0(TW / 2 - EDGE - TRAY + 0.05), EDGE * sx, (TRAY - 0.1) * sx, h - 2 * EDGE * sx);
     });
     const top = new THREE.Mesh(new THREE.PlaneGeometry(TW, TD), phys({ map: tex, roughness: 0.6, clearcoat: 0.3, clearcoatRoughness: 0.6, envMapIntensity: 0.25, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.1 }));   // satin lacquer: a sheen, no hot spot
     top.rotation.x = -Math.PI / 2; top.position.y = FIELD_Y; top.receiveShadow = true;
@@ -607,6 +640,9 @@ const BLOB_MAT = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: fa
 }) });
 
 export const LUDO_COLORS = ['#c8402f', '#2f8a4a', '#e0b030', '#2f6fb8'];
+/** The colours of the ludo board in use (they change with the board skin); labels use them too. */
+let ludoPalette = LUDO_COLORS;
+export const ludoColor = (i: number) => ludoPalette[i] ?? LUDO_COLORS[i];
 const CELL = 0.7;
 /** The 52 track squares as grid cells (column, row), clockwise from red's start. */
 const PATH: [number, number][] = (() => {
@@ -648,37 +684,39 @@ export class LudoBoard implements BoardRenderer {
   private top!: THREE.Mesh;
   // classic turned pawn: wide foot, slim waist, collar and a round head
   private pawnGeo = [turned([[0, 0], [0.25, 0], [0.265, 0.02], [0.26, 0.05], [0.2, 0.09], [0.14, 0.16], [0.105, 0.26], [0.1, 0.32], [0.16, 0.34], [0.165, 0.365], [0.1, 0.38], [0.09, 0.4], [0.13, 0.43], [0.15, 0.49], [0.13, 0.56], [0.07, 0.6], [0, 0.61]], 36, 5)];
-  private pawnMats = LUDO_COLORS.map(c => phys({ color: c, roughness: 0.22, clearcoat: 1, clearcoatRoughness: 0.08, envMapIntensity: 1 }));
+  private pawnMats: THREE.MeshPhysicalMaterial[];
 
-  constructor() {
+  constructor(look: LudoLook = LUDO_LOOKS.ludo_classic) {
+    const COLS = look.colors; ludoPalette = COLS;
+    this.pawnMats = COLS.map(c => phys({ color: c, roughness: 0.22, clearcoat: 1, clearcoatRoughness: 0.08, envMapIntensity: 1 }));
     const size = CELL * 15;
     const tex = hiTex(1050, 1050, (g, w) => {
       const c = w / 15;
-      g.fillStyle = '#f6efdf'; g.fillRect(0, 0, w, w);
+      g.fillStyle = look.base; g.fillRect(0, 0, w, w);
       // printed card laid on wood: a faint paper fibre texture under the print
       g.globalAlpha = 0.05; for (let i = 0; i < 4000; i++) { g.fillStyle = Math.random() < 0.5 ? '#000' : '#fff'; g.fillRect(Math.random() * w, Math.random() * w, Math.random() * 6, 1); } g.globalAlpha = 1;
       // bases
       BASE_ORIGIN.forEach(([bx, by], i) => {
-        g.fillStyle = LUDO_COLORS[i]; g.fillRect(bx * c, by * c, 6 * c, 6 * c);
-        g.fillStyle = '#f6efdf'; g.fillRect((bx + 1) * c, (by + 1) * c, 4 * c, 4 * c);
-        for (const [dx, dy] of [[1.5, 1.5], [3.5, 1.5], [1.5, 3.5], [3.5, 3.5]]) { g.fillStyle = LUDO_COLORS[i]; g.beginPath(); g.arc((bx + dx + 0.5) * c, (by + dy + 0.5) * c, c * 0.42, 0, Math.PI * 2); g.fill(); }
+        g.fillStyle = COLS[i]; g.fillRect(bx * c, by * c, 6 * c, 6 * c);
+        g.fillStyle = look.base; g.fillRect((bx + 1) * c, (by + 1) * c, 4 * c, 4 * c);
+        for (const [dx, dy] of [[1.5, 1.5], [3.5, 1.5], [1.5, 3.5], [3.5, 3.5]]) { g.fillStyle = COLS[i]; g.beginPath(); g.arc((bx + dx + 0.5) * c, (by + dy + 0.5) * c, c * 0.42, 0, Math.PI * 2); g.fill(); }
       });
       // track cells
-      g.strokeStyle = '#6b5a45'; g.lineWidth = 2;
+      g.strokeStyle = look.line; g.lineWidth = 2;
       PATH.forEach(([x, y], i) => {
         const start = COLOR_OFFSET.indexOf(i);
-        g.fillStyle = start >= 0 ? LUDO_COLORS[start] : '#fbf7ee';
+        g.fillStyle = start >= 0 ? COLS[start] : look.track;
         g.fillRect(x * c, y * c, c, c); g.strokeRect(x * c, y * c, c, c);
-        if (STARS.has(i)) star(g, (x + 0.5) * c, (y + 0.5) * c, c * 0.32);
+        if (STARS.has(i)) star(g, (x + 0.5) * c, (y + 0.5) * c, c * 0.32, look.star);
       });
-      HOME_COL.forEach((cells, i) => cells.forEach(([x, y]) => { g.fillStyle = LUDO_COLORS[i]; g.fillRect(x * c, y * c, c, c); g.strokeRect(x * c, y * c, c, c); }));
+      HOME_COL.forEach((cells, i) => cells.forEach(([x, y]) => { g.fillStyle = COLS[i]; g.fillRect(x * c, y * c, c, c); g.strokeRect(x * c, y * c, c, c); }));
       // centre home triangles
       const m = 7.5 * c;
       [[[6, 6], [6, 9]], [[6, 6], [9, 6]], [[9, 6], [9, 9]], [[6, 9], [9, 9]]].forEach(([[ax, ay], [bx2, by2]], i) => {
-        g.fillStyle = LUDO_COLORS[i]; g.beginPath(); g.moveTo(ax * c, ay * c); g.lineTo(bx2 * c, by2 * c); g.lineTo(m, m); g.fill();
+        g.fillStyle = COLS[i]; g.beginPath(); g.moveTo(ax * c, ay * c); g.lineTo(bx2 * c, by2 * c); g.lineTo(m, m); g.fill();
       });
     });
-    const walnut = phys({ map: woodTex('#4a2a17', '#26140a', '#6b4128', [2, 1]), roughness: 0.38, clearcoat: 0.8, clearcoatRoughness: 0.15, envMapIntensity: 0.6 });
+    const walnut = phys({ map: woodTex(look.frame[0], look.frame[1], look.frame[2], [2, 1]), roughness: 0.38, clearcoat: 0.8, clearcoatRoughness: 0.15, envMapIntensity: 0.6 });
     const board = new THREE.Mesh(new THREE.BoxGeometry(size + 0.6, 0.3, size + 0.6), walnut);
     board.position.y = 0.15;
     // base cups: shallow wooden rings each pawn sits in at home
@@ -782,8 +820,8 @@ export class LudoBoard implements BoardRenderer {
   }
 }
 
-function star(g: CanvasRenderingContext2D, x: number, y: number, r: number) {
-  g.fillStyle = '#b9a68a'; g.beginPath();
+function star(g: CanvasRenderingContext2D, x: number, y: number, r: number, color = '#b9a68a') {
+  g.fillStyle = color; g.beginPath();
   for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + (i * Math.PI) / 5, rr = i % 2 ? r * 0.45 : r; g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); }
   g.closePath(); g.fill();
 }
