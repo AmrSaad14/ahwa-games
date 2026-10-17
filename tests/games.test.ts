@@ -324,3 +324,26 @@ test('mahbousa: trapping the mother (last checker on its start) wins a double ga
   s.c[1][0] = 1; s.c[0][0] = 1; s.pinned[0] = 1;   // player 1 starts on point 0: its last checker there is trapped
   assert.deepEqual(V.winner(s), { winner: 0, points: 2, kind: 'mother' });
 });
+
+test('tawla: one checker can use both dice in a single move (5 and 2 → 7 points)', async () => {
+  const { defFor } = await import('../shared/games/defs');
+  for (const mode of ['tawla', 'mahbousa', 'tawla31', 'gulbahar'] as Mode[]) {
+    const def = defFor(mode);
+    let s = def.newGame(2, 0, Math.random) as never;
+    const seq = [4 / 6 + 0.01, 1 / 6 + 0.01];   // a 5 and a 2
+    const r = def.act(s, 0, { t: 'roll' }, () => seq.shift() ?? 0.5);
+    assert.ok(typeof r !== 'string'); s = r.s as never;
+    const v = def.view(s, 0) as { combos?: [number, number, number[]][]; steps: [number, number][] };
+    assert.ok(v.combos && v.combos.length > 0, 'combined moves are offered');
+    for (const [from, to, via] of v.combos!) {
+      assert.ok(!v.steps.some(x => x[0] === from && x[1] === to), 'a combined move is not also a single-die move');
+      const done = def.act(s, 0, { t: 'step', from, to, via }, Math.random);
+      assert.ok(typeof done !== 'string', `combined move ${from}→${to} via ${via} is legal`);
+      assert.equal(done.e?.from, from); assert.equal(done.e?.to, to);
+    }
+    // a made-up route is refused
+    const [from, to] = v.combos![0];
+    assert.equal(def.act(s, 0, { t: 'step', from, to, via: [5] }, Math.random), 'illegal_move');
+  }
+});
+

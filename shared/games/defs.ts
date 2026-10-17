@@ -10,7 +10,7 @@ export type BoardGameId = 'chess' | 'tawla' | 'ludo';
 export type BoardAction =
   | { t: 'move'; from: number; to: number; promo?: C.Promo }   // chess
   | { t: 'roll' }                                              // tawla, ludo
-  | { t: 'step'; from: number; to: number }                    // tawla (one die)
+  | { t: 'step'; from: number; to: number; via?: number[] }    // tawla: one die, or one checker on with both dice (via the points in between)
   | { t: 'pawn'; i: number }                                   // ludo
   | { t: 'pass' };                                             // forced pass with nothing to play
 
@@ -78,9 +78,40 @@ export const chessDef: GameDef<ChessGame> = {
 };
 
 /* ---------------- tawla ---------------- */
+type Hop = { from: number; to: number };
+/**
+ * Moves that carry one checker on with two or more dice in a row (a 5 and a 2 straight to the point 7 away),
+ * each stop on the way being a legal step. Doubles can chain up to four. Single-die moves are not repeated here.
+ */
+function combosOf<S extends { turn: number }>(s: S, next: (s: S) => Hop[], play: (s: S, f: number, t: number) => S | null, off: number) {
+  const single = new Set(next(s).map(x => x.from + ':' + x.to));
+  const out = new Map<string, [number, number, number[]]>();
+  const walk = (st: S, start: number, at: number, via: number[]) => {
+    if (via.length >= 3) return;
+    for (const x of next(st)) {
+      if (x.from !== at) continue;
+      const n = play(st, at, x.to);
+      if (!n || n.turn !== s.turn) continue;
+      const key = start + ':' + x.to;
+      if (via.length && !single.has(key) && !out.has(key)) out.set(key, [start, x.to, via]);
+      if (x.to !== off) walk(n, start, x.to, [...via, x.to]);
+    }
+  };
+  for (const f of new Set(next(s).map(x => x.from))) walk(s, f, f, []);
+  return [...out.values()];
+}
+/** The stops of a step (with its optional `via`), checked: plain numbers, at most three stops in between. */
+function hops(a: { from: number; to: number; via?: number[] }): number[] | null {
+  const via = Array.isArray(a.via) ? a.via : [];
+  if (via.length > 3 || via.some(x => !Number.isInteger(x))) return null;
+  return [a.from, ...via, a.to];
+}
+
 export interface TawlaView {
   pts: number[]; bar: [number, number]; off: [number, number]; turn: number; you: number;
   rolled: [number, number] | null; dice: number[]; steps: [number, number][]; pips: [number, number];
+  /** one checker moved on with two or more dice in one go: [from, to, the points it passes through] */
+  combos?: [number, number, number[]][];
   /** عادة, محبوسة, ٣١ or جلبهار */
   variant: 'aada' | V.TablesVariant;
   /** محبوسة: per point, whose lone checker is trapped underneath (-1: none) */
@@ -101,7 +132,9 @@ export const tawlaDef: GameDef<T.TawlaState> = {
       return { s: n, e: { t: 'roll', s: seat, dice: n.rolled! } };
     }
     if (a.t === 'step') {
-      const n = T.playStep(s, a.from, a.to);
+      const path = hops(a); if (!path) return 'illegal_move';
+      let n: T.TawlaState | null = s;
+      for (let i = 1; i < path.length && n; i++) n = n.turn === s.turn ? T.playStep(n, path[i - 1], path[i]) : null;
       if (!n) return 'illegal_move';
       const hit = n.bar[1 - seat] > s.bar[1 - seat];
       return { s: T.turnDone(n) && !T.winner(n) ? T.endTurn(n) : n, e: { t: 'step', s: seat, from: a.from, to: a.to, hit } };
@@ -122,6 +155,7 @@ export const tawlaDef: GameDef<T.TawlaState> = {
   view: (s, seat): TawlaView => ({
     pts: s.pts, bar: s.bar, off: s.off, turn: s.turn, you: seat, rolled: s.rolled, dice: s.dice,
     steps: seat === s.turn ? T.nextSteps(s).map(x => [x.from, x.to] as [number, number]) : [],
+    combos: seat === s.turn && s.rolled ? combosOf(s, T.nextSteps, T.playStep, T.OFF) : undefined,
     pips: [T.pipCount(s, 0), T.pipCount(s, 1)], variant: 'aada',
   }),
 };
@@ -140,9 +174,14 @@ function tablesDef(variant: V.TablesVariant): GameDef<V.TablesState> {
       }
       if (a.t === 'step') {
         if (!s.rolled) return 'must_roll';
-        const n = V.playStep(s, a.from, a.to);
+        const path = hops(a); if (!path) return 'illegal_move';
+        let n: V.TablesState | null = s, trapped = false;
+        for (let i = 1; i < path.length && n; i++) {
+          const before: V.TablesState = n, to = path[i];
+          n = before.turn === s.turn ? V.playStep(before, path[i - 1], to) : null;
+          if (n && variant === 'mahbousa' && to !== V.OFF && n.pinned[to] === 1 - seat && before.pinned[to] !== 1 - seat) trapped = true;
+        }
         if (!n) return 'illegal_move';
-        const trapped = variant === 'mahbousa' && a.to !== V.OFF && n.pinned[a.to] === 1 - seat && s.pinned[a.to] !== 1 - seat;
         return { s: V.turnDone(n) && !V.winner(n) ? V.endTurn(n) : n, e: { t: 'step', s: seat, from: a.from, to: a.to, hit: trapped } };
       }
       if (a.t === 'pass') {
@@ -167,6 +206,7 @@ function tablesDef(variant: V.TablesVariant): GameDef<V.TablesState> {
       return {
         pts, bar: [0, 0], off: s.off, turn: s.turn, you: seat, rolled: s.rolled, dice: s.dice,
         steps: seat === s.turn ? V.nextSteps(s).map(x => [x.from, x.to] as [number, number]) : [],
+        combos: seat === s.turn && s.rolled ? combosOf(s, V.nextSteps, V.playStep, V.OFF) : undefined,
         pips: [V.pipCount(s, 0), V.pipCount(s, 1)], variant,
         pinned: variant === 'mahbousa' ? s.pinned : undefined,
         later: s.later.length ? s.later : undefined, carry: s.carry !== null ? true : undefined,

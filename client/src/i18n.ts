@@ -70,6 +70,7 @@ const en = {
   rulesListTawla: [
     '## All tawla games',
     'Two players, 15 checkers each, two dice. Doubles are played four times. If you can use both dice you must; if only one, the larger.',
+    'To move one checker with both dice in one go (a 5 and a 2 → 7 points), tap it and pick the farther point; it stops on the point in between first.',
     'Bear off only when all 15 are in your home quarter. A win is 1 point, or 2 (مارس) if the loser hasn\'t borne off any. A set is to 3 points (5 or 7 in rooms).',
     '## عادة (regular)',
     'The usual backgammon start. Landing on a lone opposing checker sends it to the bar, and it must come back in before anything else moves. Two or more checkers close a point.',
@@ -210,6 +211,7 @@ const ar: Dict = {
   rulesListTawla: [
     '## كل أنواع الطاولة',
     'لاعبين، لكل واحد ١٥ قطعة وزهرين. الدوبيش يتلعب أربع مرات. لو تقدر تلعب الزهرين لازم تلعبهم، ولو واحد بس يبقى الأكبر.',
+    'عشان تحرك قطعة واحدة بالزهرين مرة واحدة (٥ و٢ ← ٧ خانات)، اضغط عليها واختار الخانة الأبعد؛ هي بتعدي على الخانة اللي في النص الأول.',
     'التقفيل بس لما الـ١٥ قطعة يبقوا في بيتك. الكسبان ياخد نقطة، أو نقطتين (مارس) لو الخسران ما قفّلش ولا قطعة. الشوط لحد ٣ (أو ٥ أو ٧ في الغرف).',
     '## عادة',
     'رصّة الطاولة المعروفة. لو نزلت على قطعة لوحدها للخصم تروح البار، ولازم تدخل الأول قبل أي حركة. قطعتين أو أكتر يقفلوا البيت.',

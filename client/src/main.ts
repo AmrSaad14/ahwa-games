@@ -190,6 +190,16 @@ function applyView(v: AnyView) {
 }
 
 /* ---------------- chess, tawla, ludo ---------------- */
+/** Tawla: every place a checker on `from` can reach this turn: one die, or both dice on the same checker. */
+function tawlaDests(tw: NonNullable<BoardView['tawla']>, from: number): number[] {
+  return [...new Set([...tw.steps.filter(x => x[0] === from).map(x => x[1]), ...(tw.combos ?? []).filter(x => x[0] === from).map(x => x[1])])];
+}
+/** Tawla: the move from → to, as one die or as a combined move through the points in between. */
+function tawlaMove(tw: NonNullable<BoardView['tawla']>, from: number, to: number): BoardAction | null {
+  if (tw.steps.some(x => x[0] === from && x[1] === to)) return { t: 'step', from, to };
+  const c = (tw.combos ?? []).find(x => x[0] === from && x[1] === to);
+  return c ? { t: 'step', from, to, via: c[2] } : null;
+}
 function boardFroms(v: BoardView): number[] {
   if (v.chess) return [...new Set(v.chess.legal.map(m => m[0]))];
   if (v.tawla) return [...new Set(v.tawla.steps.map(m => m[0]))];
@@ -197,7 +207,7 @@ function boardFroms(v: BoardView): number[] {
 }
 function boardUi(v: BoardView): BoardUi {
   if (v.chess) return { sel: S.boardSel, targets: S.boardSel === null ? [] : v.chess.legal.filter(m => m[0] === S.boardSel).map(m => m[1]) };
-  if (v.tawla) return { sel: S.boardSel, targets: S.boardSel === null ? [] : v.tawla.steps.filter(m => m[0] === S.boardSel).map(m => m[1]), movable: S.boardSel === null ? boardFroms(v) : [] };
+  if (v.tawla) return { sel: S.boardSel, targets: S.boardSel === null ? [] : tawlaDests(v.tawla, S.boardSel), movable: S.boardSel === null ? boardFroms(v) : [] };
   if (v.ludo) return { sel: null, targets: v.ludo.movable };
   return { sel: null, targets: [] };
 }
@@ -246,11 +256,11 @@ function handlePick(p: Pick) {
     const tw = v.tawla;
     if (!tw.rolled) return;
     if (S.boardSel !== null) {
-      const st = tw.steps.find(x => x[0] === S.boardSel && x[1] === p.p);
-      if (st) { act({ t: 'step', from: st[0], to: st[1] }); S.boardSel = null; return render(); }
+      const mv = tawlaMove(tw, S.boardSel, p.p);
+      if (mv) { act(mv); S.boardSel = null; return render(); }
     }
-    const dests = [...new Set(tw.steps.filter(x => x[0] === p.p).map(x => x[1]))];
-    if (dests.length === 1 && S.boardSel !== p.p) { act({ t: 'step', from: p.p, to: dests[0] }); S.boardSel = null; return render(); }  // only one place to go
+    const dests = tawlaDests(tw, p.p);
+    if (dests.length === 1 && S.boardSel !== p.p) { const mv = tawlaMove(tw, p.p, dests[0]); if (mv) act(mv); S.boardSel = null; return render(); }  // only one place to go
     S.boardSel = dests.length && S.boardSel !== p.p ? p.p : null;
     return render();
   }
@@ -284,8 +294,8 @@ scene.onDrop = (from, to) => {
       if (mv) { S.boardSel = null; act({ t: 'move', from: mv[0], to: mv[1] }); done = true; }
     }
     if (v.tawla && from.kind === 'point' && to.kind === 'point') {
-      const st = v.tawla.steps.find(x => x[0] === from.p && x[1] === to.p);
-      if (st) { S.boardSel = null; act({ t: 'step', from: st[0], to: st[1] }); done = true; }
+      const mv = tawlaMove(v.tawla, from.p, to.p);
+      if (mv) { S.boardSel = null; act(mv); done = true; }
     }
   }
   if (!done) render();   // stays picked up, with its targets showing
@@ -1009,8 +1019,8 @@ function boardScreen(v: BoardView): HTMLElement[] {
         if (v.tawla.carry) status = t('gulCarry') + ' · ' + status;
         else if (v.tawla.later?.length || (v.tawla.rolled[0] === v.tawla.rolled[1] && v.tawla.dice[0] !== v.tawla.rolled[0])) status = t('gulRun', { n: v.tawla.dice[0] ?? v.tawla.rolled[0] }) + ' · ' + status;
         const sel = S.boardSel;
-        if (sel !== null && v.tawla.steps.some(x => x[0] === sel && x[1] === OFF))
-          action = btn(t('bearOff'), () => { act({ t: 'step', from: sel, to: OFF }); S.boardSel = null; render(); }, 'btn', { id: 'bearoff-btn' });
+        const off = sel !== null ? tawlaMove(v.tawla, sel, OFF) : null;
+        if (off) action = btn(t('bearOff'), () => { act(off); S.boardSel = null; render(); }, 'btn', { id: 'bearoff-btn' });
       }
     } else if (v.ludo) {
       if (v.ludo.die === null) { status = t('rollDice'); action = btn(t('roll'), () => act({ t: 'roll' }), 'btn big roll', { id: 'roll-btn' }); }
@@ -1306,6 +1316,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !Capacitor
 // recording hooks: ?rec for the how-to GIFs, ?promo for the promo video (the computer plays your seat)
 if (/[?&](rec|promo)\b/.test(location.search)) (window as unknown as Record<string, unknown>).__ahwa = {
   view: () => S.view, spot: (p: Pick) => scene.spotScreen(p), ghost: (e: End) => scene.ghostScreen(e),
+  pick: (p: Pick) => handlePick(p), targets: () => (S.view && S.view.game !== 'domino' ? boardUi(S.view as BoardView).targets : []),
   practice: (mode: Mode) => { startPractice(mode); const seat = S.practice?.table.seats[0]; if (seat) seat.away = true; S.practice?.table.refresh(); },
 };
 // the game is played in landscape: lock it where the browser allows (installed app, fullscreen)

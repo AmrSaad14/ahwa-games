@@ -246,7 +246,7 @@ export class Hub {
           const n = (x: unknown) => Number(x);
           const clean: BoardAction | null =
             a.t === 'move' ? { t: 'move', from: n(a.from), to: n(a.to), promo: (['q', 'r', 'b', 'n'] as const).find(p => p === a.promo) } :
-            a.t === 'step' ? { t: 'step', from: n(a.from), to: n(a.to) } :
+            a.t === 'step' ? { t: 'step', from: n(a.from), to: n(a.to), via: Array.isArray(a.via) ? a.via.slice(0, 4).map(n) : undefined } :
             a.t === 'pawn' ? { t: 'pawn', i: n(a.i) } : a.t === 'roll' ? { t: 'roll' } : a.t === 'pass' ? { t: 'pass' } : null;
           e = clean ? table.act(uid, clean) : 'bad_action';
         }
