@@ -7,11 +7,12 @@ import fs from 'node:fs';
 const admobAndroid = process.env.ADMOB_APP_ID_ANDROID || 'ca-app-pub-3940256099942544~3347511713';
 const admobIos = process.env.ADMOB_APP_ID_IOS || 'ca-app-pub-3940256099942544~1458002511';
 
-// Android SDK 35: Google Play requires targeting it, and the billing library (Play Billing 8) compiles against it
+// Android SDK 35: Google Play requires targeting it, and the billing library compiles against it (and needs Android 6.0+)
 const vars = 'android/variables.gradle';
 if (fs.existsSync(vars)) {
   let g = fs.readFileSync(vars, 'utf8');
-  g = g.replace(/compileSdkVersion\s*=\s*\d+/, 'compileSdkVersion = 35').replace(/targetSdkVersion\s*=\s*\d+/, 'targetSdkVersion = 35');
+  g = g.replace(/compileSdkVersion\s*=\s*\d+/, 'compileSdkVersion = 35').replace(/targetSdkVersion\s*=\s*\d+/, 'targetSdkVersion = 35')
+    .replace(/minSdkVersion\s*=\s*\d+/, 'minSdkVersion = 23');   // Android 6.0+: what Google Play Billing needs
   fs.writeFileSync(vars, g);
   const props = 'android/gradle.properties';
   if (fs.existsSync(props) && !fs.readFileSync(props, 'utf8').includes('suppressUnsupportedCompileSdk')) {
