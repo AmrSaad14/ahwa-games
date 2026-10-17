@@ -15,7 +15,7 @@ let port = 0;
 before(async () => {
   app = createServer({ ...config, port: 0, host: '127.0.0.1', dbPath: ':memory:', staticDir: '/nonexistent',
     turnMs: 3000, botFillMs: 300, nextRoundMs: 30, botDelay: [5, 10], lobbyAfterMatchMs: 200, msgsPer5s: 10000, chessClockMs: 15_000, autoMoveMs: 30,
-    login: { ...config.login, sms: 'console' } } as typeof config);
+    login: { ...config.login, sms: 'console' }, billing: { ...config.billing, testMode: true, serviceAccount: '' } } as typeof config);
   port = await app.listen();
 });
 after(async () => { await app.close(); });
@@ -401,4 +401,35 @@ test('rewarded ads: AdMob\'s signed callback is checked', async () => {
   assert.equal(ok?.get('user_id'), 'u1');
   assert.equal(ok?.get('custom_data'), 'tk');
   assert.equal(await verifySsv(`${msg.replace('u1', 'u2')}&signature=${sig}&key_id=3335741209`, publicKey), null, 'a changed callback is refused');
+});
+
+test('shop: a coin pack is credited once per purchase, the ad-free plan sets a date', async () => {
+  const a = await new Client().open(), b = await new Client().open();
+  const before = a.last('welcome')!.user.coins;
+  a.send({ t: 'buy', product: 'coins_50k', token: 'test:order-1' });
+  await a.until(() => !!a.last('bought'));
+  assert.equal(a.last('bought')!.coins, 50_000);
+  await a.until(() => a.msgs.some(m => m.t === 'user' && m.user.coins === before + 50_000));
+  // the app may ask again (it retries until it hears back): never credited twice
+  a.msgs = [];
+  a.send({ t: 'buy', product: 'coins_50k', token: 'test:order-1' });
+  await a.until(() => !!a.last('bought'));
+  assert.equal(a.last('bought')!.coins, 0);
+  // someone else can't claim the same purchase
+  b.send({ t: 'buy', product: 'coins_50k', token: 'test:order-1' });
+  await b.until(() => !!b.last('buyFailed'));
+  assert.equal(b.last('buyFailed')!.code, 'wrong_account');
+  // ad-free for a month
+  a.send({ t: 'buy', product: 'no_ads_monthly', token: 'test:sub-1' });
+  await a.until(() => (a.last('bought')?.adFreeUntil ?? 0) > Date.now() + 29 * 86_400_000);
+  // unknown products and unverifiable tokens are refused
+  b.msgs = [];
+  b.send({ t: 'buy', product: 'coins_free', token: 'test:x' });
+  await b.until(() => !!b.last('buyFailed'));
+  assert.equal(b.last('buyFailed')!.code, 'bad_product');
+  b.msgs = [];
+  b.send({ t: 'buy', product: 'coins_1m', token: 'real-looking-token' });
+  await b.until(() => !!b.last('buyFailed'));
+  assert.equal(b.last('buyFailed')!.code, 'purchases_off');
+  a.ws.close(); b.ws.close();
 });

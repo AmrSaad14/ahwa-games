@@ -1,5 +1,5 @@
-// Google AdMob in the phone apps: a rewarded video that pays coins, and an occasional full-screen ad
-// between matches (never during play). The website shows no ads.
+// Google AdMob in the phone apps: a rewarded video that pays coins, and a full-screen ad after every
+// finished game (never during play; none on the ad-free plan). The website shows no ads.
 import { Capacitor } from '@capacitor/core';
 import { AdMob, AdmobConsentStatus, RewardAdPluginEvents } from '@capacitor-community/admob';
 
@@ -19,7 +19,7 @@ const units = () => {
 const isTest = (id: string) => id.startsWith('ca-app-pub-3940256099942544/');
 
 let ready: Promise<boolean> | null = null;
-let finished = 0, lastShown = 0;
+let lastShown = 0;
 
 export const adsSupported = () => Capacitor.isNativePlatform();
 
@@ -55,11 +55,14 @@ export async function showRewarded(userId: string, ticket: string): Promise<bool
   finally { h.remove(); }
 }
 
-/** After a match ends: every third finished match, at most once every four minutes, a full-screen ad. */
-export async function afterMatch(): Promise<void> {
-  if (!adsSupported()) return;
-  finished++;
-  if (finished % 3 !== 0 || Date.now() - lastShown < 4 * 60_000) return;
+/**
+ * After every finished game: a full-screen ad (video when AdMob has one; Google decides the length, usually
+ * 15-30 s, and lets players skip some of them after 5 s). Never during play, and never for players on the
+ * ad-free plan. Resolves when the ad is closed (or straight away if there is none).
+ */
+export async function afterMatch(adFree = false): Promise<void> {
+  if (!adsSupported() || adFree) return;
+  if (Date.now() - lastShown < 20_000) return;   // two games ending back to back: one ad is enough
   if (!(await initAds())) return;
   const id = units().interstitial;
   try {

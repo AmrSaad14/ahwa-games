@@ -134,6 +134,7 @@ export interface PublicUser {
   phone: string | null;   // signed-in mobile number, partly hidden
   google: string | null;  // signed-in Google account (its email)
   adsLeft: number;        // rewarded ads that still pay out today
+  adFreeUntil: number;    // ad-free plan paid until (ms since 1970); 0 = shows ads
   ratings: Partial<Record<GameId, { rating: number; games: number; wins: number }>>;
 }
 
@@ -165,6 +166,8 @@ export type C2S =
   | { t: 'coins' }
   | { t: 'adStart' }
   | { t: 'adWatched'; ticket: string }
+  /** A Google Play purchase to check and credit: a coin pack or the ad-free plan. */
+  | { t: 'buy'; product: string; token: string }
   | { t: 'gift'; to: number; k: GiftKind }
   | { t: 'voice'; on: boolean }
   | { t: 'rtc'; to: number; data: RtcSignal }
@@ -185,6 +188,9 @@ export type S2C =
   | { t: 'coins'; rows: CoinRow[] }
   | { t: 'adTicket'; ticket: string; ssv: boolean }
   | { t: 'adReward'; coins: number }
+  /** A purchase was checked with the store and credited (or was already credited earlier). */
+  | { t: 'bought'; product: string; token: string; coins: number; adFreeUntil: number }
+  | { t: 'buyFailed'; product: string; token: string; code: string }
   | { t: 'payout'; kind: string; delta: number; fee: number; stake: number }
   | { t: 'table'; view: AnyView }
   | { t: 'left' }

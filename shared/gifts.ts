@@ -41,3 +41,18 @@ export function shortCoins(n: number) {
   if (a >= 1_000) return sign + +(a / 1_000).toFixed(a % 1_000 && a < 10_000 ? 1 : 0) + 'K';
   return sign + a;
 }
+
+/* ---------------- the shop: coin packs and the ad-free plan ----------------
+ * Sold through Google Play Billing (App Store later). The product IDs must match the ones created in the
+ * Play Console; the EGP prices here are only shown when the store can't be reached (the store's own,
+ * localized price is shown otherwise). Coins can't be turned back into money. */
+export interface CoinPack { id: string; coins: number; egp: number }
+export const COIN_PACKS: CoinPack[] = [
+  { id: 'coins_50k', coins: 50_000, egp: 200 },
+  { id: 'coins_100k', coins: 100_000, egp: 379 },
+  { id: 'coins_500k', coins: 500_000, egp: 599 },
+  { id: 'coins_1m', coins: 1_000_000, egp: 899 },
+];
+/** Monthly subscription: no full-screen ads (the optional "watch an ad for coins" button stays). */
+export const NO_ADS = { id: 'no_ads_monthly', egp: 199, days: 30 };
+export const packById = (id: string) => COIN_PACKS.find(p => p.id === id);

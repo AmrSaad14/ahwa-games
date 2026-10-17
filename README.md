@@ -109,6 +109,28 @@ CLIENT_STUBS=1 npm run build && node tests/ui-smoke.mjs ./screenshots
 npm run build          # rebuild afterwards: CLIENT_STUBS swaps out three.js for the test
 ```
 
+## Shop: coin packs and the ad-free plan (Google Play Billing)
+
+| Product ID (Play Console) | Type | Price | Gives |
+|---|---|---|---|
+| `coins_50k` | In-app product (consumable) | 200 EGP | 50,000 coins |
+| `coins_100k` | In-app product (consumable) | 379 EGP | 100,000 coins |
+| `coins_500k` | In-app product (consumable) | 599 EGP | 500,000 coins |
+| `coins_1m` | In-app product (consumable) | 899 EGP | 1,000,000 coins |
+| `no_ads_monthly` | Subscription, monthly | 199 EGP | No full-screen ads after games |
+
+The app buys through Google Play (`cordova-plugin-purchase`, Play Billing 8) and sends each purchase to the
+server, which checks it with the Google Play Developer API before crediting it, once (`server/billing.ts`).
+To switch it on after the app is on Play:
+1. Create the five products above in Play Console → Monetize, with those IDs and prices.
+2. In Google Cloud, create a service account and a JSON key; in Play Console → Users and permissions, invite its
+   email with "View financial data" and "Manage orders and subscriptions".
+3. Put the JSON key in the server's `GOOGLE_PLAY_SERVICE_ACCOUNT` setting (Render → Environment).
+Until then the shop says it isn't open yet; the demo uses a pretend checkout. Coins can't be cashed out.
+
+A full-screen ad (video when AdMob has one; AdMob decides the length, usually up to 30 seconds) shows after
+every finished game, never during play, and never on the ad-free plan.
+
 ## Free hosting for testing (Render)
 
 Until you rent a server, the game runs on Render's free plan, with no card needed. `render.yaml` describes everything:

@@ -1,7 +1,8 @@
+import { PlayBilling } from './billing';
 import crypto from 'node:crypto';
 import { GAMES, GameId, MODES, MODE_PLAYERS, Mode, defaultTarget, gameOf, targetOptions, teamOf } from '../shared/engine';
 import type { C2S, Emote, IceServer, S2C } from '../shared/protocol';
-import { ECONOMY, STAKES, giftByKind, isStake, winnings } from '../shared/gifts';
+import { ECONOMY, STAKES, giftByKind, isStake, winnings, NO_ADS } from '../shared/gifts';
 import { EMOTES } from '../shared/protocol';
 import { Table } from '../shared/table';
 import { BoardTable } from '../shared/boardtable';
@@ -31,6 +32,7 @@ export interface HubOptions {
   autoMoveMs?: number; chessClockMs?: number;
   phones?: PhoneCodes; google?: GoogleSignIn; defaultCountry?: string;
   adsSsv?: boolean;
+  billing?: PlayBilling;
 }
 
 const CODE_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
@@ -53,6 +55,7 @@ export class Hub {
   private emptySince = new Map<string, number>();
   private authLimiter = new Limiter(10, 60_000);
   private giftLimiter = new Limiter(1, 1200);
+  private buyLimiter = new Limiter(20, 60_000);
   private reportLimiter = new Limiter(10, 60 * 60_000);
   private ticker: ReturnType<typeof setInterval>;
 
@@ -173,6 +176,30 @@ export class Hub {
         if (this.opts.adsSsv) return;
         if (!this.adLimiter.allow(uid)) return err('slow_down');
         if (!this.rewardAd(uid, String(m.ticket || ''))) return err('ad_limit');
+        return;
+      }
+      case 'buy': {
+        // a Google Play purchase: check it with Google, then credit it exactly once
+        const product = String(m.product || ''), token = String(m.token || '');
+        const fail = (code: string) => s.conn.send({ t: 'buyFailed', product, token, code });
+        if (!this.buyLimiter.allow(uid)) return fail('slow_down');
+        const billing = this.opts.billing;
+        if (!billing?.enabled) return fail('purchases_off');
+        const seen = this.store.purchase(token);
+        if (seen && seen.product !== NO_ADS.id) {
+          // already credited (the app asks again until it hears back): just confirm
+          if (seen.user_id !== uid) return fail('wrong_account');
+          return s.conn.send({ t: 'bought', product, token, coins: 0, adFreeUntil: this.store.get(uid)?.ad_free_until ?? 0 });
+        }
+        billing.verify(uid, product, token).then(r => {
+          if (!r.ok) return fail(r.code);
+          let coins = 0;
+          if (product === NO_ADS.id) this.store.setAdFree(uid, token, product, r.orderId, r.until);
+          else if (this.store.creditPack(uid, token, product, r.orderId, r.coins)) coins = r.coins;
+          const now = this.byUser.get(uid);
+          now?.conn.send({ t: 'bought', product, token, coins, adFreeUntil: this.store.get(uid)?.ad_free_until ?? 0 });
+          this.sendUser(uid);
+        }).catch(e => { console.error('[billing]', (e as Error).message); fail('store_unreachable'); });
         return;
       }
       case 'create': {

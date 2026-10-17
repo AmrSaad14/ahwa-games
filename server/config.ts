@@ -25,6 +25,12 @@ export const config = {
   maxConnectionsPerIp: num(process.env.MAX_CONNECTIONS_PER_IP, 20),
   // Rewarded ads: ADS_SSV=1 once AdMob's server-side verification calls PUBLIC_URL/ads/ssv (README → Ads)
   adsSsv: process.env.ADS_SSV === '1',
+  // Shop: Google Play purchases are checked with Google (server/billing.ts)
+  billing: {
+    serviceAccount: process.env.GOOGLE_PLAY_SERVICE_ACCOUNT || '',
+    packageName: process.env.ANDROID_PACKAGE || 'com.ahwa.domino',
+    testMode: process.env.PURCHASES_TEST === '1',
+  },
   // Hosts that wipe the disk on restart (free plans): back the database up to a private GitHub repo (server/backup.ts)
   backup: {
     repo: process.env.BACKUP_GITHUB_REPO || '',

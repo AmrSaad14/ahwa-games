@@ -11,7 +11,7 @@ import { maskPhone } from './login';
 export interface UserRow {
   id: string; name: string; ch: number; email: string | null; pw: string | null;
   rating: number; games: number; wins: number; created: number; seen: number;
-  coins: number; gifts: number; bonus_day: string | null;
+  coins: number; gifts: number; bonus_day: string | null; ad_free_until: number;
   phone: string | null; google_sub: string | null; google_email: string | null;
 }
 
@@ -62,6 +62,10 @@ export class Store {
     if (!cols.has('bonus_day')) this.db.exec('ALTER TABLE users ADD COLUMN bonus_day TEXT');
     if (!cols.has('phone')) this.db.exec('ALTER TABLE users ADD COLUMN phone TEXT');
     if (!cols.has('google_sub')) this.db.exec('ALTER TABLE users ADD COLUMN google_sub TEXT; ALTER TABLE users ADD COLUMN google_email TEXT');
+    if (!cols.has('ad_free_until')) this.db.exec('ALTER TABLE users ADD COLUMN ad_free_until INTEGER NOT NULL DEFAULT 0');
+    // every store purchase, so the same purchase can never be credited twice
+    this.db.exec(`CREATE TABLE IF NOT EXISTS purchases (
+      token TEXT PRIMARY KEY, user_id TEXT NOT NULL, product TEXT NOT NULL, order_id TEXT, ts INTEGER NOT NULL, coins INTEGER NOT NULL DEFAULT 0, until INTEGER NOT NULL DEFAULT 0)`);
     this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_phone ON users(phone) WHERE phone IS NOT NULL; CREATE UNIQUE INDEX IF NOT EXISTS users_google ON users(google_sub) WHERE google_sub IS NOT NULL');
     // coins moved to stakes from 5K to 1M: older balances are scaled up once
     if (!this.db.prepare("SELECT v FROM meta WHERE k = 'coins_v2'").get()) {
@@ -221,6 +225,22 @@ export class Store {
 
   publicUser(u: UserRow): PublicUser { return { ...toPublic(u), ratings: this.ratingsOf(u.id), adsLeft: Math.max(0, ECONOMY.adsPerDay - this.adsToday(u.id)) }; }
 
+  /** A store purchase seen before (same purchase token), or undefined. */
+  purchase(token: string) { return this.db.prepare('SELECT * FROM purchases WHERE token = ?').get(token) as { user_id: string; product: string; coins: number; until: number } | undefined; }
+  /** Credit a coin pack once per purchase token. Returns false if that token was already used. */
+  creditPack(uid: string, token: string, product: string, orderId: string | null, coins: number): boolean {
+    if (this.purchase(token)) return false;
+    this.db.prepare('INSERT INTO purchases (token, user_id, product, order_id, ts, coins) VALUES (?, ?, ?, ?, ?, ?)').run(token, uid, product, orderId, Date.now(), coins);
+    this.addCoins(uid, coins); this.logCoins(uid, 'buy', coins);
+    return true;
+  }
+  /** The ad-free plan: paid until `until` (a renewal keeps the same token and moves the date on). */
+  setAdFree(uid: string, token: string, product: string, orderId: string | null, until: number) {
+    this.db.prepare(`INSERT INTO purchases (token, user_id, product, order_id, ts, until) VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(token) DO UPDATE SET until = excluded.until, order_id = excluded.order_id`).run(token, uid, product, orderId, Date.now(), until);
+    this.db.prepare('UPDATE users SET ad_free_until = ? WHERE id = ?').run(until, uid);
+  }
+
   /** Rows changed since the database was opened (to skip backups when nothing happened). */
   changes(): number { return Number((this.db.prepare('SELECT total_changes() AS n').get() as { n: number }).n); }
   /** A consistent copy of the whole database in one file (safe while the game keeps running). */
@@ -229,5 +249,5 @@ export class Store {
   close() { this.db.close(); }
 }
 
-export const toPublic = (u: UserRow): PublicUser => ({ id: u.id, name: u.name, ch: u.ch, email: u.email, rating: u.rating, games: u.games, wins: u.wins, coins: u.coins, gifts: u.gifts, ratings: {}, adsLeft: 0,
+export const toPublic = (u: UserRow): PublicUser => ({ id: u.id, name: u.name, ch: u.ch, email: u.email, rating: u.rating, games: u.games, wins: u.wins, coins: u.coins, gifts: u.gifts, ratings: {}, adsLeft: 0, adFreeUntil: u.ad_free_until ?? 0,
   phone: u.phone ? maskPhone(u.phone) : null, google: u.google_sub ? (u.google_email || 'Google') : null });

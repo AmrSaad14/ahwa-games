@@ -10,6 +10,7 @@ import { Hub } from './hub';
 import { GoogleSignIn, PhoneCodes, backToAppPage } from './login';
 import { verifySsv } from './ads';
 import { GitHubBackup } from './backup';
+import { PlayBilling } from './billing';
 import type { S2C } from '../shared/protocol';
 
 const MIME: Record<string, string> = {
@@ -22,7 +23,8 @@ export function createServer(opts = config) {
   const store = new Store(opts.dbPath);
   const tokens = new Tokens(store.secret(opts.secret));
   const phones = new PhoneCodes(opts.login), google = new GoogleSignIn(opts.login);
-  const hub = new Hub(store, tokens, { phones, google, defaultCountry: opts.login.defaultCountry, adsSsv: opts.adsSsv, turnMs: opts.turnMs, botFillMs: opts.botFillMs, nextRoundMs: opts.nextRoundMs, botDelay: opts.botDelay, lobbyAfterMatchMs: opts.lobbyAfterMatchMs, msgsPer5s: (opts as { msgsPer5s?: number }).msgsPer5s,
+  const billing = new PlayBilling(opts.billing);
+  const hub = new Hub(store, tokens, { phones, google, billing, defaultCountry: opts.login.defaultCountry, adsSsv: opts.adsSsv, turnMs: opts.turnMs, botFillMs: opts.botFillMs, nextRoundMs: opts.nextRoundMs, botDelay: opts.botDelay, lobbyAfterMatchMs: opts.lobbyAfterMatchMs, msgsPer5s: (opts as { msgsPer5s?: number }).msgsPer5s,
     stunUrls: opts.stunUrls, turnUrls: opts.turnUrls, turnSecret: opts.turnSecret, autoMoveMs: opts.autoMoveMs, chessClockMs: opts.chessClockMs });
   const staticRoot = path.resolve(opts.staticDir);
   const perIp = new Map<string, number>();

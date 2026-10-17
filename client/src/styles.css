@@ -426,3 +426,30 @@ body:has(#ui .hud) .toast { top: calc(3.75rem + var(--safe-t)); }
 .zoomctl .reset { visibility: hidden; }
 .zoomctl.zoomed .reset { visibility: visible; border-color: var(--brass-dim); color: var(--brass); }
 @media (orientation: landscape) and (max-height: 380px) { .zoomctl { gap: 0.375rem; } .zoomctl .iconbtn { width: 2.5rem; height: 2.5rem; } }
+
+/* the shop on the coins page */
+.packs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.5rem; }
+@media (max-width: 520px) { .packs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pack { position: relative; display: flex; flex-direction: column; align-items: center; gap: 0.125rem; padding: 0.75rem 0.5rem 0.625rem; min-height: 6rem;
+  border-radius: 0.875rem; border: 1px solid var(--line); background: linear-gradient(180deg, rgba(217,168,78,.12), rgba(217,168,78,.03)); color: var(--ink); cursor: pointer; font: inherit; }
+.pack .pc { font-size: 1.5rem; line-height: 1; }
+.pack b { font-size: 1.15rem; color: var(--brass); }
+.pack .pp { font-size: .85rem; font-weight: 600; background: var(--brass); color: #2a1a0c; border-radius: 999px; padding: 0.125rem 0.625rem; margin-top: 0.25rem; }
+.pack.best { border-color: var(--brass); box-shadow: 0 0 0 2px rgba(217,168,78,.25); }
+.pack .tag { position: absolute; top: -0.6rem; inset-inline: 0; margin: auto; width: max-content; font-size: .68rem; padding: 0.0625rem 0.5rem; border-radius: 999px; background: var(--tq); color: #fff; }
+.pack:active { transform: scale(.97); }
+.noads { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.75rem 0.875rem; border-radius: 0.875rem; border: 1px solid var(--line); background: rgba(58,163,146,.08); }
+.noads.on { border-color: var(--tq); }
+.noads .btn { white-space: nowrap; }
+.big-price { font-size: 1.6rem; font-weight: 700; color: var(--brass); margin: 0; }
+
+/* the full-screen ad after a game (demo stand-in for the AdMob video) */
+.overlay.interstitial { background: #000; flex-direction: column; justify-content: center; gap: 1rem; z-index: 80; }
+.ad-video { position: relative; width: min(42rem, 92vw); aspect-ratio: 16 / 9; max-height: 70vh; border-radius: 0.75rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; text-align: center; padding: 1rem;
+  background: radial-gradient(circle at 50% 40%, #7a1420, #2a0710 70%); overflow: hidden; }
+.ad-video .tag { position: absolute; top: 0.625rem; inset-inline-start: 0.625rem; background: #f3cd62; color: #2a1a0c; font-weight: 700; font-size: .75rem; padding: 0.125rem 0.5rem; border-radius: 0.375rem; }
+.ad-count { position: absolute; top: 0.5rem; inset-inline-end: 0.75rem; font-variant-numeric: tabular-nums; color: #fff; opacity: .85; }
+.ad-video h2 { color: #f3cd62; margin: 0; font-size: 2rem; }
+.ad-track { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(255,255,255,.2); }
+.ad-bar { display: block; height: 100%; width: 0; background: #f3cd62; transition: width 1s linear; }
+.ad-actions { gap: 0.75rem; }

@@ -17,7 +17,8 @@ import { prefs, sfx, unlockAudio } from './sound';
 import { Voice } from './voice';
 import { DemoWallet } from './demowallet';
 import { adsSupported, afterMatch, initAds, showRewarded } from './ads';
-import { GIFTS, GiftKind, STAKES, giftByKind, isStake, shortCoins, winnings } from '../../shared/gifts';
+import { billingSupported, buy, initBilling, purchaseDone, purchaseRefused, storePrice } from './billing';
+import { COIN_PACKS, GIFTS, GiftKind, NO_ADS, STAKES, giftByKind, isStake, shortCoins, winnings } from '../../shared/gifts';
 
 /** Demo build (no game server): stakes are played against the computer with a wallet kept in this browser. */
 declare const __DEMO__: boolean;
@@ -33,10 +34,11 @@ const store = {
 
 /* ---------------- state ---------------- */
 type Screen = 'home' | 'friends' | 'lb' | 'settings' | 'rules' | 'coins';
-type Sheet = null | 'leave' | 'emotes' | 'delete' | 'player' | 'signin' | 'fakead';
+type Sheet = null | 'leave' | 'emotes' | 'delete' | 'player' | 'signin' | 'fakead' | 'interstitial' | 'checkout';
 const S = {
   screen: 'home' as Screen,
   sheet: null as Sheet,
+  checkout: null as string | null,   // demo: the product on the pretend payment sheet
   online: false,
   user: null as PublicUser | null,
   mode: (MODES.includes(store.get('mode') as Mode) ? store.get('mode') : 'ffa2') as Mode,
@@ -73,7 +75,7 @@ setLang((store.get('lang') as Lang) || (navigator.language?.startsWith('ar') ? '
 const localName = () => S.user?.name || store.get('name') || CHAR_NAMES[getLang()][localCh()];
 const localCh = () => S.user?.ch ?? (Number(store.get('ch', '0')) || 0);
 if (DEMO) { wallet = new DemoWallet(); S.user = wallet.user(localName(), localCh()); }
-const syncWallet = () => { if (wallet && S.user) S.user = { ...S.user, coins: wallet.coins, adsLeft: Math.max(0, 10 - wallet.adsToday()) }; };
+const syncWallet = () => { if (wallet && S.user) S.user = { ...S.user, coins: wallet.coins, adsLeft: Math.max(0, 10 - wallet.adsToday()), adFreeUntil: wallet.adFreeUntil }; };
 
 /* ---------------- dom helpers ---------------- */
 type Attrs = Record<string, unknown>;
@@ -119,6 +121,7 @@ function onMessage(m: S2C) {
     case 'welcome':
       store.set('token', m.token); S.user = m.user; voice.ice = m.ice ?? [];
       S.login = m.login ?? { google: false, phone: false };
+      initBilling(m.user.id, (product, token) => net.send({ t: 'buy', product, token }), () => { if (S.screen === 'coins') render(); });
       if (pendingTicket) { net.send({ t: 'ticket', ticket: pendingTicket }); pendingTicket = null; }
       else if (!signedIn(m.user) && (S.login.google || S.login.phone) && !store.get('signinAsked') && !S.view) S.sheet = 'signin'; store.set('name', m.user.name); store.set('ch', String(m.user.ch));
       // carry a name/character picked while offline over to the server
@@ -141,6 +144,16 @@ function onMessage(m: S2C) {
     case 'coins': S.coinRows = m.rows; break;
     case 'adTicket': playRewarded(m.ticket, m.ssv); return;
     case 'adReward': toast(t('adRewarded', { n: shortCoins(m.coins) })); sfx.gift(); break;
+    case 'bought':
+      purchaseDone(m.token);
+      if (m.coins) { toast(t('boughtCoins', { n: shortCoins(m.coins) })); sfx.gift(); }
+      else if (m.product === NO_ADS.id && m.adFreeUntil > Date.now() && S.screen === 'coins') toast(t('adFreeOn', { d: dateText(m.adFreeUntil) }));
+      if (S.user) S.user = { ...S.user, adFreeUntil: m.adFreeUntil };
+      break;
+    case 'buyFailed':
+      purchaseRefused(m.token);
+      if (m.code !== 'expired') toast(errText(m.code));
+      break;
     case 'otp': S.otpPhone = m.phone; toast(t('codeSentTo', { phone: m.phone })); break;
     case 'signedIn':
       S.otpPhone = null; S.phoneDraft = ''; store.set('signinAsked', '1');
@@ -164,6 +177,7 @@ function applyView(v: AnyView) {
     voice.sync(v);
     v.seats.forEach((s, i) => { if (s?.pid && blocked.has(s.pid) && !voice.muted.has(i)) voice.setMuted(i, true); });
   }
+  if (v.phase === 'mend' && (!prev || prev.id !== v.id || prev.phase !== 'mend')) gameAdSoon();
   if (v.game !== 'domino') { applyBoardView(prev, v); return; }
   // keep a selection only while it is still valid
   if (S.sel !== null && (v.phase !== 'play' || v.turn !== v.you || !v.hand.includes(S.sel))) { S.sel = null; S.choose = null; }
@@ -364,7 +378,6 @@ function demoForfeit() {
   toast(t('payoutLeft', { n: shortCoins(v.stake) }));
 }
 function practiceAgain() {
-  afterMatch();
   const v = S.view;
   if (wallet && v?.stake) { if (!wallet.take(v.stake)) return toast(t('needCoins', { n: shortCoins(v.stake) })); syncWallet(); }
   S.practice!.restart();
@@ -380,7 +393,6 @@ function startPractice(mode = S.mode, stake = 0) {
 }
 function stopPractice() { S.practice?.stop(); S.practice = null; }
 function leaveGame() {
-  if (S.view?.phase === 'mend') afterMatch();
   voice.leave();
   S.sheet = null; S.sel = null; S.choose = null; S.screen = 'home';
   if (S.practice) { demoForfeit(); stopPractice(); S.view = null; render(); return; }
@@ -492,6 +504,8 @@ function render() {
   if (S.sheet === 'emotes') ui.append(emoteSheet());
   if (S.sheet === 'signin' && !v) ui.append(signInSheet());
   if (S.sheet === 'fakead') ui.append(fakeAdSheet());
+  if (S.sheet === 'interstitial') ui.append(demoInterstitial());
+  if (S.sheet === 'checkout' && S.checkout) ui.append(checkoutSheet(S.checkout));
   if (S.sheet === 'player' && v) { const ps = playerSheet(v); if (ps) ui.append(ps); }
   if (S.sheet === 'delete') ui.append(sheet(h('p', null, t('deleteConfirm')), h('div', { class: 'row' }, btn(t('stay'), () => { S.sheet = null; render(); }, 'btn alt'),
     btn(t('deleteYes'), () => { net.send({ t: 'delete' }); S.sheet = null; S.screen = 'home'; toast(t('deleted')); render(); }, 'btn danger'))));
@@ -572,8 +586,9 @@ function coinsScreen() {
   };
   return h('section', { class: 'sheet-card tall coins-page' },
     h('div', { class: 'row between' }, h('h2', null, t('coinsTitle')), u ? h('b', { class: 'coins big-coins' }, '🪙 ' + num(u.coins)) : null),
-    h('p', { class: 'muted small' }, t('coinsHow')),
+    ...shopSection(),
     canWatchAd() ? h('div', { class: 'row' }, adButton('btn tq', true), h('span', { class: 'muted small' }, t('adsLeft', { n: S.user!.adsLeft }))) : null,
+    h('p', { class: 'muted small' }, t('coinsHow')),
     h('p', { class: 'lab' }, t('coinsHistory')),
     !S.online && !wallet ? h('p', { class: 'muted' }, t('offline')) : !S.coinRows ? h('p', { class: 'muted' }, t('connecting')) : !rows.length ? h('p', { class: 'muted' }, t('coinsEmpty')) :
       h('ol', { class: 'coin-log' }, ...rows.map(r => h('li', null,
@@ -723,6 +738,85 @@ function adButton(cls = 'chip ad-chip', long = false) {
   return btn(long ? '🎬 ' + t('watchAd', { n: shortCoins(5_000) }) : '🎬 +' + shortCoins(5_000), watchAd, cls, { 'aria-label': t('watchAd', { n: shortCoins(5_000) }), title: t('watchAd', { n: shortCoins(5_000) }) });
 }
 /** Demo only: a stand-in for the video, five seconds long. */
+/* ---------------- ads after every game, and the shop ---------------- */
+const adFree = () => (S.user?.adFreeUntil ?? 0) > Date.now();
+const dateText = (ts: number) => new Date(ts).toLocaleDateString(getLang() === 'ar' ? 'ar-EG' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+let adTimer = 0;
+/** A game just ended: once the result has been on screen a moment, a full-screen ad (none on the ad-free plan). */
+function gameAdSoon() {
+  clearTimeout(adTimer);
+  adTimer = window.setTimeout(() => {
+    if (adFree()) return;
+    if (adsSupported()) { afterMatch(false); return; }
+    // the demo shows what the app does, with a stand-in for the video
+    if (DEMO && !S.sheet) { S.sheet = 'interstitial'; render(); }
+  }, 2500);
+}
+/** Demo: what the full-screen ad after a game looks like (in the app it is a real video from AdMob). */
+function demoInterstitial() {
+  const total = 30, canSkip = 5;
+  const left = h('b', { class: 'ad-count' }, String(total));
+  const skip = btn(t('skipIn', { s: canSkip }), () => { clearInterval(tick); S.sheet = null; render(); }, 'btn alt ad-skip', { disabled: true });
+  const bar = h('i', { class: 'ad-bar' });
+  let n = 0;
+  const tick = setInterval(() => {
+    n++;
+    if (!document.body.contains(left)) return clearInterval(tick);
+    left.textContent = String(Math.max(0, total - n));
+    bar.style.width = `${Math.min(100, (n / total) * 100)}%`;
+    if (n < canSkip) skip.textContent = t('skipIn', { s: canSkip - n });
+    else { (skip as HTMLButtonElement).disabled = false; skip.textContent = t('skipAd'); }
+    if (n >= total) { clearInterval(tick); S.sheet = null; render(); }
+  }, 1000);
+  return h('div', { class: 'overlay interstitial' },
+    h('div', { class: 'ad-video' },
+      h('span', { class: 'tag' }, t('adTag')), left,
+      h('h2', null, t('brand')), h('p', { class: 'muted' }, t('demoAdVideo')),
+      h('div', { class: 'ad-track' }, bar)),
+    h('div', { class: 'row ad-actions' },
+      btn(t('removeAds'), () => { clearInterval(tick); S.sheet = null; openCoins(); }, 'btn tq'),
+      skip));
+}
+/** A product's price: the store's own once it has loaded, else the price list in pounds. */
+function priceOf(id: string, egp: number) { return storePrice(id) ?? t('egp', { n: egp }); }
+function buyItem(id: string) {
+  unlockAudio();
+  if (wallet) { S.checkout = id; S.sheet = 'checkout'; return render(); }
+  if (billingSupported()) { buy(id).then(ok => { if (!ok) toast(t('buyFailed')); }); return; }
+  toast(t('buyInApp'));
+}
+/** Demo: a pretend payment sheet (no money is taken). */
+function checkoutSheet(id: string) {
+  const pack = COIN_PACKS.find(p => p.id === id), sub = id === NO_ADS.id;
+  const what = pack ? t('packCoins', { n: shortCoins(pack.coins) }) : t('noAdsTitle');
+  const price = pack ? priceOf(pack.id, pack.egp) : t('perMonth', { p: priceOf(NO_ADS.id, NO_ADS.egp) });
+  const pay = () => {
+    if (pack && wallet) { wallet.add('buy', pack.coins, pack.coins); syncWallet(); toast(t('boughtCoins', { n: shortCoins(pack.coins) })); sfx.gift(); }
+    if (sub && wallet) { wallet.setAdFree(Date.now() + NO_ADS.days * 86_400_000); syncWallet(); toast(t('adFreeOn', { d: dateText(wallet.adFreeUntil) })); }
+    S.sheet = null; S.checkout = null; render();
+  };
+  return sheet(h('h2', null, what), h('p', { class: 'big-price' }, price), h('p', { class: 'muted small' }, t('demoCheckout')),
+    h('div', { class: 'row' }, btn(t('cancel'), () => { S.sheet = null; S.checkout = null; render(); }, 'btn alt'), btn(t('pay', { p: price }), pay, 'btn')));
+}
+/** The shop on the coins page: coin packs and the ad-free plan. */
+function shopSection() {
+  const best = COIN_PACKS[COIN_PACKS.length - 1].id;
+  const on = adFree();
+  return [
+    h('p', { class: 'lab' }, t('shopTitle')),
+    h('div', { class: 'packs' }, ...COIN_PACKS.map(p =>
+      h('button', { type: 'button', class: 'pack' + (p.id === best ? ' best' : ''), onclick: () => buyItem(p.id) },
+        p.id === best ? h('span', { class: 'tag' }, t('bestValue')) : null,
+        h('span', { class: 'pc' }, '🪙'), h('b', null, shortCoins(p.coins)), h('span', { class: 'pp' }, priceOf(p.id, p.egp))))),
+    h('div', { class: 'noads' + (on ? ' on' : '') },
+      h('div', { class: 'stack tight' }, h('b', null, t('noAdsTitle')),
+        h('span', { class: 'muted small' }, on ? t('adFreeUntil', { d: dateText(S.user!.adFreeUntil) }) : t('noAdsDesc'))),
+      on ? (billingSupported() ? btn(t('manageSub'), () => { window.open('https://play.google.com/store/account/subscriptions?sku=' + NO_ADS.id, '_blank'); }, 'btn alt') : null)
+        : btn(t('perMonth', { p: priceOf(NO_ADS.id, NO_ADS.egp) }), () => buyItem(NO_ADS.id), 'btn')),
+    !billingSupported() && !wallet ? h('p', { class: 'muted small' }, t('buyInApp')) : null,
+  ];
+}
+
 function fakeAdSheet() {
   const box = h('div', { class: 'card fakead' }, h('span', { class: 'tag' }, t('adTag')), h('h2', null, t('brand')), h('p', { class: 'muted' }, t('demoAdText')));
   const count = h('b', { class: 'big' }, '5');
@@ -1332,7 +1426,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !Capacitor
 // recording hooks: ?rec for the how-to GIFs, ?promo for the promo video (the computer plays your seat)
 if (/[?&](rec|promo)\b/.test(location.search)) (window as unknown as Record<string, unknown>).__ahwa = {
   view: () => S.view, spot: (p: Pick) => scene.spotScreen(p), ghost: (e: End) => scene.ghostScreen(e),
-  pick: (p: Pick) => handlePick(p), targets: () => (S.view && S.view.game !== 'domino' ? boardUi(S.view as BoardView).targets : []),
+  pick: (p: Pick) => handlePick(p), showGameAd: () => { S.sheet = 'interstitial'; render(); }, targets: () => (S.view && S.view.game !== 'domino' ? boardUi(S.view as BoardView).targets : []),
   practice: (mode: Mode) => { startPractice(mode); const seat = S.practice?.table.seats[0]; if (seat) seat.away = true; S.practice?.table.refresh(); },
 };
 // the game is played in landscape: lock it where the browser allows (installed app, fullscreen)
