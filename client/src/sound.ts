@@ -2,6 +2,8 @@ import { Haptics, ImpactStyle } from '@capacitor/haptics';
 
 /** Small synthesized sound set: no audio files to ship or load. */
 let ctx: AudioContext | null = null;
+let idle: ReturnType<typeof setTimeout> | undefined;
+if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { if (document.hidden && ctx?.state === 'running') ctx.suspend().catch(() => {}); });
 export const prefs = { sound: true, vibrate: true };
 
 function ac(): AudioContext | null {
@@ -9,6 +11,8 @@ function ac(): AudioContext | null {
   try {
     if (!ctx) ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
     if (ctx.state === 'suspended') ctx.resume();
+    // an open audio output keeps the phone's sound chip awake: let it sleep a few seconds after the last sound
+    clearTimeout(idle); idle = setTimeout(() => { if (ctx?.state === 'running') ctx.suspend().catch(() => {}); }, 4000);
     return ctx;
   } catch { return null; }
 }

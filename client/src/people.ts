@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeRigid } from './perf';
 import { phys } from './boards';
 
 /* Realistic, procedurally sculpted Egyptian coffeehouse regulars.
@@ -553,50 +554,8 @@ export function makePerson(p: PersonSpec, key: string): Person {
   }
 
   group.traverse(o => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
-  mergeStatic(group);
+  mergeRigid(group, [group, piv, head, ...arms, ...elbows, ...hands]);
   return { group, piv, head, arms, elbows, hands };
-}
-
-/** Fewer draw calls: meshes that share a parent and a material become one mesh. */
-function mergeStatic(root: THREE.Object3D) {
-  if ((new THREE.BufferGeometry() as unknown as { isBufferGeometry?: unknown }).isBufferGeometry !== true) return;
-  const nodes: THREE.Object3D[] = [];
-  root.traverse(n => nodes.push(n));
-  for (const node of nodes) {
-    const byMat = new Map<THREE.Material, THREE.Mesh[]>();
-    for (const c of node.children) {
-      const m = c as THREE.Mesh;
-      if (!m.isMesh || m.children.length) continue;
-      const mat = m.material as THREE.Material;
-      if (!byMat.has(mat)) byMat.set(mat, []);
-      byMat.get(mat)!.push(m);
-    }
-    for (const [mat, list] of byMat) {
-      if (list.length < 2) continue;
-      const indexed = list.every(m => m.geometry.index);
-      const parts = list.map(m => { m.updateMatrix(); const g = indexed ? m.geometry.clone() : m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone(); g.applyMatrix4(m.matrix); return g; });
-      const idx: number[] = [];
-      const total = parts.reduce((n, g) => n + g.getAttribute('position').count, 0);
-      const pos = new Float32Array(total * 3), nor = new Float32Array(total * 3), uv = new Float32Array(total * 2);
-      let o = 0;
-      for (const g of parts) {
-        const n = g.getAttribute('position').count;
-        pos.set(g.getAttribute('position').array as Float32Array, o * 3);
-        if (g.getAttribute('normal')) nor.set(g.getAttribute('normal').array as Float32Array, o * 3);
-        if (g.getAttribute('uv')) uv.set(g.getAttribute('uv').array as Float32Array, o * 2);
-        if (indexed) { const ix = g.index!.array; for (let k = 0; k < ix.length; k++) idx.push(ix[k] + o); }
-        o += n; g.dispose();
-      }
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-      geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
-      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-      if (indexed) geo.setIndex(idx);
-      const merged = new THREE.Mesh(geo, mat); merged.castShadow = true;
-      for (const m of list) { node.remove(m); m.geometry.dispose(); }
-      node.add(merged);
-    }
-  }
 }
 
 /* ---------- the regulars ---------- */

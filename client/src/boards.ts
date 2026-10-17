@@ -4,6 +4,7 @@ import { BAR, OFF } from '../../shared/games/tawla';
 import { COLOR_OFFSET, HOME, LAP, TRACK } from '../../shared/games/ludo';
 import { TEX_HI, canvasTex } from './ahwa';
 import { CHESS_LOOKS, ChessLook, DICE_LOOKS, DiceLook, LUDO_LOOKS, LudoLook, TAWLA_LOOKS, TawlaLook } from './looks';
+import { IS_PHONE, clearDisposing } from './perf';
 /** Board artwork: drawn at the device's texture detail (2x where there is memory for it). */
 const hiTex = (w: number, h: number, draw: (g: CanvasRenderingContext2D, w: number, h: number) => void) => canvasTex(w, h, draw, undefined, TEX_HI);
 
@@ -111,7 +112,7 @@ function woodCanvas(w: number, h: number, base: string, dark: string, light: str
 }
 function texOf(c: HTMLCanvasElement, repeat?: [number, number]) {
   const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16;
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = IS_PHONE ? 8 : 16;
   if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat[0], repeat[1]); }
   return t;
 }
@@ -131,7 +132,9 @@ function smooth(pts: [number, number][], steps = 6): THREE.Vector2[] {
   const last = pts[pts.length - 1]; out.push(new THREE.Vector2(last[0], last[1]));
   return out;
 }
-const turned = (pts: [number, number][], seg = 40, steps = 6) => new THREE.LatheGeometry(smooth(pts, steps), seg);
+/** Phones: turned pieces with fewer facets (the difference is invisible at phone size, the GPU load is not). */
+const DETAIL = IS_PHONE ? 0.6 : 1;
+const turned = (pts: [number, number][], seg = 40, steps = 6) => new THREE.LatheGeometry(smooth(pts, Math.max(3, Math.round(steps * DETAIL))), Math.max(18, Math.round(seg * DETAIL)));
 
 /** A cube with rounded edges and corners (keeps the six face groups for per-face materials). */
 function roundedBox(size: number, r: number, seg = 5) {
@@ -343,7 +346,7 @@ export class ChessBoard implements BoardRenderer {
     this.clock = clock;
     const c = v.chess; if (!c) return;
     this.root.rotation.y = c.you === 'b' ? Math.PI : 0;
-    this.pieces.clear(); this.marks.clear(); this.bySq.clear();
+    this.pieces.clear(); clearDisposing(this.marks); this.bySq.clear();
     let moved: THREE.Object3D | null = null;
     c.board.forEach((p, sq) => {
       if (!p) return;
@@ -513,7 +516,7 @@ export class TawlaBoard implements BoardRenderer {
     const s = v.tawla; if (!s) return;
     this.clock = clock; this.lastView = s;
     this.root.rotation.y = s.you === 1 ? Math.PI : 0;
-    this.checkers.clear(); this.marks.clear(); this.topAt.clear();
+    this.checkers.clear(); clearDisposing(this.marks); this.topAt.clear();
     const add = (p: number, pos: THREE.Vector3, flat = true) => {
       const m = new THREE.Mesh(checkerGeo, checkerMats[p]); m.position.copy(pos); m.castShadow = true;
       if (!flat) { m.rotation.x = Math.PI / 2; m.scale.set(1, 0.6, 1); }
@@ -749,7 +752,7 @@ export class LudoBoard implements BoardRenderer {
     const s = v.ludo; if (!s) return;
     const myColor = s.you >= 0 ? s.colors[s.you] : 3;
     this.root.rotation.y = [Math.PI / 2, Math.PI, Math.PI * 1.5, 0][myColor];   // your base at the bottom-left
-    this.pawns.clear(); this.marks.clear(); this.movable = [];
+    this.pawns.clear(); clearDisposing(this.marks); this.movable = [];
     const bySpot = new Map<string, number>();
     const newKey = v.last && v.last.k !== this.lastK;
     s.pawns.forEach((arr, seat) => arr.forEach((_, i) => {

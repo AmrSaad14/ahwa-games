@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { IS_PHONE, mergeStaticWorld } from './perf';
 
 /* The coffeehouse (قهوة بلدي) around the game table: textures, furniture, shisha, walls and lights.
    Everything is procedural (canvas textures + simple geometry), so there are no image or model files to ship. */
@@ -24,7 +25,7 @@ export function canvasTex(w: number, h: number, draw: Draw, repeat?: [number, nu
   draw(g, w, h);
   const tx = new THREE.CanvasTexture(c);
   tx.colorSpace = THREE.SRGBColorSpace;
-  tx.anisotropy = 16;   // three.js clamps this to what the GPU supports
+  tx.anisotropy = IS_PHONE ? 4 : 16;   // three.js clamps this to what the GPU supports (4x is plenty at phone size)
   if (repeat) { tx.wrapS = tx.wrapT = THREE.RepeatWrapping; tx.repeat.set(repeat[0], repeat[1]); }
   return tx;
 }
@@ -244,8 +245,8 @@ function framedPicture(w: number, h: number, draw: Draw, frame = mats.brass) {
 }
 
 /** Builds the room around the table and returns things that animate. */
-export function buildAhwa(scene: THREE.Scene) {
-  const room = new THREE.Group(); scene.add(room);
+export function buildAhwa(scene: THREE.Scene, lamps = true) {
+  const room = new THREE.Group(); room.userData.room = true; scene.add(room);
   const floor = mesh(new THREE.PlaneGeometry(90, 90), new THREE.MeshStandardMaterial({ map: floorTexture(90 / 2.4), roughness: 0.75 }), 0, FLOOR_Y, 0, room);
   floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
 
@@ -310,7 +311,8 @@ export function buildAhwa(scene: THREE.Scene) {
   for (const x of [-2.3, 2.3]) mesh(new THREE.BoxGeometry(0.4, 8.4, 0.4), wood(), x, 0, 0.1, door);
   mesh(new THREE.BoxGeometry(5, 0.45, 0.4), wood(), 0, 4.2, 0.1, door);
   door.position.set(16.5, FLOOR_Y + 4, backZ + 0.05); room.add(door);
-  const daylight = new THREE.PointLight(0xffe2b0, 40, 26, 1.6); daylight.position.set(16, 2, backZ + 3); room.add(daylight);
+  // lamps: real point lights only where the GPU has room for them (on phones the glow is painted by the hemisphere light)
+  if (lamps) { const daylight = new THREE.PointLight(0xffe2b0, 40, 26, 1.6); daylight.position.set(16, 2, backZ + 3); room.add(daylight); }
 
   // tea station (النصبة): counter, kettle, glasses
   const counter = new THREE.Group();
@@ -358,9 +360,11 @@ export function buildAhwa(scene: THREE.Scene) {
     shade.castShadow = false;
     // brighter than white, so the film look makes the bulb glow
     mesh(new THREE.SphereGeometry(0.28, 14, 10), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffe0a0).multiplyScalar(5) }), b.x, b.y, b.z, room);
-    const l = new THREE.PointLight(0xffc27a, 30, 20, 1.7); l.position.copy(b); room.add(l);
+    if (lamps) { const l = new THREE.PointLight(0xffc27a, 30, 20, 1.7); l.position.copy(b); room.add(l); }
   }
 
+  // the room never moves: one draw call per material instead of one per chair leg and glass
+  mergeStaticWorld(room);
   return { smoke, tables };
 }
 

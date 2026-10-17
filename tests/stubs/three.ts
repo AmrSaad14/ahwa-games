@@ -36,7 +36,7 @@ export class CanvasTexture { center = new Vector3(); rotation = 0; wrapS = 0; wr
 export class Color { constructor(public c?: any) { return loose(this); } }
 export class Fog { constructor(..._a: any[]) {} }
 export class Raycaster { setFromCamera() {} intersectObjects() { return []; } }
-export class WebGLRenderer { shadowMap: any = {}; outputColorSpace = ''; toneMapping = 0; toneMappingExposure = 1; constructor(_o?: any) {} setPixelRatio() {} getPixelRatio() { return 1; } setSize() {} render() {} }
+export class WebGLRenderer { shadowMap: any = {}; info: any = { autoReset: true, reset() {}, render: { calls: 0, triangles: 0 }, memory: { geometries: 0, textures: 0 } }; outputColorSpace = ''; toneMapping = 0; toneMappingExposure = 1; constructor(_o?: any) {} setPixelRatio() {} getPixelRatio() { return 1; } setSize() {} render() {} }
 export const ACESFilmicToneMapping = 4, PCFSoftShadowMap = 2, PCFShadowMap = 1, SRGBColorSpace = 'srgb', RepeatWrapping = 1000, DoubleSide = 2;
 export class Float32BufferAttribute { constructor(..._a: any[]) { return loose(this); } } export class Texture extends CanvasTexture {}
 export class CircleGeometry extends BufferGeometry {} export class CapsuleGeometry extends BufferGeometry {} export class IcosahedronGeometry extends BufferGeometry {}

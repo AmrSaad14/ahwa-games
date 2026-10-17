@@ -7,6 +7,7 @@ import { BoardRenderer, BoardUi, ChessBoard, LudoBoard, Pick, TawlaBoard, initBo
 import { CHESS_LOOKS, LUDO_LOOKS, TAWLA_LOOKS, TILE_LOOKS, TileLook } from './looks';
 import { HEAD_Y, PEOPLE, makePerson } from './people';
 import { Post } from './post';
+import { IS_PHONE, disposeTree } from './perf';
 import { FLOOR_Y, Smoke, TEX_HI, buildAhwa, canvasTex, makeChair, makeShisha, makeTable, makeTeaGlass } from './ahwa';
 
 /** The six characters players pick from; the colour stands for them in lists and badges. */
@@ -56,6 +57,9 @@ function initialGfx(): 0 | 1 | 2 {
   const mem = (navigator as { deviceMemory?: number }).deviceMemory;
   return mem !== undefined && mem <= 3 ? 1 : 2;
 }
+
+/** The café room built by buildAhwa (the first group added to the scene). */
+const roomGroup = (s: THREE.Scene) => s.children.find(c => c.userData.room);
 
 export class TableScene {
   private renderer: THREE.WebGLRenderer;
@@ -112,6 +116,13 @@ export class TableScene {
   /** Graphics level: 2 full, 1 lighter, 0 lightest. Steps down by itself when frames are slow, and is remembered. */
   private gfx = initialGfx();
   private perf = { sum: 0, n: 0, slow: 0 };
+  /** Phones: full frame rate only while something moves or the player touches; 30 fps otherwise (less heat and battery). */
+  private busyUntil = 0; private lastDraw = 0; private shadowAt = 0;
+  /** Something changes on screen: draw every frame and refresh the shadows for a moment. */
+  /** The app is in the background (phone): draw nothing at all. */
+  paused = false;
+  setPaused(p: boolean) { this.paused = p; if (!p) { this.lastT = performance.now(); this.wake(); } }
+  wake(ms = 1500) { this.busyUntil = Math.max(this.busyUntil, performance.now() + ms); }
   /** Film look (glow on highlights, grade, vignette) on the top graphics level. Everything stays sharp. */
   private post: Post | null = null;
   private pinch = new Map<number, { x: number; y: number }>();
@@ -180,18 +191,24 @@ export class TableScene {
   }
 
   constructor(private canvas: HTMLCanvasElement) {
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: IS_PHONE ? 'default' : 'high-performance', stencil: false });
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = this.gfx === 2 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    // the shadow map is redrawn only when something moves (see tick), not every frame
+    this.renderer.shadowMap.autoUpdate = false;
+    this.renderer.info.autoReset = false;
+    this.renderer.shadowMap.type = this.gfx === 2 && !IS_PHONE ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
     initBoardEnvironment(this.renderer);
-    if (this.gfx === 2) { try { this.post = new Post(this.renderer); } catch { this.post = null; } }
+    // the glow pass costs about 7 extra full-screen draws: desktops only (phones keep a sharp, direct picture)
+    if (this.gfx === 2 && !IS_PHONE) { try { this.post = new Post(this.renderer); } catch { this.post = null; } }
     const s = this.scene;
     s.background = new THREE.Color(0x24170e);
     s.fog = new THREE.Fog(0x2a1b10, 30, 75);
-    s.add(new THREE.HemisphereLight(0xffe2b8, 0x3a2416, 0.9));
+    // phones skip the room's 4 point lights (each one costs every pixel); a little more ambient light makes up for them
+    const lamps = this.gfx === 2 && !IS_PHONE;
+    s.add(new THREE.HemisphereLight(0xffe2b8, 0x3a2416, lamps ? 0.9 : 1.15));
     // the bulb over our table
     const spot = new THREE.SpotLight(0xffd59a, 200, 45, 0.78, 0.55, 1.4);
     spot.position.set(0.5, 15, 1.5); spot.target.position.set(0, 0, 0);
@@ -199,13 +216,15 @@ export class TableScene {
     s.add(spot, spot.target);
     const fill = new THREE.DirectionalLight(0xffe9cc, 0.35); fill.position.set(-10, 12, 18); s.add(fill);
 
-    const room = buildAhwa(s);
+    const room = buildAhwa(s, lamps);
     this.smoke = new Smoke(s, room.smoke);
     // a couple of regulars at the next tables
     const r1 = this.makeChar(0, true); r1.position.set(-12.5 + 3.6 * Math.sin(0.1), 0, -8.5 + 3.6); r1.lookAt(-12.5, 0, -8.5); s.add(r1);
     const r2 = this.makeChar(3, true); r2.position.set(12.5, 0, -9 - 3.6); r2.lookAt(12.5, 0, -9); s.add(r2);
     const r3 = this.makeChar(1, true); r3.position.set(12.5, 0, -9 + 3.6); r3.lookAt(12.5, 0, -9); s.add(r3);
     this.regulars.push(r1, r2, r3);
+    // phones: the neighbouring tables don't draw into the shadow map (it then holds just our table and its players)
+    if (!lamps) for (const o of [...this.regulars, roomGroup(s)]) o?.traverse(m => { m.castShadow = false; });
 
     // our table, tea glasses at the corners and a shisha by the top-right chair
     s.add(makeTable(T));
@@ -302,25 +321,36 @@ export class TableScene {
     window.visualViewport?.addEventListener('resize', () => this.resize());
     if (typeof ResizeObserver === 'function') new ResizeObserver(() => this.resize()).observe(canvas);
     this.resize();
-    const loop = (now: number) => { this.tick(now); requestAnimationFrame(loop); };
+    // any touch, click or wheel: full speed for a moment
+    for (const ev of ['pointerdown', 'pointermove', 'wheel', 'keydown'] as const) window.addEventListener(ev, () => this.wake(), { passive: true });
+    document.addEventListener('visibilitychange', () => { this.lastT = performance.now(); this.wake(); });
+    const loop = (now: number) => {
+      requestAnimationFrame(loop);
+      if (document.hidden || this.paused) return;
+      // idle on a phone: 30 fps, the café still breathes but the GPU rests
+      if (IS_PHONE && now - this.lastDraw < (now > this.busyUntil ? 30 : 14)) return;   // and never over 60 fps on 90/120 Hz screens
+      this.lastDraw = now;
+      this.tick(now);
+    };
     requestAnimationFrame(loop);
   }
 
   /* ---------- public API ---------- */
 
-  showHome(ch: number) { this.view = null; this.homeCh = ch; this.sel = null; this.choose = null; this.refresh(); }
+  showHome(ch: number) { this.wake(); this.view = null; this.homeCh = ch; this.sel = null; this.choose = null; this.refresh(); }
 
   showTable(view: AnyView, sel: number | null, choose: End[] | null, boardUi: BoardUi = { sel: null, targets: [] }) {
     const newRound = !this.view || this.view.round !== view.round || this.view.id !== view.id;
     if (newRound) { this.known.clear(); this.dropAt.clear(); this.yardLayout = []; }
     this.view = view; this.sel = sel; this.choose = choose; this.boardUi = boardUi;
+    this.wake(1800);
     this.refresh();
   }
 
   animate(seat: number, type: Anim['type']) {
     const pos = this.posToSeat.indexOf(seat);
     const c = pos >= 0 ? this.chars[pos] : null;
-    if (c) (c.userData as CharData).anim = { type, t0: this.clock, d: type === 'win' ? 2.2 : 0.9 };
+    if (c) { (c.userData as CharData).anim = { type, t0: this.clock, d: type === 'win' ? 2.2 : 0.9 }; this.wake(type === 'win' ? 2500 : 1200); }
   }
 
   seatAt(pos: number) { return this.posToSeat[pos] ?? -1; }
@@ -353,6 +383,13 @@ export class TableScene {
     return { x: ((this.v3.x + 1) / 2) * r.width + r.left, y: ((1 - this.v3.y) / 2) * r.height + r.top };
   }
 
+  /** Numbers for tuning: draw calls, triangles, textures and the drawing size (?promo test hook only). */
+  stats() {
+    const i = this.renderer.info, b = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+    let meshes = 0, lights = 0; this.scene.traverse(o => { if ((o as THREE.Mesh).isMesh) meshes++; if ((o as THREE.Light).isLight) lights++; });
+    return { calls: i.render.calls, triangles: i.render.triangles, geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs?.length ?? 0, meshes, lights, px: `${b.x}x${b.y}`, gfx: this.gfx, post: !!this.post };
+  }
+
   /* ---------- shop skins ---------- */
 
   /** Wear these skins (ids per kind). Rebuilds only what changed. */
@@ -370,7 +407,7 @@ export class TableScene {
       if (k === 'dice') setDiceLook(s[k]!);
       // boards are rebuilt with the new look the next time they are shown (dice live inside the tawla and ludo boards)
       const drop = k === 'dice' ? (['tawla', 'ludo'] as const) : [k];
-      for (const g of drop) { const b = this.boards[g]; if (b) { this.scene.remove(b.root); delete this.boards[g]; } }
+      for (const g of drop) { const b = this.boards[g]; if (b) { this.scene.remove(b.root); disposeTree(b.root); delete this.boards[g]; } }
       rebuild = true;
     }
     if (rebuild) this.rebuildBoard();
@@ -429,6 +466,19 @@ export class TableScene {
     return [{ x: 0, z: SEAT_R }, { x: -SEAT_R, z: 0 }, { x: 0, z: -SEAT_R }, { x: SEAT_R, z: 0 }][pos];
   }
 
+  /** Characters who left a seat wait here to be seated again (building one is slow, and nothing leaks). */
+  private charPool = new Map<number, THREE.Group[]>();
+  private parkChar(g: THREE.Group) {
+    const u = g.userData as CharData; u.anim = null; u.active = false;
+    const list = this.charPool.get(u.ch) ?? []; list.push(g); this.charPool.set(u.ch, list);
+  }
+  private takeChar(i: number): THREE.Group {
+    const g = this.charPool.get(i)?.pop();
+    if (!g) return this.makeChar(i);
+    g.position.set(0, 0, 0); g.rotation.set(0, 0, 0);
+    return g;
+  }
+
   private makeChar(i: number, regular = false): THREE.Group {
     const p = makePerson(PEOPLE[i], String(i));
     const g = p.group;
@@ -464,8 +514,8 @@ export class TableScene {
     }
     for (let pos = 0; pos < 4; pos++) {
       const cur = this.chars[pos];
-      if (cur && (cur.userData as CharData).ch !== chs[pos]) { this.scene.remove(cur); this.chars[pos] = null; }
-      if (chs[pos] >= 0 && !this.chars[pos]) { const g = this.makeChar(chs[pos]); this.chars[pos] = g; this.scene.add(g); }
+      if (cur && (cur.userData as CharData).ch !== chs[pos]) { this.scene.remove(cur); this.chars[pos] = null; this.parkChar(cur); }
+      if (chs[pos] >= 0 && !this.chars[pos]) { const g = this.takeChar(chs[pos]); this.chars[pos] = g; this.scene.add(g); }
       const g = this.chars[pos];
       if (g) {
         const P = this.seatPoint(pos); g.position.set(P.x, 0, P.z); g.lookAt(0, 0, 0);
@@ -572,9 +622,10 @@ export class TableScene {
     const w = this.canvas.clientWidth || window.innerWidth, h = this.canvas.clientHeight || window.innerHeight;
     // sharp on phones, but never more pixels than the level allows (a 4K or retina desktop would crawl otherwise)
     const budget = [1.1e6, 2.2e6, 4.6e6][this.gfx], cap = [1, 1.6, 2.6][this.gfx];
-    const pr = Math.max(0.6, Math.min(cap, window.devicePixelRatio || 1, Math.sqrt(budget / Math.max(1, w * h))));
+    const pr = Math.max(0.6, Math.min(cap, IS_PHONE ? 2 : 9, window.devicePixelRatio || 1, Math.sqrt(budget / Math.max(1, w * h))));
     if (Math.abs(this.renderer.getPixelRatio() - pr) > 0.01) this.renderer.setPixelRatio(pr);
     this.renderer.setSize(w, h, false);
+    this.wake();
     if (this.post) { const b = this.renderer.getDrawingBufferSize(new THREE.Vector2()); this.post.setSize(b.x, b.y); }
     this.camera.aspect = w / h;
     this.frameKey = '';
@@ -755,6 +806,7 @@ export class TableScene {
       const k = this.reduce ? 1 : 1 - Math.exp(-Math.min(raw, 0.25) * 14);   // about a quarter of a second, at any frame rate
       this.mag += (this.magT - this.mag) * k; this.pan.x += (this.panT.x - this.pan.x) * k; this.pan.y += (this.panT.y - this.pan.y) * k;
       this.clampPan(this.pan, this.mag);
+      this.wake(300);
     } else { this.mag = this.magT; this.pan = { ...this.panT }; }
     this.zoom = this.mag < 1 ? 1 / this.mag : 1;
     this.placeCamera(this.view || this.reduce ? 0 : Math.sin(t * 0.12) * 0.35);
@@ -793,6 +845,10 @@ export class TableScene {
     this.board?.tick(this.clock);
     this.ghostMat.opacity = 0.35 + Math.sin(t * 5) * 0.2;
     if (this.ring.visible) (this.ring.material as THREE.MeshBasicMaterial).opacity = 0.5 + Math.sin(t * 3) * 0.3;
+    // shadows: redrawn every frame while things move, else ~12 times a second (the regulars breathing)
+    const shadowNow = performance.now();
+    if (shadowNow < this.busyUntil || shadowNow - this.shadowAt > 80) { this.renderer.shadowMap.needsUpdate = true; this.shadowAt = shadowNow; }
+    this.renderer.info.reset();
     if (this.post) {
       // the whole picture stays sharp: only a soft glow on highlights, a warm grade and a light vignette
       try { this.post.render(this.scene, this.camera); }

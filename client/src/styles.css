@@ -222,7 +222,7 @@ body:has(#ui .hud) .toast { top: calc(3.75rem + var(--safe-t)); }
 .clock.low { background: var(--danger) !important; color: #fff !important; }
 .board-act { flex: 1; display: flex; justify-content: center; align-items: center; min-height: 3.5rem; }
 .btn.roll { min-width: 9.375rem; font-size: 1.15rem; animation: pulse 1.4s ease-in-out infinite; }
-@keyframes pulse { 50% { transform: scale(1.05); filter: brightness(1.1); } }
+@keyframes pulse { 50% { transform: scale(1.05); } }   /* transform only: runs on the compositor, no repaint each frame */
 @media (prefers-reduced-motion: reduce) { .btn.roll { animation: none; } }
 .captured { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 1.15rem; line-height: 1; padding: 0 0.375rem; }
 .cap-w { color: #efe4cc; text-shadow: 0 0 2px #000; } .cap-b { color: #1b110b; text-shadow: 0 0 2px #e8d6a8; }
@@ -474,3 +474,9 @@ body:has(#ui .hud) .toast { top: calc(3.75rem + var(--safe-t)); }
 /* no dark fades over the game: words over the table get a soft outline instead, so the whole table stays bright */
 .hud .meta, .bottom .status, .bottom .secs, .board-bottom .status, .board-bottom .secs { text-shadow: 0 1px 2px rgba(0,0,0,.95), 0 0 0.5rem rgba(0,0,0,.75); }
 .hud .meta { color: #f3e6cc; }
+
+/* phones: a blur behind a panel is recomputed every frame over the live 3D table; the panels are nearly opaque anyway */
+@media (pointer: coarse) {
+  .sheet-card, .zoomctl .iconbtn { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .zoomctl .iconbtn { background: rgba(20,13,8,.82); }
+}

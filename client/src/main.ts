@@ -1422,6 +1422,7 @@ const labels = [0, 1, 2, 3].map(pos => {
   return d;
 });
 let lastSecond = -1;
+const lblBox = new WeakMap<HTMLElement, { k: string; w: number; h: number; l: string; t: string }>();
 function renderLabels(content: boolean) {
   const v = S.view;
   labels.forEach((el, pos) => {
@@ -1451,22 +1452,27 @@ function renderLabels(content: boolean) {
         if (showBubble) el.append(h('span', { class: 'bubble', dir: 'auto' }, bubble!.text ?? t(('emote_' + bubble!.k) as Key)));
       }
     }
-    el.hidden = false;
+    if (el.hidden) { el.hidden = false; lblBox.delete(el); }
+    // the label's size is read only when its text changed (reading it every frame forces a page layout each frame)
+    let box = lblBox.get(el);
+    if (!box || box.k !== el.dataset.k) lblBox.set(el, box = { k: el.dataset.k!, w: el.offsetWidth, h: el.offsetHeight, l: '', t: '' });
     // keep labels on screen, clear of the side panel, and below the score bar
-    const half = Math.min(el.offsetWidth / 2 + 6, window.innerWidth / 4);
+    const half = Math.min(box.w / 2 + 6, window.innerWidth / 4);
     const x = Math.max(chrome.left + half, Math.min(window.innerWidth - chrome.right - half, p.x));
     const underMeta = x - half < metaBox.right && x + half > metaBox.left;
-    el.style.left = x + 'px';
-    el.style.top = Math.max((underMeta ? Math.max(chrome.top, metaBox.bottom) : chrome.top) + el.offsetHeight + 4, p.y) + 'px';
+    const l = Math.round(x) + 'px', tp = Math.round(Math.max((underMeta ? Math.max(chrome.top, metaBox.bottom) : chrome.top) + box.h + 4, p.y)) + 'px';
+    if (l !== box.l) el.style.left = box.l = l;
+    if (tp !== box.t) el.style.top = box.t = tp;
   });
   // timers
   if (v && v.phase === 'play' && v.turnEndsAt && v.game !== 'chess') {
     const left = Math.max(0, v.turnEndsAt - net.serverNow());
     const frac = Math.min(1, left / v.turnMs);
-    document.querySelectorAll<HTMLElement>('.lbl.on .bar, #my-timer i').forEach(b => { b.style.width = (frac * 100).toFixed(1) + '%'; b.classList.toggle('low', left < 5000); });
+    const wd = (frac * 100).toFixed(1) + '%';
+    document.querySelectorAll<HTMLElement>('.lbl.on .bar, #my-timer i').forEach(b => { if (b.style.width !== wd) b.style.width = wd; b.classList.toggle('low', left < 5000); });
     const sec = Math.ceil(left / 1000);
     const secsEl = document.getElementById('my-secs');
-    if (secsEl) { secsEl.textContent = t('secs', { s: sec }); secsEl.classList.toggle('low', left < 5000); }
+    if (secsEl) { const txt = t('secs', { s: sec }); if (secsEl.textContent !== txt) secsEl.textContent = txt; secsEl.classList.toggle('low', left < 5000); }
     if (v.turn === v.you && sec <= 3 && sec > 0 && sec !== lastSecond) { lastSecond = sec; sfx.tick(); }
   }
   // chess clocks
@@ -1491,6 +1497,8 @@ scene.onFrame = () => renderLabels(false);
 applySkins();
 
 /* ---------------- platform ---------------- */
+// in the background the game draws nothing (no battery spent on a screen nobody sees)
+CapApp.addListener('appStateChange', ({ isActive }: { isActive: boolean }) => scene.setPaused(!isActive));
 CapApp.addListener('backButton', () => {
   if (S.promo) { S.promo = null; return render(); }
   if (S.sheet) { S.sheet = null; return render(); }
@@ -1508,7 +1516,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !Capacitor
 // recording hooks: ?rec for the how-to GIFs, ?promo for the promo video (the computer plays your seat)
 if (/[?&](rec|promo)\b/.test(location.search)) (window as unknown as Record<string, unknown>).__ahwa = {
   view: () => S.view, spot: (p: Pick) => scene.spotScreen(p), ghost: (e: End) => scene.ghostScreen(e),
-  pick: (p: Pick) => handlePick(p), showGameAd: () => { S.sheet = 'interstitial'; render(); }, targets: () => (S.view && S.view.game !== 'domino' ? boardUi(S.view as BoardView).targets : []),
+  pick: (p: Pick) => handlePick(p), stats: () => scene.stats(), showGameAd: () => { S.sheet = 'interstitial'; render(); }, targets: () => (S.view && S.view.game !== 'domino' ? boardUi(S.view as BoardView).targets : []),
   practice: (mode: Mode) => { startPractice(mode); const seat = S.practice?.table.seats[0]; if (seat) seat.away = true; S.practice?.table.refresh(); },
 };
 // the game is played in landscape: lock it where the browser allows (installed app, fullscreen)
