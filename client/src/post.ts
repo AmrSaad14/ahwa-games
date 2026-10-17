@@ -76,7 +76,7 @@ export class Post {
     for (const r of [...this.half, ...this.quarter]) r.texture.type = hdr ? THREE.HalfFloatType : THREE.UnsignedByteType;
     this.comp = this.mat(COMPOSITE, {
       sharp: { value: this.main.texture }, soft: { value: this.half[0].texture }, softer: { value: this.quarter[0].texture },
-      bloom: { value: 1 }, vignette: { value: 0.32 }, aspect: { value: new THREE.Vector2(1, 1) }, seed: { value: 0 },
+      bloom: { value: 1 }, vignette: { value: 0 }, aspect: { value: new THREE.Vector2(1, 1) }, seed: { value: 0 },
     });
     this.comp.toneMapped = true;
     this.quad.frustumCulled = false;
