@@ -1,14 +1,14 @@
 export type Lang = 'ar' | 'en';
 
 const en = {
-  brand: 'Ahwa Games', tagline: 'Coffeehouse games with friends',
+  brand: 'Kings Battle', tagline: 'Coffeehouse games with friends',
   quick: 'Quick match', friends: 'Play with friends', practice: 'Practice', leaderboard: 'Leaderboard', settings: 'Settings',
   mode_ffa2: '1 vs 1', mode_ffa3: '3 players', mode_ffa4: '4 players', mode_team: '2 vs 2 (partners)',
   modeHint_ffa2: '7 tiles each, draw from the boneyard, to 101', modeHint_ffa3: 'No 0|0, 9 tiles each, no boneyard', modeHint_ffa4: 'All tiles dealt, everyone for themselves', modeHint_team: 'Partners opposite, double six opens, to 151',
   offline: 'You are offline. Practice still works.', connecting: 'Connecting…',
   searching: 'Finding players', found: '{n} of {m} players', botsIn: 'Computer players join in {s}s', cancel: 'Cancel',
   createRoom: 'Create a room', joinRoom: 'Join a room', code: 'Room code', join: 'Join', create: 'Create', target: 'Play to', points: '{n} points',
-  room: 'Room', share: 'Share invite', copy: 'Copy code', copied: 'Code copied', shareText: 'Join my {game} table in Ahwa Games! Room code: {code}',
+  room: 'Room', share: 'Share invite', copy: 'Copy code', copied: 'Code copied', shareText: 'Join my {game} table in Kings Battle! Room code: {code}',
   empty: 'Empty seat', addBot: 'Add computer', remove: 'Remove', host: 'Host', you: 'You', bot: 'Computer', away: 'Computer playing', offlineTag: 'Reconnecting',
   start: 'Start game', waitHost: 'Waiting for the host to start', fillSeats: 'Fill every seat with a friend or a computer to start.', leave: 'Leave', teamA: 'Team A', teamB: 'Team B',
   round: 'Round {n}', to: 'to {n}', boneyard: 'Boneyard {n}', tiles: '{n} tiles',
@@ -135,14 +135,14 @@ const en = {
 type Dict = typeof en;
 
 const ar: Dict = {
-  brand: 'ألعاب القهوة', tagline: 'ألعاب القهوة مع أصحابك',
+  brand: 'معركة الملوك', tagline: 'ألعاب القهوة مع أصحابك',
   quick: 'لعب سريع', friends: 'العب مع أصحابك', practice: 'تدريب', leaderboard: 'المتصدرون', settings: 'الإعدادات',
   mode_ffa2: 'فردي', mode_ffa3: '٣ لاعبين', mode_ffa4: '٤ لاعبين', mode_team: 'زوجي ٢ ضد ٢',
   modeHint_ffa2: '٧ أحجار وبازار، لحد ١٠١', modeHint_ffa3: 'من غير دبل بلانك، ٩ أحجار، من غير بازار', modeHint_ffa4: 'كل الأحجار متوزعة، كل واحد لنفسه', modeHint_team: 'الشركا قصاد بعض، الدبل ستة يفتح، لحد ١٥١',
   offline: 'أنت غير متصل. التدريب يعمل.', connecting: 'جارٍ الاتصال…',
   searching: 'البحث عن لاعبين', found: '{n} من {m} لاعبين', botsIn: 'سينضم لاعبو الكمبيوتر خلال {s} ث', cancel: 'إلغاء',
   createRoom: 'إنشاء غرفة', joinRoom: 'دخول غرفة', code: 'كود الغرفة', join: 'دخول', create: 'إنشاء', target: 'اللعب حتى', points: '{n} نقطة',
-  room: 'غرفة', share: 'مشاركة الدعوة', copy: 'نسخ الكود', copied: 'تم نسخ الكود', shareText: 'تعالى العب {game} معايا في ألعاب القهوة! كود الغرفة: {code}',
+  room: 'غرفة', share: 'مشاركة الدعوة', copy: 'نسخ الكود', copied: 'تم نسخ الكود', shareText: 'تعالى العب {game} معايا في معركة الملوك! كود الغرفة: {code}',
   empty: 'مقعد فارغ', addBot: 'إضافة كمبيوتر', remove: 'إزالة', host: 'المضيف', you: 'أنت', bot: 'كمبيوتر', away: 'الكمبيوتر يلعب', offlineTag: 'يعيد الاتصال',
   start: 'ابدأ اللعب', waitHost: 'في انتظار المضيف ليبدأ', fillSeats: 'املأ كل المقاعد بأصحابك أو بالكمبيوتر لتبدأ.', leave: 'خروج', teamA: 'الفريق أ', teamB: 'الفريق ب',
   round: 'الجولة {n}', to: 'حتى {n}', boneyard: 'المخزن {n}', tiles: '{n} أحجار',

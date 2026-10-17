@@ -29,7 +29,7 @@ export const config = {
   login: {
     publicUrl: process.env.PUBLIC_URL || '',                // https address players reach this server on
     appScheme: process.env.APP_SCHEME || 'ahwagames',
-    appName: process.env.APP_NAME || 'Ahwa Games',
+    appName: process.env.APP_NAME || 'Kings Battle',
     googleClientId: process.env.GOOGLE_CLIENT_ID || '',
     googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
     sms: (process.env.SMS_PROVIDER || '') as 'twilio' | 'http' | 'console' | '',

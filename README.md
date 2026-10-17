@@ -1,4 +1,4 @@
-# Ahwa Games
+# Kings Battle
 
 Four coffeehouse games, played online around a 3D table in an Egyptian ahwa: **Domino, Tawla (backgammon), Chess and Ludo**. In Arabic (right-to-left) and English.
 (The working name stays until the branding step.)

@@ -1,5 +1,5 @@
 # Builds an installable Android APK of the game on every push to main (or from the Actions tab).
-# The APK is attached to the run as "ahwa-games-apk" and published on the Releases page as "Latest APK"
+# The APK is attached to the run as "kings-battle-apk" and published on the Releases page as "Latest APK"
 # (tag apk-latest), so it can be downloaded straight to a phone.
 #
 # Online play needs your game server's address baked in: set a repository variable named SERVER_URL
@@ -61,7 +61,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         continue-on-error: true
         with:
-          name: ahwa-games-apk
+          name: kings-battle-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 1
@@ -70,7 +70,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp android/app/build/outputs/apk/debug/app-debug.apk ahwa-games.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk kings-battle.apk
           gh release delete apk-latest --yes --cleanup-tag || true
-          gh release create apk-latest ahwa-games.apk --title "Latest APK" --target "$GITHUB_SHA" --prerelease \
-            --notes "Built from ${GITHUB_SHA::7}. Install on Android: download ahwa-games.apk and allow installing from this source."
+          gh release create apk-latest kings-battle.apk --title "Latest APK" --target "$GITHUB_SHA" --prerelease \
+            --notes "Built from ${GITHUB_SHA::7}. Install on Android: download kings-battle.apk and allow installing from this source."

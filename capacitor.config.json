@@ -1,8 +1,8 @@
 {
   "appId": "com.ahwa.domino",
-  "appName": "Ahwa Games",
+  "appName": "Kings Battle",
   "webDir": "client/dist",
-  "backgroundColor": "#1b120c",
+  "backgroundColor": "#2a0710",
   "server": { "androidScheme": "https" },
   "android": { "allowMixedContent": false },
   "ios": { "contentInset": "never" }
