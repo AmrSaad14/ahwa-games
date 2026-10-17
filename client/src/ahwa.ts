@@ -45,14 +45,15 @@ export function floorTexture(repeat: number) {
     g.fillStyle = '#d6c6a6'; g.fillRect(0, 0, w, w);
     const c = w / 2;
     // corner quarter-circles form rings across four tiles
-    g.fillStyle = '#7c2f24';
+    // muted, worn colours: a real old floor, and calm enough not to compete with the game
+    g.fillStyle = '#6f3a2d';
     for (const [x, y] of [[0, 0], [w, 0], [0, w], [w, w]]) { g.beginPath(); g.arc(x, y, w * 0.34, 0, Math.PI * 2); g.fill(); }
     g.fillStyle = '#d6c6a6';
     for (const [x, y] of [[0, 0], [w, 0], [0, w], [w, w]]) { g.beginPath(); g.arc(x, y, w * 0.25, 0, Math.PI * 2); g.fill(); }
-    g.fillStyle = '#2a2420';
+    g.fillStyle = '#3e342c';
     for (const [x, y] of [[0, 0], [w, 0], [0, w], [w, w]]) { g.beginPath(); g.arc(x, y, w * 0.13, 0, Math.PI * 2); g.fill(); }
     // centre flower
-    g.fillStyle = '#2f5d52';
+    g.fillStyle = '#3d5c53';
     for (let i = 0; i < 4; i++) {
       g.save(); g.translate(c, c); g.rotate((i * Math.PI) / 2);
       g.beginPath(); g.ellipse(0, -w * 0.13, w * 0.07, w * 0.13, 0, 0, Math.PI * 2); g.fill(); g.restore();
@@ -60,7 +61,7 @@ export function floorTexture(repeat: number) {
     g.fillStyle = '#c99a3f'; g.beginPath(); g.arc(c, c, w * 0.05, 0, Math.PI * 2); g.fill();
     // grout and wear
     g.strokeStyle = 'rgba(40,30,20,.55)'; g.lineWidth = 3; g.strokeRect(1.5, 1.5, w - 3, w - 3);
-    grime(g, w, w, 40, 'rgba(60,40,20,.10)', 60);
+    grime(g, w, w, 60, 'rgba(60,40,20,.14)', 70);
     grime(g, w, w, 25, 'rgba(255,240,210,.08)', 40);
   }, [repeat, repeat]);
 }
@@ -245,7 +246,7 @@ function framedPicture(w: number, h: number, draw: Draw, frame = mats.brass) {
 /** Builds the room around the table and returns things that animate. */
 export function buildAhwa(scene: THREE.Scene) {
   const room = new THREE.Group(); scene.add(room);
-  const floor = mesh(new THREE.PlaneGeometry(90, 90), new THREE.MeshStandardMaterial({ map: floorTexture(90 / 1.8), roughness: 0.75 }), 0, FLOOR_Y, 0, room);
+  const floor = mesh(new THREE.PlaneGeometry(90, 90), new THREE.MeshStandardMaterial({ map: floorTexture(90 / 2.4), roughness: 0.75 }), 0, FLOOR_Y, 0, room);
   floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
 
   const backZ = -16, sideX = 24, wallH = 22;
@@ -355,7 +356,8 @@ export function buildAhwa(scene: THREE.Scene) {
     mesh(new THREE.CylinderGeometry(0.03, 0.03, 12, 4), mats.iron, b.x, b.y + 6.2, b.z, room);
     const shade = mesh(new THREE.ConeGeometry(0.9, 0.7, 20, 1, true), new THREE.MeshStandardMaterial({ color: 0x2f6c5c, side: THREE.DoubleSide, roughness: 0.5 }), b.x, b.y + 0.35, b.z, room);
     shade.castShadow = false;
-    mesh(new THREE.SphereGeometry(0.28, 14, 10), new THREE.MeshBasicMaterial({ color: 0xffe0a0 }), b.x, b.y, b.z, room);
+    // brighter than white, so the film look makes the bulb glow
+    mesh(new THREE.SphereGeometry(0.28, 14, 10), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffe0a0).multiplyScalar(5) }), b.x, b.y, b.z, room);
     const l = new THREE.PointLight(0xffc27a, 30, 20, 1.7); l.position.copy(b); room.add(l);
   }
 

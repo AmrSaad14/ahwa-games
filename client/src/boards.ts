@@ -296,7 +296,7 @@ export class ChessBoard implements BoardRenderer {
         g.strokeStyle = 'rgba(20,10,5,.35)'; g.lineWidth = 1.5; g.strokeRect(f * c, r * c, c, c);
       }
     });
-    const top = new THREE.Mesh(new THREE.PlaneGeometry(B, B), phys({ map: tex, roughness: 0.42, clearcoat: 0.6, clearcoatRoughness: 0.35, envMapIntensity: 0.3 }));
+    const top = new THREE.Mesh(new THREE.PlaneGeometry(B, B), phys({ map: tex, roughness: 0.58, clearcoat: 0.35, clearcoatRoughness: 0.6, envMapIntensity: 0.3, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.1 }));   // satin lacquer: a sheen, no hot spot
     top.rotation.x = -Math.PI / 2; top.position.y = 0.302; top.receiveShadow = true;
     frame.receiveShadow = true; frame.castShadow = true;
     this.root.add(frame, top, this.marks, this.pieces);
@@ -439,7 +439,7 @@ export class TawlaBoard implements BoardRenderer {
       // the bearing-off tray is lined with dark felt
       g.fillStyle = '#1f3a2a'; g.fillRect(x0(TW / 2 - EDGE - TRAY + 0.05), EDGE * sx, (TRAY - 0.1) * sx, h - 2 * EDGE * sx);
     });
-    const top = new THREE.Mesh(new THREE.PlaneGeometry(TW, TD), phys({ map: tex, roughness: 0.45, clearcoat: 0.5, clearcoatRoughness: 0.35, envMapIntensity: 0.25 }));
+    const top = new THREE.Mesh(new THREE.PlaneGeometry(TW, TD), phys({ map: tex, roughness: 0.6, clearcoat: 0.3, clearcoatRoughness: 0.6, envMapIntensity: 0.25, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.1 }));   // satin lacquer: a sheen, no hot spot
     top.rotation.x = -Math.PI / 2; top.position.y = FIELD_Y; top.receiveShadow = true;
     // raised rails with sadaf inlay on top: the four sides, the middle bar and the tray divider
     const rails = new THREE.Group();

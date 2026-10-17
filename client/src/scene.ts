@@ -5,6 +5,7 @@ import type { AnyView, TableView } from '../../shared/protocol';
 import type { BoardGameId } from '../../shared/games/defs';
 import { BoardRenderer, BoardUi, ChessBoard, LudoBoard, Pick, TawlaBoard, initBoardEnvironment } from './boards';
 import { HEAD_Y, PEOPLE, makePerson } from './people';
+import { Post } from './post';
 import { FLOOR_Y, Smoke, TEX_HI, buildAhwa, canvasTex, makeChair, makeShisha, makeTable, makeTeaGlass } from './ahwa';
 
 /** The six characters players pick from; the colour stands for them in lists and badges. */
@@ -96,6 +97,8 @@ export class TableScene {
   /** Graphics level: 2 full, 1 lighter, 0 lightest. Steps down by itself when frames are slow, and is remembered. */
   private gfx = initialGfx();
   private perf = { sum: 0, n: 0, slow: 0 };
+  /** Film look (depth of field, bloom, grade) on the top graphics level. */
+  private post: Post | null = null;
   private pinch = new Map<number, { x: number; y: number }>();
   private pinchStart = 0; private zoomStart = 1;
   onGhost: (e: End) => void = () => {};
@@ -169,6 +172,7 @@ export class TableScene {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
     initBoardEnvironment(this.renderer);
+    if (this.gfx === 2) { try { this.post = new Post(this.renderer); } catch { this.post = null; } }
     const s = this.scene;
     s.background = new THREE.Color(0x24170e);
     s.fog = new THREE.Fog(0x2a1b10, 30, 75);
@@ -484,6 +488,7 @@ export class TableScene {
     const pr = Math.max(0.6, Math.min(cap, window.devicePixelRatio || 1, Math.sqrt(budget / Math.max(1, w * h))));
     if (Math.abs(this.renderer.getPixelRatio() - pr) > 0.01) this.renderer.setPixelRatio(pr);
     this.renderer.setSize(w, h, false);
+    if (this.post) { const b = this.renderer.getDrawingBufferSize(new THREE.Vector2()); this.post.setSize(b.x, b.y); }
     this.camera.aspect = w / h;
     this.frameKey = '';
     this.placeCamera(0);
@@ -503,6 +508,7 @@ export class TableScene {
     this.gfx = (this.gfx - 1) as 0 | 1;
     try { localStorage.setItem(GFX_KEY, String(this.gfx)); } catch { /* private mode */ }
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.post?.dispose(); this.post = null;
     const sh = this.spot.shadow;
     sh.mapSize.setScalar(1024); sh.map?.dispose(); (sh as { map: unknown }).map = null;
     this.resize();
@@ -637,7 +643,12 @@ export class TableScene {
     this.board?.tick(this.clock);
     this.ghostMat.opacity = 0.35 + Math.sin(t * 5) * 0.2;
     if (this.ring.visible) (this.ring.material as THREE.MeshBasicMaterial).opacity = 0.5 + Math.sin(t * 3) * 0.3;
-    this.renderer.render(this.scene, this.camera);
+    if (this.post) {
+      // the table and the people at it stay sharp; the rest of the café softens
+      const playing = !!this.view && this.view.phase !== 'lobby';
+      try { this.post.render(this.scene, this.camera, SEAT_R + 0.8, playing ? 0.9 : 1); }   // the players' chairs are the edge of the sharp zone
+      catch { this.post.dispose(); this.post = null; this.renderer.setRenderTarget(null); this.renderer.render(this.scene, this.camera); }
+    } else this.renderer.render(this.scene, this.camera);
     this.onFrame();
   }
 
