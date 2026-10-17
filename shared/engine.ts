@@ -10,9 +10,10 @@ export const TILES: ReadonlyArray<readonly [number, number]> = (() => {
 /**
  * Every way to play, across all games, following how they are played in Egypt.
  * Domino: ffa2 (فردي), ffa3, ffa4, team (زوجي).
- * Tawla: tawla (عادة, regular backgammon), mahbousa (محبوسة), tawla31 (٣١), gulbahar (جلبهار).
- * Chess: chess1 / chess3 / chess (5 min) / chess10 time controls.
- * Ludo: ludo2-4 classic, ludoq2/ludoq4 quick (سريع), ludom2/ludom4 master (ماستر).
+ * Tawla: tawla (عادة, regular backgammon), mahbousa (محبوسة), tawla31 (٣١).
+ * Chess: one standard game, 5 minutes each plus 2 seconds a move.
+ * Ludo: classic rules for 2, 3 or 4 players.
+ * (The rules engines still know gulbahar, the other chess clocks and quick/master ludo, but they are not offered.)
  */
 export type Mode = 'ffa2' | 'ffa3' | 'ffa4' | 'team'
   | 'tawla' | 'mahbousa' | 'tawla31' | 'gulbahar'
@@ -20,7 +21,15 @@ export type Mode = 'ffa2' | 'ffa3' | 'ffa4' | 'team'
   | 'ludo2' | 'ludo3' | 'ludo4' | 'ludoq2' | 'ludoq4' | 'ludom2' | 'ludom4';
 export type GameId = 'domino' | 'tawla' | 'chess' | 'ludo';
 export const GAMES: GameId[] = ['domino', 'tawla', 'chess', 'ludo'];
+/** The ways to play that the app offers, per game. */
 export const GAME_MODES: Record<GameId, Mode[]> = {
+  domino: ['ffa2', 'ffa3', 'ffa4', 'team'],
+  tawla: ['tawla', 'mahbousa', 'tawla31'],
+  chess: ['chess'],
+  ludo: ['ludo2', 'ludo3', 'ludo4'],
+};
+/** Every mode the rules engines understand (including ones no longer offered). */
+const ALL_MODES: Record<GameId, Mode[]> = {
   domino: ['ffa2', 'ffa3', 'ffa4', 'team'],
   tawla: ['tawla', 'mahbousa', 'tawla31', 'gulbahar'],
   chess: ['chess1', 'chess3', 'chess', 'chess10'],
@@ -33,7 +42,7 @@ export const MODE_PLAYERS: Record<Mode, number> = {
   chess1: 2, chess3: 2, chess: 2, chess10: 2,
   ludo2: 2, ludo3: 3, ludo4: 4, ludoq2: 2, ludoq4: 4, ludom2: 2, ludom4: 4,
 };
-export const gameOf = (m: Mode): GameId => (GAMES.find(g => GAME_MODES[g].includes(m)) ?? 'domino');
+export const gameOf = (m: Mode): GameId => (GAMES.find(g => ALL_MODES[g].includes(m)) ?? 'domino');
 /** Tawla variants. */
 export type TawlaVariant = 'aada' | 'mahbousa' | 'tawla31' | 'gulbahar';
 export const tawlaVariant = (m: Mode): TawlaVariant => (m === 'tawla' ? 'aada' : (m as TawlaVariant));
