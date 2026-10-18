@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeRigid } from './perf';
+import { Prim, Shell, buildBody } from './body';
 import { phys } from './boards';
 
 /* Realistic, procedurally sculpted Egyptian coffeehouse regulars.
@@ -274,7 +275,7 @@ export const ELBOW_TO_PALM = FOREARM + 0.22;
 const texCache = new Map<string, THREE.Texture>();
 const cached = (k: string, make: () => THREE.Texture) => { let t = texCache.get(k); if (!t) { t = make(); texCache.set(k, t); } return t; };
 
-export function makePerson(p: PersonSpec, key: string, standing = false): Person {
+export function makePerson(p: PersonSpec, key: string, standing = false, withBody = true): Person {
   const group = new THREE.Group(), piv = new THREE.Group(); piv.position.y = -1.75; group.add(piv);
   const legs = new THREE.Group(); legs.position.y = -1.75; group.add(legs);
   const mesh = (parent: THREE.Object3D, geo: THREE.BufferGeometry, mat: THREE.Material, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); parent.add(m); return m; };
@@ -307,11 +308,8 @@ export function makePerson(p: PersonSpec, key: string, standing = false): Person
   const B = { tall: p.build?.tall ?? 1, sh: p.build?.shoulders ?? 1, arms: p.build?.arms ?? 1 };
   for (const q of prof) q[0] *= lerp(1, B.sh, sstep(1.3, 2.5, q[1]));
   piv.scale.setScalar(B.tall);
-  const torso = mesh(piv, lathe(prof), topMat); torso.scale.z = 0.62;
   if (p.top === 'suit') {
     // jacket open at the front over a white shirt and tie
-    const jacket = mesh(piv, lathe(prof.map(([r, y]) => [r * 1.05 + 0.03, y] as [number, number]).slice(0, 10), 40, 0.34, Math.PI * 2 - 0.68), sleeveMat);
-    jacket.scale.z = 0.66; (jacket.material as THREE.Material).side = THREE.DoubleSide;
     const tie = phys({ color: 0x5a1d1d, roughness: 0.5, sheen: 0.5, sheenColor: new THREE.Color(0xa04040) });
     const tg = mesh(piv, new THREE.BoxGeometry(0.16, 1.15, 0.04), tie, 0, 2.2, 0.58); tg.rotation.x = -0.12;
     mesh(piv, new THREE.BoxGeometry(0.14, 0.1, 0.05), tie, 0, 2.8, 0.36);
@@ -343,24 +341,21 @@ export function makePerson(p: PersonSpec, key: string, standing = false): Person
     return m;
   };
   const hips: THREE.Group[] = [], knees: THREE.Group[] = [];
+  const seatedLegs: V3[][] = [];
   if (standing) {
     // standing: straight legs on hip and knee joints, so they can walk
     for (const sx of [-1, 1]) {
       const hip = new THREE.Group(); hip.position.set(sx * 0.45, 0.3, 0.05); legs.add(hip);
-      capsuleBetween(hip, [0, 0, 0], [0, -1.95, 0], 0.42, 0.33, pantsMat);
       const knee = new THREE.Group(); knee.position.y = -1.95; hip.add(knee);
-      capsuleBetween(knee, [0, 0, 0], [0, -1.95, 0.02], 0.3, 0.22, pantsMat);
       const shoe = mesh(knee, new THREE.CapsuleGeometry(0.2, 0.55, 6, 12), shoeMat, 0, -2.05, 0.28); shoe.rotation.x = Math.PI / 2; shoe.scale.set(1.05, 1, 0.65);
       hips.push(hip); knees.push(knee);
     }
     // the galabeya falls straight from the waist to the shins
     if (robe) { const skirt = mesh(legs, new THREE.CylinderGeometry(0.95, 1.2, 3.3, 24, 1, true), topMat, 0, -1.3, 0.05); (skirt.material as THREE.Material).side = THREE.DoubleSide; skirt.scale.z = 0.7; }
-    else mesh(legs, new THREE.BoxGeometry(1.25, 0.55, 0.9), pantsMat, 0, 0.35, 0.05);
   } else {
     for (const sx of [-1, 1]) {
       const hip: V3 = [sx * 0.45, 0.3, 0.05], knee: V3 = [sx * 0.5, 0.36, 1.9], ankle: V3 = [sx * 0.52, -1.62, 2.0];
-      capsuleBetween(legs, hip, knee, 0.42, 0.33, pantsMat);
-      capsuleBetween(legs, knee, ankle, 0.3, 0.22, pantsMat);
+      seatedLegs.push([hip, knee, ankle]);
       const shoe = mesh(legs, new THREE.CapsuleGeometry(0.2, 0.55, 6, 12), shoeMat, sx * 0.52, -1.72, 2.3); shoe.rotation.x = Math.PI / 2; shoe.scale.set(1.05, 1, 0.65);
     }
     if (robe) {
@@ -375,11 +370,10 @@ export function makePerson(p: PersonSpec, key: string, standing = false): Person
         return [x, lerp(0.66, -1.5, k) - (1 - k) * 0, lerp(2.12, 2.1, k) + 0.1 * Math.sin(k * Math.PI) - 0.2 * sag * Math.sin(k * Math.PI)];
       });
       const dm = mesh(legs, drape, topMat); (dm.material as THREE.Material).side = THREE.DoubleSide;
-    } else mesh(legs, new THREE.BoxGeometry(1.25, 0.55, 0.9), pantsMat, 0, 0.35, 0.2);
+    }
   }
 
   /* neck and head */
-  const neck = mesh(piv, new THREE.CylinderGeometry(fem ? 0.22 : 0.27, fem ? 0.26 : 0.31, 0.8, 20), handSkin, 0, 3.1, 0.0); neck.rotation.x = 0.12;
   const head = new THREE.Group(); head.position.set(0, HEAD_Y, 0.08); piv.add(head);
   const hs = new THREE.Group(); hs.scale.setScalar(HEAD_R); head.add(hs);
   // denser around the face, so the nose, lips and eyelids keep their shape
@@ -558,26 +552,11 @@ export function makePerson(p: PersonSpec, key: string, standing = false): Person
   /* arms */
   const arms: THREE.Group[] = [], elbows: THREE.Group[] = [], hands: THREE.Group[] = [];
   const shortSleeve = p.top === 'polo' || p.top === 'tee';
-  // sculpted limbs: a rounded shoulder (deltoid), a biceps swell, a forearm thick below the elbow and slim at the wrist
   const A = B.arms * (fem ? 0.82 : 1);
-  // (muscle and sleeve thickness grow down the arm; the cap at the shoulder stays slim)
-  const limb = (pts: [number, number][], grow = 0, k = A) => lathe(pts.map(([r, y]) => { const w = sstep(0.05, -0.35, y); return [r * lerp(1, k, w) + grow * lerp(0.3, 1, w), y] as [number, number]; }), 22);
-  // the shoulder cap rounds off low and narrow so it melts into the slope of the shoulders (no ball on top)
-  const UPPER: [number, number][] = [[0.001, -UPPER_ARM - 0.1], [0.12, -UPPER_ARM - 0.07], [0.2, -UPPER_ARM + 0.02], [0.21, -1.25], [0.25, -0.98],
-    [0.285, -0.72], [0.28, -0.5], [0.285, -0.3], [0.27, -0.12], [0.235, 0.0], [0.17, 0.08], [0.08, 0.12], [0.001, 0.13]];
-  const FORE: [number, number][] = [[0.001, -FOREARM - 0.04], [0.12, -FOREARM - 0.02], [0.135, -FOREARM + 0.12], [0.16, -0.95], [0.2, -0.6],
-    [0.235, -0.3], [0.23, -0.12], [0.205, 0.02], [0.12, 0.1], [0.001, 0.12]];
   for (const sx of [-1, 1]) {
     const sh = new THREE.Group(); sh.position.set(sx * (fem ? 0.84 : 0.94) * B.sh, SHOULDER_Y - 0.2, -0.02); sh.rotation.set(0, -sx * 0.17, sx * 0.1); piv.add(sh);   // the joint sits at the edge of the chest
     const arm = new THREE.Group(); arm.rotation.x = -1.1; sh.add(arm);
-    if (shortSleeve) {
-      // a short sleeve over the shoulder, then the bare upper arm
-      mesh(arm, limb(UPPER), handSkin);
-      const sl = mesh(arm, limb([[0.3, -0.6] as [number, number], ...UPPER.filter(q => q[1] > -0.55)], 0.035), sleeveMat);   // a sleeve that follows the arm (sl.material as THREE.Material).side = THREE.DoubleSide;
-    } else mesh(arm, limb(UPPER, 0.045), sleeveMat);
     const el = new THREE.Group(); el.position.y = -UPPER_ARM; el.rotation.x = -0.45; arm.add(el);
-    const foreMat = shortSleeve ? handSkin : sleeveMat;
-    mesh(el, limb(FORE, shortSleeve ? 0 : 0.04), foreMat);
     if (robe) { const cuff = mesh(el, new THREE.CylinderGeometry(0.33 * A, 0.24 * A, 0.62, 20, 1, true), sleeveMat, 0, -FOREARM + 0.38, 0); (cuff.material as THREE.Material).side = THREE.DoubleSide; }
     if (p.top === 'suit') mesh(el, new THREE.CylinderGeometry(0.175 * A, 0.175 * A, 0.1, 14), clothMat(0xf1eee6), 0, -FOREARM + 0.06, 0);
     // hand: palm facing down when the forearm rests on the table
@@ -603,8 +582,72 @@ export function makePerson(p: PersonSpec, key: string, standing = false): Person
   }
 
   if (standing) for (const a of arms) a.rotation.x = 0;   // arms hanging at the sides
+
+  /* the body itself: one smooth skinned shape (skin) with the clothes as fitted shells over it (portraits only need the head) */
+  if (withBody) {
+    const V = (o: THREE.Object3D, x: number, y: number, z: number) => o.localToWorld(new THREE.Vector3(x, y, z));
+    group.updateMatrixWorld(true);
+    // a point in the torso's own frame (no allocation: these run for every point of the grid)
+    const pivInv = piv.matrixWorld.clone().invert(), _l = new THREE.Vector3();
+    const pl = (q: THREE.Vector3) => _l.copy(q).applyMatrix4(pivInv);
+    const bones: THREE.Object3D[] = [piv, legs, ...arms, ...elbows, ...hips, ...knees];
+    const PIV = 0, LEGS = 1, ARM = (i: number) => 2 + i, EL = (i: number) => 4 + i, HIP = (i: number) => 6 + i, KNEE = (i: number) => 8 + i;
+    const T = B.tall, w = fem ? 0.93 : 1;
+    const P = (bone: number, a: THREE.Vector3, b: THREE.Vector3, ra: number, rb: number, zs?: number, cut?: (q: THREE.Vector3) => number): Prim => ({ a, b, ra, rb, bone, zs, cut });
+    const torso: Prim[] = [
+      P(PIV, V(piv, -0.36, 0.38, 0), V(piv, 0.36, 0.38, 0), (fem ? 0.6 : 0.52) * T, (fem ? 0.6 : 0.52) * T, 0.72),                                   // hips
+      P(PIV, V(piv, 0, 0.55, 0), V(piv, 0, 1.45, 0.02), (fem ? 0.62 : 0.68 + belly * 0.12) * T, (fem ? 0.6 : 0.7 + belly * 0.14) * T, 0.66),        // waist
+      P(PIV, V(piv, 0, 1.6, 0), V(piv, 0, 2.15, 0), (fem ? 0.74 : 0.84) * B.sh * T, (fem ? 0.78 : 0.9) * B.sh * T, 0.62),                         // chest
+      P(PIV, V(piv, -0.7 * B.sh * w, 2.32, -0.05), V(piv, 0.7 * B.sh * w, 2.32, -0.05), 0.34 * T, 0.34 * T, 0.78),                              // shoulder line
+      P(PIV, V(piv, 0, 2.3, -0.06), V(piv, 0, 2.72, -0.04), 0.46 * T, 0.36 * T, 0.72),                                                            // up to the neck (trapezius)
+    ];
+    if (belly > 0.1) torso.push(P(PIV, V(piv, 0, 1.05, 0.22), V(piv, 0, 1.25, 0.22), (0.5 + belly * 0.3) * T, (0.5 + belly * 0.25) * T, 0.75));
+    if (fem) for (const sx of [-1, 1]) torso.push(P(PIV, V(piv, sx * 0.3, 1.92, 0.3), V(piv, sx * 0.3, 1.98, 0.3), 0.25 * T, 0.24 * T, 0.85));
+    const neck = [P(PIV, V(piv, 0, 2.55, -0.02), V(piv, 0, 3.32, 0.05), (fem ? 0.23 : 0.28) * T, (fem ? 0.21 : 0.25) * T)];
+    const armP = (i: number, cutAt?: number) => {
+      const S = V(arms[i], 0, 0, 0), E = V(elbows[i], 0, 0, 0), W = V(elbows[i], 0, -FOREARM + 0.04, 0);
+      const r = A * T, dir = E.clone().sub(S).normalize();
+      // a garment ending part way down the upper arm (short sleeves) is cut flat across the arm
+      const cut = cutAt === undefined ? undefined : (() => { const C = S.clone().lerp(E, cutAt); return (q: THREE.Vector3) => (q.x - C.x) * dir.x + (q.y - C.y) * dir.y + (q.z - C.z) * dir.z; })();
+      const list = [
+        P(ARM(i), S, S.clone().lerp(E, 0.08), 0.27 * r, 0.27 * r, 1, cut),                                                                            // shoulder (deltoid)
+        P(ARM(i), S.clone().lerp(E, 0.08), E, 0.255 * r, 0.19 * r, 1, cut),                                                                           // upper arm
+        P(ARM(i), S.clone().lerp(E, 0.35), S.clone().lerp(E, 0.55), 0.27 * r, 0.25 * r, 1, cut),                                                    // biceps
+      ];
+      if (cutAt === undefined || cutAt > 1) list.push(P(EL(i), E, W, 0.2 * r, 0.13 * r, 1, cut), P(EL(i), E.clone().lerp(W, 0.12), E.clone().lerp(W, 0.4), 0.215 * r, 0.19 * r, 1, cut));   // forearm
+      return list;
+    };
+    const legP = (): Prim[] => {
+      const out: Prim[] = [];
+      for (let i = 0; i < 2; i++) {
+        const [hp, kn, an] = standing
+          ? [V(hips[i], 0, 0, 0), V(knees[i], 0, 0, 0), V(knees[i], 0, -1.95, 0.02)]
+          : seatedLegs[i].map(q => V(legs, q[0], q[1], q[2]));
+        const hb = standing ? HIP(i) : LEGS, kb = standing ? KNEE(i) : LEGS;
+        out.push(P(hb, hp, kn, 0.44, 0.31), P(hb, hp.clone().lerp(kn, 0.15), hp.clone().lerp(kn, 0.5), 0.46, 0.4), P(kb, kn, an, 0.29, 0.18), P(kb, kn.clone().lerp(an, 0.15), kn.clone().lerp(an, 0.45), 0.31, 0.27));
+      }
+      return out;
+    };
+    const sleeve = p.top === 'polo' || p.top === 'tee' ? 0.48 : undefined;          // short sleeves end about half way to the elbow
+    const shells: Shell[] = [
+      // skin: the neck and the arms (the rest is always under clothes)
+      { prims: [...neck, ...torso.slice(3, 5), ...armP(0), ...armP(1)], k: 0.16, grow: 0, material: handSkin },
+      // the top: shirt, tee, blouse or galabeya, over the body and down the sleeves
+      { prims: [...torso, ...armP(0, sleeve ?? 2), ...armP(1, sleeve ?? 2)], k: 0.2, grow: robe ? 0.07 : 0.045, material: p.top === 'suit' ? clothMat(0xf1eee6) : topMat,
+        // a shirt ends at the hips (the galabeya goes on down over the legs)
+        clip: robe ? undefined : q => (fem ? 0.32 : 0.42) - pl(q).y },
+      // trousers (or the galabeya's lower part), up to the waist
+      { prims: [torso[0], { ...torso[1], cut: q => pl(q).y - 0.8 }, ...legP()], k: 0.18, grow: 0.035, material: pantsMat },
+    ];
+    if (p.top === 'suit') {
+      // the jacket over the shirt, open at the front in a V down to the buttons
+      shells.push({ prims: [...torso, ...armP(0, 2), ...armP(1, 2)], k: 0.2, grow: 0.085, material: sleeveMat,
+        clip: q => { const l = pl(q); return Math.max(0.28 - l.y, -Math.max(0.15 - l.z, Math.abs(l.x) - Math.max(0, (l.y - 1.45) * 0.32), 1.42 - l.y, l.y - 3.1)); } });
+    }
+    buildBody(JSON.stringify([p, standing]), group, bones, shells);
+  }
   group.traverse(o => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
-  mergeRigid(group, [group, piv, head, ...arms, ...elbows, ...hands, ...hips, ...knees]);
+  mergeRigid(group, [group, piv, legs, head, ...arms, ...elbows, ...hands, ...hips, ...knees]);   // (legs: the body is bound to it, it must stay)
   return { group, piv, head, arms, elbows, hands, hips, knees, eyes, lids };
 }
 

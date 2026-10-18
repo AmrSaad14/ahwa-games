@@ -207,7 +207,7 @@ export class TableScene {
       const urls: string[] = [];
       r.setScissorTest(true); r.setViewport(0, 0, S, S); r.setScissor(0, 0, S, S);
       PEOPLE.forEach((spec, i) => {
-        const p = makePerson(spec, String(i));
+        const p = makePerson(spec, String(i), false, false);
         sc.add(p.group);
         const hy = HEAD_Y - 1.75 + (spec.headwear === 'tarboosh' || spec.headwear === 'emma' ? 0.12 : 0) - 0.05;
         cam.position.set(0.9, hy + 0.1, 4.1); cam.lookAt(0, hy, 0);
@@ -215,7 +215,7 @@ export class TableScene {
         g2.drawImage(el, 0, el.height - px, px, px, 0, 0, px, px);
         urls.push(out.toDataURL('image/jpeg', 0.88));
         sc.remove(p.group);
-        p.group.traverse(o => (o as THREE.Mesh).geometry?.dispose());
+        p.group.traverse(o => { if (!(o as THREE.SkinnedMesh).isSkinnedMesh) (o as THREE.Mesh).geometry?.dispose(); });   // (bodies share their shape between copies of a character: keep it)
       });
       r.setScissorTest(false); r.setViewport(0, 0, size.x, size.y);
       this.onPortraits(urls);
@@ -464,7 +464,7 @@ export class TableScene {
   /** Your own character on the café floor (rebuilt when you pick another one). */
   private ensureWalker() {
     if (this.walker?.ch === this.homeCh) return this.walker;
-    if (this.walker) { this.scene.remove(this.walker.group); this.walker.group.traverse(o => (o as THREE.Mesh).geometry?.dispose()); }
+    if (this.walker) { this.scene.remove(this.walker.group); this.walker.group.traverse(o => { if (!(o as THREE.SkinnedMesh).isSkinnedMesh) (o as THREE.Mesh).geometry?.dispose(); }); }
     const p = makePerson(PEOPLE[this.homeCh], 'w' + this.homeCh, true);
     p.group.scale.setScalar(WALKER_SCALE);
     this.walker = Object.assign(p, { ch: this.homeCh });
