@@ -511,7 +511,7 @@ export class TableScene {
     const tableY = 0.33 / WALKER_SCALE, edge = 0.95 / WALKER_SCALE;
     for (const [a, sx] of [[0, -1], [1, 1]] as const) {
       const swing = (a === 0 ? -sw : sw) * 1.4;
-      const hang = this.walkHand.set(sx * 1.08, -1.88 + Math.abs(swing) * 0.25, 0.22 + swing);
+      const hang = this.walkHand.set(sx * 1.14, -1.9 + Math.abs(swing) * 0.25, 0.18 + swing);
       hang.lerp(this.walkHand2.set(sx * 0.85, tableY + 0.16, edge + 0.75), sk);
       reach(w.piv, w.arms[a], w.elbows[a], sx, hang, 1 - sk);
     }
@@ -569,6 +569,12 @@ export class TableScene {
   /** Test hook: look from here at that (null: back to the normal camera). */
   private camOverride: { pos: THREE.Vector3; look: THREE.Vector3 } | null = null;
   lookFrom(pos: number[] | null, look?: number[]) { this.camOverride = pos ? { pos: new THREE.Vector3(...pos), look: new THREE.Vector3(...look!) } : null; this.wake(3000); }
+  /** Test hook: all six characters standing in a row on the café floor. */
+  lineup() {
+    const g = new THREE.Group();
+    PEOPLE.forEach((spec, i) => { const p = makePerson(spec, 'l' + i, true); p.group.scale.setScalar(WALKER_SCALE); p.group.position.set(-9 + i * 3.6, FLOOR_Y + FEET_DROP * WALKER_SCALE, 9); p.piv.updateMatrix(); for (const [k, sx] of [[0, -1], [1, 1]] as const) reach(p.piv, p.arms[k], p.elbows[k], sx, new THREE.Vector3(sx * 1.14, -1.9, 0.18), 1); g.add(p.group); });
+    this.scene.add(g); if (this.walker) this.walker.group.visible = false; this.wake(5000);
+  }
   pose(type: ActKind, k: string | undefined, fix: number) { this.posing = { type, k, fix }; this.wake(5000); }
   animate(seat: number, type: ActKind, k?: string) {
     const v = this.view;
@@ -717,7 +723,7 @@ export class TableScene {
     const p = makePerson(PEOPLE[i], String(i));
     const g = p.group;
     g.add(makeChair());
-    const data: CharData = Object.assign(newActor(p, regular, regular ? 0.85 : SEAT_R - T - 0.35), { ch: i, seat: -1 });
+    const data: CharData = Object.assign(newActor(p, regular, regular ? 0.85 : SEAT_R - T - 0.35, PEOPLE[i]), { ch: i, seat: -1 });
     g.userData = data;
     if (regular) {
       // holding a glass of tea
@@ -1068,7 +1074,11 @@ export class TableScene {
     for (const c of this.chars) if (c) { c.updateMatrixWorld(); heads.push((c.userData.headW = headOf(c))); }
     const activePos = this.view && this.view.phase === 'play' ? this.posToSeat.indexOf(this.view.turn) : -1;
     const sights: Sights = { board: this.boardFocus, heads, you: this.camera.position, activeHead: activePos >= 0 && this.chars[activePos] ? this.chars[activePos]!.userData.headW : null };
-    if (this.posing) for (const c of this.chars) if (c) (c.userData as CharData).anim = { ...this.posing, t0: t, d: 1 };
+    if (this.posing) for (const c of this.chars) if (c) {
+      const u = c.userData as CharData, P = this.posing;
+      if ((P.type as string) === 'habit') { u.anim = null; u.active = false; u.idle = { kind: P.k as never, t0: t - 10 * P.fix, d: 10 }; }
+      else u.anim = { ...P, t0: t, d: 1 };
+    }
     for (const c of this.chars) if (c) act(c, c.userData as CharData, t, dt, amp, sights, c.userData.headW);
     for (const r of this.regulars) {
       const u = r.userData as CharData;

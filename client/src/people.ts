@@ -21,6 +21,10 @@ export interface PersonSpec {
   glasses?: boolean; sebha?: boolean; watch?: boolean; earrings?: boolean; belly?: number;
   iris?: string;
   swatch: number;
+  /** Their own body: height, shoulder width, how muscular the arms are, how much they stoop (all about 1 = average). */
+  build?: { tall?: number; shoulders?: number; arms?: number; hunch?: number };
+  /** Their own habits while waiting (see acting.ts), and how quickly they move (old men slower). */
+  habits?: string[]; tempo?: number;
 }
 
 /* ---------- small maths ---------- */
@@ -292,10 +296,15 @@ export function makePerson(p: PersonSpec, key: string, standing = false): Person
   /* torso */
   const fem = p.sex === 'f', belly = p.belly ?? 0;
   const prof: [number, number][] = [
-    [0.001, 0.0], [0.7, 0.02], [fem ? 0.98 : 0.88, 0.4], [fem ? 0.82 : 0.86 + belly * 0.12, 0.95], [fem ? 0.78 : 0.86 + belly * 0.16, 1.3],
-    [fem ? 0.9 : 0.9 + belly * 0.08, 1.75], [fem ? 0.92 : 0.98, 2.15], [fem ? 0.9 : 1.0, 2.42], [0.82, 2.68], [0.52, 2.86], [0.33, 2.93], [0.3, 2.95],
+    // a person's shape: hips, a narrower waist (unless there is a belly), the chest widening up to the shoulders
+    [0.001, 0.0], [0.7, 0.02], [fem ? 0.98 : 0.86, 0.4], [fem ? 0.8 : 0.79 + belly * 0.16, 0.95], [fem ? 0.76 : 0.78 + belly * 0.2, 1.3],
+    [fem ? 0.86 : 0.88 + belly * 0.08, 1.75], [fem ? 0.86 : 0.95, 2.15], [fem ? 0.8 : 0.88, 2.42], [fem ? 0.68 : 0.74, 2.68], [0.5, 2.86], [0.33, 2.93], [0.3, 2.95],
   ];
   const lathe = (pts: [number, number][], segs = 40, start = 0, len = Math.PI * 2) => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), segs, start, len);
+  // their own build: broad or narrow shoulders and chest, and their height (the whole upper body scales)
+  const B = { tall: p.build?.tall ?? 1, sh: p.build?.shoulders ?? 1, arms: p.build?.arms ?? 1 };
+  for (const q of prof) q[0] *= lerp(1, B.sh, sstep(1.3, 2.5, q[1]));
+  piv.scale.setScalar(B.tall);
   const torso = mesh(piv, lathe(prof), topMat); torso.scale.z = 0.62;
   if (p.top === 'suit') {
     // jacket open at the front over a white shirt and tie
@@ -547,22 +556,29 @@ export function makePerson(p: PersonSpec, key: string, standing = false): Person
   /* arms */
   const arms: THREE.Group[] = [], elbows: THREE.Group[] = [], hands: THREE.Group[] = [];
   const shortSleeve = p.top === 'polo' || p.top === 'tee';
+  // sculpted limbs: a rounded shoulder (deltoid), a biceps swell, a forearm thick below the elbow and slim at the wrist
+  const A = B.arms * (fem ? 0.82 : 1);
+  const limb = (pts: [number, number][], grow = 0, k = A) => lathe(pts.map(([r, y]) => [r * k + grow, y] as [number, number]), 22);
+  const UPPER: [number, number][] = [[0.001, -UPPER_ARM - 0.1], [0.12, -UPPER_ARM - 0.07], [0.2, -UPPER_ARM + 0.02], [0.21, -1.25], [0.25, -0.98],
+    [0.285, -0.72], [0.28, -0.5], [0.29, -0.3], [0.31, -0.12], [0.29, 0.02], [0.22, 0.13], [0.1, 0.19], [0.001, 0.2]];
+  const FORE: [number, number][] = [[0.001, -FOREARM - 0.04], [0.12, -FOREARM - 0.02], [0.135, -FOREARM + 0.12], [0.16, -0.95], [0.2, -0.6],
+    [0.235, -0.3], [0.23, -0.12], [0.205, 0.02], [0.12, 0.1], [0.001, 0.12]];
   for (const sx of [-1, 1]) {
-    const sh = new THREE.Group(); sh.position.set(sx * (fem ? 0.9 : 1.0), SHOULDER_Y, -0.02); sh.rotation.set(0, -sx * 0.17, sx * 0.1); piv.add(sh);
+    const sh = new THREE.Group(); sh.position.set(sx * (fem ? 0.86 : 0.98) * B.sh, SHOULDER_Y - 0.1, -0.02); sh.rotation.set(0, -sx * 0.17, sx * 0.1); piv.add(sh);   // the joint sits at the edge of the chest
     const arm = new THREE.Group(); arm.rotation.x = -1.1; sh.add(arm);
-    mesh(arm, new THREE.SphereGeometry(fem ? 0.23 : 0.26, 18, 12), sleeveMat, 0, -0.08, 0);
     if (shortSleeve) {
-      // a short sleeve, then bare upper arm
-      const sl = mesh(arm, new THREE.CylinderGeometry(0.3, 0.31, 0.62, 18, 1, true), sleeveMat, 0, -0.33, 0); (sl.material as THREE.Material).side = THREE.DoubleSide;
-      capsuleBetween(arm, [0, -0.1, 0], [0, -UPPER_ARM, 0], 0.25, 0.21, handSkin);
-    } else capsuleBetween(arm, [0, -0.05, 0], [0, -UPPER_ARM, 0], fem ? 0.25 : 0.3, fem ? 0.2 : 0.24, sleeveMat);
+      // a short sleeve over the shoulder, then the bare upper arm
+      mesh(arm, limb(UPPER), handSkin);
+      const sl = mesh(arm, limb([[0.3, -0.6] as [number, number], ...UPPER.filter(q => q[1] > -0.55)], 0.035), sleeveMat);   // a sleeve that follows the arm (sl.material as THREE.Material).side = THREE.DoubleSide;
+    } else mesh(arm, limb(UPPER, 0.045), sleeveMat);
     const el = new THREE.Group(); el.position.y = -UPPER_ARM; el.rotation.x = -0.45; arm.add(el);
     const foreMat = shortSleeve ? handSkin : sleeveMat;
-    capsuleBetween(el, [0, 0, 0], [0, -FOREARM, 0], fem ? 0.19 : 0.22, fem ? 0.13 : 0.16, foreMat);
-    if (robe) { const cuff = mesh(el, new THREE.CylinderGeometry(0.3, 0.22, 0.6, 18, 1, true), sleeveMat, 0, -FOREARM + 0.4, 0); (cuff.material as THREE.Material).side = THREE.DoubleSide; }
-    if (p.top === 'suit') mesh(el, new THREE.CylinderGeometry(0.17, 0.17, 0.1, 14), clothMat(0xf1eee6), 0, -FOREARM + 0.06, 0);
+    mesh(el, limb(FORE, shortSleeve ? 0 : 0.04), foreMat);
+    if (robe) { const cuff = mesh(el, new THREE.CylinderGeometry(0.33 * A, 0.24 * A, 0.62, 20, 1, true), sleeveMat, 0, -FOREARM + 0.38, 0); (cuff.material as THREE.Material).side = THREE.DoubleSide; }
+    if (p.top === 'suit') mesh(el, new THREE.CylinderGeometry(0.175 * A, 0.175 * A, 0.1, 14), clothMat(0xf1eee6), 0, -FOREARM + 0.06, 0);
     // hand: palm facing down when the forearm rests on the table
     const hand = new THREE.Group(); hand.position.y = -FOREARM - 0.02; el.add(hand);
+    hand.scale.setScalar(Math.sqrt(A));
     const palm = mesh(hand, new THREE.CapsuleGeometry(0.15, 0.22, 6, 12), handSkin, 0, -0.2, 0); palm.scale.set(fem ? 1.0 : 1.15, 1, 0.55);
     for (let k = 0; k < 4; k++) {
       const fx = sx * (-0.12 + k * 0.08) * (fem ? 0.9 : 1), len = [0.2, 0.24, 0.23, 0.18][k] * (fem ? 0.95 : 1);
@@ -572,7 +588,7 @@ export function makePerson(p: PersonSpec, key: string, standing = false): Person
     }
     const th = new THREE.Group(); th.position.set(-sx * 0.15, -0.15, 0.02); th.rotation.set(0.3, 0, -sx * 0.7); hand.add(th);
     mesh(th, new THREE.CapsuleGeometry(0.05, 0.2, 4, 8), handSkin, 0, -0.14, 0);
-    if (p.watch && sx === -1) { const w = mesh(el, new THREE.TorusGeometry(0.16, 0.035, 8, 20), phys({ color: 0x2a2a2a, metalness: 0.6, roughness: 0.3 }), 0, -FOREARM + 0.13, 0); w.rotation.x = Math.PI / 2; mesh(el, new THREE.CylinderGeometry(0.1, 0.1, 0.05, 16), gold, 0, -FOREARM + 0.13, 0.17).rotation.x = Math.PI / 2; }
+    if (p.watch && sx === -1) { const w = mesh(el, new THREE.TorusGeometry(0.16 * A, 0.035, 8, 20), phys({ color: 0x2a2a2a, metalness: 0.6, roughness: 0.3 }), 0, -FOREARM + 0.13, 0); w.rotation.x = Math.PI / 2; mesh(el, new THREE.CylinderGeometry(0.1, 0.1, 0.05, 16), gold, 0, -FOREARM + 0.13, 0.17).rotation.x = Math.PI / 2; }
     if (p.sebha && sx === -1) {
       const bead = phys({ color: 0x7a2a12, roughness: 0.25, clearcoat: 1 });
       const sb = new THREE.Group(); sb.position.set(0, -0.25, -0.1); hand.add(sb);
@@ -592,20 +608,26 @@ export function makePerson(p: PersonSpec, key: string, standing = false): Person
 export const PEOPLE: PersonSpec[] = [
   // عم فتحي: an old-school effendi in a tarboosh, suit and glasses
   { skin: 0xa77a5e, sex: 'm', age: 2, hair: 0xd8d4cc, hairStyle: 'short', brows: 0xb9b2a6, mustache: 'thick', stubble: 0.25,
-    headwear: 'tarboosh', top: 'suit', cloth: 0xf1eee6, cloth2: 0x4e4238, pants: 0x4e4238, shoes: 0x2a1a10, glasses: true, belly: 0.6, swatch: 0x9e1b17 },
+    headwear: 'tarboosh', top: 'suit', cloth: 0xf1eee6, cloth2: 0x4e4238, pants: 0x4e4238, shoes: 0x2a1a10, glasses: true, belly: 0.6, swatch: 0x9e1b17,
+    build: { tall: 0.96, shoulders: 0.9, arms: 0.86, hunch: 0.12 }, habits: ['glasses', 'mustache', 'sip', 'nod', 'chin'], tempo: 0.75 },
   // كابتن سامي: a retired football captain, thick black moustache, navy polo, watch
   { skin: 0x8f654b, sex: 'm', age: 1, hair: 0x2c231d, hairStyle: 'receding', brows: 0x1a120c, mustache: 'thick', stubble: 0.35,
-    top: 'polo', cloth: 0x24406a, pants: 0x7d6d55, shoes: 0x3a2618, watch: true, belly: 0.4, swatch: 0x24406a },
+    top: 'polo', cloth: 0x24406a, pants: 0x7d6d55, shoes: 0x3a2618, watch: true, belly: 0.4, swatch: 0x24406a,
+    build: { tall: 1.05, shoulders: 1.14, arms: 1.22, hunch: -0.04 }, habits: ['watch', 'knuckles', 'behindhead', 'tap', 'stretch'], tempo: 1.05 },
   // زيكو: a young man from the neighbourhood, curly hair and a short beard
   { skin: 0x7d5642, sex: 'm', age: 0, hair: 0x1f1610, hairStyle: 'curly', brows: 0x140e0a, mustache: 'trim', stubble: 0.95,
-    top: 'tee', cloth: 0x2f7d5d, pants: 0x34465e, shoes: 0xe9e6e0, swatch: 0x2f7d5d },
+    top: 'tee', cloth: 0x2f7d5d, pants: 0x34465e, shoes: 0xe9e6e0, swatch: 0x2f7d5d,
+    build: { tall: 1.03, shoulders: 0.98, arms: 0.95, hunch: 0.08 }, habits: ['drum', 'groove', 'behindhead', 'tap', 'lean'], tempo: 1.25 },
   // منى: a mother of three in a terracotta hijab
   { skin: 0xb98c70, sex: 'f', age: 1, hair: 0x1e130c, hairStyle: 'none', brows: 0x24160d, headwear: 'hijab', scarf: 0x6b2a32,
-    top: 'blouse', cloth: 0x3d3350, pants: 0x2a2433, shoes: 0x1e1814, swatch: 0xb5523b },
+    top: 'blouse', cloth: 0x3d3350, pants: 0x2a2433, shoes: 0x1e1814, swatch: 0xb5523b,
+    build: { tall: 0.95, shoulders: 0.94, arms: 0.95, hunch: 0.02 }, habits: ['hijab', 'folded', 'nod', 'chin', 'sip'], tempo: 0.95 },
   // ندى: a university student with long dark hair
   { skin: 0xc79b7e, sex: 'f', age: 0, hair: 0x2a180f, hairStyle: 'long', brows: 0x2a180f, top: 'blouse', cloth: 0xd9a441,
-    pants: 0x3a4a66, shoes: 0xd8cfc2, earrings: true, iris: '#5a3a1c', swatch: 0xd9a441 },
+    pants: 0x3a4a66, shoes: 0xd8cfc2, earrings: true, iris: '#5a3a1c', swatch: 0xd9a441,
+    build: { tall: 0.98, shoulders: 0.88, arms: 0.88, hunch: 0 }, habits: ['hair', 'chin', 'folded', 'stretch', 'tap'], tempo: 1.1 },
   // الحاج محمود: a Saidi elder in a striped galabeya and white emma, prayer beads in hand
   { skin: 0x825a42, sex: 'm', age: 2, hair: 0xd8d4cc, hairStyle: 'short', brows: 0xcfc8bc, mustache: 'thick', beard: 'full', stubble: 0.3,
-    headwear: 'emma', top: 'galabeya', cloth: 0xd9d1c0, cloth2: 0x8a7f6c, pattern: 'stripe', pants: 0xd9d1c0, shoes: 0x5a3a22, sebha: true, belly: 0.3, swatch: 0x8a7f6c },
+    headwear: 'emma', top: 'galabeya', cloth: 0xd9d1c0, cloth2: 0x8a7f6c, pattern: 'stripe', pants: 0xd9d1c0, shoes: 0x5a3a22, sebha: true, belly: 0.3, swatch: 0x8a7f6c,
+    build: { tall: 1.0, shoulders: 1.08, arms: 1.06, hunch: 0.1 }, habits: ['beads', 'beads', 'beard', 'nod', 'sip'], tempo: 0.7 },
 ];

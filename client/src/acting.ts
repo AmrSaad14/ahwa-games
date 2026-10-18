@@ -12,7 +12,8 @@ import { ELBOW_TO_PALM, UPPER_ARM } from './people';
 
 export type ActKind = 'play' | 'draw' | 'pass' | 'win' | 'lose' | 'emote';
 export interface Act { type: ActKind; t0: number; d: number; k?: string; /** test hook: hold the action at this point (0-1) */ fix?: number }
-type Idle = 'tap' | 'lean' | 'scratch' | 'nod' | 'stretch' | 'chin' | 'sip';
+type Idle = 'tap' | 'lean' | 'scratch' | 'nod' | 'stretch' | 'chin' | 'sip'
+  | 'glasses' | 'mustache' | 'watch' | 'knuckles' | 'behindhead' | 'drum' | 'groove' | 'hijab' | 'folded' | 'hair' | 'beads' | 'beard';
 export interface Actor {
   piv: THREE.Group; head: THREE.Group; arms: THREE.Group[]; elbows: THREE.Group[]; eyes: THREE.Mesh[]; lids: THREE.Mesh[];
   phase: number; anim: Act | null; active: boolean;
@@ -24,14 +25,20 @@ export interface Actor {
   tea?: boolean;
   /** How far in front of them the table's edge is (body units). */
   edge: number;
+  /** Who they are: their own habits, how quickly they move, how they sit (stooped or upright). */
+  habits: Idle[]; tempo: number; hunch: number;
 }
 
-export function newActor(p: { piv: THREE.Group; head: THREE.Group; arms: THREE.Group[]; elbows: THREE.Group[]; eyes: THREE.Mesh[]; lids: THREE.Mesh[] }, tea = false, edge = 1.2): Actor {
+export function newActor(p: { piv: THREE.Group; head: THREE.Group; arms: THREE.Group[]; elbows: THREE.Group[]; eyes: THREE.Mesh[]; lids: THREE.Mesh[] }, tea = false, edge = 1.2,
+  who: { habits?: string[]; tempo?: number; build?: { hunch?: number } } = {}): Actor {
   return { ...p, phase: Math.random() * 6, anim: null, active: false, idle: null, nextIdle: 2 + Math.random() * 5,
-    blinkAt: Math.random() * 3, blink2: false, lookAt: new THREE.Vector3(), nextLook: 0, yaw: 0, pitch: 0.1, tea, edge };
+    blinkAt: Math.random() * 3, blink2: false, lookAt: new THREE.Vector3(), nextLook: 0, yaw: 0, pitch: 0.1, tea, edge,
+    habits: (who.habits as Idle[] | undefined) ?? IDLES, tempo: who.tempo ?? 1, hunch: who.build?.hunch ?? 0 };
 }
 
 const IDLES: Idle[] = ['tap', 'tap', 'lean', 'scratch', 'nod', 'chin', 'stretch'];
+/** Habits that take a while (counting beads, a song in the head). */
+const LONG = new Set<Idle>(['beads', 'groove', 'behindhead', 'folded', 'watch']);
 const ease = (k: number) => (k <= 0 ? 0 : k >= 1 ? 1 : k * k * (3 - 2 * k));
 /** 0 → 1 → 0 over an action: quick in, hold, quick out. */
 const hold = (k: number, edge = 0.18) => ease(Math.min(k / edge, (1 - k) / edge, 1));
@@ -51,7 +58,7 @@ export function reach(piv: THREE.Object3D, arm: THREE.Object3D, elbow: THREE.Obj
   sh.rotation.set(0, 0, 0);
   // the target from the shoulder, in the torso's frame (the torso leans and bobs)
   _inv.copy(piv.quaternion).invert();
-  const v = _t.copy(target).sub(piv.position).applyQuaternion(_inv).sub(sh.position);
+  const v = _t.copy(target).sub(piv.position).applyQuaternion(_inv).divideScalar(piv.scale.x || 1).sub(sh.position);   // (taller people: a scaled torso)
   const L1 = UPPER_ARM, L2 = ELBOW_TO_PALM;
   const d = clamp(v.length(), 0.35, L1 + L2 - 0.02);
   const dir = v.normalize();
@@ -89,19 +96,20 @@ const mix = (out: THREE.Vector3, x: number, y: number, z: number, k: number) => 
  */
 export function act(body: THREE.Object3D, u: Actor, t: number, dt: number, amp: number, sights: Sights, self: THREE.Vector3 | null) {
   const E = u.edge;
-  let lean = u.active ? 0.16 : 0.04, headDown = 0, bob = 0, headTilt = 0, nod = 0, shake = 0;
+  let yawTo = 0;
+  let lean = (u.active ? 0.16 : 0.04) + u.hunch, headDown = 0, bob = 0, headTilt = 0, nod = 0, shake = 0;
   // hands at rest: forearms on the table, hands a little in from the edge
-  const br = Math.sin(t * 1.6 + u.phase) * amp;
+  const br = Math.sin(t * 1.6 * (0.8 + 0.2 * u.tempo) + u.phase) * amp;
   L.set(-0.85, 0.16, E + 0.75 + br * 0.02); R.set(0.85, 0.16, E + 0.75 - br * 0.02);
   if (u.tea) R.set(0.75, 0.55, E + 0.35);   // the regulars hold their tea
   u.piv.position.y = -1.75 + br * 0.03;
 
   /* waiting for others: a little fidget now and then */
   if (!u.active && !u.anim && amp > 0) {
-    if (!u.idle && t > u.nextIdle) u.idle = { kind: u.tea ? 'sip' : IDLES[Math.floor(Math.random() * IDLES.length)], t0: t, d: 1.6 + Math.random() * 1.6 };
+    if (!u.idle && t > u.nextIdle) { const kind = u.tea ? 'sip' : u.habits[Math.floor(Math.random() * u.habits.length)]; u.idle = { kind, t0: t, d: (LONG.has(kind) ? 3.2 : 1.6 + Math.random() * 1.6) / u.tempo }; }
     if (u.idle) {
       const k = (t - u.idle.t0) / u.idle.d, h = hold(k);
-      if (k >= 1) { u.idle = null; u.nextIdle = t + (u.tea ? 2 : 3) + Math.random() * 5; }
+      if (k >= 1) { u.idle = null; u.nextIdle = t + ((u.tea ? 2 : 2.5) + Math.random() * 4.5) / u.tempo; }
       else switch (u.idle.kind) {
         case 'tap': R.y += Math.abs(Math.sin(k * Math.PI * 9)) * 0.14 * h; break;                         // drumming fingers
         case 'lean': lean -= 0.14 * h; mix(L, -0.9, 0.12, E + 0.15, h); mix(R, 0.9, 0.12, E + 0.15, h); break;   // sit back, hands at the edge
@@ -110,6 +118,19 @@ export function act(body: THREE.Object3D, u: Actor, t: number, dt: number, amp: 
         case 'chin': mix(R, 0.08, CHIN_Y - 0.05, 0.62, h); headTilt = -0.1 * h; lean += 0.06 * h; break;   // chin on the hand
         case 'stretch': mix(L, -0.75, 3.7, -0.1, h); mix(R, 0.75, 3.7, -0.1, h); lean -= 0.1 * h; headDown = -0.25 * h; break;
         case 'sip': mix(R, 0.12, CHIN_Y + 0.05, 0.55, h); headDown = -0.1 * h; break;
+        // their own habits
+        case 'glasses': mix(R, 0.04, HEAD_Y + 0.04, 0.74, h); headDown = 0.08 * h; break;                                   // pushes his glasses up
+        case 'mustache': mix(R, Math.sin(k * Math.PI * 4) * 0.12, CHIN_Y + 0.16, 0.74, h); headTilt = 0.06 * h; break;          // strokes his moustache
+        case 'watch': mix(L, 0.05, 1.05, 1.15, h); headDown = 0.35 * h; yawTo = 0.25 * h; break;                             // checks his watch
+        case 'knuckles': mix(L, -0.12, 0.55, 1.3, h); mix(R, 0.12, 0.55, 1.3, h); lean += Math.sin(k * Math.PI * 6) * 0.03 * h; break;   // cracks his knuckles
+        case 'behindhead': lean -= 0.2 * h; mix(L, -0.5, TOP_Y - 0.2, -0.25, h); mix(R, 0.5, TOP_Y - 0.2, -0.25, h); headDown = -0.12 * h; break;   // hands behind the head
+        case 'drum': L.y += Math.abs(Math.sin(k * Math.PI * 12)) * 0.15 * h; R.y += Math.abs(Math.cos(k * Math.PI * 12)) * 0.15 * h; nod = Math.sin(k * Math.PI * 12) * 0.04 * h; break;   // drums on the table
+        case 'groove': nod = Math.sin(k * Math.PI * 8) * 0.1 * h; headTilt = Math.sin(k * Math.PI * 4) * 0.08 * h; lean += Math.sin(k * Math.PI * 8) * 0.03 * h; break;   // a song in his head
+        case 'hijab': mix(R, 0.5, HEAD_Y + 0.15, 0.25, h); headTilt = -0.1 * h; break;                                       // straightens her hijab
+        case 'folded': mix(L, 0.25, 0.4, E + 0.35, h); mix(R, -0.25, 0.5, E + 0.4, h); lean -= 0.05 * h; break;             // arms folded on the table
+        case 'hair': mix(R, 0.52, HEAD_Y + 0.08, 0.15, h); headTilt = -0.14 * h; break;                                      // tucks her hair behind the ear
+        case 'beads': { const c = k * Math.PI * 10; mix(L, -0.3 + Math.sin(c) * 0.05, 0.75 + Math.cos(c) * 0.06, 0.95, h); headDown = 0.1 * h; break; }   // counts his prayer beads
+        case 'beard': mix(R, 0.02, CHIN_Y - 0.15 - Math.sin(k * Math.PI * 3) * 0.12, 0.66, h); break;                       // strokes his beard
       }
     }
   } else u.idle = null;
@@ -166,7 +187,7 @@ export function act(body: THREE.Object3D, u: Actor, t: number, dt: number, amp: 
   const wantPitch = clamp(Math.atan2(HEAD_Y - local.y, Math.hypot(local.x, local.z)) * 0.8, -0.35, 0.6);
   const kk = 1 - Math.exp(-dt * 5);
   u.yaw += (wantYaw * 0.75 - u.yaw) * kk; u.pitch += (wantPitch * 0.7 - u.pitch) * kk;
-  u.head.rotation.set(clamp(u.pitch + headDown + nod, -0.6, 0.8), u.yaw + shake, headTilt, 'YXZ');
+  u.head.rotation.set(clamp(u.pitch + headDown + nod, -0.6, 0.8), u.yaw * (1 - Math.min(1, Math.abs(yawTo) * 4)) - yawTo + shake, headTilt, 'YXZ');
   for (const e of u.eyes) {
     const rest = e.userData.rest as THREE.Euler;
     e.rotation.set(rest.x + clamp((wantPitch - u.pitch) * 0.6, -0.25, 0.25), rest.y + clamp(wantYaw - u.yaw, -0.45, 0.45), rest.z);
