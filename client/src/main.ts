@@ -69,6 +69,8 @@ const S = {
   otpPhone: null as string | null,     // number a sign-in code was sent to
   phoneDraft: '',
   payout: null as null | { kind: string; delta: number; fee: number; stake: number; table: string },
+  atTable: null as GameId | null,   // home: the café table you walked over to (null: the whole café floor)
+  intro: false,                     // the opening scene is playing
 };
 if (gameOf(S.mode) !== S.game) S.mode = GAME_MODES[S.game][0];
 S.target = defaultTarget(S.mode);
@@ -400,6 +402,7 @@ function stopPractice() { S.practice?.stop(); S.practice = null; }
 function leaveGame() {
   voice.leave();
   S.sheet = null; S.sel = null; S.choose = null; S.screen = 'home';
+  if (S.view) S.atTable = S.view.game;
   if (S.practice) { demoForfeit(); stopPractice(); S.view = null; render(); return; }
   net.send({ t: 'leave' });
   S.view = null; render();
@@ -497,9 +500,10 @@ let lastScreenKey = '';
 function render() {
   const ui = $('ui');
   const v = S.view;
+  if (v && S.intro) { S.intro = false; scene.skipIntro(); }
   // the same screen re-drawn (another game, mode or stake picked): no entrance animation and the same scroll position,
   // so switching between games feels like one screen; only a new screen or sheet slides in
-  const key = [v ? `${v.id}:${v.phase === 'lobby' ? 'lobby' : 'play'}` : S.queue ? 'search' : S.screen, S.sheet ?? ''].join('|');
+  const key = [v ? `${v.id}:${v.phase === 'lobby' ? 'lobby' : 'play'}` : S.intro ? 'intro' : S.queue ? 'search' : S.screen === 'home' ? (S.atTable ? 'table' : 'cafe') : S.screen, S.sheet ?? ''].join('|');
   const still = key === lastScreenKey; lastScreenKey = key;
   const scrolls = still ? [...ui.querySelectorAll<HTMLElement>('.sheet-card, .card, .scroll')].map(e => e.scrollTop) : [];
   ui.classList.toggle('still', still);
@@ -509,8 +513,10 @@ function render() {
     if (v.phase === 'lobby') ui.append(roomScreen(v)); else ui.append(...(v.game === 'domino' ? gameScreen(v) : boardScreen(v)));
     if (S.promo && v.game === 'chess') ui.append(promoSheet(v));
   } else {
-    scene.showHome(localCh());
-    if (S.queue) ui.append(searchScreen());
+    scene.showHome(localCh(), S.atTable);
+    if (S.intro) ui.append(introScreen());
+    else if (S.queue) ui.append(searchScreen());
+    else if (S.screen === 'home' && !S.atTable) ui.append(topBar(), cafeScreen());
     else ui.append(topBar(), ({ home: homeScreen, friends: friendsScreen, lb: lbScreen, settings: settingsScreen, rules: rulesScreen, coins: coinsScreen, skins: skinsScreen })[S.screen]());
   }
   if (S.sheet === 'leave') ui.append(sheet(h('p', null, t('leaveConfirm')), v && v.stake ? h('p', { class: 'bad' }, t('leaveStake', { n: shortCoins(v.stake) })) : h('span'), h('div', { class: 'row' }, btn(t('stay'), () => { S.sheet = null; render(); }, 'btn alt'), btn(t('leaveYes'), leaveGame, 'btn danger'))));
@@ -566,6 +572,44 @@ function gamePicker() {
     (b.firstChild as HTMLElement).innerHTML = GAME_ICONS[g];
     return b;
   }));
+}
+/** Home: the café floor. Each game has its own table; tap one (or its name tag) to sit down there. */
+function cafeScreen() {
+  const tags = GAMES.map(g => {
+    const b = h('button', { type: 'button', class: 'table-tag', 'data-g': g, 'aria-label': t('sitAt', { g: t(('game_' + g) as Key) }), onclick: () => goToTable(g) },
+      h('span', { class: 'gicon' }), h('b', null, t(('game_' + g) as Key)));
+    (b.firstChild as HTMLElement).innerHTML = GAME_ICONS[g];
+    b.style.visibility = 'hidden';
+    return b;
+  });
+  return h('div', { class: 'cafe' },
+    h('div', { class: 'table-tags' }, ...tags),
+    h('div', { class: 'cafe-foot' },
+      h('p', { class: 'cafe-hint' }, t('pickTable')),
+      h('div', { class: 'row links' },
+        btn(t('skinShop'), () => { S.screen = 'skins'; render(); }, 'link'),
+        btn(t('coinsTitle'), openCoins, 'link'),
+        btn(t('leaderboard'), () => openLb(S.game), 'link'),
+        btn(t('rules'), () => { S.screen = 'rules'; render(); }, 'link'))));
+}
+/** Walk over to a game's table: its modes, stakes and play buttons open beside it. */
+function goToTable(g: GameId) { unlockAudio(); S.atTable = g; pickGame(g); }
+/** The name tags float over their tables (moved every frame with the camera; no layout reads). */
+function placeTableTags() {
+  document.querySelectorAll<HTMLElement>('.table-tag').forEach(el => {
+    const p = scene.tableScreen(el.dataset.g as GameId);
+    if (!p) { if (el.style.visibility !== 'hidden') el.style.visibility = 'hidden'; return; }
+    const tr = `translate(${Math.round(p.x)}px, ${Math.round(p.y)}px) translate(-50%, -100%)`;
+    if (el.style.transform !== tr) el.style.transform = tr;
+    if (el.style.visibility !== 'visible') el.style.visibility = 'visible';
+  });
+}
+/** The opening scene: only the name, and a hint that a tap skips it. */
+function introScreen() {
+  return h('div', { class: 'intro', onclick: () => scene.skipIntro() },
+    h('h1', { class: 'intro-title' }, t('brand')),
+    h('p', { class: 'intro-line' }, t('introLine')),
+    h('p', { class: 'intro-skip' }, t('tapToSkip')));
 }
 const targetLabel = (m: Mode, n: number) => gameOf(m) === 'tawla' ? t('pointsTo', { n }) : t('points', { n });
 
@@ -627,9 +671,13 @@ function homeScreen() {
     h('button', { type: 'button', class: 'mode', role: 'radio', 'aria-checked': String(S.mode === m), onclick: () => { S.mode = m; store.set('mode', m); render(); } },
       h('b', null, t(('mode_' + m) as Key)), h('span', null, t(('modeHint_' + m) as Key)))));
   // on landscape screens: what to play on one side, how to play it on the other, links under the first
-  return h('section', { class: 'sheet-card home' },
+  const head = h('div', { class: 'table-head' },
+    btn('‹ ' + t('backToCafe'), () => { S.atTable = null; render(); }, 'chip back-cafe'),
+    h('span', { class: 'gicon' }), h('b', null, t(('game_' + S.game) as Key)));
+  (head.children[1] as HTMLElement).innerHTML = GAME_ICONS[S.game];
+  return h('section', { class: 'sheet-card home at-table' },
     h('div', { class: 'home-pick' },
-      gamePicker(),
+      head,
       modeBtns ?? h('p', { class: 'muted center small' }, t(('modeHint_' + S.mode) as Key))),
     h('div', { class: 'home-act' },
       stakePicker(S.mode),
@@ -1525,7 +1573,8 @@ function renderLabels(content: boolean) {
 }
 // expire emote bubbles
 setInterval(() => { const now = Date.now(); let ch = false; S.bubbles.forEach((b, k) => { if (b.until < now) { S.bubbles.delete(k); ch = true; } }); if (ch) renderLabels(true); }, 500);
-scene.onFrame = () => renderLabels(false);
+scene.onFrame = () => { renderLabels(false); placeTableTags(); };
+scene.onTable = g => goToTable(g);
 applySkins();
 
 /* ---------------- platform ---------------- */
@@ -1536,7 +1585,9 @@ CapApp.addListener('backButton', () => {
   if (S.sheet) { S.sheet = null; return render(); }
   if (S.view) { if ((S.practice && !S.view.stake) || S.view.phase !== 'play') leaveGame(); else { S.sheet = 'leave'; render(); } return; }
   if (S.queue) { net.send({ t: 'cancel' }); S.queue = null; return render(); }
+  if (S.intro) { scene.skipIntro(); return; }
   if (S.screen !== 'home') { S.screen = 'home'; return render(); }
+  if (S.atTable) { S.atTable = null; return render(); }
   CapApp.minimizeApp().catch(() => {});
 }).catch(() => {});
 
@@ -1562,4 +1613,9 @@ document.addEventListener('pointerdown', lockLandscape, { once: true });
 document.addEventListener('pointerdown', unlockAudio, { once: true });
 net.connect();
 initAds();
+// the opening scene, once per launch (test runs skip it unless the address asks for ?intro)
+if (/[?&]intro\b/.test(location.search) || (!navigator.webdriver && !/[?&](rec|promo)\b/.test(location.search))) {
+  S.intro = true;
+  scene.playIntro(() => { S.intro = false; render(); });
+}
 render();

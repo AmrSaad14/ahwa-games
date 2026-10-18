@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { End, TILES } from '../../shared/engine';
+import { End, GAMES, GameId, TILES } from '../../shared/engine';
 import { layoutLine, previewPlacement } from '../../shared/layout';
 import type { AnyView, TableView } from '../../shared/protocol';
 import type { BoardGameId } from '../../shared/games/defs';
-import { BoardRenderer, BoardUi, ChessBoard, LudoBoard, Pick, TawlaBoard, initBoardEnvironment, setDiceLook } from './boards';
+import { BoardRenderer, BoardUi, ChessBoard, LudoBoard, Pick, TawlaBoard, initBoardEnvironment, makePiece, setDiceLook } from './boards';
 import { CHESS_LOOKS, LUDO_LOOKS, TAWLA_LOOKS, TILE_LOOKS, TileLook } from './looks';
-import { HEAD_Y, PEOPLE, makePerson } from './people';
+import { FEET_DROP, HEAD_Y, PEOPLE, Person, makePerson } from './people';
 import { Post } from './post';
 import { IS_PHONE, disposeTree, onTop } from './perf';
-import { FLOOR_Y, Smoke, TEX_HI, buildAhwa, canvasTex, makeChair, makeShisha, makeTable, makeTeaGlass } from './ahwa';
+import { FLOOR_Y, Smoke, TEX_HI, buildAhwa, canvasTex, makeBackgammon, makeChair, makeShisha, makeTable, makeTeaGlass } from './ahwa';
 
 /** The six characters players pick from; the colour stands for them in lists and badges. */
 export const CHARS = PEOPLE;
@@ -23,6 +23,15 @@ const T = 6;
 /** How far the line may run sideways before it turns a corner (layout units). */
 const X_MAX = (T - 1.9) / TS;
 const SEAT_R = T + 2.0;
+
+/** The café floor (home screen): one table for each game. */
+const LOBBY: Record<GameId, [number, number]> = { domino: [-8, -5], tawla: [8, -5], chess: [-8, 6.5], ludo: [8, 6.5] };
+const LOBBY_T = 3.2;
+/** The intro: you come in from the street door and walk between the tables. */
+const INTRO_PATH: [number, number][] = [[16.5, -17.5], [16, -12], [13, -1.5], [6, 0.8], [0, 1]];
+const WALK_SPEED = 4.6;
+/** Your character on the café floor, a little smaller than the seated players so the doors and tables look right. */
+const WALKER_SCALE = 0.84;
 
 /** Visual positions around the table: 0 bottom (you), 1 left, 2 top, 3 right. */
 export function positionsFor(n: number): number[] { return n === 2 ? [0, 2] : n === 3 ? [0, 1, 3] : [0, 1, 2, 3]; }
@@ -77,6 +86,21 @@ export class TableScene {
   private ghostMat = new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.5, depthWrite: false });
   private faceMats = new Map<string, THREE.MeshStandardMaterial>();
   private smoke: Smoke;
+  /* the café floor (home): four game tables, you walking between them, and the intro */
+  private mainTable!: THREE.Group;
+  private shishaG!: THREE.Group;
+  private lobbyG = new THREE.Group();
+  private lobbyDecor: Partial<Record<GameId, THREE.Object3D>> = {};
+  private lobbyHits: THREE.Mesh[] = [];
+  private lobbyRing!: THREE.Mesh;
+  private walker: (Person & { ch: number }) | null = null;
+  private walkPos = new THREE.Vector3(0, 0, 1); private walkTo = new THREE.Vector3(0, 0, 1); private walkYaw = 0; private stride = 0;
+  private walkPath: THREE.Vector3[] = [];
+  private focus: GameId | null = null;
+  private intro: { t: number; done: () => void } | null = null;
+  private camPos = new THREE.Vector3(); private camLook = new THREE.Vector3(); private camInit = false; private camT = 0;
+  /** A game table on the café floor was tapped. */
+  onTable: (g: GameId) => void = () => {};
   private clock = 0; private lastT = performance.now();
   private dropAt = new Map<number, number>();
   private known = new Set<number>();
@@ -227,11 +251,12 @@ export class TableScene {
     if (!lamps) for (const o of [...this.regulars, roomGroup(s)]) o?.traverse(m => { m.castShadow = false; });
 
     // our table, tea glasses at the corners and a shisha by the top-right chair
-    s.add(makeTable(T));
+    this.mainTable = makeTable(T); s.add(this.mainTable);
     for (const [x, z] of [[T - 0.7, T - 0.7], [-T + 0.7, -T + 0.7], [T - 0.7, -T + 0.7]]) { const g = makeTeaGlass(); g.position.set(x, 0, z); this.glasses.add(g); }
     s.add(this.glasses);
     const sh = makeShisha(new THREE.Vector3(-2.6, 2.6, 2.2));
-    sh.group.position.set(T + 2.6, FLOOR_Y, -T - 1.2); sh.group.rotation.y = 0.6; s.add(sh.group);
+    sh.group.position.set(T + 2.6, FLOOR_Y, -T - 1.2); sh.group.rotation.y = 0.6; s.add(sh.group); this.shishaG = sh.group;
+    this.buildLobby(); s.add(this.lobbyG);
 
     this.boardG.scale.setScalar(TS);
     s.add(this.boardG, this.propsG);
@@ -242,6 +267,12 @@ export class TableScene {
       const r = canvas.getBoundingClientRect();
       const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
       this.ray.setFromCamera(ndc, this.camera);
+      if (!this.view) {
+        if (this.intro) { this.skipIntro(); return; }
+        const hit = this.ray.intersectObjects(this.lobbyHits, false)[0];
+        if (hit) this.onTable(hit.object.userData.game as GameId);
+        return;
+      }
       if (this.board && this.view && this.view.game !== 'domino') {
         // a tap picks on release; pressing and moving drags the piece instead
         const hit = this.ray.intersectObjects(this.board.pickables, true)[0];
@@ -337,7 +368,162 @@ export class TableScene {
 
   /* ---------- public API ---------- */
 
-  showHome(ch: number) { this.wake(); this.view = null; this.homeCh = ch; this.sel = null; this.choose = null; this.refresh(); }
+  showHome(ch: number, focus: GameId | null = this.focus) {
+    this.wake(); this.view = null; this.homeCh = ch; this.sel = null; this.choose = null;
+    this.setFocus(focus);
+    this.refresh();
+  }
+
+  /* ---------- the café floor and the intro ---------- */
+
+  /** Walk over to a game's table (or back to the middle of the café) and look at it. */
+  setFocus(g: GameId | null) {
+    if (g === this.focus && this.walkPath.length) return;
+    this.focus = g; this.wake(1500);
+    if (this.intro) return;
+    if (!g) { this.walkPath = [new THREE.Vector3(0, 0, 1)]; return; }
+    // round the table on the side toward the middle, and stand behind it, facing the board (and you)
+    const [x, z] = LOBBY[g], side = x < 0 ? 1 : -1;
+    this.walkPath = [new THREE.Vector3(x + side * (LOBBY_T + 2.6), 0, z + 0.5), new THREE.Vector3(x + side * 1.2, 0, z - LOBBY_T - 1.7)];
+  }
+  /** The opening scene: your character walks in from the street. Calls `done` at the end (or when skipped). */
+  playIntro(done: () => void) {
+    if (this.reduce) { done(); return; }
+    this.intro = { t: 0, done };
+    this.walkPath = INTRO_PATH.map(([x, z]) => new THREE.Vector3(x, 0, z));
+    this.walkPos.copy(this.walkPath.shift()!); this.walkYaw = 0;
+    this.camInit = false; this.wake(60_000);
+  }
+  skipIntro() {
+    const it = this.intro; if (!it) return;
+    this.intro = null; this.busyUntil = 0; this.wake();
+    this.walkPath = []; this.walkPos.set(0, 0, 1); this.walkYaw = 0; this.camInit = false;
+    it.done();
+  }
+  get introPlaying() { return !!this.intro; }
+  /** Screen position (CSS px) above a café table, for its name tag. */
+  tableScreen(g: GameId): { x: number; y: number } | null {
+    if (this.view || this.intro) return null;
+    const p = new THREE.Vector3(LOBBY[g][0], 3.4, LOBBY[g][1]).project(this.camera);
+    if (p.z > 1 || Math.abs(p.x) > 1.1 || Math.abs(p.y) > 1.1) return null;
+    const r = this.canvas.getBoundingClientRect();
+    return { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height };
+  }
+
+  private buildLobby() {
+    const L = this.lobbyG;
+    for (const g of GAMES) {
+      const [x, z] = LOBBY[g];
+      const t = new THREE.Group(); t.position.set(x, 0, z); L.add(t);
+      t.add(makeTable(LOBBY_T));
+      // two empty chairs waiting for players, one each side
+      for (const sx of [-1, 1]) { const ch = makeChair(); ch.position.set(sx * (LOBBY_T + 1.3), 0, 0); ch.rotation.set(0, -sx * Math.PI / 2, 0); t.add(ch); }
+      // what you tap: the whole table (an invisible box)
+      const hit = new THREE.Mesh(new THREE.BoxGeometry(LOBBY_T * 2 + 3, 7, LOBBY_T * 2 + 3), new THREE.MeshBasicMaterial({ visible: false }));
+      hit.position.set(x, 0, z); hit.userData.game = g; L.add(hit); this.lobbyHits.push(hit);
+    }
+    for (const g of GAMES) this.buildDecor(g);
+    // a soft golden ring under the table you are at
+    this.lobbyRing = new THREE.Mesh(new THREE.RingGeometry(LOBBY_T + 2.6, LOBBY_T + 3.1, 64), new THREE.MeshBasicMaterial({ color: 0xffcf6e, transparent: true, opacity: 0.5, depthWrite: false }));
+    this.lobbyRing.rotation.x = -Math.PI / 2; this.lobbyRing.position.y = FLOOR_Y + 0.03; this.lobbyRing.visible = false; L.add(this.lobbyRing);
+  }
+  /** What lies on a café table: its game, in your own skins. */
+  private buildDecor(g: GameId) {
+    const old = this.lobbyDecor[g];
+    if (old) { this.lobbyG.remove(old); if (g !== 'domino') disposeTree(old); }
+    const [x, z] = LOBBY[g], fit = LOBBY_T * 2 - 1.2;
+    let d: THREE.Object3D;
+    if (g === 'tawla') { d = makeBackgammon(); d.scale.setScalar(1.25); }
+    else if (g === 'chess') {
+      const b = new ChessBoard(CHESS_LOOKS[this.skins.chess]); d = b.root; d.scale.setScalar(fit / 9.5);
+      // a game under way: a few pieces on their squares
+      const at = (p: string, f: number, r: number) => { const m = makePiece(p); m.position.set((f - 3.5) * 1.05, 0.3, (3.5 - r) * 1.05); d.add(m); };
+      at('K', 4, 0); at('Q', 3, 2); at('N', 5, 2); at('P', 4, 3); at('P', 3, 3); at('R', 0, 0);
+      at('k', 6, 7); at('q', 3, 6); at('n', 2, 5); at('p', 4, 4); at('p', 5, 6); at('b', 1, 6);
+    } else if (g === 'ludo') { const b = new LudoBoard(LUDO_LOOKS[this.skins.ludo]); d = b.root; d.scale.setScalar(fit / 11.1); }
+    else {
+      // a short line of play
+      d = new THREE.Group(); d.scale.setScalar(TS * 0.95);
+      const line: [number, number, number, number][] = [[6, 6, 0, 1], [6, 3, 2, 0], [3, 3, -2, 0], [6, 1, 4.4, 0], [1, 5, -4.6, 0], [5, 5, -7.2, 1]];
+      for (const [a, b, px, rot] of line) { const m = this.tile(a, b); m.position.set(px, TILE_H / 2, 0); m.rotation.y = rot ? 0 : Math.PI / 2; d.add(m); }
+      for (let i = 0; i < 4; i++) { const m = this.tile(0, 0, false); m.position.set(-3 + i * 1.15, TILE_H / 2, 4.5); d.add(m); }
+    }
+    d.position.set(x, 0, z);
+    this.lobbyDecor[g] = d; this.lobbyG.add(d);
+  }
+
+  /** Your own character on the café floor (rebuilt when you pick another one). */
+  private ensureWalker() {
+    if (this.walker?.ch === this.homeCh) return this.walker;
+    if (this.walker) { this.scene.remove(this.walker.group); this.walker.group.traverse(o => (o as THREE.Mesh).geometry?.dispose()); }
+    const p = makePerson(PEOPLE[this.homeCh], 'w' + this.homeCh, true);
+    p.group.scale.setScalar(WALKER_SCALE);
+    this.walker = Object.assign(p, { ch: this.homeCh });
+    this.scene.add(p.group);
+    return this.walker;
+  }
+
+  /** Walking, and the camera over the café floor (home screen and intro). */
+  private tickCafe(dt: number, t: number) {
+    const w = this.ensureWalker();
+    w.group.visible = true;
+    // walk along the path
+    let moving = false;
+    if (this.walkPath.length) {
+      const to = this.walkPath[0], d = to.clone().sub(this.walkPos); d.y = 0;
+      const step = WALK_SPEED * dt;
+      if (d.length() <= step) { this.walkPos.copy(to); this.walkPath.shift(); }
+      else {
+        this.walkPos.addScaledVector(d.normalize(), step); moving = true;
+        const yaw = Math.atan2(d.x, d.z); let dy = yaw - this.walkYaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+        this.walkYaw += dy * Math.min(1, dt * 8);
+      }
+      this.wake(300);
+    }
+    if (!moving) {
+      // standing: face the table you are at, or the room
+      const want = this.focus ? Math.atan2(LOBBY[this.focus][0] - this.walkPos.x, LOBBY[this.focus][1] - this.walkPos.z) : 0;
+      let dy = want - this.walkYaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); this.walkYaw += dy * Math.min(1, dt * 5);
+    }
+    if (moving) this.stride += dt * WALK_SPEED * 1.15;
+    const k = moving ? 1 : 0, ph = this.stride, amp = this.reduce ? 0 : 1;
+    const sw = Math.sin(ph) * 0.55 * k;
+    w.hips[0].rotation.x = sw; w.hips[1].rotation.x = -sw;
+    w.knees[0].rotation.x = Math.max(0, -Math.cos(ph)) * 0.9 * k; w.knees[1].rotation.x = Math.max(0, Math.cos(ph)) * 0.9 * k;
+    w.arms[0].rotation.x = -sw * 0.8; w.arms[1].rotation.x = sw * 0.8;
+    w.elbows[0].rotation.x = w.elbows[1].rotation.x = -0.25 - 0.2 * k;
+    w.head.rotation.y = moving ? 0 : Math.sin(t * 0.4) * 0.25 * amp;
+    w.group.position.set(this.walkPos.x, FLOOR_Y + FEET_DROP * WALKER_SCALE + Math.abs(Math.cos(ph)) * 0.1 * k, this.walkPos.z);
+    w.group.rotation.y = this.walkYaw;
+    // the ring under the table you are at
+    this.lobbyRing.visible = !!this.focus && !this.intro;
+    if (this.focus) { this.lobbyRing.position.x = LOBBY[this.focus][0]; this.lobbyRing.position.z = LOBBY[this.focus][1]; (this.lobbyRing.material as THREE.MeshBasicMaterial).opacity = 0.35 + Math.sin(t * 2.4) * 0.15 * amp; }
+    if (this.intro) {
+      this.intro.t += dt;
+      if (!this.walkPath.length) { const it = this.intro; this.intro = null; this.busyUntil = 0; this.wake(1500); it.done(); }
+    }
+  }
+
+  /** Where the camera wants to be on the café floor, and what it looks at. */
+  private cafeShot(w: number, h: number): { pos: THREE.Vector3; look: THREE.Vector3 } {
+    const aspect = w / h, portrait = aspect < 0.9, far = Math.max(1, 1.75 / aspect);
+    const p = this.walkPos;
+    if (this.intro) {
+      const yawV = new THREE.Vector3(Math.sin(this.walkYaw), 0, Math.cos(this.walkYaw));
+      if (this.intro.t < 2.4) return { pos: new THREE.Vector3(18.5, 3.5, 1), look: new THREE.Vector3(p.x, 1.6, p.z) };   // the door opens: someone comes in
+      // then over his shoulder, walking into the café
+      return { pos: p.clone().addScaledVector(yawV, -9 * far).add(new THREE.Vector3(1.5, 7.5, 0)), look: p.clone().addScaledVector(yawV, 7).setY(-0.5) };
+    }
+    if (this.focus) {
+      const [x, z] = LOBBY[this.focus];
+      // the table on the free side of the screen (the menu sits on the right, or at the bottom on a tall screen)
+      const off = portrait ? new THREE.Vector3(0, 0, 3.5) : new THREE.Vector3(5.2, 0, 0);
+      const look = new THREE.Vector3(x, -0.6, z).add(off);
+      return { pos: look.clone().add(new THREE.Vector3(0, 11.5 * far, 13.5 * far)), look };
+    }
+    // the whole café floor: four tables, and you among them
+    return { pos: new THREE.Vector3(0, 23 * far, 25 * far), look: new THREE.Vector3(0, -2, -3.2) };
+  }
 
   showTable(view: AnyView, sel: number | null, choose: End[] | null, boardUi: BoardUi = { sel: null, targets: [] }) {
     const newRound = !this.view || this.view.round !== view.round || this.view.id !== view.id;
@@ -395,6 +581,7 @@ export class TableScene {
   /** Wear these skins (ids per kind). Rebuilds only what changed. */
   setSkins(s: Partial<Record<'tiles' | 'dice' | 'tawla' | 'chess' | 'ludo', string>>) {
     let rebuild = false;
+    const before = { ...this.skins };
     if (s.tiles && s.tiles !== this.skins.tiles && TILE_LOOKS[s.tiles]) {
       this.skins.tiles = s.tiles; this.tileLook = TILE_LOOKS[s.tiles];
       this.faceMats.forEach(m => { m.map?.dispose(); m.dispose(); }); this.faceMats.clear();
@@ -410,6 +597,10 @@ export class TableScene {
       for (const g of drop) { const b = this.boards[g]; if (b) { this.scene.remove(b.root); disposeTree(b.root); delete this.boards[g]; } }
       rebuild = true;
     }
+    // the café tables show your skins too
+    if (before.tiles !== this.skins.tiles) this.buildDecor('domino');
+    if (before.chess !== this.skins.chess) this.buildDecor('chess');
+    if (before.ludo !== this.skins.ludo) this.buildDecor('ludo');
     if (rebuild) this.rebuildBoard();
   }
 
@@ -500,9 +691,13 @@ export class TableScene {
     const v = this.view;
     let chs: number[] = [-1, -1, -1, -1];
     this.posToSeat = [-1, -1, -1, -1];
-    if (!v) {
-      chs = [-1, (this.homeCh + 1) % 6, this.homeCh, (this.homeCh + 4) % 6];
-    } else {
+    // home: the café floor with its four game tables; our big table is only there while playing or in a room
+    const cafe = !v;
+    this.lobbyG.visible = cafe; this.mainTable.visible = !cafe; this.shishaG.visible = !cafe;
+    if (this.walker) this.walker.group.visible = cafe;
+    if (cafe) this.ensureWalker();
+    else { this.camInit = false; this.intro = null; this.walkPath = []; }
+    if (v) {
       const n = v.seats.length, base = v.you >= 0 ? v.you : 0, list = positionsFor(n);
       for (let k = 0; k < n; k++) {
         const seat = (base + k) % n, pos = list[k], s = v.seats[seat];
@@ -547,7 +742,7 @@ export class TableScene {
     const av = this.view;
     for (const b of Object.values(this.boards)) b!.root.visible = false;
     this.board = null;
-    this.glasses.visible = !(av && av.game === 'ludo' && av.phase !== 'lobby');
+    this.glasses.visible = !!av && !(av.game === 'ludo' && av.phase !== 'lobby');
     if (!av || av.phase === 'lobby') { if (this.zoomed) this.resetZoom(); return; }
     if (av.game !== 'domino') {
       // chess, tawla or ludo: the game's own board sits on the table
@@ -695,6 +890,18 @@ export class TableScene {
   private placeCamera(sway: number) {
     const w = this.canvas.clientWidth || window.innerWidth, h = this.canvas.clientHeight || window.innerHeight;
     const playing = !!this.view && this.view.phase !== 'lobby';
+    if (!this.view) {
+      // the café floor: the camera glides from shot to shot
+      const now = performance.now(), dt = this.camT ? Math.min(0.25, (now - this.camT) / 1000) : 0.016; this.camT = now;
+      const shot = this.cafeShot(w, h);
+      if (!this.camInit || this.reduce) { this.camPos.copy(shot.pos); this.camLook.copy(shot.look); this.camInit = true; }
+      else { const k = 1 - Math.exp(-dt * (this.intro ? 2.2 : 3)); this.camPos.lerp(shot.pos, k); this.camLook.lerp(shot.look, k); }
+      if (this.camPos.distanceTo(shot.pos) > 0.05) this.wake(200);
+      this.camera.position.copy(this.camPos); this.camera.lookAt(this.camLook);
+      this.camera.clearViewOffset();
+      this.camera.updateProjectionMatrix();
+      return;
+    }
     if (!playing) {
       // the café, seen from the door: the menu card sits over the lower part
       const portrait = w / h < 0.9, el = 0.62, vf = (this.camera.fov * Math.PI) / 180;
@@ -809,6 +1016,7 @@ export class TableScene {
       this.wake(300);
     } else { this.mag = this.magT; this.pan = { ...this.panT }; }
     this.zoom = this.mag < 1 ? 1 / this.mag : 1;
+    if (!this.view) this.tickCafe(dt, t);
     this.placeCamera(this.view || this.reduce ? 0 : Math.sin(t * 0.12) * 0.35);
     for (const c of this.chars) {
       if (!c) continue;

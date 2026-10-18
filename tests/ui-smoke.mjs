@@ -30,6 +30,13 @@ const page = async () => {
   return p;
 };
 const pages = [];
+/** Home is the café floor: walk to a game's table (from wherever you are) to get its menu. */
+const sit = async (p, g) => {
+  await p.evaluate(() => document.querySelector('.back-cafe')?.click());
+  await p.waitForSelector('.table-tag', { state: 'attached' });
+  await p.evaluate(g => document.querySelector(`.table-tag[data-g="${g}"]`).click(), g);
+  await p.waitForSelector('.home.at-table');
+};
 const step = async (name, fn) => {
   process.stdout.write(`• ${name} … `);
   try { await fn(); } catch (e) { for (const [i, p] of pages.entries()) await p.screenshot({ path: path.join(shots, `fail-${i}.png`) }).catch(() => {}); throw e; }
@@ -39,6 +46,9 @@ const step = async (name, fn) => {
 try {
   const a = await page();
   await step('home screen connects', async () => {
+    await a.waitForSelector('.cafe .table-tag', { state: 'attached' });
+    await a.screenshot({ path: path.join(shots, '0-cafe.png') });
+    await sit(a, 'domino');
     await a.waitForSelector('.btn.big:not([disabled])', { timeout: 8000 });
     await a.screenshot({ path: path.join(shots, '1-home.png') });
   });
@@ -78,16 +88,16 @@ try {
     await a.waitForSelector('.home');
   });
   await step('chess practice: clocks, a legal move by tapping is offered', async () => {
-    await a.click('.game >> nth=2');
+    await sit(a, 'chess');
     await a.click('text=Practice');
     await a.waitForSelector('.clock');
     await a.waitForFunction(() => /\d:\d\d/.test(document.querySelector('.clock')?.textContent || ''));
     await a.click('.hud .iconbtn');
     await a.waitForSelector('.home');
   });
-  for (const [i, g] of [[1, 'tawla'], [3, 'ludo']]) {
+  for (const g of ['tawla', 'ludo']) {
     await step(`${g} practice: roll the dice on your turn`, async () => {
-      await a.click(`.game >> nth=${i}`);
+      await sit(a, g);
       await a.click('text=Practice');
       await a.waitForSelector('#roll-btn', { timeout: 20000 });
       await a.click('#roll-btn', { force: true });
@@ -96,7 +106,7 @@ try {
       await a.waitForSelector('.home');
     });
   }
-  await a.click('.game >> nth=0');
+  await sit(a, 'domino');
   let code = '';
   await step('create a private room', async () => {
     await a.click('text=Play with friends');
@@ -108,6 +118,7 @@ try {
   });
   const b = await page();
   await step('friend joins with the code', async () => {
+    await sit(b, 'domino');
     await b.waitForSelector('.btn.big:not([disabled])');
     await b.click('.topbar .chip.profile'); // settings
     await b.fill('#set-name', 'Mona');
@@ -147,6 +158,7 @@ try {
   });
   const c = await page();
   await step('quick match fills with computer players', async () => {
+    await sit(c, 'domino');
     await c.waitForSelector('.btn.big:not([disabled])');
     await c.click('.mode >> nth=2');
     await c.click('.btn.big');

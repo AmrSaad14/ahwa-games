@@ -251,7 +251,11 @@ function clothTexture(base: number, pattern: PersonSpec['pattern'] = 'plain', se
 
 /* ---------- the person ---------- */
 
-export interface Person { group: THREE.Group; piv: THREE.Group; head: THREE.Group; arms: THREE.Group[]; elbows: THREE.Group[]; hands: THREE.Group[] }
+export interface Person { group: THREE.Group; piv: THREE.Group; head: THREE.Group; arms: THREE.Group[]; elbows: THREE.Group[]; hands: THREE.Group[];
+  /** Standing people only: hip and knee joints of each leg (for walking). */
+  hips: THREE.Group[]; knees: THREE.Group[] }
+/** A standing person's feet are this far below their group's origin (place the group FEET_DROP above the floor). */
+export const FEET_DROP = 5.6;
 
 const HEAD_R = 0.6;            // head units to scene units
 export const HEAD_Y = 3.62;    // head centre above the hips
@@ -260,7 +264,7 @@ const SHOULDER_Y = 2.6;
 const texCache = new Map<string, THREE.Texture>();
 const cached = (k: string, make: () => THREE.Texture) => { let t = texCache.get(k); if (!t) { t = make(); texCache.set(k, t); } return t; };
 
-export function makePerson(p: PersonSpec, key: string): Person {
+export function makePerson(p: PersonSpec, key: string, standing = false): Person {
   const group = new THREE.Group(), piv = new THREE.Group(); piv.position.y = -1.75; group.add(piv);
   const legs = new THREE.Group(); legs.position.y = -1.75; group.add(legs);
   const mesh = (parent: THREE.Object3D, geo: THREE.BufferGeometry, mat: THREE.Material, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); parent.add(m); return m; };
@@ -321,25 +325,41 @@ export function makePerson(p: PersonSpec, key: string): Person {
     mesh(parent, new THREE.SphereGeometry(r1, 16, 10), mat, ...b);
     return m;
   };
-  for (const sx of [-1, 1]) {
-    const hip: V3 = [sx * 0.45, 0.3, 0.05], knee: V3 = [sx * 0.5, 0.36, 1.9], ankle: V3 = [sx * 0.52, -1.62, 2.0];
-    capsuleBetween(legs, hip, knee, 0.42, 0.33, pantsMat);
-    capsuleBetween(legs, knee, ankle, 0.3, 0.22, pantsMat);
-    const shoe = mesh(legs, new THREE.CapsuleGeometry(0.2, 0.55, 6, 12), shoeMat, sx * 0.52, -1.72, 2.3); shoe.rotation.x = Math.PI / 2; shoe.scale.set(1.05, 1, 0.65);
+  const hips: THREE.Group[] = [], knees: THREE.Group[] = [];
+  if (standing) {
+    // standing: straight legs on hip and knee joints, so they can walk
+    for (const sx of [-1, 1]) {
+      const hip = new THREE.Group(); hip.position.set(sx * 0.45, 0.3, 0.05); legs.add(hip);
+      capsuleBetween(hip, [0, 0, 0], [0, -1.95, 0], 0.42, 0.33, pantsMat);
+      const knee = new THREE.Group(); knee.position.y = -1.95; hip.add(knee);
+      capsuleBetween(knee, [0, 0, 0], [0, -1.95, 0.02], 0.3, 0.22, pantsMat);
+      const shoe = mesh(knee, new THREE.CapsuleGeometry(0.2, 0.55, 6, 12), shoeMat, 0, -2.05, 0.28); shoe.rotation.x = Math.PI / 2; shoe.scale.set(1.05, 1, 0.65);
+      hips.push(hip); knees.push(knee);
+    }
+    // the galabeya falls straight from the waist to the shins
+    if (robe) { const skirt = mesh(legs, new THREE.CylinderGeometry(0.95, 1.2, 3.3, 24, 1, true), topMat, 0, -1.3, 0.05); (skirt.material as THREE.Material).side = THREE.DoubleSide; skirt.scale.z = 0.7; }
+    else mesh(legs, new THREE.BoxGeometry(1.25, 0.55, 0.9), pantsMat, 0, 0.35, 0.05);
+  } else {
+    for (const sx of [-1, 1]) {
+      const hip: V3 = [sx * 0.45, 0.3, 0.05], knee: V3 = [sx * 0.5, 0.36, 1.9], ankle: V3 = [sx * 0.52, -1.62, 2.0];
+      capsuleBetween(legs, hip, knee, 0.42, 0.33, pantsMat);
+      capsuleBetween(legs, knee, ankle, 0.3, 0.22, pantsMat);
+      const shoe = mesh(legs, new THREE.CapsuleGeometry(0.2, 0.55, 6, 12), shoeMat, sx * 0.52, -1.72, 2.3); shoe.rotation.x = Math.PI / 2; shoe.scale.set(1.05, 1, 0.65);
+    }
+    if (robe) {
+      // the galabeya drapes from the lap down between the knees to the ankles
+      const drape = sheet(18, 24, (u, v) => {
+        const x = (u - 0.5) * 1.85 * (1 + Math.max(0, v - 0.45) * 0.2), sag = Math.sin(u * Math.PI);
+        if (v < 0.45) {                                   // over the lap, sagging between the thighs
+          const k = v / 0.45;
+          return [x, 0.66 + 0.06 * Math.sin(k * Math.PI) - 0.18 * sag * Math.sin(k * Math.PI) * 0.6 + 0.04 * Math.cos(u * Math.PI * 2), lerp(0.05, 2.12, k)];
+        }
+        const k = (v - 0.45) / 0.55;                      // and down from the knees to the ankles
+        return [x, lerp(0.66, -1.5, k) - (1 - k) * 0, lerp(2.12, 2.1, k) + 0.1 * Math.sin(k * Math.PI) - 0.2 * sag * Math.sin(k * Math.PI)];
+      });
+      const dm = mesh(legs, drape, topMat); (dm.material as THREE.Material).side = THREE.DoubleSide;
+    } else mesh(legs, new THREE.BoxGeometry(1.25, 0.55, 0.9), pantsMat, 0, 0.35, 0.2);
   }
-  if (robe) {
-    // the galabeya drapes from the lap down between the knees to the ankles
-    const drape = sheet(18, 24, (u, v) => {
-      const x = (u - 0.5) * 1.85 * (1 + Math.max(0, v - 0.45) * 0.2), sag = Math.sin(u * Math.PI);
-      if (v < 0.45) {                                   // over the lap, sagging between the thighs
-        const k = v / 0.45;
-        return [x, 0.66 + 0.06 * Math.sin(k * Math.PI) - 0.18 * sag * Math.sin(k * Math.PI) * 0.6 + 0.04 * Math.cos(u * Math.PI * 2), lerp(0.05, 2.12, k)];
-      }
-      const k = (v - 0.45) / 0.55;                      // and down from the knees to the ankles
-      return [x, lerp(0.66, -1.5, k) - (1 - k) * 0, lerp(2.12, 2.1, k) + 0.1 * Math.sin(k * Math.PI) - 0.2 * sag * Math.sin(k * Math.PI)];
-    });
-    const dm = mesh(legs, drape, topMat); (dm.material as THREE.Material).side = THREE.DoubleSide;
-  } else mesh(legs, new THREE.BoxGeometry(1.25, 0.55, 0.9), pantsMat, 0, 0.35, 0.2);
 
   /* neck and head */
   const neck = mesh(piv, new THREE.CylinderGeometry(fem ? 0.22 : 0.27, fem ? 0.26 : 0.31, 0.8, 20), handSkin, 0, 3.1, 0.0); neck.rotation.x = 0.12;
@@ -553,9 +573,10 @@ export function makePerson(p: PersonSpec, key: string): Person {
     arms.push(arm); elbows.push(el); hands.push(hand);
   }
 
+  if (standing) for (const a of arms) a.rotation.x = 0;   // arms hanging at the sides
   group.traverse(o => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
-  mergeRigid(group, [group, piv, head, ...arms, ...elbows, ...hands]);
-  return { group, piv, head, arms, elbows, hands };
+  mergeRigid(group, [group, piv, head, ...arms, ...elbows, ...hands, ...hips, ...knees]);
+  return { group, piv, head, arms, elbows, hands, hips, knees };
 }
 
 /* ---------- the regulars ---------- */

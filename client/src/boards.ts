@@ -280,7 +280,7 @@ function geosFor(t: string) {
   return (pieceGeo[t] = out);
 }
 const darkerMat = { w: phys({ color: 0x6b4a26, roughness: 0.6 }), b: phys({ color: 0x050302, roughness: 0.6 }) };
-function makePiece(p: string) {
+export function makePiece(p: string) {
   const white = p === p.toUpperCase(), g = new THREE.Group();
   for (const { geo, dark } of geosFor(p.toLowerCase())) {
     const m = new THREE.Mesh(geo, geo.type === 'CylinderGeometry' && dark ? feltMat : dark ? darkerMat[white ? 'w' : 'b'] : pieceMats[white ? 'w' : 'b']);
