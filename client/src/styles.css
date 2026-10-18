@@ -480,3 +480,6 @@ body:has(#ui .hud) .toast { top: calc(3.75rem + var(--safe-t)); }
   .sheet-card, .zoomctl .iconbtn { backdrop-filter: none; -webkit-backdrop-filter: none; }
   .zoomctl .iconbtn { background: rgba(20,13,8,.82); }
 }
+
+/* re-drawing the same screen (switching games, modes, stakes): nothing slides or fades in again */
+#ui.still .sheet-card, #ui.still .card, #ui.still .emotes { animation: none; }

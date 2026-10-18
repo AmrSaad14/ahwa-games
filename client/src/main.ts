@@ -493,9 +493,17 @@ function sideName(v: TableView, team: number) {
 }
 
 /* ---------------- rendering ---------------- */
+let lastScreenKey = '';
 function render() {
-  const ui = $('ui'); ui.innerHTML = '';
+  const ui = $('ui');
   const v = S.view;
+  // the same screen re-drawn (another game, mode or stake picked): no entrance animation and the same scroll position,
+  // so switching between games feels like one screen; only a new screen or sheet slides in
+  const key = [v ? `${v.id}:${v.phase === 'lobby' ? 'lobby' : 'play'}` : S.queue ? 'search' : S.screen, S.sheet ?? ''].join('|');
+  const still = key === lastScreenKey; lastScreenKey = key;
+  const scrolls = still ? [...ui.querySelectorAll<HTMLElement>('.sheet-card, .card, .scroll')].map(e => e.scrollTop) : [];
+  ui.classList.toggle('still', still);
+  ui.innerHTML = '';
   if (v) {
     scene.showTable(v, S.sel, S.choose, v.game === 'domino' ? undefined : boardUi(v));
     if (v.phase === 'lobby') ui.append(roomScreen(v)); else ui.append(...(v.game === 'domino' ? gameScreen(v) : boardScreen(v)));
@@ -516,6 +524,7 @@ function render() {
   if (S.sheet === 'delete') ui.append(sheet(h('p', null, t('deleteConfirm')), h('div', { class: 'row' }, btn(t('stay'), () => { S.sheet = null; render(); }, 'btn alt'),
     btn(t('deleteYes'), () => { net.send({ t: 'delete' }); S.sheet = null; S.screen = 'home'; toast(t('deleted')); render(); }, 'btn danger'))));
   if (!S.online && net.ready === false && inGame() && !S.practice) ui.append(h('div', { class: 'banner' }, t('reconnecting')));
+  if (scrolls.length) ui.querySelectorAll<HTMLElement>('.sheet-card, .card, .scroll').forEach((e, i) => { if (scrolls[i]) e.scrollTop = scrolls[i]; });
   measureChrome();
   renderLabels(true);
   const rot = document.getElementById('rotate');
