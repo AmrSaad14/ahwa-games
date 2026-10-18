@@ -107,3 +107,12 @@ export function clearDisposing(g: THREE.Object3D) {
   disposeTree(g, false);
   g.clear();
 }
+
+/**
+ * A printed surface lying on a solid (a board's playing card on its frame, a tile's face): pulled toward the camera
+ * in the depth test, so the two never flicker or stripe through each other on phones, whose depth buffers are coarse.
+ */
+export function onTop<M extends THREE.Material>(m: M): M {
+  m.polygonOffset = true; m.polygonOffsetFactor = -2; m.polygonOffsetUnits = -4;
+  return m;
+}

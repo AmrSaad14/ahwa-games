@@ -4,7 +4,7 @@ import { BAR, OFF } from '../../shared/games/tawla';
 import { COLOR_OFFSET, HOME, LAP, TRACK } from '../../shared/games/ludo';
 import { TEX_HI, canvasTex } from './ahwa';
 import { CHESS_LOOKS, ChessLook, DICE_LOOKS, DiceLook, LUDO_LOOKS, LudoLook, TAWLA_LOOKS, TawlaLook } from './looks';
-import { IS_PHONE, clearDisposing } from './perf';
+import { IS_PHONE, clearDisposing, onTop } from './perf';
 /** Board artwork: drawn at the device's texture detail (2x where there is memory for it). */
 const hiTex = (w: number, h: number, draw: (g: CanvasRenderingContext2D, w: number, h: number) => void) => canvasTex(w, h, draw, undefined, TEX_HI);
 
@@ -28,6 +28,8 @@ export interface BoardRenderer {
 
 const ease = (k: number) => 1 - Math.pow(1 - Math.min(1, Math.max(0, k)), 3);
 const shadow = <T extends THREE.Object3D>(o: T) => { o.traverse(c => { if ((c as THREE.Mesh).isMesh) { c.castShadow = true; c.receiveShadow = true; } }); return o; };
+/** Highlights and rings drawn on a board: always over the printed card. */
+const lift = (m: THREE.Mesh) => { onTop(m.material as THREE.Material); return m; };
 function overlay(size: number, color: number, opacity: number) {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false }));
   m.rotation.x = -Math.PI / 2; return m;
@@ -332,7 +334,7 @@ export class ChessBoard implements BoardRenderer {
         g.strokeStyle = 'rgba(20,10,5,.35)'; g.lineWidth = 1.5; g.strokeRect(f * c, r * c, c, c);
       }
     });
-    const top = new THREE.Mesh(new THREE.PlaneGeometry(B, B), phys({ map: tex, roughness: 0.58, clearcoat: 0.35, clearcoatRoughness: 0.6, envMapIntensity: 0.3, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.1 }));   // satin lacquer: a sheen, no hot spot
+    const top = new THREE.Mesh(new THREE.PlaneGeometry(B, B), onTop(phys({ map: tex, roughness: 0.58, clearcoat: 0.35, clearcoatRoughness: 0.6, envMapIntensity: 0.3, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.1 })));   // satin lacquer: a sheen, no hot spot
     top.rotation.x = -Math.PI / 2; top.position.y = 0.302; top.receiveShadow = true;
     frame.receiveShadow = true; frame.castShadow = true;
     this.root.add(frame, top, this.marks, this.pieces);
@@ -357,7 +359,7 @@ export class ChessBoard implements BoardRenderer {
       if (c.last && c.last.to === sq) moved = g;
       this.pieces.add(g);
     });
-    const mark = (sq: number, color: number, op: number, size = SQ) => { const m = overlay(size, color, op); m.position.copy(this.pos(sq)); m.position.y = 0.305; this.marks.add(m); return m; };
+    const mark = (sq: number, color: number, op: number, size = SQ) => { const m = overlay(size, color, op); m.position.copy(this.pos(sq)); m.position.y = 0.305; this.marks.add(lift(m)); return m; };
     if (c.last) { mark(c.last.from, 0xf2c14e, 0.35); mark(c.last.to, 0xf2c14e, 0.45); }
     if (c.check >= 0) mark(c.check, 0xd33b2c, 0.6);
     if (ui.sel !== null) mark(ui.sel, 0x3aa392, 0.55);
@@ -365,7 +367,7 @@ export class ChessBoard implements BoardRenderer {
       const occupied = !!c.board[t];
       const m = new THREE.Mesh(occupied ? new THREE.RingGeometry(0.38, 0.48, 32) : new THREE.CircleGeometry(0.16, 24),
         new THREE.MeshBasicMaterial({ color: 0x1f6d63, transparent: true, opacity: 0.75, depthWrite: false }));
-      m.rotation.x = -Math.PI / 2; m.position.copy(this.pos(t)); m.position.y = 0.31; this.marks.add(m);
+      m.rotation.x = -Math.PI / 2; m.position.copy(this.pos(t)); m.position.y = 0.31; this.marks.add(lift(m));
     }
     if (v.last && v.last.k !== this.lastK) {
       this.lastK = v.last.k;
@@ -475,7 +477,7 @@ export class TawlaBoard implements BoardRenderer {
       // the bearing-off tray is lined with dark felt
       g.fillStyle = look.tray; g.fillRect(x0(TW / 2 - EDGE - TRAY + 0.05), EDGE * sx, (TRAY - 0.1) * sx, h - 2 * EDGE * sx);
     });
-    const top = new THREE.Mesh(new THREE.PlaneGeometry(TW, TD), phys({ map: tex, roughness: 0.6, clearcoat: 0.3, clearcoatRoughness: 0.6, envMapIntensity: 0.25, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.1 }));   // satin lacquer: a sheen, no hot spot
+    const top = new THREE.Mesh(new THREE.PlaneGeometry(TW, TD), onTop(phys({ map: tex, roughness: 0.6, clearcoat: 0.3, clearcoatRoughness: 0.6, envMapIntensity: 0.25, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.1 })));   // satin lacquer: a sheen, no hot spot
     top.rotation.x = -Math.PI / 2; top.position.y = FIELD_Y; top.receiveShadow = true;
     // raised rails with sadaf inlay on top: the four sides, the middle bar and the tray divider
     const rails = new THREE.Group();
@@ -548,19 +550,19 @@ export class TawlaBoard implements BoardRenderer {
     const top = (i: number) => (i === BAR ? this.barPos(s.turn, Math.max(0, s.bar[s.turn] - 1)) : this.stackPos(i, Math.max(0, Math.abs(s.pts[i]) - 1) + under(i), Math.abs(s.pts[i]) + under(i)));
     if (ui.sel !== null) {
       const ring = new THREE.Mesh(new THREE.RingGeometry(CR * 0.9, CR * 1.25, 32), new THREE.MeshBasicMaterial({ color: 0x3aa392, transparent: true, opacity: 0.9, depthWrite: false }));
-      ring.rotation.x = -Math.PI / 2; ring.position.copy(top(ui.sel)); ring.position.y += 0.09; this.marks.add(ring);
+      ring.rotation.x = -Math.PI / 2; ring.position.copy(top(ui.sel)); ring.position.y += 0.09; this.marks.add(lift(ring));
     }
     // before picking: a soft ring on every checker that can move
     for (const f of ui.movable ?? []) {
       const ring = new THREE.Mesh(new THREE.RingGeometry(CR * 0.88, CR * 1.3, 32), new THREE.MeshBasicMaterial({ color: 0xffcf6e, transparent: true, opacity: 0.95, depthWrite: false }));
-      ring.rotation.x = -Math.PI / 2; ring.position.copy(top(f)); ring.position.y += 0.09; this.marks.add(ring);
+      ring.rotation.x = -Math.PI / 2; ring.position.copy(top(f)); ring.position.y += 0.09; this.marks.add(lift(ring));
     }
     for (const tgt of ui.targets) {
       const disc = new THREE.Mesh(new THREE.CircleGeometry(CR, 28), new THREE.MeshBasicMaterial({ color: 0xffcf6e, transparent: true, opacity: 0.55, depthWrite: false }));
       disc.rotation.x = -Math.PI / 2;
       if (tgt === OFF) { disc.scale.set(1.3, 2.2, 1); disc.position.copy(this.offPos(s.turn, Math.min(14, s.off[s.turn]))); disc.position.y = 0.43; }
       else { const n = Math.abs(s.pts[tgt]) * (s.pts[tgt] * (s.turn === 0 ? 1 : -1) > 0 ? 1 : 0) + under(tgt); disc.position.copy(this.stackPos(tgt, n, n + 1)); disc.position.y = 0.46; }
-      this.marks.add(disc);
+      this.marks.add(lift(disc));
     }
     // dice on the right half
     this.dice.forEach(d => this.root.remove(d)); this.dice = [];
@@ -723,14 +725,14 @@ export class LudoBoard implements BoardRenderer {
     const board = new THREE.Mesh(new THREE.BoxGeometry(size + 0.6, 0.3, size + 0.6), walnut);
     board.position.y = 0.15;
     // base cups: shallow wooden rings each pawn sits in at home
-    const cupMat = phys({ color: 0x000000, transparent: true, opacity: 0.18, roughness: 1 });
+    const cupMat = onTop(phys({ color: 0x000000, transparent: true, opacity: 0.18, roughness: 1 }));
     BASE_ORIGIN.forEach(([bx, by]) => [[1.5, 1.5], [3.5, 1.5], [1.5, 3.5], [3.5, 3.5]].forEach(([dx, dy]) => {
       const cup = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.3, 32), cupMat); cup.rotation.x = -Math.PI / 2;
-      cup.position.copy(this.cellPos(bx + dx, by + dy)); cup.position.y = 0.303; this.root.add(cup);
+      cup.position.copy(this.cellPos(bx + dx, by + dy)); cup.position.y = 0.306; this.root.add(cup);
     }));
     // a matte printed card, lit evenly: no lamp glare, no hot spot and no shadows from the room across it,
     // so every colour and square reads the same from corner to corner (pawns get their own soft contact shadow)
-    const top = new THREE.Mesh(new THREE.PlaneGeometry(size, size), phys({ map: tex, roughness: 0.92, metalness: 0, envMapIntensity: 0, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.42 }));
+    const top = new THREE.Mesh(new THREE.PlaneGeometry(size, size), onTop(phys({ map: tex, roughness: 0.92, metalness: 0, envMapIntensity: 0, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.42 })));
     top.rotation.x = -Math.PI / 2; top.position.y = 0.301; top.receiveShadow = false;
     this.root.add(shadow(board), top, this.marks, this.pawns);
     this.top = top;
@@ -773,7 +775,7 @@ export class LudoBoard implements BoardRenderer {
       if (seat === s.you && ui.targets.includes(i)) {
         this.movable.push(g);
         const ring = new THREE.Mesh(new THREE.RingGeometry(0.24, 0.32, 28), new THREE.MeshBasicMaterial({ color: 0xffcf6e, transparent: true, opacity: 0.9, depthWrite: false }));
-        ring.rotation.x = -Math.PI / 2; ring.position.copy(pos); ring.position.y = 0.31; this.marks.add(ring);
+        ring.rotation.x = -Math.PI / 2; ring.position.copy(pos); ring.position.y = 0.31; this.marks.add(lift(ring));
       }
       this.pawns.add(g);
     }));

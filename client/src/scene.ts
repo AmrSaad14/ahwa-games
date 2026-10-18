@@ -7,7 +7,7 @@ import { BoardRenderer, BoardUi, ChessBoard, LudoBoard, Pick, TawlaBoard, initBo
 import { CHESS_LOOKS, LUDO_LOOKS, TAWLA_LOOKS, TILE_LOOKS, TileLook } from './looks';
 import { HEAD_Y, PEOPLE, makePerson } from './people';
 import { Post } from './post';
-import { IS_PHONE, disposeTree } from './perf';
+import { IS_PHONE, disposeTree, onTop } from './perf';
 import { FLOOR_Y, Smoke, TEX_HI, buildAhwa, canvasTex, makeChair, makeShisha, makeTable, makeTeaGlass } from './ahwa';
 
 /** The six characters players pick from; the colour stands for them in lists and badges. */
@@ -64,7 +64,7 @@ const roomGroup = (s: THREE.Scene) => s.children.find(c => c.userData.room);
 export class TableScene {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
-  private camera = new THREE.PerspectiveCamera(38, 1, 0.1, 400);
+  private camera = new THREE.PerspectiveCamera(38, 1, 0.5, 220);   // near 0.5: much finer depth on phones (no striping)
   private boardG = new THREE.Group();   // the line of play, in layout units (scaled)
   private propsG = new THREE.Group();   // tiles held by opponents and the boneyard, in world units
   private ring: THREE.Mesh;
@@ -446,7 +446,7 @@ export class TableScene {
         pin.addColorStop(0, '#fff2c4'); pin.addColorStop(0.5, '#d4a347'); pin.addColorStop(1, '#7a5520');
         g.fillStyle = pin; g.beginPath(); g.arc(256, 128, 12, 0, Math.PI * 2); g.fill();
       }, undefined, TEX_HI > 1 ? 1.5 : 1);
-      m = new THREE.MeshStandardMaterial({ map: tx, roughness: this.tileLook.rough, metalness: this.tileLook.metal });
+      m = onTop(new THREE.MeshStandardMaterial({ map: tx, roughness: this.tileLook.rough, metalness: this.tileLook.metal }));
       this.faceMats.set(k, m);
     }
     return m;
