@@ -11,7 +11,7 @@ class Obj {
   parent: any = null;
   children: any[] = []; userData: any = {}; visible = true; castShadow = false; receiveShadow = false;
   position = new Vector3(); rotation = new Vector3(); scale = new Vector3(1, 1, 1);
-  add(...o: any[]) { this.children.push(...o); return this; }
+  add(...o: any[]) { for (const c of o) c.parent = this; this.children.push(...o); return this; }
   remove(o: any) { this.children = this.children.filter(c => c !== o); return this; }
   clear() { this.children = []; return this; }
   traverse(fn: (o: any) => void) { fn(this); this.children.forEach(c => c.traverse?.(fn)); }

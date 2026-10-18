@@ -46,7 +46,8 @@ const _inv = new THREE.Quaternion();
  * `sx` is -1 for the left arm, +1 for the right. The elbow stays out to the side and down, like a person's.
  */
 export function reach(piv: THREE.Object3D, arm: THREE.Object3D, elbow: THREE.Object3D, sx: number, target: THREE.Vector3, back = 0) {
-  const sh = arm.parent!;
+  const sh = arm.parent;
+  if (!sh) return;
   sh.rotation.set(0, 0, 0);
   // the target from the shoulder, in the torso's frame (the torso leans and bobs)
   _inv.copy(piv.quaternion).invert();
