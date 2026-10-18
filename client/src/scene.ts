@@ -7,6 +7,8 @@ import { BoardRenderer, BoardUi, ChessBoard, LudoBoard, Pick, TawlaBoard, initBo
 import { CHESS_LOOKS, LUDO_LOOKS, TAWLA_LOOKS, TILE_LOOKS, TileLook } from './looks';
 import { FEET_DROP, HEAD_Y, PEOPLE, Person, makePerson } from './people';
 import { Post } from './post';
+import { ActKind, Actor, Sights, act, newActor } from './acting';
+import { teamOf } from '../../shared/engine';
 import { IS_PHONE, disposeTree, onTop } from './perf';
 import { FLOOR_Y, Smoke, TEX_HI, buildAhwa, canvasTex, makeBackgammon, makeChair, makeShisha, makeTable, makeTeaGlass } from './ahwa';
 
@@ -36,8 +38,7 @@ const WALKER_SCALE = 0.84;
 /** Visual positions around the table: 0 bottom (you), 1 left, 2 top, 3 right. */
 export function positionsFor(n: number): number[] { return n === 2 ? [0, 2] : n === 3 ? [0, 1, 3] : [0, 1, 2, 3]; }
 
-type Anim = { type: 'play' | 'draw' | 'pass' | 'win' | 'emote'; t0: number; d: number };
-interface CharData { piv: THREE.Group; head: THREE.Group; arms: THREE.Group[]; elbows: THREE.Group[]; phase: number; anim: Anim | null; active: boolean; ch: number; seat: number }
+type CharData = Actor & { ch: number; seat: number; table?: THREE.Vector3 };
 
 /* ---------- realistic domino tile ---------- */
 const TILE_W = 1.94, TILE_D = 0.96, TILE_H = 0.3;
@@ -86,6 +87,8 @@ export class TableScene {
   private ghostMat = new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.5, depthWrite: false });
   private faceMats = new Map<string, THREE.MeshStandardMaterial>();
   private smoke: Smoke;
+  /** Where the players at our table look when they look at the game. */
+  private boardFocus = new THREE.Vector3(0, 0, 0);
   /* the café floor (home): four game tables, you walking between them, and the intro */
   private mainTable!: THREE.Group;
   private shishaG!: THREE.Group;
@@ -96,6 +99,9 @@ export class TableScene {
   private walker: (Person & { ch: number }) | null = null;
   private walkPos = new THREE.Vector3(0, 0, 1); private walkTo = new THREE.Vector3(0, 0, 1); private walkYaw = 0; private stride = 0;
   private walkPath: THREE.Vector3[] = [];
+  /** Sitting down at a café table: 0 standing, 1 seated. */
+  private sitK = 0;
+  private walkLook = { blinkAt: 1, yaw: 0 };
   private focus: GameId | null = null;
   private intro: { t: number; done: () => void } | null = null;
   private camPos = new THREE.Vector3(); private camLook = new THREE.Vector3(); private camInit = false; private camT = 0;
@@ -247,6 +253,7 @@ export class TableScene {
     const r2 = this.makeChar(3, true); r2.position.set(12.5, 0, -9 - 3.6); r2.lookAt(12.5, 0, -9); s.add(r2);
     const r3 = this.makeChar(1, true); r3.position.set(12.5, 0, -9 + 3.6); r3.lookAt(12.5, 0, -9); s.add(r3);
     this.regulars.push(r1, r2, r3);
+    (r1.userData as CharData).table = new THREE.Vector3(-12.5, 0, -8.5); (r2.userData as CharData).table = new THREE.Vector3(12.5, 0, -9); (r3.userData as CharData).table = new THREE.Vector3(12.5, 0, -9);
     // phones: the neighbouring tables don't draw into the shadow map (it then holds just our table and its players)
     if (!lamps) for (const o of [...this.regulars, roomGroup(s)]) o?.traverse(m => { m.castShadow = false; });
 
@@ -382,9 +389,9 @@ export class TableScene {
     this.focus = g; this.wake(1500);
     if (this.intro) return;
     if (!g) { this.walkPath = [new THREE.Vector3(0, 0, 1)]; return; }
-    // round the table on the side toward the middle, and stand behind it, facing the board (and you)
-    const [x, z] = LOBBY[g], side = x < 0 ? 1 : -1;
-    this.walkPath = [new THREE.Vector3(x + side * (LOBBY_T + 2.6), 0, z + 0.5), new THREE.Vector3(x + side * 1.2, 0, z - LOBBY_T - 1.7)];
+    // walk round to the chair on the table's left (it stays in view beside the menu) and sit down
+    const [x, z] = LOBBY[g];
+    this.walkPath = [new THREE.Vector3(x - LOBBY_T - 2.6, 0, z + LOBBY_T + 1.4), new THREE.Vector3(x - LOBBY_T - 1.3, 0, z)];
   }
   /** The opening scene: your character walks in from the street. Calls `done` at the end (or when skipped). */
   playIntro(done: () => void) {
@@ -467,9 +474,14 @@ export class TableScene {
   private tickCafe(dt: number, t: number) {
     const w = this.ensureWalker();
     w.group.visible = true;
+    // stand up before walking off; sit down once at the chair of the table you picked
+    const seat = this.focus && !this.intro ? (() => { const [x, z] = LOBBY[this.focus!]; return { x: x - LOBBY_T - 1.3, z, yaw: Math.PI / 2 }; })() : null;
+    const atSeat = !!seat && !this.walkPath.length && Math.hypot(this.walkPos.x - seat.x, this.walkPos.z - seat.z) < 0.05;
+    const sitWant = atSeat ? 1 : 0;
+    if (this.sitK !== sitWant) { this.sitK = sitWant > this.sitK ? Math.min(1, this.sitK + dt / 0.7) : Math.max(0, this.sitK - dt / 0.6); this.wake(300); }
     // walk along the path
     let moving = false;
-    if (this.walkPath.length) {
+    if (this.walkPath.length && this.sitK === 0) {
       const to = this.walkPath[0], d = to.clone().sub(this.walkPos); d.y = 0;
       const step = WALK_SPEED * dt;
       if (d.length() <= step) { this.walkPos.copy(to); this.walkPath.shift(); }
@@ -481,19 +493,30 @@ export class TableScene {
       this.wake(300);
     }
     if (!moving) {
-      // standing: face the table you are at, or the room
-      const want = this.focus ? Math.atan2(LOBBY[this.focus][0] - this.walkPos.x, LOBBY[this.focus][1] - this.walkPos.z) : 0;
-      let dy = want - this.walkYaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); this.walkYaw += dy * Math.min(1, dt * 5);
+      // standing still: face the chair's table (or the room), seated: square to the table
+      const want = atSeat ? seat!.yaw : this.focus ? Math.atan2(LOBBY[this.focus][0] - this.walkPos.x, LOBBY[this.focus][1] - this.walkPos.z) : 0;
+      let dy = want - this.walkYaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); this.walkYaw += dy * Math.min(1, dt * 6);
     }
     if (moving) this.stride += dt * WALK_SPEED * 1.15;
-    const k = moving ? 1 : 0, ph = this.stride, amp = this.reduce ? 0 : 1;
+    const k = moving ? 1 : 0, ph = this.stride, amp = this.reduce ? 0 : 1, sk = this.sitK * this.sitK * (3 - 2 * this.sitK);
     const sw = Math.sin(ph) * 0.55 * k;
-    w.hips[0].rotation.x = sw; w.hips[1].rotation.x = -sw;
-    w.knees[0].rotation.x = Math.max(0, -Math.cos(ph)) * 0.9 * k; w.knees[1].rotation.x = Math.max(0, Math.cos(ph)) * 0.9 * k;
-    w.arms[0].rotation.x = -sw * 0.8; w.arms[1].rotation.x = sw * 0.8;
-    w.elbows[0].rotation.x = w.elbows[1].rotation.x = -0.25 - 0.2 * k;
-    w.head.rotation.y = moving ? 0 : Math.sin(t * 0.4) * 0.25 * amp;
-    w.group.position.set(this.walkPos.x, FLOOR_Y + FEET_DROP * WALKER_SCALE + Math.abs(Math.cos(ph)) * 0.1 * k, this.walkPos.z);
+    w.hips[0].rotation.x = sw - 1.45 * sk; w.hips[1].rotation.x = -sw - 1.45 * sk;
+    w.knees[0].rotation.x = Math.max(0, -Math.cos(ph)) * 0.9 * k + 1.45 * sk; w.knees[1].rotation.x = Math.max(0, Math.cos(ph)) * 0.9 * k + 1.45 * sk;
+    // seated: forearms on the table, ready to play
+    w.arms[0].rotation.set(-sw * 0.8 - 1.0 * sk, 0, 0); w.arms[1].rotation.set(sw * 0.8 - 1.0 * sk, 0, 0);
+    w.elbows[0].rotation.x = w.elbows[1].rotation.x = -0.25 - 0.2 * k - 0.35 * sk;
+    w.piv.rotation.x = 0.08 * sk;
+    w.piv.position.y = -1.75 + Math.sin(t * 1.6) * 0.03 * amp;
+    // eyes and head: blink, look around the room, at the board once seated, at you now and then
+    const L = this.walkLook;
+    const lookYaw = moving ? 0 : atSeat ? Math.sin(t * 0.5) * 0.35 * amp : Math.sin(t * 0.4) * 0.35 * amp;
+    L.yaw += (lookYaw - L.yaw) * Math.min(1, dt * 4);
+    w.head.rotation.set(atSeat ? 0.35 * sk : 0.05, L.yaw, 0, 'YXZ');
+    let closed = 0;
+    if (t > L.blinkAt) { const bk = (t - L.blinkAt) / 0.16; if (bk >= 1) L.blinkAt = t + 2 + Math.random() * 3.5; else closed = Math.sin(bk * Math.PI); }
+    for (const l of w.lids) l.rotation.x = (l.userData.open as number) + closed * 0.85;
+    const standY = FLOOR_Y + FEET_DROP * WALKER_SCALE, sitY = -0.33;
+    w.group.position.set(this.walkPos.x, standY + (sitY - standY) * sk + Math.abs(Math.cos(ph)) * 0.1 * k, this.walkPos.z);
     w.group.rotation.y = this.walkYaw;
     // the ring under the table you are at
     this.lobbyRing.visible = !!this.focus && !this.intro;
@@ -517,7 +540,7 @@ export class TableScene {
     if (this.focus) {
       const [x, z] = LOBBY[this.focus];
       // the table on the free side of the screen (the menu sits on the right, or at the bottom on a tall screen)
-      const off = portrait ? new THREE.Vector3(0, 0, 3.5) : new THREE.Vector3(5.2, 0, 0);
+      const off = portrait ? new THREE.Vector3(-1.5, 0, 3.5) : new THREE.Vector3(3.4, 0, 0);
       const look = new THREE.Vector3(x, -0.6, z).add(off);
       return { pos: look.clone().add(new THREE.Vector3(0, 11.5 * far, 13.5 * far)), look };
     }
@@ -533,10 +556,19 @@ export class TableScene {
     this.refresh();
   }
 
-  animate(seat: number, type: Anim['type']) {
-    const pos = this.posToSeat.indexOf(seat);
-    const c = pos >= 0 ? this.chars[pos] : null;
-    if (c) { (c.userData as CharData).anim = { type, t0: this.clock, d: type === 'win' ? 2.2 : 0.9 }; this.wake(type === 'win' ? 2500 : 1200); }
+  /** Test hook: hold everyone at the table in one pose (an action at point `fix` of it). */
+  private posing: { type: ActKind; k?: string; fix: number } | null = null;
+  pose(type: ActKind, k: string | undefined, fix: number) { this.posing = { type, k, fix }; this.wake(5000); }
+  animate(seat: number, type: ActKind, k?: string) {
+    const v = this.view;
+    const set = (s: number, ty: ActKind) => {
+      const pos = this.posToSeat.indexOf(s), c = pos >= 0 ? this.chars[pos] : null;
+      if (c) (c.userData as CharData).anim = { type: ty, t0: this.clock, d: ty === 'win' || ty === 'lose' ? 2.2 : ty === 'emote' ? 1.8 : 0.9, k };
+    };
+    set(seat, type);
+    // a win: the winners celebrate (partners too), everyone else at the table takes it badly
+    if (type === 'win' && v) v.seats.forEach((_, s) => { if (s !== seat) set(s, teamOf(v.mode as never, s) === teamOf(v.mode as never, seat) ? 'win' : 'lose'); });
+    this.wake(type === 'win' ? 2500 : 1800);
   }
 
   seatAt(pos: number) { return this.posToSeat[pos] ?? -1; }
@@ -674,7 +706,7 @@ export class TableScene {
     const p = makePerson(PEOPLE[i], String(i));
     const g = p.group;
     g.add(makeChair());
-    const data: CharData = { piv: p.piv, head: p.head, arms: p.arms, elbows: p.elbows, phase: Math.random() * 6, anim: null, active: false, ch: i, seat: -1 };
+    const data: CharData = Object.assign(newActor(p, regular), { ch: i, seat: -1 });
     g.userData = data;
     if (regular) {
       // holding a glass of tea
@@ -1018,32 +1050,18 @@ export class TableScene {
     this.zoom = this.mag < 1 ? 1 / this.mag : 1;
     if (!this.view) this.tickCafe(dt, t);
     this.placeCamera(this.view || this.reduce ? 0 : Math.sin(t * 0.12) * 0.35);
-    for (const c of this.chars) {
-      if (!c) continue;
-      const u = c.userData as CharData;
-      u.piv.position.y = -1.75 + Math.sin(t * 1.6 + u.phase) * 0.03 * amp;
-      u.piv.rotation.x += ((u.active ? 0.2 : 0) - u.piv.rotation.x) * 0.08;
-      u.head.rotation.y = Math.sin(t * 0.5 + u.phase) * 0.2 * amp;
-      u.head.rotation.x += ((u.active ? 0.3 : 0.06) - u.head.rotation.x) * 0.08;
-      u.arms[0].rotation.x = -1.1; u.arms[1].rotation.x = -1.1; c.position.y = 0;
-      u.elbows[0].rotation.x = u.elbows[1].rotation.x = -0.45;
-      if (u.anim) {
-        const k = (t - u.anim.t0) / u.anim.d;
-        if (k >= 1) u.anim = null;
-        else if (u.anim.type === 'play') u.arms[1].rotation.x = -1.1 - Math.sin(k * Math.PI) * 0.9;
-        else if (u.anim.type === 'draw') u.arms[0].rotation.x = -1.1 - Math.sin(k * Math.PI) * 0.7;
-        else if (u.anim.type === 'pass') u.head.rotation.y = Math.sin(k * Math.PI * 6) * 0.55 * (1 - k);
-        else if (u.anim.type === 'emote') u.arms[1].rotation.x = -2.6 + Math.sin(k * Math.PI * 6) * 0.3;
-        else if (u.anim.type === 'win') { c.position.y = Math.abs(Math.sin(k * Math.PI * 4)) * 0.8 * (1 - k * 0.5); u.arms[0].rotation.x = u.arms[1].rotation.x = -2.9; }
-        for (let a = 0; a < 2; a++) if (u.arms[a].rotation.x < -1.8) u.elbows[a].rotation.x = -0.15;
-      }
-    }
+    // the people at our table and at the next tables: breathing, looking, fidgeting, reacting
+    const heads: THREE.Vector3[] = [];
+    const headOf = (g: THREE.Object3D) => g.localToWorld(new THREE.Vector3(0, 1.9, 0));
+    for (const c of this.chars) if (c) { c.updateMatrixWorld(); heads.push((c.userData.headW = headOf(c))); }
+    const activePos = this.view && this.view.phase === 'play' ? this.posToSeat.indexOf(this.view.turn) : -1;
+    const sights: Sights = { board: this.boardFocus, heads, you: this.camera.position, activeHead: activePos >= 0 && this.chars[activePos] ? this.chars[activePos]!.userData.headW : null };
+    if (this.posing) for (const c of this.chars) if (c) (c.userData as CharData).anim = { ...this.posing, t0: t, d: 1 };
+    for (const c of this.chars) if (c) act(c, c.userData as CharData, t, dt, amp, sights, c.userData.headW);
     for (const r of this.regulars) {
       const u = r.userData as CharData;
-      u.piv.position.y = -1.75 + Math.sin(t * 1.3 + u.phase) * 0.03 * amp;
-      u.head.rotation.y = Math.sin(t * 0.35 + u.phase) * 0.5 * amp;
-      const sip = Math.max(0, Math.sin(t * 0.4 + u.phase)) * amp;
-      u.arms[1].rotation.x = -1.6 - sip * 0.5; u.elbows[1].rotation.x = -0.6 - sip * 1.1;
+      r.updateMatrixWorld();
+      act(r, u, t, dt, amp, { board: u.table!, heads: this.regulars.map(o => o.userData.headW ??= headOf(o)), you: this.camera.position, activeHead: null }, r.userData.headW);
     }
     for (const m of this.boardG.children) {
       const d = m.userData.drop as number | undefined;

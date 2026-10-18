@@ -253,7 +253,9 @@ function clothTexture(base: number, pattern: PersonSpec['pattern'] = 'plain', se
 
 export interface Person { group: THREE.Group; piv: THREE.Group; head: THREE.Group; arms: THREE.Group[]; elbows: THREE.Group[]; hands: THREE.Group[];
   /** Standing people only: hip and knee joints of each leg (for walking). */
-  hips: THREE.Group[]; knees: THREE.Group[] }
+  hips: THREE.Group[]; knees: THREE.Group[];
+  /** Eyeballs (turn to look at things) and upper lids (close to blink), left and right. */
+  eyes: THREE.Mesh[]; lids: THREE.Mesh[] }
 /** A standing person's feet are this far below their group's origin (place the group FEET_DROP above the floor). */
 export const FEET_DROP = 5.6;
 
@@ -391,6 +393,7 @@ export function makePerson(p: PersonSpec, key: string, standing = false): Person
     const rim = mesh(hs, new THREE.TorusGeometry(0.13, 0.03, 8, 18, Math.PI * 1.4), handSkin, sx * (SX * 0.97 + 0.04), -0.02, -0.06); rim.rotation.set(0, sx * Math.PI / 2, Math.PI * 0.3); rim.scale.set(1, 1.8, 1);
   }
   // eyes with lids
+  const eyes: THREE.Mesh[] = [], lids: THREE.Mesh[] = [];
   const eyeM = phys({ color: 0xffffff, map: cached('eye' + (p.iris ?? '#4a2c17'), () => eyeTexture(p.iris ?? '#4a2c17')), roughness: 0.1, clearcoat: 1, clearcoatRoughness: 0.05, envMapIntensity: 0.6 });
   const lidM = skin;
   for (const sx of [-1, 1]) {
@@ -398,8 +401,10 @@ export function makePerson(p: PersonSpec, key: string, standing = false): Person
     const ec: V3 = [c[0], c[1], c[2] - 0.095];
     const r = 0.12;
     const eye = mesh(hs, new THREE.SphereGeometry(r, 32, 20, -Math.PI / 2), eyeM, ...ec); eye.rotation.set(0.08, -sx * 0.06, 0);
+    eye.userData.dynamic = true; eye.userData.rest = eye.rotation.clone(); eyes.push(eye);
     // upper lid covers the top, lower lid the bottom, leaving an almond-shaped opening
     const up = mesh(hs, new THREE.SphereGeometry(r * 1.06, 32, 12, 0, Math.PI * 2, 0, Math.PI * 0.4), lidM, ...ec); up.rotation.x = 0.05 + (p.age > 1 ? 0.1 : 0); up.rotation.z = sx * 0.06;
+    up.userData.dynamic = true; up.userData.open = up.rotation.x; lids.push(up);
     const lo = mesh(hs, new THREE.SphereGeometry(r * 1.04, 32, 10, 0, Math.PI * 2, Math.PI * 0.64, Math.PI * 0.36), lidM, ...ec); lo.rotation.x = -0.05;
     // lash line
     const lash = mesh(hs, new THREE.TorusGeometry(r * 1.06, fem ? 0.02 : 0.009, 6, 20, Math.PI * 0.8), phys({ color: 0x120b06, roughness: 0.6 }), ...ec);
@@ -576,7 +581,7 @@ export function makePerson(p: PersonSpec, key: string, standing = false): Person
   if (standing) for (const a of arms) a.rotation.x = 0;   // arms hanging at the sides
   group.traverse(o => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
   mergeRigid(group, [group, piv, head, ...arms, ...elbows, ...hands, ...hips, ...knees]);
-  return { group, piv, head, arms, elbows, hands, hips, knees };
+  return { group, piv, head, arms, elbows, hands, hips, knees, eyes, lids };
 }
 
 /* ---------- the regulars ---------- */

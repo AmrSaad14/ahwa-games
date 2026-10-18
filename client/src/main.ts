@@ -345,7 +345,7 @@ function sendEmote(k: Emote) {
 }
 function showEmote(seat: number, k: Emote) {
   S.bubbles.set(seat, { k, until: Date.now() + 2600 });
-  scene.animate(seat, 'emote');
+  scene.animate(seat, 'emote', k);
   sfx.pop();
 }
 function quick() {
@@ -1599,7 +1599,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !Capacitor
 // recording hooks: ?rec for the how-to GIFs, ?promo for the promo video (the computer plays your seat)
 if (/[?&](rec|promo)\b/.test(location.search)) (window as unknown as Record<string, unknown>).__ahwa = {
   view: () => S.view, spot: (p: Pick) => scene.spotScreen(p), ghost: (e: End) => scene.ghostScreen(e),
-  pick: (p: Pick) => handlePick(p), stats: () => scene.stats(), showGameAd: () => { S.sheet = 'interstitial'; render(); }, gameOver: () => gameAdSoon(), playAgain: (cb: () => void) => afterAd(cb), targets: () => (S.view && S.view.game !== 'domino' ? boardUi(S.view as BoardView).targets : []),
+  pick: (p: Pick) => handlePick(p), stats: () => scene.stats(), showGameAd: () => { S.sheet = 'interstitial'; render(); }, gameOver: () => gameAdSoon(), pose: (type: string, k: string | undefined, fix: number) => scene.pose(type as never, k, fix), act: (seat: number, type: string, k?: string) => (type === 'emote' ? showEmote(seat, k as Emote) : scene.animate(seat, type as never)), playAgain: (cb: () => void) => afterAd(cb), targets: () => (S.view && S.view.game !== 'domino' ? boardUi(S.view as BoardView).targets : []),
   practice: (mode: Mode) => { startPractice(mode); const seat = S.practice?.table.seats[0]; if (seat) seat.away = true; S.practice?.table.refresh(); },
 };
 // the game is played in landscape: lock it where the browser allows (installed app, fullscreen)
