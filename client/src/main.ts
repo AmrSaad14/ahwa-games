@@ -518,6 +518,7 @@ function render() {
   if (S.sheet === 'signin' && !v) ui.append(signInSheet());
   if (S.sheet === 'fakead') ui.append(fakeAdSheet());
   if (S.sheet === 'interstitial') ui.append(demoInterstitial());
+  else if (demoAdDone) { const d = demoAdDone; demoAdDone = null; demoAdAt = 0; d(false); }   // the ad was closed some other way
   if (S.sheet === 'checkout' && S.checkout) ui.append(checkoutSheet(S.checkout));
   if (S.sheet === 'skinBuy' && S.skinBuy) ui.append(skinBuySheet(S.skinBuy));
   if (S.sheet === 'player' && v) { const ps = playerSheet(v); if (ps) ui.append(ps); }
@@ -832,31 +833,53 @@ function skinBuySheet(id: string) {
 const adFree = () => (S.user?.adFreeUntil ?? 0) > Date.now();
 const dateText = (ts: number) => new Date(ts).toLocaleDateString(getLang() === 'ar' ? 'ar-EG' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 let adTimer = 0;
+/** The ad after the last game: still to show, or showing now (resolves true when it closes, false if the player left for the shop). */
+let demoAdAt = 0;
+let adDue = false, adRun: Promise<boolean> | null = null, demoAdDone: ((go: boolean) => void) | null = null;
 /** A game just ended: once the result has been on screen a moment, a full-screen ad (none on the ad-free plan). */
 function gameAdSoon() {
   clearTimeout(adTimer);
-  adTimer = window.setTimeout(() => {
-    if (adFree()) return;
-    if (adsSupported()) { afterMatch(false); return; }
-    // the demo shows what the app does, with a stand-in for the video
-    if (DEMO && !S.sheet) { S.sheet = 'interstitial'; render(); }
-  }, 2500);
+  adDue = !adFree() && (adsSupported() || DEMO);
+  if (adDue) adTimer = window.setTimeout(() => { runAd(); }, 2500);
 }
+/** Shows the ad that is due now (at once, if the player is already asking for the next game). */
+function runAd(): Promise<boolean> {
+  if (adRun) return adRun;
+  clearTimeout(adTimer);
+  if (!adDue || adFree()) { adDue = false; return Promise.resolve(true); }
+  adDue = false;
+  adRun = (adsSupported()
+    ? afterMatch(false).then(() => true)
+    // the demo shows what the app does, with a stand-in for the video
+    : new Promise<boolean>(res => { demoAdDone = res; demoAdAt = Date.now(); S.sheet = 'interstitial'; render(); })
+  ).finally(() => { adRun = null; demoAdDone = null; });
+  return adRun;
+}
+/** Play again: the next game starts only after the ad for the last one has finished. */
+let starting = false;
+function afterAd(start: () => void) {
+  if (starting) return;
+  if (!adDue && !adRun) return start();
+  starting = true;
+  runAd().then(go => { starting = false; if (go) start(); });
+}
+function closeDemoAd(go = true) { S.sheet = null; demoAdAt = 0; const d = demoAdDone; demoAdDone = null; d?.(go); render(); }
 /** Demo: what the full-screen ad after a game looks like (in the app it is a real video from AdMob). */
 function demoInterstitial() {
   const total = 30, canSkip = 5;
   const left = h('b', { class: 'ad-count' }, String(total));
-  const skip = btn(t('skipIn', { s: canSkip }), () => { clearInterval(tick); S.sheet = null; render(); }, 'btn alt ad-skip', { disabled: true });
+  const skip = btn(t('skipIn', { s: canSkip }), () => { clearInterval(tick); closeDemoAd(); }, 'btn alt ad-skip', { disabled: true });
   const bar = h('i', { class: 'ad-bar' });
-  let n = 0;
+  // counted from when the ad opened, so a screen update during it doesn't start it over
+  if (!demoAdAt) demoAdAt = Date.now();
   const tick = setInterval(() => {
-    n++;
     if (!document.body.contains(left)) return clearInterval(tick);
+    const n = Math.floor((Date.now() - demoAdAt) / 1000);
     left.textContent = String(Math.max(0, total - n));
     bar.style.width = `${Math.min(100, (n / total) * 100)}%`;
     if (n < canSkip) skip.textContent = t('skipIn', { s: canSkip - n });
     else { (skip as HTMLButtonElement).disabled = false; skip.textContent = t('skipAd'); }
-    if (n >= total) { clearInterval(tick); S.sheet = null; render(); }
+    if (n >= total) { clearInterval(tick); closeDemoAd(); }
   }, 1000);
   return h('div', { class: 'overlay interstitial' },
     h('div', { class: 'ad-video' },
@@ -864,7 +887,7 @@ function demoInterstitial() {
       h('h2', null, t('brand')), h('p', { class: 'muted' }, t('demoAdVideo')),
       h('div', { class: 'ad-track' }, bar)),
     h('div', { class: 'row ad-actions' },
-      btn(t('removeAds'), () => { clearInterval(tick); S.sheet = null; openCoins(); }, 'btn tq'),
+      btn(t('removeAds'), () => { clearInterval(tick); closeDemoAd(false); openCoins(); }, 'btn tq'),
       skip));
 }
 /** A product's price: the store's own once it has loaded, else the price list in pounds. */
@@ -1139,8 +1162,8 @@ function resultSheet(v: TableView): HTMLElement {
   const delta = mend && v.match && v.you >= 0 ? v.match.deltas[v.you] : null;
   const actions = h('div', { class: 'row center' });
   if (mend) {
-    if (S.practice) actions.append(btn(t('playAgain'), practiceAgain, 'btn'), btn(t('home'), leaveGame, 'btn alt'));
-    else if (!v.private) actions.append(btn(t('playAgain'), () => { const m = v.mode, st = v.stake; leaveGame(); S.mode = m; if (st) S.stake = st; quick(); }, 'btn'), btn(t('home'), leaveGame, 'btn alt'));
+    if (S.practice) actions.append(btn(t('playAgain'), () => afterAd(practiceAgain), 'btn'), btn(t('home'), leaveGame, 'btn alt'));
+    else if (!v.private) actions.append(btn(t('playAgain'), () => afterAd(() => { const m = v.mode, st = v.stake; leaveGame(); S.mode = m; if (st) S.stake = st; quick(); }), 'btn'), btn(t('home'), leaveGame, 'btn alt'));
     else actions.append(btn(t('leave'), leaveGame, 'btn alt'));
   }
   return h('div', { class: 'overlay' }, h('div', { class: 'card' },
@@ -1268,8 +1291,8 @@ function boardResultSheet(v: BoardView): HTMLElement {
   const delta = mend && v.match && me >= 0 ? v.match.deltas[me] : null;
   const actions = h('div', { class: 'row center' });
   if (mend) {
-    if (S.practice) actions.append(btn(t('playAgain'), practiceAgain, 'btn'), btn(t('home'), leaveGame, 'btn alt'));
-    else if (!v.private) actions.append(btn(t('playAgain'), () => { const m = v.mode, st = v.stake; leaveGame(); S.mode = m; if (st) S.stake = st; quick(); }, 'btn'), btn(t('home'), leaveGame, 'btn alt'));
+    if (S.practice) actions.append(btn(t('playAgain'), () => afterAd(practiceAgain), 'btn'), btn(t('home'), leaveGame, 'btn alt'));
+    else if (!v.private) actions.append(btn(t('playAgain'), () => afterAd(() => { const m = v.mode, st = v.stake; leaveGame(); S.mode = m; if (st) S.stake = st; quick(); }), 'btn'), btn(t('home'), leaveGame, 'btn alt'));
     else actions.append(btn(t('leave'), leaveGame, 'btn alt'));
   }
   const secs = Math.max(0, Math.ceil((v.nextAt - net.serverNow()) / 1000));
@@ -1525,7 +1548,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !Capacitor
 // recording hooks: ?rec for the how-to GIFs, ?promo for the promo video (the computer plays your seat)
 if (/[?&](rec|promo)\b/.test(location.search)) (window as unknown as Record<string, unknown>).__ahwa = {
   view: () => S.view, spot: (p: Pick) => scene.spotScreen(p), ghost: (e: End) => scene.ghostScreen(e),
-  pick: (p: Pick) => handlePick(p), stats: () => scene.stats(), showGameAd: () => { S.sheet = 'interstitial'; render(); }, targets: () => (S.view && S.view.game !== 'domino' ? boardUi(S.view as BoardView).targets : []),
+  pick: (p: Pick) => handlePick(p), stats: () => scene.stats(), showGameAd: () => { S.sheet = 'interstitial'; render(); }, gameOver: () => gameAdSoon(), playAgain: (cb: () => void) => afterAd(cb), targets: () => (S.view && S.view.game !== 'domino' ? boardUi(S.view as BoardView).targets : []),
   practice: (mode: Mode) => { startPractice(mode); const seat = S.practice?.table.seats[0]; if (seat) seat.away = true; S.practice?.table.refresh(); },
 };
 // the game is played in landscape: lock it where the browser allows (installed app, fullscreen)
