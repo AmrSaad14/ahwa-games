@@ -1,9 +1,13 @@
 import * as THREE from 'three';
+import { ELBOW_TO_PALM, UPPER_ARM } from './people';
 
 /*
  * The people at the tables, alive: they breathe, blink, look at the board, at whoever is playing and now and
  * then at you; they think on their turn, fidget while they wait, react to wins and losses and act out emotes.
- * Pure posing: every frame `act` sets each joint from the character's state, nothing accumulates.
+ *
+ * Arms are posed by where the hands should be (on the table, at the chin, on the head, up in the air): a
+ * two-bone solver bends the shoulder and the elbow like a real arm (elbows out and down), so every pose
+ * stays natural. Pure posing: every frame `act` sets each joint from the character's state.
  */
 
 export type ActKind = 'play' | 'draw' | 'pass' | 'win' | 'lose' | 'emote';
@@ -18,11 +22,13 @@ export interface Actor {
   blinkAt: number; blink2: boolean; lookAt: THREE.Vector3; nextLook: number; yaw: number; pitch: number;
   /** Regulars at the other tables hold a glass of tea and drink from it. */
   tea?: boolean;
+  /** How far in front of them the table's edge is (body units). */
+  edge: number;
 }
 
-export function newActor(p: { piv: THREE.Group; head: THREE.Group; arms: THREE.Group[]; elbows: THREE.Group[]; eyes: THREE.Mesh[]; lids: THREE.Mesh[] }, tea = false): Actor {
+export function newActor(p: { piv: THREE.Group; head: THREE.Group; arms: THREE.Group[]; elbows: THREE.Group[]; eyes: THREE.Mesh[]; lids: THREE.Mesh[] }, tea = false, edge = 1.2): Actor {
   return { ...p, phase: Math.random() * 6, anim: null, active: false, idle: null, nextIdle: 2 + Math.random() * 5,
-    blinkAt: Math.random() * 3, blink2: false, lookAt: new THREE.Vector3(), nextLook: 0, yaw: 0, pitch: 0.1, tea };
+    blinkAt: Math.random() * 3, blink2: false, lookAt: new THREE.Vector3(), nextLook: 0, yaw: 0, pitch: 0.1, tea, edge };
 }
 
 const IDLES: Idle[] = ['tap', 'tap', 'lean', 'scratch', 'nod', 'chin', 'stretch'];
@@ -32,67 +38,109 @@ const hold = (k: number, edge = 0.18) => ease(Math.min(k / edge, (1 - k) / edge,
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 const v3 = new THREE.Vector3(), m4 = new THREE.Matrix4();
 
+/* ---------------- arms: reach for a point ---------------- */
+const _t = new THREE.Vector3(), _e = new THREE.Vector3(), _u = new THREE.Vector3(), _x = new THREE.Vector3(), _y = new THREE.Vector3(), _z = new THREE.Vector3(), _m = new THREE.Matrix4(), _q = new THREE.Quaternion();
+const _inv = new THREE.Quaternion();
+/**
+ * Point an arm so its palm reaches `target` (in the body's frame: facing +z, y up, origin at the seat).
+ * `sx` is -1 for the left arm, +1 for the right. The elbow stays out to the side and down, like a person's.
+ */
+export function reach(piv: THREE.Object3D, arm: THREE.Object3D, elbow: THREE.Object3D, sx: number, target: THREE.Vector3, back = 0) {
+  const sh = arm.parent!;
+  sh.rotation.set(0, 0, 0);
+  // the target from the shoulder, in the torso's frame (the torso leans and bobs)
+  _inv.copy(piv.quaternion).invert();
+  const v = _t.copy(target).sub(piv.position).applyQuaternion(_inv).sub(sh.position);
+  const L1 = UPPER_ARM, L2 = ELBOW_TO_PALM;
+  const d = clamp(v.length(), 0.35, L1 + L2 - 0.02);
+  const dir = v.normalize();
+  const a = Math.acos(clamp((L1 * L1 + d * d - L2 * L2) / (2 * L1 * d), -1, 1));         // shoulder: off the line to the hand
+  const bend = Math.PI - Math.acos(clamp((L1 * L1 + L2 * L2 - d * d) / (2 * L1 * L2), -1, 1));   // elbow
+  // which way the elbow points: out, down and a little back
+  // (`back` 0-1: hanging or swinging arms point their elbows backward instead, close to the body)
+  const hx = sx * (0.7 - 0.55 * back), hy = -0.75 + 0.6 * back, hz = -0.45 - 0.55 * back;
+  _e.set(hx, hy, hz).addScaledVector(dir, -_e.set(hx, hy, hz).dot(dir));
+  if (_e.lengthSq() < 1e-6) _e.set(sx, 0, 0);
+  _e.normalize();
+  const u = _u.copy(dir).multiplyScalar(Math.cos(a)).addScaledVector(_e, Math.sin(a)).normalize();   // upper arm
+  // the arm's frame: its -y runs down the upper arm, the elbow bends toward its +z
+  _y.copy(u).negate();
+  _z.copy(dir).addScaledVector(u, -u.dot(dir));
+  if (_z.lengthSq() < 1e-6) _z.copy(_e).negate().addScaledVector(u, -u.dot(_e)); // arm straight: any side
+  _z.normalize();
+  _x.crossVectors(_y, _z).normalize();
+  _m.makeBasis(_x, _y, _z);
+  arm.quaternion.copy(_q.setFromRotationMatrix(_m));
+  elbow.rotation.set(-bend, 0, 0);
+}
+
 /** Something worth looking at: the board, a player's head, you (the camera). */
 export interface Sights { board: THREE.Vector3; heads: THREE.Vector3[]; you: THREE.Vector3; activeHead: THREE.Vector3 | null }
 
+const HEAD_Y = 1.87, CHIN_Y = 1.32, TOP_Y = 2.55;
+const L = new THREE.Vector3(), R = new THREE.Vector3(), tmp = new THREE.Vector3();
+/** Blend a hand target toward another by k. */
+const mix = (out: THREE.Vector3, x: number, y: number, z: number, k: number) => out.lerp(tmp.set(x, y, z), k);
+
 /**
- * Pose a seated person for this frame. `body` is their group (facing +z), `t` the scene clock, `amp` 0 when the
- * player asked for reduced motion.
+ * Pose a seated person for this frame. `body` is their group (facing +z, the table top at y = 0), `t` the
+ * scene clock, `amp` 0 when the player asked for reduced motion.
  */
 export function act(body: THREE.Object3D, u: Actor, t: number, dt: number, amp: number, sights: Sights, self: THREE.Vector3 | null) {
-  const [A0, A1] = u.arms, [E0, E1] = u.elbows;
-  // the resting pose: forearms on the table
-  let lean = u.active ? 0.2 : 0.02, headDown = 0, bob = 0;
-  let a0 = -1.1, a1 = -1.1, e0 = -0.45, e1 = -0.45, z0 = 0, z1 = 0, headTilt = 0, nod = 0, shake = 0;
-  // breathing
+  const E = u.edge;
+  let lean = u.active ? 0.16 : 0.04, headDown = 0, bob = 0, headTilt = 0, nod = 0, shake = 0;
+  // hands at rest: forearms on the table, hands a little in from the edge
   const br = Math.sin(t * 1.6 + u.phase) * amp;
+  L.set(-0.85, 0.16, E + 0.75 + br * 0.02); R.set(0.85, 0.16, E + 0.75 - br * 0.02);
+  if (u.tea) R.set(0.75, 0.55, E + 0.35);   // the regulars hold their tea
   u.piv.position.y = -1.75 + br * 0.03;
 
   /* waiting for others: a little fidget now and then */
   if (!u.active && !u.anim && amp > 0) {
-    if (!u.idle && t > u.nextIdle) { u.idle = { kind: u.tea ? 'sip' : IDLES[Math.floor(Math.random() * IDLES.length)], t0: t, d: 1.6 + Math.random() * 1.6 }; }
+    if (!u.idle && t > u.nextIdle) u.idle = { kind: u.tea ? 'sip' : IDLES[Math.floor(Math.random() * IDLES.length)], t0: t, d: 1.6 + Math.random() * 1.6 };
     if (u.idle) {
       const k = (t - u.idle.t0) / u.idle.d, h = hold(k);
       if (k >= 1) { u.idle = null; u.nextIdle = t + (u.tea ? 2 : 3) + Math.random() * 5; }
       else switch (u.idle.kind) {
-        case 'tap': a1 -= 0.05 + Math.abs(Math.sin(k * Math.PI * 9)) * 0.12 * h; break;                 // drumming fingers
-        case 'lean': lean -= 0.16 * h; a0 += 0.35 * h; a1 += 0.35 * h; e0 += 0.25 * h; e1 += 0.25 * h; break;   // sit back
-        case 'scratch': a0 = -1.1 - 1.7 * h; e0 = -0.45 - 1.6 * h; z0 = -0.25 * h; headTilt = 0.15 * h; a0 += Math.sin(k * 40) * 0.05 * h; break;
+        case 'tap': R.y += Math.abs(Math.sin(k * Math.PI * 9)) * 0.14 * h; break;                         // drumming fingers
+        case 'lean': lean -= 0.14 * h; mix(L, -0.9, 0.12, E + 0.15, h); mix(R, 0.9, 0.12, E + 0.15, h); break;   // sit back, hands at the edge
+        case 'scratch': mix(L, -0.4, TOP_Y - 0.15 + Math.sin(k * 40) * 0.04, 0.05, h); headTilt = 0.12 * h; break;
         case 'nod': nod = Math.sin(k * Math.PI * 4) * 0.14 * h; break;
-        case 'chin': a1 = -1.1 - 0.55 * h; e1 = -0.45 - 1.75 * h; z1 = 0.25 * h; headTilt = -0.12 * h; break;   // chin on the hand
-        case 'stretch': a0 = a1 = -1.1 - 1.9 * h; e0 = e1 = -0.45 + 0.3 * h; lean -= 0.1 * h; headDown = -0.25 * h; break;
-        case 'sip': a1 = -1.6 - 0.5 * h; e1 = -0.6 - 1.1 * h; headDown = -0.1 * h; break;
+        case 'chin': mix(R, 0.08, CHIN_Y - 0.05, 0.62, h); headTilt = -0.1 * h; lean += 0.06 * h; break;   // chin on the hand
+        case 'stretch': mix(L, -0.75, 3.7, -0.1, h); mix(R, 0.75, 3.7, -0.1, h); lean -= 0.1 * h; headDown = -0.25 * h; break;
+        case 'sip': mix(R, 0.12, CHIN_Y + 0.05, 0.55, h); headDown = -0.1 * h; break;
       }
-    } else if (u.tea) { a1 = -1.6; e1 = -0.6; }
-  } else { u.idle = null; if (u.tea) { a1 = -1.6; e1 = -0.6; } }
+    }
+  } else u.idle = null;
 
-  /* their turn: thinking, chin on the hand, eyes on the board */
+  /* their turn: thinking, chin on the hand now and then, eyes on the board */
   if (u.active && !u.anim) {
-    const th = 0.5 + 0.5 * Math.sin(t * 0.7 + u.phase);
-    a1 = -1.1 - 0.5 * th; e1 = -0.45 - 1.7 * th; z1 = 0.22 * th; headTilt = -0.08 * th;
+    const th = clamp(0.5 + 0.8 * Math.sin(t * 0.6 + u.phase), 0, 1);
+    mix(R, 0.08, CHIN_Y - 0.05, 0.62, th); headTilt = -0.07 * th;
   }
 
   /* things that happen: playing a piece, drawing, passing, winning, losing, emotes */
   if (u.anim) {
-    const k = u.anim.fix ?? (t - u.anim.t0) / u.anim.d, h = hold(k, 0.22);
+    const k = u.anim.fix ?? (t - u.anim.t0) / u.anim.d, h = hold(k, 0.22), s = Math.sin(clamp(k, 0, 1) * Math.PI);
     if (k >= 1) u.anim = null;
     else switch (u.anim.type) {
-      case 'play': a1 = -1.1 - Math.sin(k * Math.PI) * 0.9; lean += 0.12 * Math.sin(k * Math.PI); break;
-      case 'draw': a0 = -1.1 - Math.sin(k * Math.PI) * 0.7; break;
-      case 'pass': shake = Math.sin(k * Math.PI * 6) * 0.5 * (1 - k); a0 += 0.3 * h; a1 += 0.3 * h; lean -= 0.1 * h; break;   // shrug, shake the head
-      case 'win': bob = Math.abs(Math.sin(k * Math.PI * 4)) * 0.8 * (1 - k * 0.5); a0 = a1 = -1.1 - 1.8 * h; e0 = e1 = -0.15; headDown = -0.3 * h; break;
-      case 'lose': lean -= 0.05 * h; headDown = 0.45 * h; shake = Math.sin(k * Math.PI * 3) * 0.25 * h; a0 = -1.1 - 1.35 * h; e0 = -0.45 - 1.85 * h; z0 = -0.15 * h; break;   // head down, hand over the eyes
+      case 'play': mix(R, 0.25, 0.25, E + 2.6, s); lean += 0.14 * s; break;          // reach into the middle
+      case 'draw': mix(L, -1.2, 0.25, E + 2.2, s); lean += 0.1 * s; break;
+      case 'pass': shake = Math.sin(k * Math.PI * 6) * 0.5 * (1 - k); mix(L, -1.0, 0.9, E + 0.4, h); mix(R, 1.0, 0.9, E + 0.4, h); lean -= 0.08 * h; break;   // shrug, palms up
+      case 'win': bob = Math.abs(Math.sin(k * Math.PI * 4)) * 0.6 * (1 - k * 0.5); mix(L, -1.1, 3.9, 0.35, h); mix(R, 1.1, 3.9, 0.35, h); headDown = -0.3 * h; break;
+      case 'lose': lean += 0.08 * h; headDown = 0.4 * h; shake = Math.sin(k * Math.PI * 3) * 0.2 * h; mix(L, -0.05, HEAD_Y + 0.05, 0.62, h); break;   // hand over the eyes
       case 'emote': {
         const w = Math.sin(k * Math.PI * 6);
         switch (u.anim.k) {
-          case 'hi': a1 = -1.1 - 1.7 * h; e1 = -0.3 - 0.4 * h; z1 = (-0.2 + w * 0.35) * h; break;                                      // wave
-          case 'clap': a0 = a1 = -1.1 - 0.4 * h; e0 = e1 = -0.45 - 0.9 * h; z0 = (0.35 + w * 0.12) * h; z1 = -(0.35 + w * 0.12) * h; break;
-          case 'lol': lean -= (0.12 + Math.abs(w) * 0.08) * h; headDown = -0.35 * h; bob = Math.abs(Math.sin(k * Math.PI * 10)) * 0.12 * h; break;   // laughing, head back
-          case 'angry': a1 = -1.1 - 1.2 * Math.max(0, Math.sin(k * Math.PI * 4)) * h; e1 = -0.45 - 0.6 * h; headDown = 0.15 * h; break;   // fist on the table
-          case 'think': a1 = -1.1 - 0.55 * h; e1 = -0.45 - 1.75 * h; z1 = 0.25 * h; headTilt = -0.2 * h; break;
-          case 'wow': case 'oops': a0 = a1 = -1.1 - 1.55 * h; e0 = e1 = -0.45 - 1.6 * h; z0 = -0.3 * h; z1 = 0.3 * h; headDown = -0.15 * h; break;   // hands on the head
-          case 'hurry': a1 -= Math.abs(Math.sin(k * Math.PI * 14)) * 0.18 * h; nod = Math.sin(k * Math.PI * 14) * 0.05 * h; break;   // tapping on the table
-          case 'gg': case 'nice': case 'love': case 'fire': default: a1 = -1.1 - 1.25 * h; e1 = -0.45 - 0.9 * h; nod = Math.sin(k * Math.PI * 4) * 0.12 * h; break;   // thumbs up and a nod
+          case 'hi': mix(R, 1.15 + w * 0.3, 2.45, 1.05, h); break;                                                     // wave
+          case 'clap': mix(L, -0.18 - Math.max(0, w) * 0.25, 1.0, 1.25, h); mix(R, 0.18 + Math.max(0, w) * 0.25, 1.0, 1.25, h); break;
+          case 'lol': lean -= (0.12 + Math.abs(w) * 0.06) * h; headDown = -0.35 * h; bob = Math.abs(Math.sin(k * Math.PI * 10)) * 0.1 * h; mix(L, -0.5, 0.0, 0.9, h); break;   // laughing, hand on the belly
+          case 'angry': { const up = Math.max(0, Math.sin(k * Math.PI * 4)); mix(R, 0.55, 0.15 + up * 1.0, E + 0.8 - up * 0.4, h); headDown = 0.15 * h; break; }   // fist on the table
+          case 'think': mix(R, 0.08, CHIN_Y - 0.05, 0.62, h); headTilt = -0.18 * h; break;
+          case 'wow': case 'oops': mix(L, -0.42, TOP_Y - 0.1, 0.2, h); mix(R, 0.42, TOP_Y - 0.1, 0.2, h); headDown = -0.12 * h; break;   // hands on the head
+          case 'hurry': R.y += Math.abs(Math.sin(k * Math.PI * 14)) * 0.2 * h; nod = Math.sin(k * Math.PI * 14) * 0.05 * h; break;   // tapping on the table
+          case 'love': mix(L, -0.25, 1.15, 0.75, h); mix(R, 0.25, 1.15, 0.75, h); nod = Math.sin(k * Math.PI * 3) * 0.08 * h; break;   // hands on the heart
+          default: mix(R, 0.7, 1.3, E + 0.6, h); nod = Math.sin(k * Math.PI * 4) * 0.12 * h; break;            // gg, nice, fire: thumbs up and a nod
         }
         break;
       }
@@ -111,21 +159,17 @@ export function act(body: THREE.Object3D, u: Actor, t: number, dt: number, amp: 
     u.lookAt.copy(to); u.nextLook = t + 1.2 + Math.random() * 3;
     if (Math.random() < 0.6) u.blinkAt = Math.min(u.blinkAt, t + 0.05);    // eyes blink when the gaze jumps
   }
-  // the target in the head's own frame (the body faces +z)
   m4.copy(body.matrixWorld).invert();
   const local = v3.copy(u.lookAt).applyMatrix4(m4);
-  const hy = 1.9;   // about head height in the body's frame
   const wantYaw = clamp(Math.atan2(local.x, local.z), -1.0, 1.0);
-  const wantPitch = clamp(Math.atan2(hy - local.y, Math.hypot(local.x, local.z)) * 0.8, -0.35, 0.6);
-  const k = 1 - Math.exp(-dt * 5);
-  u.yaw += (wantYaw * 0.75 - u.yaw) * k; u.pitch += (wantPitch * 0.7 - u.pitch) * k;
+  const wantPitch = clamp(Math.atan2(HEAD_Y - local.y, Math.hypot(local.x, local.z)) * 0.8, -0.35, 0.6);
+  const kk = 1 - Math.exp(-dt * 5);
+  u.yaw += (wantYaw * 0.75 - u.yaw) * kk; u.pitch += (wantPitch * 0.7 - u.pitch) * kk;
   u.head.rotation.set(clamp(u.pitch + headDown + nod, -0.6, 0.8), u.yaw + shake, headTilt, 'YXZ');
-  // the eyes do the rest of the turn
   for (const e of u.eyes) {
     const rest = e.userData.rest as THREE.Euler;
     e.rotation.set(rest.x + clamp((wantPitch - u.pitch) * 0.6, -0.25, 0.25), rest.y + clamp(wantYaw - u.yaw, -0.45, 0.45), rest.z);
   }
-  // blink every few seconds (sometimes twice)
   let closed = 0;
   if (t > u.blinkAt) {
     const bk = (t - u.blinkAt) / 0.16;
@@ -135,6 +179,8 @@ export function act(body: THREE.Object3D, u: Actor, t: number, dt: number, amp: 
   for (const l of u.lids) l.rotation.x = (l.userData.open as number) + closed * 0.85;
 
   u.piv.rotation.x += (lean - u.piv.rotation.x) * (1 - Math.exp(-dt * 6));
-  A0.rotation.set(a0, 0, z0); A1.rotation.set(a1, 0, z1); E0.rotation.x = e0; E1.rotation.x = e1;
+  u.piv.updateMatrix();
+  reach(u.piv, u.arms[0], u.elbows[0], -1, L);
+  reach(u.piv, u.arms[1], u.elbows[1], 1, R);
   body.position.y = bob;
 }

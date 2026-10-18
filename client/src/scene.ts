@@ -7,7 +7,7 @@ import { BoardRenderer, BoardUi, ChessBoard, LudoBoard, Pick, TawlaBoard, initBo
 import { CHESS_LOOKS, LUDO_LOOKS, TAWLA_LOOKS, TILE_LOOKS, TileLook } from './looks';
 import { FEET_DROP, HEAD_Y, PEOPLE, Person, makePerson } from './people';
 import { Post } from './post';
-import { ActKind, Actor, Sights, act, newActor } from './acting';
+import { ActKind, Actor, Sights, act, newActor, reach } from './acting';
 import { teamOf } from '../../shared/engine';
 import { IS_PHONE, disposeTree, onTop } from './perf';
 import { FLOOR_Y, Smoke, TEX_HI, buildAhwa, canvasTex, makeBackgammon, makeChair, makeShisha, makeTable, makeTeaGlass } from './ahwa';
@@ -24,7 +24,8 @@ const TS = 0.62;
 const T = 6;
 /** How far the line may run sideways before it turns a corner (layout units). */
 const X_MAX = (T - 1.9) / TS;
-const SEAT_R = T + 2.0;
+/** Players sit close enough to rest their forearms on the table (its rim ends at T + 0.35). */
+const SEAT_R = T + 1.5;
 
 /** The café floor (home screen): one table for each game. */
 const LOBBY: Record<GameId, [number, number]> = { domino: [-8, -5], tawla: [8, -5], chess: [-8, 6.5], ludo: [8, 6.5] };
@@ -102,6 +103,7 @@ export class TableScene {
   /** Sitting down at a café table: 0 standing, 1 seated. */
   private sitK = 0;
   private walkLook = { blinkAt: 1, yaw: 0 };
+  private walkHand = new THREE.Vector3(); private walkHand2 = new THREE.Vector3();
   private focus: GameId | null = null;
   private intro: { t: number; done: () => void } | null = null;
   private camPos = new THREE.Vector3(); private camLook = new THREE.Vector3(); private camInit = false; private camT = 0;
@@ -502,11 +504,17 @@ export class TableScene {
     const sw = Math.sin(ph) * 0.55 * k;
     w.hips[0].rotation.x = sw - 1.45 * sk; w.hips[1].rotation.x = -sw - 1.45 * sk;
     w.knees[0].rotation.x = Math.max(0, -Math.cos(ph)) * 0.9 * k + 1.45 * sk; w.knees[1].rotation.x = Math.max(0, Math.cos(ph)) * 0.9 * k + 1.45 * sk;
-    // seated: forearms on the table, ready to play
-    w.arms[0].rotation.set(-sw * 0.8 - 1.0 * sk, 0, 0); w.arms[1].rotation.set(sw * 0.8 - 1.0 * sk, 0, 0);
-    w.elbows[0].rotation.x = w.elbows[1].rotation.x = -0.25 - 0.2 * k - 0.35 * sk;
     w.piv.rotation.x = 0.08 * sk;
     w.piv.position.y = -1.75 + Math.sin(t * 1.6) * 0.03 * amp;
+    w.piv.updateMatrix();
+    // hands: hanging at the sides (swinging as he walks), or forearms on the table once seated
+    const tableY = 0.33 / WALKER_SCALE, edge = 0.95 / WALKER_SCALE;
+    for (const [a, sx] of [[0, -1], [1, 1]] as const) {
+      const swing = (a === 0 ? -sw : sw) * 1.4;
+      const hang = this.walkHand.set(sx * 1.08, -1.88 + Math.abs(swing) * 0.25, 0.22 + swing);
+      hang.lerp(this.walkHand2.set(sx * 0.85, tableY + 0.16, edge + 0.75), sk);
+      reach(w.piv, w.arms[a], w.elbows[a], sx, hang, 1 - sk);
+    }
     // eyes and head: blink, look around the room, at the board once seated, at you now and then
     const L = this.walkLook;
     const lookYaw = moving ? 0 : atSeat ? Math.sin(t * 0.5) * 0.35 * amp : Math.sin(t * 0.4) * 0.35 * amp;
@@ -558,6 +566,9 @@ export class TableScene {
 
   /** Test hook: hold everyone at the table in one pose (an action at point `fix` of it). */
   private posing: { type: ActKind; k?: string; fix: number } | null = null;
+  /** Test hook: look from here at that (null: back to the normal camera). */
+  private camOverride: { pos: THREE.Vector3; look: THREE.Vector3 } | null = null;
+  lookFrom(pos: number[] | null, look?: number[]) { this.camOverride = pos ? { pos: new THREE.Vector3(...pos), look: new THREE.Vector3(...look!) } : null; this.wake(3000); }
   pose(type: ActKind, k: string | undefined, fix: number) { this.posing = { type, k, fix }; this.wake(5000); }
   animate(seat: number, type: ActKind, k?: string) {
     const v = this.view;
@@ -706,7 +717,7 @@ export class TableScene {
     const p = makePerson(PEOPLE[i], String(i));
     const g = p.group;
     g.add(makeChair());
-    const data: CharData = Object.assign(newActor(p, regular), { ch: i, seat: -1 });
+    const data: CharData = Object.assign(newActor(p, regular, regular ? 0.85 : SEAT_R - T - 0.35), { ch: i, seat: -1 });
     g.userData = data;
     if (regular) {
       // holding a glass of tea
@@ -920,6 +931,7 @@ export class TableScene {
   }
 
   private placeCamera(sway: number) {
+    if (this.camOverride) { this.camera.position.copy(this.camOverride.pos); this.camera.lookAt(this.camOverride.look); this.camera.clearViewOffset(); this.camera.updateProjectionMatrix(); return; }
     const w = this.canvas.clientWidth || window.innerWidth, h = this.canvas.clientHeight || window.innerHeight;
     const playing = !!this.view && this.view.phase !== 'lobby';
     if (!this.view) {

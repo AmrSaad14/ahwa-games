@@ -262,6 +262,10 @@ export const FEET_DROP = 5.6;
 const HEAD_R = 0.6;            // head units to scene units
 export const HEAD_Y = 3.62;    // head centre above the hips
 const SHOULDER_Y = 2.6;
+/** Arm bones: shoulder to elbow, elbow to wrist (natural proportions: the hands hang to mid-thigh). */
+export const UPPER_ARM = 1.5, FOREARM = 1.32;
+/** Elbow to the middle of the palm (what arm poses aim at). */
+export const ELBOW_TO_PALM = FOREARM + 0.22;
 
 const texCache = new Map<string, THREE.Texture>();
 const cached = (k: string, make: () => THREE.Texture) => { let t = texCache.get(k); if (!t) { t = make(); texCache.set(k, t); } return t; };
@@ -550,15 +554,15 @@ export function makePerson(p: PersonSpec, key: string, standing = false): Person
     if (shortSleeve) {
       // a short sleeve, then bare upper arm
       const sl = mesh(arm, new THREE.CylinderGeometry(0.3, 0.31, 0.62, 18, 1, true), sleeveMat, 0, -0.33, 0); (sl.material as THREE.Material).side = THREE.DoubleSide;
-      capsuleBetween(arm, [0, -0.1, 0], [0, -1.3, 0], 0.25, 0.21, handSkin);
-    } else capsuleBetween(arm, [0, -0.05, 0], [0, -1.3, 0], fem ? 0.25 : 0.3, fem ? 0.2 : 0.24, sleeveMat);
-    const el = new THREE.Group(); el.position.y = -1.3; el.rotation.x = -0.45; arm.add(el);
+      capsuleBetween(arm, [0, -0.1, 0], [0, -UPPER_ARM, 0], 0.25, 0.21, handSkin);
+    } else capsuleBetween(arm, [0, -0.05, 0], [0, -UPPER_ARM, 0], fem ? 0.25 : 0.3, fem ? 0.2 : 0.24, sleeveMat);
+    const el = new THREE.Group(); el.position.y = -UPPER_ARM; el.rotation.x = -0.45; arm.add(el);
     const foreMat = shortSleeve ? handSkin : sleeveMat;
-    capsuleBetween(el, [0, 0, 0], [0, -1.18, 0], fem ? 0.19 : 0.22, fem ? 0.13 : 0.16, foreMat);
-    if (robe) { const cuff = mesh(el, new THREE.CylinderGeometry(0.3, 0.22, 0.6, 18, 1, true), sleeveMat, 0, -0.9, 0); (cuff.material as THREE.Material).side = THREE.DoubleSide; }
-    if (p.top === 'suit') mesh(el, new THREE.CylinderGeometry(0.17, 0.17, 0.1, 14), clothMat(0xf1eee6), 0, -1.12, 0);
+    capsuleBetween(el, [0, 0, 0], [0, -FOREARM, 0], fem ? 0.19 : 0.22, fem ? 0.13 : 0.16, foreMat);
+    if (robe) { const cuff = mesh(el, new THREE.CylinderGeometry(0.3, 0.22, 0.6, 18, 1, true), sleeveMat, 0, -FOREARM + 0.4, 0); (cuff.material as THREE.Material).side = THREE.DoubleSide; }
+    if (p.top === 'suit') mesh(el, new THREE.CylinderGeometry(0.17, 0.17, 0.1, 14), clothMat(0xf1eee6), 0, -FOREARM + 0.06, 0);
     // hand: palm facing down when the forearm rests on the table
-    const hand = new THREE.Group(); hand.position.y = -1.2; el.add(hand);
+    const hand = new THREE.Group(); hand.position.y = -FOREARM - 0.02; el.add(hand);
     const palm = mesh(hand, new THREE.CapsuleGeometry(0.15, 0.22, 6, 12), handSkin, 0, -0.2, 0); palm.scale.set(fem ? 1.0 : 1.15, 1, 0.55);
     for (let k = 0; k < 4; k++) {
       const fx = sx * (-0.12 + k * 0.08) * (fem ? 0.9 : 1), len = [0.2, 0.24, 0.23, 0.18][k] * (fem ? 0.95 : 1);
@@ -568,7 +572,7 @@ export function makePerson(p: PersonSpec, key: string, standing = false): Person
     }
     const th = new THREE.Group(); th.position.set(-sx * 0.15, -0.15, 0.02); th.rotation.set(0.3, 0, -sx * 0.7); hand.add(th);
     mesh(th, new THREE.CapsuleGeometry(0.05, 0.2, 4, 8), handSkin, 0, -0.14, 0);
-    if (p.watch && sx === -1) { const w = mesh(el, new THREE.TorusGeometry(0.16, 0.035, 8, 20), phys({ color: 0x2a2a2a, metalness: 0.6, roughness: 0.3 }), 0, -1.05, 0); w.rotation.x = Math.PI / 2; mesh(el, new THREE.CylinderGeometry(0.1, 0.1, 0.05, 16), gold, 0, -1.05, 0.17).rotation.x = Math.PI / 2; }
+    if (p.watch && sx === -1) { const w = mesh(el, new THREE.TorusGeometry(0.16, 0.035, 8, 20), phys({ color: 0x2a2a2a, metalness: 0.6, roughness: 0.3 }), 0, -FOREARM + 0.13, 0); w.rotation.x = Math.PI / 2; mesh(el, new THREE.CylinderGeometry(0.1, 0.1, 0.05, 16), gold, 0, -FOREARM + 0.13, 0.17).rotation.x = Math.PI / 2; }
     if (p.sebha && sx === -1) {
       const bead = phys({ color: 0x7a2a12, roughness: 0.25, clearcoat: 1 });
       const sb = new THREE.Group(); sb.position.set(0, -0.25, -0.1); hand.add(sb);
