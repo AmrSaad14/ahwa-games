@@ -297,8 +297,10 @@ export function makePerson(p: PersonSpec, key: string, standing = false): Person
   const fem = p.sex === 'f', belly = p.belly ?? 0;
   const prof: [number, number][] = [
     // a person's shape: hips, a narrower waist (unless there is a belly), the chest widening up to the shoulders
-    [0.001, 0.0], [0.7, 0.02], [fem ? 0.98 : 0.86, 0.4], [fem ? 0.8 : 0.79 + belly * 0.16, 0.95], [fem ? 0.76 : 0.78 + belly * 0.2, 1.3],
-    [fem ? 0.86 : 0.88 + belly * 0.08, 1.75], [fem ? 0.86 : 0.95, 2.15], [fem ? 0.8 : 0.88, 2.42], [fem ? 0.68 : 0.74, 2.68], [0.5, 2.86], [0.33, 2.93], [0.3, 2.95],
+    [0.001, 0.0], [0.7, 0.02], [fem ? 0.92 : 0.86, 0.4], [fem ? 0.8 : 0.79 + belly * 0.16, 0.95], [fem ? 0.76 : 0.78 + belly * 0.2, 1.3],
+    [fem ? 0.86 : 0.88 + belly * 0.08, 1.75], [fem ? 0.87 : 0.96, 2.15], [fem ? 0.84 : 0.93, 2.38],
+    // the shoulders slope up to the neck (trapezius), no flat shelf
+    [fem ? 0.68 : 0.74, 2.6], [0.5, 2.78], [0.37, 2.9], [0.31, 2.95],
   ];
   const lathe = (pts: [number, number][], segs = 40, start = 0, len = Math.PI * 2) => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), segs, start, len);
   // their own build: broad or narrow shoulders and chest, and their height (the whole upper body scales)
@@ -558,13 +560,15 @@ export function makePerson(p: PersonSpec, key: string, standing = false): Person
   const shortSleeve = p.top === 'polo' || p.top === 'tee';
   // sculpted limbs: a rounded shoulder (deltoid), a biceps swell, a forearm thick below the elbow and slim at the wrist
   const A = B.arms * (fem ? 0.82 : 1);
-  const limb = (pts: [number, number][], grow = 0, k = A) => lathe(pts.map(([r, y]) => [r * k + grow, y] as [number, number]), 22);
+  // (muscle and sleeve thickness grow down the arm; the cap at the shoulder stays slim)
+  const limb = (pts: [number, number][], grow = 0, k = A) => lathe(pts.map(([r, y]) => { const w = sstep(0.05, -0.35, y); return [r * lerp(1, k, w) + grow * lerp(0.3, 1, w), y] as [number, number]; }), 22);
+  // the shoulder cap rounds off low and narrow so it melts into the slope of the shoulders (no ball on top)
   const UPPER: [number, number][] = [[0.001, -UPPER_ARM - 0.1], [0.12, -UPPER_ARM - 0.07], [0.2, -UPPER_ARM + 0.02], [0.21, -1.25], [0.25, -0.98],
-    [0.285, -0.72], [0.28, -0.5], [0.29, -0.3], [0.31, -0.12], [0.29, 0.02], [0.22, 0.13], [0.1, 0.19], [0.001, 0.2]];
+    [0.285, -0.72], [0.28, -0.5], [0.285, -0.3], [0.27, -0.12], [0.235, 0.0], [0.17, 0.08], [0.08, 0.12], [0.001, 0.13]];
   const FORE: [number, number][] = [[0.001, -FOREARM - 0.04], [0.12, -FOREARM - 0.02], [0.135, -FOREARM + 0.12], [0.16, -0.95], [0.2, -0.6],
     [0.235, -0.3], [0.23, -0.12], [0.205, 0.02], [0.12, 0.1], [0.001, 0.12]];
   for (const sx of [-1, 1]) {
-    const sh = new THREE.Group(); sh.position.set(sx * (fem ? 0.86 : 0.98) * B.sh, SHOULDER_Y - 0.1, -0.02); sh.rotation.set(0, -sx * 0.17, sx * 0.1); piv.add(sh);   // the joint sits at the edge of the chest
+    const sh = new THREE.Group(); sh.position.set(sx * (fem ? 0.84 : 0.94) * B.sh, SHOULDER_Y - 0.2, -0.02); sh.rotation.set(0, -sx * 0.17, sx * 0.1); piv.add(sh);   // the joint sits at the edge of the chest
     const arm = new THREE.Group(); arm.rotation.x = -1.1; sh.add(arm);
     if (shortSleeve) {
       // a short sleeve over the shoulder, then the bare upper arm
