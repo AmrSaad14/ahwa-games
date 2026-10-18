@@ -23,7 +23,9 @@ export interface PersonSpec {
   iris?: string;
   swatch: number;
   /** Their own body: height, shoulder width, how muscular the arms are, how much they stoop (all about 1 = average). */
-  build?: { tall?: number; shoulders?: number; arms?: number; hunch?: number };
+  build?: { tall?: number; shoulders?: number; arms?: number; hunch?: number;
+    /** chest depth (pecs / bust), waist and hip width, neck thickness, how muscular (0 soft – 1 athletic) */
+    chest?: number; waist?: number; hips?: number; neck?: number; muscle?: number };
   /** Their own habits while waiting (see acting.ts), and how quickly they move (old men slower). */
   habits?: string[]; tempo?: number;
 }
@@ -594,16 +596,24 @@ export function makePerson(p: PersonSpec, key: string, standing = false, withBod
     const PIV = 0, LEGS = 1, ARM = (i: number) => 2 + i, EL = (i: number) => 4 + i, HIP = (i: number) => 6 + i, KNEE = (i: number) => 8 + i;
     const T = B.tall, w = fem ? 0.93 : 1;
     const P = (bone: number, a: THREE.Vector3, b: THREE.Vector3, ra: number, rb: number, zs?: number, cut?: (q: THREE.Vector3) => number): Prim => ({ a, b, ra, rb, bone, zs, cut });
+    // their own figure
+    const bd = p.build ?? {}, CH = bd.chest ?? 1, WA = bd.waist ?? 1, HI = bd.hips ?? 1, NK = bd.neck ?? 1, MU = bd.muscle ?? 0.4;
     const torso: Prim[] = [
-      P(PIV, V(piv, -0.36, 0.38, 0), V(piv, 0.36, 0.38, 0), (fem ? 0.6 : 0.52) * T, (fem ? 0.6 : 0.52) * T, 0.72),                                   // hips
-      P(PIV, V(piv, 0, 0.55, 0), V(piv, 0, 1.45, 0.02), (fem ? 0.62 : 0.68 + belly * 0.12) * T, (fem ? 0.6 : 0.7 + belly * 0.14) * T, 0.66),        // waist
+      P(PIV, V(piv, -0.36 * HI, 0.38, 0), V(piv, 0.36 * HI, 0.38, 0), (fem ? 0.6 : 0.52) * HI * T, (fem ? 0.6 : 0.52) * HI * T, 0.72),                // hips
+      P(PIV, V(piv, 0, 0.55, 0), V(piv, 0, 1.45, 0.02), (fem ? 0.62 : 0.68 + belly * 0.12) * WA * T, (fem ? 0.6 : 0.7 + belly * 0.14) * WA * T, 0.66),   // waist
       P(PIV, V(piv, 0, 1.6, 0), V(piv, 0, 2.15, 0), (fem ? 0.74 : 0.84) * B.sh * T, (fem ? 0.78 : 0.9) * B.sh * T, 0.62),                         // chest
       P(PIV, V(piv, -0.7 * B.sh * w, 2.32, -0.05), V(piv, 0.7 * B.sh * w, 2.32, -0.05), 0.34 * T, 0.34 * T, 0.78),                              // shoulder line
-      P(PIV, V(piv, 0, 2.3, -0.06), V(piv, 0, 2.72, -0.04), 0.46 * T, 0.36 * T, 0.72),                                                            // up to the neck (trapezius)
+      P(PIV, V(piv, 0, 2.3, -0.06), V(piv, 0, 2.72, -0.04), (0.42 + 0.06 * NK) * T, 0.36 * NK * T, 0.72),                                        // up to the neck (trapezius)
+      // the back: shoulder blades and the muscles under them (a V from the shoulders down for an athlete)
+      ...[-1, 1].map(sx => P(PIV, V(piv, sx * 0.4 * B.sh, 2.1, -0.24), V(piv, sx * 0.3 * B.sh, 1.55, -0.2), (0.3 + 0.08 * MU) * T, (0.24 + 0.08 * MU) * T, 0.62)),
+      // the seat
+      ...[-1, 1].map(sx => P(PIV, V(piv, sx * 0.3 * HI, 0.4, -0.22), V(piv, sx * 0.3 * HI, 0.55, -0.22), (fem ? 0.4 : 0.35) * HI * T, (fem ? 0.38 : 0.33) * HI * T, 0.8)),
     ];
-    if (belly > 0.1) torso.push(P(PIV, V(piv, 0, 1.05, 0.22), V(piv, 0, 1.25, 0.22), (0.5 + belly * 0.3) * T, (0.5 + belly * 0.25) * T, 0.75));
-    if (fem) for (const sx of [-1, 1]) torso.push(P(PIV, V(piv, sx * 0.3, 1.92, 0.3), V(piv, sx * 0.3, 1.98, 0.3), 0.25 * T, 0.24 * T, 0.85));
-    const neck = [P(PIV, V(piv, 0, 2.55, -0.02), V(piv, 0, 3.32, 0.05), (fem ? 0.23 : 0.28) * T, (fem ? 0.21 : 0.25) * T)];
+    // the front: a pot belly, a broad chest, or a bust
+    if (belly > 0.1) torso.push(P(PIV, V(piv, 0, 0.95 + belly * 0.1, 0.18 + belly * 0.12), V(piv, 0, 1.2, 0.2 + belly * 0.12), (0.46 + belly * 0.36) * T, (0.44 + belly * 0.3) * T, 0.78));
+    if (fem) for (const sx of [-1, 1]) torso.push(P(PIV, V(piv, sx * 0.3, 1.9, 0.28 * CH), V(piv, sx * 0.3, 1.97, 0.3 * CH), 0.25 * CH * T, 0.24 * CH * T, 0.85));
+    else for (const sx of [-1, 1]) torso.push(P(PIV, V(piv, sx * 0.34 * B.sh, 2.02, 0.2 + 0.1 * CH), V(piv, sx * 0.22 * B.sh, 1.98, 0.22 + 0.1 * CH), (0.26 + 0.06 * MU) * CH * T, (0.24 + 0.05 * MU) * CH * T, 0.55));   // pecs
+    const neck = [P(PIV, V(piv, 0, 2.55, -0.02), V(piv, 0, 3.32, 0.05), (fem ? 0.23 : 0.28) * NK * T, (fem ? 0.21 : 0.25) * NK * T)];
     const armP = (i: number, cutAt?: number) => {
       const S = V(arms[i], 0, 0, 0), E = V(elbows[i], 0, 0, 0), W = V(elbows[i], 0, -FOREARM + 0.04, 0);
       const r = A * T, dir = E.clone().sub(S).normalize();
@@ -612,9 +622,9 @@ export function makePerson(p: PersonSpec, key: string, standing = false, withBod
       const list = [
         P(ARM(i), S, S.clone().lerp(E, 0.08), 0.27 * r, 0.27 * r, 1, cut),                                                                            // shoulder (deltoid)
         P(ARM(i), S.clone().lerp(E, 0.08), E, 0.255 * r, 0.19 * r, 1, cut),                                                                           // upper arm
-        P(ARM(i), S.clone().lerp(E, 0.35), S.clone().lerp(E, 0.55), 0.27 * r, 0.25 * r, 1, cut),                                                    // biceps
+        P(ARM(i), S.clone().lerp(E, 0.33), S.clone().lerp(E, 0.58), (0.25 + 0.06 * MU) * r, (0.23 + 0.05 * MU) * r, 1, cut),                        // biceps (bigger on the strong)
       ];
-      if (cutAt === undefined || cutAt > 1) list.push(P(EL(i), E, W, 0.2 * r, 0.13 * r, 1, cut), P(EL(i), E.clone().lerp(W, 0.12), E.clone().lerp(W, 0.4), 0.215 * r, 0.19 * r, 1, cut));   // forearm
+      if (cutAt === undefined || cutAt > 1) list.push(P(EL(i), E, W, 0.2 * r, 0.13 * r, 1, cut), P(EL(i), E.clone().lerp(W, 0.12), E.clone().lerp(W, 0.4), (0.2 + 0.04 * MU) * r, (0.18 + 0.03 * MU) * r, 1, cut));   // forearm
       return list;
     };
     const legP = (): Prim[] => {
@@ -624,7 +634,11 @@ export function makePerson(p: PersonSpec, key: string, standing = false, withBod
           ? [V(hips[i], 0, 0, 0), V(knees[i], 0, 0, 0), V(knees[i], 0, -1.95, 0.02)]
           : seatedLegs[i].map(q => V(legs, q[0], q[1], q[2]));
         const hb = standing ? HIP(i) : LEGS, kb = standing ? KNEE(i) : LEGS;
-        out.push(P(hb, hp, kn, 0.44, 0.31), P(hb, hp.clone().lerp(kn, 0.15), hp.clone().lerp(kn, 0.5), 0.46, 0.4), P(kb, kn, an, 0.29, 0.18), P(kb, kn.clone().lerp(an, 0.15), kn.clone().lerp(an, 0.45), 0.31, 0.27));
+        const th = (fem ? 1.04 : 1) * Math.sqrt(HI), cf = 0.92 + 0.16 * MU;
+        // the calf swells at the back of the shin
+        const back = an.clone().sub(kn).cross(new THREE.Vector3(1, 0, 0)).normalize().multiplyScalar(-0.07);
+        out.push(P(hb, hp, kn, 0.44 * th, 0.31, 1), P(hb, hp.clone().lerp(kn, 0.15), hp.clone().lerp(kn, 0.5), 0.46 * th, 0.4 * th), P(kb, kn, an, 0.29, 0.17),
+          P(kb, kn.clone().lerp(an, 0.15).add(back), kn.clone().lerp(an, 0.45).add(back), 0.3 * cf, 0.27 * cf));
       }
       return out;
     };
@@ -633,15 +647,16 @@ export function makePerson(p: PersonSpec, key: string, standing = false, withBod
       // skin: the neck and the arms (the rest is always under clothes)
       { prims: [...neck, ...torso.slice(3, 5), ...armP(0), ...armP(1)], k: 0.16, grow: 0, material: handSkin },
       // the top: shirt, tee, blouse or galabeya, over the body and down the sleeves
-      { prims: [...torso, ...armP(0, sleeve ?? 2), ...armP(1, sleeve ?? 2)], k: 0.2, grow: robe ? 0.07 : 0.045, material: p.top === 'suit' ? clothMat(0xf1eee6) : topMat,
+      { prims: [...torso, ...armP(0, sleeve ?? 2), ...armP(1, sleeve ?? 2), ...(robe ? [P(PIV, V(piv, 0, 0.2, 0.02), V(piv, 0, 1.7, 0.02), 1.0 * T, 0.88 * T, 0.78)] : [])], k: 0.2, grow: robe ? 0.07 : 0.045, material: p.top === 'suit' ? clothMat(0xf1eee6) : topMat,
         // a shirt ends at the hips (the galabeya goes on down over the legs)
         clip: robe ? undefined : q => (fem ? 0.32 : 0.42) - pl(q).y },
       // trousers (or the galabeya's lower part), up to the waist
-      { prims: [torso[0], { ...torso[1], cut: q => pl(q).y - 0.8 }, ...legP()], k: 0.18, grow: 0.035, material: pantsMat },
+      { prims: [torso[0], { ...torso[1], cut: q => pl(q).y - 0.8 }, torso[7], torso[8], ...legP()], k: 0.18, grow: 0.035, material: pantsMat },
     ];
     if (p.top === 'suit') {
       // the jacket over the shirt, open at the front in a V down to the buttons
-      shells.push({ prims: [...torso, ...armP(0, 2), ...armP(1, 2)], k: 0.2, grow: 0.085, material: sleeveMat,
+      // (padded shoulders, a jacket's square line)
+      shells.push({ prims: [...torso, P(PIV, V(piv, -0.82 * B.sh, 2.36, -0.04), V(piv, 0.82 * B.sh, 2.36, -0.04), 0.3 * T, 0.3 * T, 0.8), ...armP(0, 2), ...armP(1, 2)], k: 0.2, grow: 0.085, material: sleeveMat,
         clip: q => { const l = pl(q); return Math.max(0.28 - l.y, -Math.max(0.15 - l.z, Math.abs(l.x) - Math.max(0, (l.y - 1.45) * 0.32), 1.42 - l.y, l.y - 3.1)); } });
     }
     buildBody(JSON.stringify([p, standing]), group, bones, shells);
@@ -656,25 +671,25 @@ export const PEOPLE: PersonSpec[] = [
   // عم فتحي: an old-school effendi in a tarboosh, suit and glasses
   { skin: 0xa77a5e, sex: 'm', age: 2, hair: 0xd8d4cc, hairStyle: 'short', brows: 0xb9b2a6, mustache: 'thick', stubble: 0.25,
     headwear: 'tarboosh', top: 'suit', cloth: 0xf1eee6, cloth2: 0x4e4238, pants: 0x4e4238, shoes: 0x2a1a10, glasses: true, belly: 0.6, swatch: 0x9e1b17,
-    build: { tall: 0.96, shoulders: 0.9, arms: 0.86, hunch: 0.12 }, habits: ['glasses', 'mustache', 'sip', 'nod', 'chin'], tempo: 0.75 },
+    build: { tall: 0.96, shoulders: 0.9, arms: 0.86, hunch: 0.12, chest: 0.8, waist: 1.08, hips: 0.98, neck: 0.88, muscle: 0.05 }, habits: ['glasses', 'mustache', 'sip', 'nod', 'chin'], tempo: 0.75 },
   // كابتن سامي: a retired football captain, thick black moustache, navy polo, watch
   { skin: 0x8f654b, sex: 'm', age: 1, hair: 0x2c231d, hairStyle: 'receding', brows: 0x1a120c, mustache: 'thick', stubble: 0.35,
-    top: 'polo', cloth: 0x24406a, pants: 0x7d6d55, shoes: 0x3a2618, watch: true, belly: 0.4, swatch: 0x24406a,
-    build: { tall: 1.05, shoulders: 1.14, arms: 1.22, hunch: -0.04 }, habits: ['watch', 'knuckles', 'behindhead', 'tap', 'stretch'], tempo: 1.05 },
+    top: 'polo', cloth: 0x24406a, pants: 0x7d6d55, shoes: 0x3a2618, watch: true, belly: 0.18, swatch: 0x24406a,
+    build: { tall: 1.05, shoulders: 1.14, arms: 1.22, hunch: -0.04, chest: 1.3, waist: 0.92, hips: 0.95, neck: 1.25, muscle: 1 }, habits: ['watch', 'knuckles', 'behindhead', 'tap', 'stretch'], tempo: 1.05 },
   // زيكو: a young man from the neighbourhood, curly hair and a short beard
   { skin: 0x7d5642, sex: 'm', age: 0, hair: 0x1f1610, hairStyle: 'curly', brows: 0x140e0a, mustache: 'trim', stubble: 0.95,
     top: 'tee', cloth: 0x2f7d5d, pants: 0x34465e, shoes: 0xe9e6e0, swatch: 0x2f7d5d,
-    build: { tall: 1.03, shoulders: 0.98, arms: 0.95, hunch: 0.08 }, habits: ['drum', 'groove', 'behindhead', 'tap', 'lean'], tempo: 1.25 },
+    build: { tall: 1.03, shoulders: 0.98, arms: 0.95, hunch: 0.08, chest: 0.92, waist: 0.84, hips: 0.9, neck: 0.95, muscle: 0.55 }, habits: ['drum', 'groove', 'behindhead', 'tap', 'lean'], tempo: 1.25 },
   // منى: a mother of three in a terracotta hijab
   { skin: 0xb98c70, sex: 'f', age: 1, hair: 0x1e130c, hairStyle: 'none', brows: 0x24160d, headwear: 'hijab', scarf: 0x6b2a32,
     top: 'blouse', cloth: 0x3d3350, pants: 0x2a2433, shoes: 0x1e1814, swatch: 0xb5523b,
-    build: { tall: 0.95, shoulders: 0.94, arms: 0.95, hunch: 0.02 }, habits: ['hijab', 'folded', 'nod', 'chin', 'sip'], tempo: 0.95 },
+    build: { tall: 0.95, shoulders: 0.94, arms: 0.95, hunch: 0.02, chest: 1.05, waist: 0.98, hips: 1.12, neck: 1, muscle: 0.2 }, habits: ['hijab', 'folded', 'nod', 'chin', 'sip'], tempo: 0.95 },
   // ندى: a university student with long dark hair
   { skin: 0xc79b7e, sex: 'f', age: 0, hair: 0x2a180f, hairStyle: 'long', brows: 0x2a180f, top: 'blouse', cloth: 0xd9a441,
     pants: 0x3a4a66, shoes: 0xd8cfc2, earrings: true, iris: '#5a3a1c', swatch: 0xd9a441,
-    build: { tall: 0.98, shoulders: 0.88, arms: 0.88, hunch: 0 }, habits: ['hair', 'chin', 'folded', 'stretch', 'tap'], tempo: 1.1 },
+    build: { tall: 0.98, shoulders: 0.88, arms: 0.88, hunch: 0, chest: 0.85, waist: 0.84, hips: 1.0, neck: 0.92, muscle: 0.3 }, habits: ['hair', 'chin', 'folded', 'stretch', 'tap'], tempo: 1.1 },
   // الحاج محمود: a Saidi elder in a striped galabeya and white emma, prayer beads in hand
   { skin: 0x825a42, sex: 'm', age: 2, hair: 0xd8d4cc, hairStyle: 'short', brows: 0xcfc8bc, mustache: 'thick', beard: 'full', stubble: 0.3,
-    headwear: 'emma', top: 'galabeya', cloth: 0xd9d1c0, cloth2: 0x8a7f6c, pattern: 'stripe', pants: 0xd9d1c0, shoes: 0x5a3a22, sebha: true, belly: 0.3, swatch: 0x8a7f6c,
-    build: { tall: 1.0, shoulders: 1.08, arms: 1.06, hunch: 0.1 }, habits: ['beads', 'beads', 'beard', 'nod', 'sip'], tempo: 0.7 },
+    headwear: 'emma', top: 'galabeya', cloth: 0xd9d1c0, cloth2: 0x8a7f6c, pattern: 'stripe', pants: 0xd9d1c0, shoes: 0x5a3a22, sebha: true, belly: 0.5, swatch: 0x8a7f6c,
+    build: { tall: 1.0, shoulders: 1.08, arms: 1.06, hunch: 0.1, chest: 1.1, waist: 1.15, hips: 1.08, neck: 1.12, muscle: 0.45 }, habits: ['beads', 'beads', 'beard', 'nod', 'sip'], tempo: 0.7 },
 ];
