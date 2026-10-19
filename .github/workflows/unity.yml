@@ -1,0 +1,95 @@
+# Builds the Unity version of the game (unity/) on every change to it:
+#  - a desktop build, run on a virtual screen to take screenshots (so changes can be checked without a phone)
+#  - the Android APK
+# Logs and screenshots go to the "unity-logs" release, the APK to the "unity-apk" release.
+# Needs the repository secret UNITY_LICENSE (the Unity_lic.ulf of a Unity Personal license).
+name: Unity build
+on:
+  push:
+    branches: [main]
+    paths: ['unity/**', '.github/workflows/unity.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: unity-build
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      IMAGE: unityci/editor:ubuntu-6000.0.84f1-android-3.2.2
+    steps:
+      - name: Free disk space (the Unity image is large)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /usr/local/share/boost /usr/local/share/powershell /usr/share/swift /opt/az /opt/microsoft /opt/google /usr/lib/jvm /opt/hostedtoolcache/CodeQL /opt/hostedtoolcache/go /opt/hostedtoolcache/PyPy || true
+          docker system prune -af > /dev/null || true
+          df -h /
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: unity/Library
+          key: unity-library-${{ hashFiles('unity/Assets/**', 'unity/Packages/manifest.json') }}
+          restore-keys: unity-library-
+
+      - name: Pick package versions
+        run: |
+          mkdir -p logs
+          V=$(curl -s https://packages.unity.com/com.unity.cloud.gltfast | jq -r '."dist-tags".latest')
+          echo "glTFast $V" | tee logs/versions.txt
+          sed -i "s/GLTFAST_VERSION/$V/" unity/Packages/manifest.json
+
+      - name: Build (desktop, then Android)
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        run: |
+          mkdir -p ulf build logs
+          printf '%s' "$UNITY_LICENSE" | tr -d '\r' > ulf/Unity_lic.ulf
+          docker pull -q $IMAGE
+          docker run --rm -v "$PWD":/w -w /w $IMAGE bash -c '
+            mkdir -p /root/.local/share/unity3d/Unity
+            cp /w/ulf/Unity_lic.ulf /root/.local/share/unity3d/Unity/Unity_lic.ulf
+            unity-editor -batchmode -nographics -quit -logFile /w/logs/activate.log -manualLicenseFile /root/.local/share/unity3d/Unity/Unity_lic.ulf
+            echo "activate exit $?" > /w/logs/editor-exit.txt
+            unity-editor -batchmode -nographics -quit -projectPath /w/unity -executeMethod BuildScript.BuildAll -logFile /w/logs/editor.log
+            echo "build exit $?" >> /w/logs/editor-exit.txt
+            chmod -R a+rwX /w/build /w/logs /w/unity/Library 2>/dev/null || true'
+          rm -rf ulf
+          cat logs/editor-exit.txt
+          grep -E "^\[build|error CS|Error building|Scripts have compiler errors" logs/editor.log | head -60 || true
+          test -f build/android/KingsBattle.apk
+
+      - name: Screenshots of the desktop build
+        if: always()
+        run: |
+          mkdir -p shots
+          if [ -f build/linux/KingsBattle.x86_64 ]; then
+            sudo apt-get update -qq > /dev/null && sudo apt-get install -y -qq xvfb mesa-utils libgl1-mesa-dri libglu1-mesa > /dev/null
+            chmod +x build/linux/KingsBattle.x86_64
+            cd build/linux
+            timeout 150 xvfb-run -a -s "-screen 0 1280x720x24" ./KingsBattle.x86_64 -screen-width 1280 -screen-height 720 -screen-fullscreen 0 -force-glcore -logFile "$GITHUB_WORKSPACE/logs/player.log" -shots || echo "player exit $?" > "$GITHUB_WORKSPACE/logs/player-exit.txt"
+            cp shots/*.png "$GITHUB_WORKSPACE/shots/" 2>/dev/null || true
+          fi
+          ls -la "$GITHUB_WORKSPACE/shots"
+
+      - name: Publish logs and screenshots
+        if: always()
+        run: |
+          [ -f logs/editor.log ] && tail -c 4000000 logs/editor.log > logs/editor-tail.log
+          files=$(ls logs/versions.txt logs/editor-exit.txt logs/activate.log logs/editor-tail.log logs/player.log logs/player-exit.txt shots/*.png 2>/dev/null)
+          gh release delete unity-logs --yes --cleanup-tag || true
+          gh release create unity-logs $files --title "Unity build logs" --target "$GITHUB_SHA" --prerelease --notes "Unity build ${GITHUB_SHA::7}"
+
+      - name: Publish the APK
+        if: always()
+        run: |
+          if [ -f build/android/KingsBattle.apk ]; then
+            cp build/android/KingsBattle.apk kings-battle-unity.apk
+            gh release delete unity-apk --yes --cleanup-tag || true
+            gh release create unity-apk kings-battle-unity.apk --title "Unity APK" --target "$GITHUB_SHA" --prerelease --notes "Unity build ${GITHUB_SHA::7}"
+          fi
