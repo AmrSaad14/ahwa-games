@@ -56,11 +56,11 @@ REGULARS = [
          clothes=["toigo_basic_tucked_t-shirt", "toigo_wool_pants", "shoes03", "grinsegold_beard_sigmund_wip"],
          tints={"toigo_basic_tucked_t-shirt": (0.18, 0.49, 0.36), "toigo_wool_pants": (0.16, 0.2, 0.3), "grinsegold_beard_sigmund_wip": (0.09, 0.06, 0.045)}),
     dict(name="Mona", gender=0, age=0.6, weight=0.58, muscle=0.35, height=0.42, proportions=0.35, eth=(0.15, 0.05, 0.8),
-         skin="onlytheghosts_middle_aged_eurasian_female", skin_dark=0.45, hair=None, brows="eyebrow010",
+         skin="onlytheghosts_middle_aged_eurasian_female", skin_dark=0.55, hair=None, brows="eyebrow010",
          clothes=["toigo_fisherman_sweater", "toigo_long_full_skirt", "toigo_flats"],
-         tints={"toigo_fisherman_sweater": (0.5, 0.42, 0.62), "toigo_long_full_skirt": (0.17, 0.14, 0.2)}, hat="hijab", scarf=(0.36, 0.09, 0.05)),
+         tints={"toigo_fisherman_sweater": (0.5, 0.42, 0.62), "toigo_long_full_skirt": (0.17, 0.14, 0.2)}, hat="hijab", scarf=(0.2, 0.045, 0.028)),
     dict(name="Nada", gender=0, age=0.48, weight=0.42, muscle=0.4, height=0.48, proportions=0.4, eth=(0.1, 0.05, 0.85),
-         skin="onlytheghosts_young_eurasian_female", skin_dark=0.4, hair="long01", hair_tint=(0.16, 0.09, 0.05), brows="eyebrow012",
+         skin="onlytheghosts_young_eurasian_female", skin_dark=0.5, hair="long01", hair_tint=(0.16, 0.09, 0.05), brows="eyebrow012",
          clothes=["female_casualsuit01", "toigo_ballet_flats", "toigo_pearl_earrings"],
          tints={}),
     dict(name="HajjMahmoud", gender=1, age=0.88, weight=0.62, muscle=0.5, height=0.52, proportions=0.6, eth=(0.3, 0.05, 0.65),
@@ -197,12 +197,12 @@ def make_emma(basemesh, rig):
     top, rx, ry = head_frame(basemesh)
     parts = []
     mat = flat_material("Emma", (0.8, 0.79, 0.75), 0.9)
-    for i in range(6):
-        k = i / 5
-        bpy.ops.mesh.primitive_torus_add(major_radius=max(rx, ry) * (1.08 - 0.22 * k * k), minor_radius=0.016 - 0.003 * k, major_segments=64, minor_segments=12)
+    for i in range(8):
+        k = i / 7
+        bpy.ops.mesh.primitive_torus_add(major_radius=max(rx, ry) * (1.02 - 0.2 * k * k), minor_radius=0.0115 - 0.002 * k, major_segments=64, minor_segments=10)
         o = bpy.context.active_object; o.name = f"EmmaWrap{i}"
         o.scale = (rx / max(rx, ry), ry / max(rx, ry) * 1.04, 1)
-        o.location = (top.x, top.y + 0.004, top.z - 0.07 + i * 0.017)
+        o.location = (top.x, top.y + 0.004, top.z - 0.075 + i * 0.0125)
         o.rotation_euler = (math.radians(-14 + (i % 2) * 12), math.radians((i % 3 - 1) * 6), math.radians(i * 37))
         o.data.materials.append(mat); smooth(o, 0); parts.append(o)
     bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=16, radius=1)
@@ -242,7 +242,7 @@ def make_hijab(basemesh, rig, rgb):
     bm.normal_update()
     for v in bm.verts:
         c = mw @ v.co; dz = tz - c.z
-        push = 0.016 + (0.03 if dz > 0.24 else 0) * min(1, (dz - 0.24) / 0.06) if dz > 0.24 else 0.016
+        push = 0.022 + (0.03 * min(1, (dz - 0.24) / 0.06) if dz > 0.24 else 0)
         v.co += v.normal * push
     # a little volume at the back of the head (hair under it)
     for v in bm.verts:
