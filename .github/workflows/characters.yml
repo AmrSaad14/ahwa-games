@@ -8,6 +8,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  actions: write
 concurrency:
   group: characters
   cancel-in-progress: true
@@ -54,6 +55,12 @@ jobs:
         run: |
           set +e
           tail -c 2000000 out/blender.txt > out/blender-tail.txt
-          files=$(ls out/*.txt out/*.png out/*.glb 2>/dev/null | grep -v "out/blender.txt")
+          files=$(ls out/*.txt out/*.png 2>/dev/null | grep -v "out/blender.txt")
           gh release delete chars-preview --yes --cleanup-tag
           gh release create chars-preview $files --title "Character previews" --target "$GITHUB_SHA" --prerelease --notes "Characters ${GITHUB_SHA::7}"
+          # the models for the game (the Unity build downloads them) — only a complete set
+          if [ $(ls out/*.glb 2>/dev/null | wc -l) -eq 6 ]; then
+            gh release delete chars-glb --yes --cleanup-tag
+            gh release create chars-glb out/*.glb --title "Character models" --target "$GITHUB_SHA" --prerelease --notes "Characters ${GITHUB_SHA::7}"
+            gh workflow run unity.yml --ref main
+          fi

@@ -18,3 +18,7 @@
 /Assets/Generated.meta
 /Assets/Resources/Characters/
 /Assets/Resources/Characters.meta
+
+# the realistic regulars, downloaded at build time from the "chars-glb" release (tools/characters)
+/Assets/Resources/People/
+/Assets/Resources/People.meta

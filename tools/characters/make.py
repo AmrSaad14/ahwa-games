@@ -109,9 +109,12 @@ def tint_material(obj, rgb, value=None, sat=None):
         node.image = img
 
 def shrink_images(limit=1024):
+    small = ("brow", "lash", "eye", "teeth", "tongue", "shoe", "flats", "glasses", "earring")
     for img in bpy.data.images:
-        if img.size[0] > limit or img.size[1] > limit:
-            k = limit / max(img.size[0], img.size[1])
+        lim = 512 if any(k in img.name.lower() for k in small) else limit
+        if img.size[0] > lim or img.size[1] > lim:
+            limit_now = lim
+            k = limit_now / max(img.size[0], img.size[1])
             img.scale(max(1, int(img.size[0] * k)), max(1, int(img.size[1] * k)))
 
 def flat_material(name, rgb, rough=0.7, sheen=0.0):
@@ -345,13 +348,23 @@ def export(spec, basemesh, rig):
             bpy.ops.object.select_all(action="DESELECT"); o.select_set(True)
             bpy.context.view_layer.objects.active = o
             bpy.ops.object.shape_key_remove(all=True, apply_mix=True)
+    # light enough for phones: dense garments are simplified (the body keeps all its detail)
+    for o in objs:
+        if o.type != "MESH" or o is copy_body: continue
+        n = len(o.data.polygons)
+        if n > 7000:
+            d = o.modifiers.new("Lighter", "DECIMATE"); d.ratio = max(0.25, 7000 / n)
+            o.modifiers.move(o.modifiers.find("Lighter"), 0)
+        if "tongue" in o.name.lower(): o.hide_set(True); o.select_set(False)
     copy_root.location = (0, 0, 0)
     bpy.ops.object.select_all(action="DESELECT")
-    for o in objs: o.hide_render = False; o.hide_set(False); o.select_set(True)
+    for o in objs:
+        if "tongue" in o.name.lower(): continue
+        o.hide_render = False; o.hide_set(False); o.select_set(True)
     bpy.context.view_layer.objects.active = copy_root
     path = os.path.join(OUT, spec["name"] + ".glb")
     bpy.ops.export_scene.gltf(filepath=path, use_selection=True, export_apply=True, export_skins=True, export_animations=False,
-                              export_morph=False, export_yup=True, export_image_format="AUTO", export_jpeg_quality=88)
+                              export_morph=False, export_yup=True, export_image_format="JPEG", export_jpeg_quality=85)
     tris = sum(len(o.evaluated_get(bpy.context.evaluated_depsgraph_get()).data.polygons) for o in objs if o.type == "MESH")
     p("  exported", spec["name"], round(os.path.getsize(path) / 1e6, 1), "MB,", tris, "faces")
     for o in objs: bpy.data.objects.remove(o, do_unlink=True)

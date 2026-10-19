@@ -17,8 +17,17 @@ public static class BuildScript
 
     static void Common()
     {
-        // the café regulars are made here, in Unity, before every build (see Editor/Characters)
-        if (!forged) { CharacterForge.BuildAll(); forged = true; }
+        // the café regulars: realistic humans made in Blender (Resources/People, see tools/characters);
+        // the older generated ones (Editor/Characters) only when those are missing
+        if (!forged)
+        {
+            forged = true;
+            if (Directory.Exists("Assets/Resources/People") && Directory.GetFiles("Assets/Resources/People", "*.glb").Length > 0)
+            {
+                if (Directory.Exists("Assets/Resources/Characters")) AssetDatabase.DeleteAsset("Assets/Resources/Characters");
+            }
+            else CharacterForge.BuildAll();
+        }
         // one empty scene: the game builds itself at start (see App.cs)
         if (!File.Exists(Scene))
         {

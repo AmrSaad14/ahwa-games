@@ -351,11 +351,11 @@ public class App : MonoBehaviour
         int n = 0;
         foreach (var p in cafe.Regulars())
         {
-            if (p.head == null) continue;
-            var face = p.head.position + Vector3.up * 0.55f;
-            var fwd = p.head.parent.forward; fwd.y = 0; fwd = fwd.sqrMagnitude > 0 ? fwd.normalized : Vector3.forward;
+            if (p.Head == null) continue;
+            var face = p.Head.position + Vector3.up * 0.55f;
+            var fwd = p.Forward;
             var f2 = (face - p.transform.position); f2.y = 0;
-            cafe.Shot(face + p.transform.TransformDirection(Vector3.forward) * 3.2f + Vector3.up * 0.35f + p.transform.TransformDirection(Vector3.right) * 0.8f, face);
+            cafe.Shot(face + fwd * 3.2f + Vector3.up * 0.35f + Vector3.Cross(Vector3.up, fwd) * 0.8f, face);
             yield return new WaitForSeconds(0.25f);
             Still($"p{n++}-{p.name}.png");
             yield return new WaitForSeconds(0.8f);
@@ -364,7 +364,8 @@ public class App : MonoBehaviour
         foreach (var p in cafe.Regulars())
         {
             var mid = p.transform.position + Vector3.up * 4.2f;
-            cafe.Shot(mid + p.transform.TransformDirection(new Vector3(0.6f, 0.15f, 1f)).normalized * 9.5f, mid);
+            var pf = p.Forward; var pr = Vector3.Cross(Vector3.up, pf);
+            cafe.Shot(mid + (pr * 0.6f + Vector3.up * 0.15f + pf).normalized * 9.5f, mid);
             yield return new WaitForSeconds(0.25f);
             Still($"b-{p.name}.png");
             yield return new WaitForSeconds(0.5f);
