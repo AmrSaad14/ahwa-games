@@ -1,0 +1,59 @@
+# Makes the café regulars as realistic 3D humans: Blender + MPFB (MakeHuman) with the free CC0 asset packs,
+# on GitHub's machine. Renders previews and exports the characters; results go to the "chars-preview" release.
+name: Characters
+on:
+  push:
+    branches: [main]
+    paths: ['tools/characters/**', '.github/workflows/characters.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: characters
+  cancel-in-progress: true
+jobs:
+  make:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Blender, MPFB and the asset packs
+        run: |
+          set +e
+          mkdir -p out packs
+          V=$(curl -s https://download.blender.org/release/Blender4.2/ | grep -o 'blender-4\.2\.[0-9]*-linux-x64\.tar\.xz' | sort -V | tail -1)
+          echo "Blender: $V" | tee out/setup.txt
+          curl -sL "https://download.blender.org/release/Blender4.2/$V" | tar -xJ
+          mv blender-4.2.*-linux-x64 blender
+          sudo apt-get update -qq > /dev/null; sudo apt-get install -y -qq libxi6 libxkbcommon0 libsm6 libgl1 libegl1 > /dev/null
+          curl -sL -o mpfb.zip "https://extensions.blender.org/download/sha256:c075b3e9b94b8e5556a5f03f4653602d02ea306de08126e8f55ed6dee28a2dad/add-on-mpfb-v2.0.18.zip?repository=%2Fapi%2Fv1%2Fextensions%2F&blender_version_min=4.2.0"
+          ls -la mpfb.zip | tee -a out/setup.txt
+          ./blender/blender -b --command extension install-file -r user_default -e mpfb.zip >> out/setup.txt 2>&1
+          echo "mpfb install exit $?" | tee -a out/setup.txt
+          for p in makehuman_system_assets skins01 skins02 hair01 eyebrows01 eyelashes01 shirts01 pants01 shoes01 suits01 glasses01 bodyparts05 dress01 skirts01 jewelry01 hats01 system_hair_materials01 system_clothes_materials01; do
+            for host in files2 files; do
+              if curl -sfL -o packs/$p.zip "https://$host.makehumancommunity.org/asset_packs/$p/${p}_cc0.zip"; then echo "pack $p ok ($host, $(du -h packs/$p.zip | cut -f1))" >> out/setup.txt; break; else echo "pack $p failed on $host" >> out/setup.txt; rm -f packs/$p.zip; fi
+            done
+          done
+          true
+
+      - name: Explore the assets
+        run: |
+          set +e
+          OUT=$PWD/out PACKS=$PWD/packs ./blender/blender -b -P tools/characters/explore.py > out/blender.txt 2>&1
+          echo "blender exit $?" >> out/setup.txt
+          ls out
+          true
+
+      - name: Publish
+        if: always()
+        run: |
+          set +e
+          tail -c 2000000 out/blender.txt > out/blender-tail.txt
+          files=$(ls out/*.txt out/*.png out/*.glb 2>/dev/null | grep -v "out/blender.txt")
+          gh release delete chars-preview --yes --cleanup-tag
+          gh release create chars-preview $files --title "Character previews" --target "$GITHUB_SHA" --prerelease --notes "Characters ${GITHUB_SHA::7}"
