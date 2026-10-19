@@ -1,24 +1,30 @@
 name: Unity probe
 on: workflow_dispatch
+permissions:
+  contents: write
 jobs:
   probe:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
     steps:
-      - name: Find Unity 6 LTS editor images
+      - name: Inspect the Unity editor image
         run: |
-          curl -s "https://hub.docker.com/v2/repositories/unityci/editor/tags?page_size=100&name=ubuntu-6000.0" | jq -r '.results[].name' | grep -E 'android' | sort -V | tail -20
-      - name: Inspect the editor image
-        run: |
-          TAG=$(curl -s "https://hub.docker.com/v2/repositories/unityci/editor/tags?page_size=100&name=ubuntu-6000.0" | jq -r '.results[].name' | grep -E -- '-android-3$|-android-3\.[0-9.]+$' | sort -V | tail -1)
+          {
+          curl -s "https://hub.docker.com/v2/repositories/unityci/editor/tags?page_size=100&name=ubuntu-6000.0" | jq -r '.results[].name' | grep android | sort -V | tail -12
+          TAG=$(curl -s "https://hub.docker.com/v2/repositories/unityci/editor/tags?page_size=100&name=ubuntu-6000.0" | jq -r '.results[].name' | grep -E -- '-android-3(\.[0-9.]+)?$' | sort -V | tail -1)
           echo "TAG=$TAG"
           docker pull -q unityci/editor:$TAG
           docker run --rm unityci/editor:$TAG bash -c '
             E=/opt/unity/Editor/Data
-            ls $E | head -50
-            echo ---managed; ls $E/Managed | head; ls $E/Managed/UnityEngine | head -80
+            ls $E
+            echo ---managed; ls $E/Managed | head -40; ls $E/Managed/UnityEngine | head -90
             echo ---roslyn; ls $E/DotNetSdkRoslyn 2>/dev/null | head; ls $E/NetCoreRuntime 2>/dev/null | head
-            echo ---netstd; find $E -path "*NetStandard*" -name "netstandard.dll" | head
-            echo ---builtin; ls $E/Resources/PackageManager/BuiltInPackages | head -80
-            echo ---ugui; find $E/Resources/PackageManager/BuiltInPackages/com.unity.ugui -maxdepth 2 | head -30
-            echo ---editor-pkgs; ls $E/Resources/PackageManager/Editor 2>/dev/null | head -50
+            echo ---netstd; find $E -name "netstandard.dll" | head
+            echo ---builtin; ls $E/Resources/PackageManager/BuiltInPackages | head -90
+            echo ---ugui; find $E/Resources/PackageManager/BuiltInPackages/com.unity.ugui -maxdepth 3 -type d | head -30
           '
+          } > probe.txt 2>&1 || true
+          gh release delete unity-probe --yes --cleanup-tag || true
+          gh release create unity-probe probe.txt --title "Unity probe" --target "$GITHUB_SHA" --prerelease --notes probe
