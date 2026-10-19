@@ -36,6 +36,15 @@ public class DominoTable : MonoBehaviour
         F = c.Front; R = Vector3.Cross(U, -F);
         var prefab = Resources.Load<GameObject>("Art/MainTable");
         if (prefab != null) { table = Instantiate(prefab, C, Quaternion.identity); table.name = "MainTable"; table.SetActive(false); }
+        // a lamp hanging over the game table
+        if (table != null)
+        {
+            var lamp = new GameObject("Lamp").AddComponent<Light>();
+            lamp.type = LightType.Point; lamp.color = new Color(1f, 0.8f, 0.55f); lamp.intensity = 2.6f; lamp.range = 22f;
+            lamp.shadows = LightShadows.None;
+            lamp.transform.SetParent(table.transform, false);
+            lamp.transform.position = C + Vector3.up * 9f + F * 1.5f;
+        }
         lineG = new GameObject("Line").transform;
         propsG = new GameObject("Props").transform;
         ghostG = new GameObject("Ghosts").transform;

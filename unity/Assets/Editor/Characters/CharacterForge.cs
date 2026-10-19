@@ -292,10 +292,10 @@ namespace KingsBattle.Forge
                 float jt = 1.42f * t, jb = r.hipY - 0.1f;
                 jacket.clip = p =>
                 {
-                    float d = jb - p.y;
                     // the V: open in front above the buttons
-                    if (p.z > 0.02f && p.y > 1.12f * t) d = Mathf.Max(d, -(Mathf.Abs(p.x) - Mathf.Lerp(0.015f, 0.085f, (p.y - 1.12f * t) / (jt - 1.12f * t))));
-                    return d;
+                    float v = Mathf.Lerp(0.015f, 0.085f, Mathf.Clamp01((p.y - 1.12f * t) / (jt - 1.12f * t))) - Mathf.Abs(p.x);
+                    float front = Mathf.Min(p.z - 0.02f, p.y - 1.12f * t);
+                    return Mathf.Max(jb - p.y, Mathf.Min(v, front));
                 };
                 jacket.prims.Add(Prim.Ball(Sp, V(0, 1.1f * t, 0.12f + s.belly * 0.06f), 0.008f).Paint(C(0x1a120c)));
                 layers.Add(jacket);
@@ -363,7 +363,7 @@ namespace KingsBattle.Forge
                 {
                     var q = p - fc;
                     float oval = Mathf.Sqrt(q.x * q.x / (0.058f * 0.058f) + q.y * q.y / (0.09f * 0.09f)) - 1;
-                    return p.z > fc.z - 0.05f * r.headScale ? -oval * 0.05f : -1;
+                    return Mathf.Min(-oval * 0.05f, p.z - (fc.z - 0.05f * r.headScale));
                 };
                 layers.Add(hw);
             }
@@ -431,10 +431,10 @@ namespace KingsBattle.Forge
             }
             p.Add(Prim.Cap(Hd, H(-0.04f, 0.127f, 0.075f), H(0.04f, 0.127f, 0.075f), (0.011f - fem * 0.003f) * k));    // brow ridge
             // the nose: bridge, tip and wings (longer and fuller with age)
-            float nl = 1 + old * 0.12f - fem * 0.08f;
-            p.Add(Prim.Cap(Hd, H(0, 0.118f, 0.086f), H(0, 0.073f - 0.004f * nl, 0.104f + 0.006f * nl), 0.0085f * k, 0.011f * k));
-            p.Add(Prim.Ball(Hd, H(0, 0.07f, 0.106f + 0.006f * nl), 0.0135f * k * nl));
-            for (int sd = -1; sd <= 1; sd += 2) p.Add(Prim.Ball(Hd, H(sd * 0.013f, 0.066f, 0.097f), 0.0095f * k * nl));
+            float nl = 1 + old * 0.06f - fem * 0.1f;
+            p.Add(Prim.Cap(Hd, H(0, 0.118f, 0.086f), H(0, 0.074f, 0.1f + 0.004f * nl), 0.0068f * k, 0.0088f * k));
+            p.Add(Prim.Ball(Hd, H(0, 0.071f, 0.102f + 0.004f * nl), 0.0102f * k * nl));
+            for (int sd = -1; sd <= 1; sd += 2) p.Add(Prim.Ball(Hd, H(sd * 0.0115f, 0.067f, 0.094f), 0.0072f * k * nl));
             // lips
             p.Add(Prim.Cap(Hd, H(-0.022f, 0.047f, 0.093f), H(0.022f, 0.047f, 0.093f), (0.0075f + fem * 0.002f) * k).Paint(lips));
             p.Add(Prim.Cap(Hd, H(-0.019f, 0.038f, 0.09f), H(0.019f, 0.038f, 0.09f), (0.0085f + fem * 0.002f) * k).Paint(lips));
@@ -471,17 +471,17 @@ namespace KingsBattle.Forge
                     p.Add(Prim.Ell(Hd, H(0, 0.02f, -0.06f), new Vector3(0.085f, 0.16f, 0.05f) * k));
                     for (int sd = -1; sd <= 1; sd += 2) p.Add(Prim.Ell(Hd, H(sd * 0.072f, 0.05f, 0.0f), new Vector3(0.018f, 0.11f, 0.05f) * k));
                 }
-                float front = s.hairStyle == "receding" ? 0.165f : 0.142f;
+                float front = s.hairStyle == "receding" ? 0.172f : 0.142f;
                 L.clip = q =>
                 {
                     var h = (q - o) / k;
-                    // the hairline: high at the forehead, down at the nape; clear of the ears and face
-                    float line = front - (0.09f - h.z) * (s.hairStyle == "long" ? 1.6f : 1.05f);
-                    float d = line - h.y;
-                    if (s.hairStyle == "long" && h.z < 0.03f) d = Mathf.Min(d, -0.001f + (h.y < -0.12f ? (-0.12f - h.y) : -0.01f));
-                    if (s.hairStyle == "receding" && h.y > 0.18f && Mathf.Abs(h.x) < 0.04f && h.z > -0.02f) d = 0.01f;   // thin on top
-                    if (Mathf.Abs(h.x) > 0.06f && h.y < 0.125f && h.z > -0.02f && s.hairStyle != "long") d = Mathf.Max(d, 0.002f);   // the ears show
-                    return d;
+                    // the hairline: high at the forehead, down at the nape
+                    float d = front - (0.09f - h.z) * (s.hairStyle == "long" ? 1.6f : 1.05f) - h.y;
+                    // long hair keeps falling at the back
+                    if (s.hairStyle == "long") d = Mathf.Min(d, Mathf.Max(h.z - 0.03f, -0.13f - h.y));
+                    // the ears show
+                    else d = Mathf.Max(d, Mathf.Min(Mathf.Min(Mathf.Abs(h.x) - 0.06f, 0.125f - h.y), h.z + 0.02f));
+                    return d * k;
                 };
             }
             return L;
@@ -512,11 +512,11 @@ namespace KingsBattle.Forge
                 L.clip = q =>
                 {
                     var h = (q - o) / k;
-                    bool beardZone = h.y < 0.062f && h.z > -0.01f;
-                    bool otherHair = h.y > 0.049f && h.z > 0.07f;                            // brows and moustache
-                    if (!beardZone && !otherHair) return 0.01f;
-                    if (h.y < 0.049f && Vector3.Distance(q, mouth) / k < 0.024f) return 0.01f;   // the mouth stays clear
-                    return -1;
+                    float beardZone = Mathf.Max(h.y - 0.062f, -0.01f - h.z);          // below the cheeks, in front of the ears
+                    float otherHair = Mathf.Max(0.049f - h.y, 0.07f - h.z);           // brows and moustache
+                    float keep = Mathf.Min(beardZone, otherHair);
+                    float mouthHole = Mathf.Min(0.024f - Vector3.Distance(q, mouth) / k, 0.049f - h.y);
+                    return Mathf.Max(keep, mouthHole) * k;
                 };
             }
             return L;

@@ -194,8 +194,19 @@ namespace KingsBattle.Forge
                 var a = verts[tris[i]]; var b = verts[tris[i + 1]]; var c = verts[tris[i + 2]];
                 var n = Vector3.Cross(b - a, c - a);
                 var g = norms[tris[i]] + norms[tris[i + 1]] + norms[tris[i + 2]];
+                if (g.sqrMagnitude < 1e-8f) g = Grad(L, (a + b + c) / 3f, h);
                 if (Vector3.Dot(n, g) < 0) { int t = tris[i + 1]; tris[i + 1] = tris[i + 2]; tris[i + 2] = t; }
             }
+            // a vertex the field gave no direction takes the average of its faces
+            var acc = new Vector3[verts.Count];
+            for (int i = 0; i < tris.Count; i += 3)
+            {
+                var a = verts[tris[i]]; var b = verts[tris[i + 1]]; var c = verts[tris[i + 2]];
+                var n = Vector3.Cross(b - a, c - a);
+                acc[tris[i]] += n; acc[tris[i + 1]] += n; acc[tris[i + 2]] += n;
+            }
+            for (int i = 0; i < verts.Count; i++)
+                if (norms[i].sqrMagnitude < 0.5f || Vector3.Dot(norms[i], acc[i]) < 0) norms[i] = acc[i].sqrMagnitude > 0 ? acc[i].normalized : Vector3.up;
         }
 
         static void Quad(float a, float b, int c0, int c1, int c2, int c3, List<int> tris)
