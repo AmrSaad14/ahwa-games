@@ -14,6 +14,7 @@ export interface UserRow {
   rating: number; games: number; wins: number; created: number; seen: number;
   coins: number; gifts: number; bonus_day: string | null; ad_free_until: number; equip: string | null;
   phone: string | null; google_sub: string | null; google_email: string | null;
+  pg_id: string | null; friend_code: string | null;
 }
 
 export class Store {
@@ -65,6 +66,12 @@ export class Store {
     if (!cols.has('google_sub')) this.db.exec('ALTER TABLE users ADD COLUMN google_sub TEXT; ALTER TABLE users ADD COLUMN google_email TEXT');
     if (!cols.has('ad_free_until')) this.db.exec('ALTER TABLE users ADD COLUMN ad_free_until INTEGER NOT NULL DEFAULT 0');
     if (!cols.has('equip')) this.db.exec('ALTER TABLE users ADD COLUMN equip TEXT');
+    if (!cols.has('pg_id')) this.db.exec('ALTER TABLE users ADD COLUMN pg_id TEXT');
+    if (!cols.has('friend_code')) this.db.exec('ALTER TABLE users ADD COLUMN friend_code TEXT');
+    this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_pg ON users(pg_id) WHERE pg_id IS NOT NULL; CREATE UNIQUE INDEX IF NOT EXISTS users_fcode ON users(friend_code) WHERE friend_code IS NOT NULL');
+    // friends: a row a→b is a request from a to b until b accepts it
+    this.db.exec(`CREATE TABLE IF NOT EXISTS friends (a TEXT NOT NULL, b TEXT NOT NULL, status TEXT NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (a, b));
+      CREATE INDEX IF NOT EXISTS friends_b ON friends(b)`);
     this.db.exec('CREATE TABLE IF NOT EXISTS user_skins (user_id TEXT NOT NULL, skin TEXT NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (user_id, skin))');
     // every store purchase, so the same purchase can never be credited twice
     this.db.exec(`CREATE TABLE IF NOT EXISTS purchases (
@@ -105,6 +112,45 @@ export class Store {
   byGoogle(sub: string): UserRow | undefined { return this.db.prepare('SELECT * FROM users WHERE google_sub = ?').get(sub) as UserRow | undefined; }
   setPhone(id: string, phone: string) { this.db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(phone, id); }
   setGoogle(id: string, sub: string, email: string | null) { this.db.prepare('UPDATE users SET google_sub = ?, google_email = ? WHERE id = ?').run(sub, email, id); }
+  byPlayGames(pid: string): UserRow | undefined { return this.db.prepare('SELECT * FROM users WHERE pg_id = ?').get(pid) as UserRow | undefined; }
+  setPlayGames(id: string, pid: string) { this.db.prepare('UPDATE users SET pg_id = ? WHERE id = ?').run(pid, id); }
+
+  /* ---------- friends ---------- */
+
+  /** The short code a player gives to friends (made the first time it is asked for). */
+  friendCode(id: string): string {
+    const u = this.get(id); if (!u) return '';
+    if (u.friend_code) return u.friend_code;
+    const ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    for (;;) {
+      const code = Array.from({ length: 6 }, () => ABC[crypto.randomInt(ABC.length)]).join('');
+      if (this.db.prepare('SELECT 1 FROM users WHERE friend_code = ?').get(code)) continue;
+      this.db.prepare('UPDATE users SET friend_code = ? WHERE id = ?').run(code, id);
+      return code;
+    }
+  }
+  byFriendCode(code: string): UserRow | undefined { return this.db.prepare('SELECT * FROM users WHERE friend_code = ?').get(code.toUpperCase()) as UserRow | undefined; }
+  /** Everyone in this player's list: friends, requests they sent, requests waiting for them. */
+  friendLinks(id: string): { other: string; status: 'friend' | 'outgoing' | 'incoming' }[] {
+    const rows = this.db.prepare('SELECT a, b, status FROM friends WHERE a = ? OR b = ?').all(id, id) as { a: string; b: string; status: string }[];
+    return rows.map(r => ({ other: r.a === id ? r.b : r.a, status: r.status === 'accepted' ? 'friend' as const : r.a === id ? 'outgoing' as const : 'incoming' as const }));
+  }
+  friendStatus(a: string, b: string): 'friend' | 'outgoing' | 'incoming' | null {
+    return this.friendLinks(a).find(l => l.other === b)?.status ?? null;
+  }
+  friendCount(id: string): number { return (this.db.prepare('SELECT COUNT(*) AS n FROM friends WHERE a = ? OR b = ?').get(id, id) as { n: number }).n; }
+  /** a asks b; if b had already asked a, they become friends. */
+  friendRequest(a: string, b: string): 'sent' | 'friends' | 'already' {
+    const st = this.friendStatus(a, b);
+    if (st === 'friend' || st === 'outgoing') return 'already';
+    if (st === 'incoming') { this.db.prepare("UPDATE friends SET status = 'accepted', ts = ? WHERE a = ? AND b = ?").run(Date.now(), b, a); return 'friends'; }
+    this.db.prepare("INSERT INTO friends (a, b, status, ts) VALUES (?, ?, 'pending', ?)").run(a, b, Date.now());
+    return 'sent';
+  }
+  friendAccept(me: string, from: string): boolean {
+    return Number(this.db.prepare("UPDATE friends SET status = 'accepted', ts = ? WHERE a = ? AND b = ? AND status = 'pending'").run(Date.now(), from, me).changes) > 0;
+  }
+  friendRemove(a: string, b: string) { this.db.prepare('DELETE FROM friends WHERE (a = ? AND b = ?) OR (a = ? AND b = ?)').run(a, b, b, a); }
 
   touch(id: string) { this.db.prepare('UPDATE users SET seen = ? WHERE id = ?').run(Date.now(), id); }
   setProfile(id: string, name: string, ch: number) { this.db.prepare('UPDATE users SET name = ?, ch = ? WHERE id = ?').run(name, ch, id); }
@@ -117,6 +163,7 @@ export class Store {
     this.db.prepare('DELETE FROM reports WHERE from_id = ?').run(id);
     this.db.prepare('DELETE FROM ratings WHERE user_id = ?').run(id);
     this.db.prepare('DELETE FROM coin_log WHERE user_id = ?').run(id);
+    this.db.prepare('DELETE FROM friends WHERE a = ? OR b = ?').run(id, id);
   }
 
   /** Gives the daily coin bonus once per (UTC) day. Returns the coins added, or 0. */
@@ -226,7 +273,7 @@ export class Store {
     return { rows: out, me };
   }
 
-  publicUser(u: UserRow): PublicUser { return { ...toPublic(u), ratings: this.ratingsOf(u.id), adsLeft: Math.max(0, ECONOMY.adsPerDay - this.adsToday(u.id)), skins: this.skinsOf(u.id) }; }
+  publicUser(u: UserRow): PublicUser { return { ...toPublic(u), code: this.friendCode(u.id), ratings: this.ratingsOf(u.id), adsLeft: Math.max(0, ECONOMY.adsPerDay - this.adsToday(u.id)), skins: this.skinsOf(u.id) }; }
 
   /** Skins this player bought in the shop. */
   skinsOf(id: string): string[] { return (this.db.prepare('SELECT skin FROM user_skins WHERE user_id = ? ORDER BY ts').all(id) as { skin: string }[]).map(r => r.skin); }
@@ -285,4 +332,4 @@ export function parseEquip(raw: string | null | undefined): Equipped {
   try { const o = JSON.parse(raw || '{}'); return o && typeof o === 'object' ? o as Equipped : {}; } catch { return {}; }
 }
 export const toPublic = (u: UserRow): PublicUser => ({ id: u.id, name: u.name, ch: u.ch, email: u.email, rating: u.rating, games: u.games, wins: u.wins, coins: u.coins, gifts: u.gifts, ratings: {}, adsLeft: 0, adFreeUntil: u.ad_free_until ?? 0, skins: [], equip: parseEquip(u.equip),
-  phone: u.phone ? maskPhone(u.phone) : null, google: u.google_sub ? (u.google_email || 'Google') : null });
+  phone: u.phone ? maskPhone(u.phone) : null, google: u.google_sub ? (u.google_email || 'Google') : null, playGames: !!u.pg_id, code: u.friend_code ?? '' });

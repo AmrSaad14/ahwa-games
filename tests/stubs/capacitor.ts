@@ -1,5 +1,6 @@
 // Test-only stand-ins for the Capacitor plugins (the real packages give native apps haptics, sharing and the back button).
 export const Capacitor = { isNativePlatform: () => false, getPlatform: () => 'web' };
+export const registerPlugin = <T>(_n: string): T => new Proxy({}, { get: () => async () => { throw new Error('not available'); } }) as T;
 export const App = { addListener: () => Promise.resolve({ remove() {} }), minimizeApp: () => Promise.resolve() };
 export const Share = { share: async (_o: unknown) => { throw new Error('not available'); } };
 export const ImpactStyle = { Light: 'LIGHT', Medium: 'MEDIUM', Heavy: 'HEAVY' } as const;

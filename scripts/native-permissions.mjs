@@ -46,6 +46,110 @@ if (fs.existsSync(android)) {
   console.log('Android: microphone permissions added, locked to landscape, ahwagames:// sign-in link, AdMob ' + admobAndroid);
 } else console.log('Android project not found (run: npx cap add android)');
 
+// Google Play Games sign-in: a small native plugin (PlayGames) registered in MainActivity, the Games SDK, and the
+// game's Play Games app id (PLAY_GAMES_APP_ID, from Play Console → Play Games Services). Without the id the app
+// still builds and simply doesn't offer Play Games.
+const pgAppId = process.env.PLAY_GAMES_APP_ID || '';
+const javaDir = 'android/app/src/main/java/com/ahwa/domino';
+if (fs.existsSync(javaDir)) {
+  fs.writeFileSync(`${javaDir}/PlayGamesPlugin.java`, `package com.ahwa.domino;
+
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
+import android.os.Bundle;
+import com.getcapacitor.JSObject;
+import com.getcapacitor.Plugin;
+import com.getcapacitor.PluginCall;
+import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.CapacitorPlugin;
+import com.google.android.gms.games.GamesSignInClient;
+import com.google.android.gms.games.PlayGames;
+import com.google.android.gms.games.PlayGamesSdk;
+
+/** Signs the player in with Google Play Games and hands the game server a one-time code to check it with Google. */
+@CapacitorPlugin(name = "PlayGames")
+public class PlayGamesPlugin extends Plugin {
+    private boolean ready = false;
+
+    private boolean configured() {
+        try {
+            ApplicationInfo ai = getContext().getPackageManager().getApplicationInfo(getContext().getPackageName(), PackageManager.GET_META_DATA);
+            Bundle md = ai.metaData;
+            return md != null && md.get("com.google.android.gms.games.APP_ID") != null;
+        } catch (Exception e) { return false; }
+    }
+
+    private boolean init() {
+        if (ready) return true;
+        if (!configured()) return false;
+        try { PlayGamesSdk.initialize(getContext()); ready = true; } catch (Exception e) { ready = false; }
+        return ready;
+    }
+
+    @PluginMethod
+    public void available(PluginCall call) {
+        JSObject r = new JSObject();
+        r.put("available", init());
+        call.resolve(r);
+    }
+
+    @PluginMethod
+    public void signIn(PluginCall call) {
+        if (!init()) { call.reject("not_configured"); return; }
+        final String clientId = call.getString("clientId", "");
+        final boolean interactive = Boolean.TRUE.equals(call.getBoolean("interactive", false));
+        final GamesSignInClient client = PlayGames.getGamesSignInClient(getActivity());
+        client.isAuthenticated().addOnCompleteListener(t -> {
+            boolean ok = t.isSuccessful() && t.getResult() != null && t.getResult().isAuthenticated();
+            if (ok) { serverCode(client, clientId, call); return; }
+            if (!interactive) { call.reject("not_signed_in"); return; }
+            client.signIn().addOnCompleteListener(s -> {
+                boolean ok2 = s.isSuccessful() && s.getResult() != null && s.getResult().isAuthenticated();
+                if (ok2) serverCode(client, clientId, call); else call.reject("sign_in_failed");
+            });
+        });
+    }
+
+    private void serverCode(GamesSignInClient client, String clientId, PluginCall call) {
+        client.requestServerSideAccess(clientId, false).addOnCompleteListener(t -> {
+            if (t.isSuccessful() && t.getResult() != null) {
+                JSObject r = new JSObject();
+                r.put("code", t.getResult());
+                call.resolve(r);
+            } else call.reject("no_server_code");
+        });
+    }
+}
+`);
+  fs.writeFileSync(`${javaDir}/MainActivity.java`, `package com.ahwa.domino;
+
+import android.os.Bundle;
+import com.getcapacitor.BridgeActivity;
+
+public class MainActivity extends BridgeActivity {
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        registerPlugin(PlayGamesPlugin.class);   // Google Play Games sign-in (the plugin lives in this app)
+        super.onCreate(savedInstanceState);
+    }
+}
+`);
+  const gradle = 'android/app/build.gradle';
+  let g = fs.readFileSync(gradle, 'utf8');
+  if (!g.includes('play-services-games-v2')) g = g.replace(/dependencies\s*\{/, `dependencies {\n    implementation "com.google.android.gms:play-services-games-v2:19.0.0"`);
+  fs.writeFileSync(gradle, g);
+  if (pgAppId) {
+    const strings = 'android/app/src/main/res/values/strings.xml';
+    let sx = fs.readFileSync(strings, 'utf8');
+    if (!sx.includes('game_services_project_id')) sx = sx.replace('</resources>', `    <string name="game_services_project_id" translatable="false">${pgAppId}</string>\n</resources>`);
+    fs.writeFileSync(strings, sx);
+    let mx = fs.readFileSync(android, 'utf8');
+    if (!mx.includes('com.google.android.gms.games.APP_ID')) mx = mx.replace('</application>', `    <meta-data android:name="com.google.android.gms.games.APP_ID" android:value="@string/game_services_project_id" />\n    </application>`);
+    fs.writeFileSync(android, mx);
+  }
+  console.log('Android: Play Games sign-in plugin added' + (pgAppId ? ` (app id ${pgAppId})` : ' (no PLAY_GAMES_APP_ID yet: Play Games stays off)'));
+}
+
 const ios = 'ios/App/App/Info.plist';
 if (fs.existsSync(ios)) {
   let plist = fs.readFileSync(ios, 'utf8');

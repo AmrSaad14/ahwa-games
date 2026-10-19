@@ -4,7 +4,8 @@ import { Share } from '@capacitor/share';
 import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 import { CHESS_TIME, End, GAMES, GAME_MODES, GameId, MODES, MODE_PLAYERS, Mode, TILES, canPlay, defaultTarget, endsFor, gameOf, targetOptions, teamOf } from '../../shared/engine';
-import type { Action, AnyView, BoardAction, BoardView, CoinRow, Emote, LeaderRow, PublicUser, S2C, TableView } from '../../shared/protocol';
+import type { Action, AnyView, BoardAction, BoardView, CoinRow, Emote, FriendRow, LeaderRow, PublicUser, S2C, TableView } from '../../shared/protocol';
+import { playGamesCode, playGamesPossible } from './playgames';
 import { ludoColor } from './boards';
 import type { BoardUi, Pick } from './boards';
 import { BAR, OFF } from '../../shared/games/tawla';
@@ -36,7 +37,7 @@ const store = {
 
 /* ---------------- state ---------------- */
 type Screen = 'home' | 'friends' | 'lb' | 'settings' | 'rules' | 'coins' | 'skins';
-type Sheet = null | 'leave' | 'emotes' | 'delete' | 'player' | 'signin' | 'fakead' | 'interstitial' | 'checkout' | 'skinBuy';
+type Sheet = null | 'leave' | 'emotes' | 'delete' | 'player' | 'signin' | 'fakead' | 'interstitial' | 'checkout' | 'skinBuy' | 'invite';
 const S = {
   screen: 'home' as Screen,
   sheet: null as Sheet,
@@ -65,7 +66,11 @@ const S = {
   reporting: false,
   stake: (isStake(Number(store.get('stake'))) ? Number(store.get('stake')) : STAKES[0]) as number,
   coinRows: null as CoinRow[] | null,
-  login: { google: false, phone: false },
+  login: { google: false, phone: false } as { google: boolean; phone: boolean; playGames?: string },
+  friends: null as FriendRow[] | null,
+  friendDraft: '',
+  invite: null as null | { from: { id: string; name: string; ch: number }; code: string; mode: Mode; stake: number },
+  pendingInvite: null as string | null,   // a friend to invite once the room we are opening exists
   otpPhone: null as string | null,     // number a sign-in code was sent to
   phoneDraft: '',
   payout: null as null | { kind: string; delta: number; fee: number; stake: number; table: string },
@@ -129,6 +134,9 @@ function onMessage(m: S2C) {
       S.login = m.login ?? { google: false, phone: false };
       applySkins();
       initBilling(m.user.id, (product, token) => net.send({ t: 'buy', product, token }), () => { if (S.screen === 'coins') render(); });
+      net.send({ t: 'friends' });
+      // Play Games signs the player in by itself on Android (no buttons), the first time it is available
+      if (S.login.playGames && !m.user.playGames && playGamesPossible()) playGamesCode(S.login.playGames, false).then(code => { if (code) net.send({ t: 'playGames', code }); });
       if (pendingTicket) { net.send({ t: 'ticket', ticket: pendingTicket }); pendingTicket = null; }
       else if (!signedIn(m.user) && (S.login.google || S.login.phone) && !store.get('signinAsked') && !S.view) S.sheet = 'signin'; store.set('name', m.user.name); store.set('ch', String(m.user.ch));
       // carry a name/character picked while offline over to the server
@@ -141,7 +149,12 @@ function onMessage(m: S2C) {
       toast(errText(m.code));
       break;
     case 'queue': S.queue = m.mode ? { mode: m.mode, count: m.count, need: m.need, botsAt: m.botsAt, stake: m.stake } : null; break;
-    case 'table': if (!S.practice) { S.queue = null; S.busy = false; S.joinCode = ''; applyView(m.view); } return;
+    case 'table':
+      if (!S.practice) {
+        S.queue = null; S.busy = false; S.joinCode = ''; applyView(m.view);
+        if (S.pendingInvite && m.view.phase === 'lobby' && m.view.code) { inviteFriend(S.pendingInvite); S.pendingInvite = null; }
+      }
+      return;
     case 'left': if (!S.practice) { voice.leave(); S.view = null; S.sel = null; S.choose = null; S.sheet = null; S.screen = 'home'; } break;
     case 'emote': if (!isBlockedSeat(m.seat)) showEmote(m.seat, m.k); return;
     case 'bonus': toast(t('dailyBonus', { n: m.coins })); sfx.gift(); return;
@@ -160,6 +173,18 @@ function onMessage(m: S2C) {
     case 'buyFailed':
       purchaseRefused(m.token);
       if (m.code !== 'expired') toast(errText(m.code));
+      break;
+    case 'friends': S.friends = m.rows; break;
+    case 'friendNews':
+      toast(t(({ request: 'newsRequest', accepted: 'newsAccepted', added: 'newsAdded', sent: 'newsSent' } as const)[m.kind], { name: m.name }));
+      if (m.kind === 'request' || m.kind === 'accepted') sfx.pop();
+      if (m.kind === 'added' || m.kind === 'sent') S.friendDraft = '';
+      break;
+    case 'invited':
+      S.invite = { from: m.from, code: m.code, mode: m.mode, stake: m.stake };
+      sfx.pop();
+      if (S.view && S.view.phase !== 'lobby') { toast(t('inviteWhilePlaying', { name: m.from.name })); break; }
+      S.sheet = 'invite';
       break;
     case 'otp': S.otpPhone = m.phone; toast(t('codeSentTo', { phone: m.phone })); break;
     case 'signedIn':
@@ -528,6 +553,7 @@ function render() {
   if (S.sheet === 'checkout' && S.checkout) ui.append(checkoutSheet(S.checkout));
   if (S.sheet === 'skinBuy' && S.skinBuy) ui.append(skinBuySheet(S.skinBuy));
   if (S.sheet === 'player' && v) { const ps = playerSheet(v); if (ps) ui.append(ps); }
+  if (S.sheet === 'invite' && S.invite) ui.append(inviteSheet());
   if (S.sheet === 'delete') ui.append(sheet(h('p', null, t('deleteConfirm')), h('div', { class: 'row' }, btn(t('stay'), () => { S.sheet = null; render(); }, 'btn alt'),
     btn(t('deleteYes'), () => { net.send({ t: 'delete' }); S.sheet = null; S.screen = 'home'; toast(t('deleted')); render(); }, 'btn danger'))));
   if (!S.online && net.ready === false && inGame() && !S.practice) ui.append(h('div', { class: 'banner' }, t('reconnecting')));
@@ -716,7 +742,9 @@ function friendsScreen() {
   code.addEventListener('input', () => { code.value = code.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5); S.joinCode = code.value; });
   const join = () => { if (code.value.length === 5) { unlockAudio(); net.send({ t: 'join', code: code.value.toLowerCase() }); } };
   code.addEventListener('keydown', e => { if (e.key === 'Enter') join(); });
-  return h('section', { class: 'sheet-card' },
+  return h('section', { class: 'sheet-card tall' },
+    friendsPanel(),
+    h('hr'),
     h('h2', null, t('joinRoom')),
     h('div', { class: 'row' }, code, btn(t('join'), join, 'btn tq')),
     h('hr'),
@@ -731,6 +759,68 @@ function friendsScreen() {
       if ((S.user?.coins ?? 0) < S.stake) return toast(t('needCoins', { n: shortCoins(S.stake) }));
       net.send({ t: 'create', mode: S.mode, target: S.target, stake: S.stake });
     }, 'btn big'));
+}
+
+/* ---------------- friends ---------------- */
+/** Your code to share, adding a friend by theirs, requests, and your friends with who is online. */
+function friendsPanel(): HTMLElement {
+  const me = S.user, rows = S.friends ?? [];
+  const input = h('input', { type: 'text', id: 'friend-code', maxlength: '6', placeholder: t('friendCodePh'), autocomplete: 'off', autocapitalize: 'characters', dir: 'ltr', value: S.friendDraft }) as HTMLInputElement;
+  input.addEventListener('input', () => { input.value = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6); S.friendDraft = input.value; });
+  const add = () => { if (input.value.length === 6) { unlockAudio(); net.send({ t: 'friendAdd', code: input.value }); } };
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') add(); });
+  const code = me?.code ?? '';
+  const incoming = rows.filter(r => r.status === 'incoming'), outgoing = rows.filter(r => r.status === 'outgoing'), friends = rows.filter(r => r.status === 'friend');
+  const who = (r: FriendRow, ...extra: (HTMLElement | null)[]) => h('li', { class: 'friend' + (r.online ? ' on' : '') },
+    h('span', { class: 'sw', 'data-ch': r.ch, style: `background-color:${charColor(r.ch)}` }),
+    h('span', { class: 'stack tight grow' }, h('b', { class: 'nm' }, r.name),
+      r.status === 'friend' ? h('span', { class: 'small presence' }, h('i', { class: 'pdot' }), r.playing ? t('playingNow') : r.online ? t('onlineNow') : t('offlineNow')) : null),
+    ...extra);
+  return h('div', { class: 'friends-panel stack' },
+    h('h2', null, t('friendsTitle')),
+    code ? h('div', { class: 'row between my-code' },
+      h('span', { class: 'stack tight' }, h('span', { class: 'lab' }, t('yourFriendCode')), h('b', { class: 'fcode', dir: 'ltr' }, code)),
+      h('span', { class: 'row' }, btn(t('share'), () => shareFriendCode(code), 'btn small tq'), btn(t('copy'), () => copyText(code), 'btn small alt'))) : null,
+    h('div', { class: 'row' }, input, btn(t('addFriend'), add, 'btn tq', { disabled: !S.online })),
+    incoming.length ? h('p', { class: 'lab' }, t('friendRequests')) : null,
+    incoming.length ? h('ul', { class: 'friends' }, ...incoming.map(r => who(r,
+      btn(t('accept'), () => net.send({ t: 'friendAnswer', id: r.id, yes: true }), 'btn small tq'),
+      btn(t('decline'), () => net.send({ t: 'friendAnswer', id: r.id, yes: false }), 'btn small alt')))) : null,
+    friends.length ? h('ul', { class: 'friends' }, ...friends.map(r => who(r,
+      r.online && !r.playing ? btn(t('invite'), () => inviteFriend(r.id), 'btn small tq') : null,
+      btn('✕', () => { if (confirmTwice('rm' + r.id)) net.send({ t: 'friendRemove', id: r.id }); else toast(t('removeFriend') + '?'); }, 'iconbtn small-icon', { 'aria-label': t('removeFriend') })))) : null,
+    outgoing.length ? h('ul', { class: 'friends' }, ...outgoing.map(r => who(r, h('span', { class: 'muted small' }, t('requestSent')),
+      btn(t('cancelReq'), () => net.send({ t: 'friendRemove', id: r.id }), 'btn small alt')))) : null,
+    !rows.length ? h('p', { class: 'muted small' }, t('noFriends')) : null);
+}
+/** Tapping a risky button twice within a few seconds confirms it. */
+const armed = new Map<string, number>();
+function confirmTwice(key: string) { const now = Date.now(), at = armed.get(key) ?? 0; armed.set(key, now); return now - at < 3000; }
+async function shareFriendCode(code: string) {
+  const text = t('shareFriendCode', { code });
+  try { await Share.share({ title: t('brand'), text }); } catch { copyText(code); }
+}
+/** Invite a friend: to the room you are in, or open one (the game and stakes picked on this screen) and invite them to it. */
+function inviteFriend(id: string) {
+  unlockAudio();
+  const name = S.friends?.find(f => f.id === id)?.name ?? '';
+  const v = S.view;
+  if (v && v.phase === 'lobby' && v.code) { net.send({ t: 'invite', id }); toast(t('inviteSent', { name })); return; }
+  if ((S.user?.coins ?? 0) < S.stake) return toast(t('needCoins', { n: shortCoins(S.stake) }));
+  S.pendingInvite = id;
+  net.send({ t: 'create', mode: S.mode, target: S.target, stake: S.stake });
+}
+function inviteSheet() {
+  const inv = S.invite!;
+  const close = () => { S.sheet = null; S.invite = null; render(); };
+  const what = t(('game_' + gameOf(inv.mode)) as Key) + ' · ' + t(('mode_' + inv.mode) as Key) + (inv.stake ? ' · 🪙 ' + shortCoins(inv.stake) : '');
+  return h('div', { class: 'overlay' }, h('div', { class: 'card invite-card' },
+    h('span', { class: 'sw big-sw', 'data-ch': inv.from.ch, style: `background-color:${charColor(inv.from.ch)}` }),
+    h('h2', null, t('inviteTitle', { name: inv.from.name })),
+    h('p', { class: 'muted' }, what),
+    h('div', { class: 'row' },
+      btn(t('inviteJoin'), () => { unlockAudio(); if (S.view) { leaveGame(); } net.send({ t: 'join', code: inv.code }); S.sheet = null; S.invite = null; S.screen = 'home'; render(); }, 'btn big'),
+      btn(t('notNow'), close, 'btn alt'))));
 }
 
 function openLb(g: GameId) {
@@ -997,7 +1087,7 @@ function fakeAdSheet() {
 
 /* ---------------- signing in: Google and mobile number ---------------- */
 let pendingTicket: string | null = null;
-const signedIn = (u: PublicUser | null) => !!u && !!(u.google || u.phone || u.email);
+const signedIn = (u: PublicUser | null) => !!u && !!(u.google || u.phone || u.email || u.playGames);
 function sendTicket(ticket: string) {
   if (net.ready) net.send({ t: 'ticket', ticket }); else pendingTicket = ticket;
 }
@@ -1022,10 +1112,19 @@ function googleSignIn() {
   if (native) Browser.open({ url }).catch(() => toast(t('err_generic'))); else location.href = url;
 }
 const GOOGLE_G = '<svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>';
-/** The sign-in choices: Google, and a mobile number with a code by SMS. */
+const PLAY_ICON = '<svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true"><path fill="#00a173" d="M8 6.5v35c0 1.2 1.3 1.9 2.3 1.3L40 25.3c1-.6 1-2 0-2.6L10.3 5.2C9.3 4.6 8 5.3 8 6.5z"/><path fill="#fff" d="M19 17h3v4h4v3h-4v4h-3v-4h-4v-3h4z"/></svg>';
+/** The sign-in choices: Google Play Games (Android), Google, and a mobile number with a code by SMS. */
 function signInOptions(): HTMLElement {
   const u = S.user;
   const box = h('div', { class: 'signin stack' });
+  if (S.login.playGames && playGamesPossible() && !u?.playGames) {
+    const pg = btn(t('withPlayGames'), () => {
+      unlockAudio(); store.set('signinAsked', '1');
+      playGamesCode(S.login.playGames!, true).then(code => { if (code) net.send({ t: 'playGames', code }); else toast(t('err_play_games_failed')); });
+    }, 'btn google playgames', { disabled: !S.online });
+    pg.insertAdjacentHTML('afterbegin', PLAY_ICON);
+    box.append(pg);
+  }
   if (S.login.google && !u?.google) {
     const g = btn(t('withGoogle'), googleSignIn, 'btn google', { disabled: !S.online });
     g.insertAdjacentHTML('afterbegin', GOOGLE_G);
@@ -1136,8 +1235,19 @@ function roomScreen(v: AnyView) {
     host && targetOptions(v.mode).length > 1 ? chips(targetOptions(v.mode), v.target, n => targetLabel(v.mode, n), n => net.send({ t: 'setup', target: n })) : null,
     v.stake ? stakePicker(v.mode, v.stake, n => net.send({ t: 'setup', stake: n }), host) : null,
     seats,
+    !full ? roomInvites(v) : null,
     host ? btn(t('start'), () => { unlockAudio(); net.send({ t: 'start' }); }, 'btn big', { disabled: !full }) : h('p', { class: 'muted center' }, t('waitHost')),
     host && !full ? h('p', { class: 'muted small center' }, t('fillSeats')) : null);
+}
+
+/** In a room still gathering players: your friends who are online, to invite with one tap. */
+function roomInvites(v: AnyView): HTMLElement | null {
+  const on = (S.friends ?? []).filter(f => f.status === 'friend' && f.online && !f.playing && !v.seats.some(s => s && s.pid === f.pid));
+  return h('div', { class: 'stack' }, h('p', { class: 'lab' }, t('inviteFriends')),
+    on.length ? h('ul', { class: 'friends' }, ...on.map(f => h('li', { class: 'friend on' },
+      h('span', { class: 'sw', 'data-ch': f.ch, style: `background-color:${charColor(f.ch)}` }), h('b', { class: 'nm grow' }, f.name),
+      btn(t('invite'), () => inviteFriend(f.id), 'btn small tq'))))
+      : h('p', { class: 'muted small' }, t('noOnlineFriends')));
 }
 
 function gameScreen(v: TableView): HTMLElement[] {
@@ -1411,6 +1521,7 @@ function playerSheet(v: AnyView): HTMLElement | null {
       coins < GIFTS[0].price ? h('p', { class: 'muted small' }, t('earnCoins')) : null,
       h('hr'),
       voice.joined && s.mic ? btn(voice.muted.has(seat) ? t('unmutePlayer') : t('mutePlayer'), () => voice.setMuted(seat, !voice.muted.has(seat)), 'btn alt') : null,
+      !S.practice && !S.friends?.some(f => f.pid === s.pid && f.status !== 'incoming') ? btn(t('addFriendBtn'), () => { net.send({ t: 'friendAdd', seat }); S.sheet = null; render(); }, 'btn tq') : null,
       h('div', { class: 'row' },
         btn(blocked.has(s.pid) ? t('unblock') : t('block'), () => {
           if (blocked.has(s.pid)) { blocked.delete(s.pid); voice.setMuted(seat, false); toast(t('unblocked')); }

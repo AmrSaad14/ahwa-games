@@ -45,6 +45,7 @@ jobs:
       - name: Create the Android project
         env:
           ADMOB_APP_ID_ANDROID: ${{ vars.ADMOB_APP_ID_ANDROID }}
+          PLAY_GAMES_APP_ID: ${{ vars.PLAY_GAMES_APP_ID }}   # Play Console → Play Games Services → Configuration (the numeric project id)
         run: |
           npx cap add android
           node scripts/native-permissions.mjs

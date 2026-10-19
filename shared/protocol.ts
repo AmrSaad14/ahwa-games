@@ -121,6 +121,9 @@ export type Action = { t: 'play'; id: number; e?: End } | { t: 'draw' } | { t: '
 export const EMOTES = ['hi', 'gg', 'nice', 'lol', 'wow', 'clap', 'fire', 'hurry', 'oops', 'think', 'angry', 'love'] as const;
 export type Emote = typeof EMOTES[number];
 
+/** A friend (or a friend request) in the friends list. */
+export interface FriendRow { id: string; pid: string; name: string; ch: number; status: 'friend' | 'outgoing' | 'incoming'; online: boolean; playing: boolean }
+
 export interface PublicUser {
   id: string;
   name: string;
@@ -138,6 +141,8 @@ export interface PublicUser {
   skins: string[];        // skins bought in the shop (the free classic ones aren't listed)
   equip: Partial<Record<'tiles' | 'dice' | 'tawla' | 'chess' | 'ludo', string>>;   // the skin chosen for each kind
   ratings: Partial<Record<GameId, { rating: number; games: number; wins: number }>>;
+  playGames?: boolean;   // signed in with Google Play Games
+  code?: string;         // friend code others add this player with
 }
 
 export interface LeaderRow { rank: number; name: string; ch: number; rating: number; games: number; wins: number; me: boolean }
@@ -152,6 +157,12 @@ export type C2S =
   | { t: 'otp'; phone: string }
   | { t: 'otpCheck'; phone: string; code: string }
   | { t: 'ticket'; ticket: string }
+  | { t: 'playGames'; code: string }
+  | { t: 'friends' }
+  | { t: 'friendAdd'; code?: string; seat?: number }
+  | { t: 'friendAnswer'; id: string; yes: boolean }
+  | { t: 'friendRemove'; id: string }
+  | { t: 'invite'; id: string }
   | { t: 'delete' }
   | { t: 'quick'; mode: Mode; stake?: number }
   | { t: 'cancel' }
@@ -181,9 +192,12 @@ export type C2S =
 
 /** Server → client */
 export type S2C =
-  | { t: 'welcome'; user: PublicUser; token: string; now: number; ice: IceServer[]; login?: { google: boolean; phone: boolean } }
+  | { t: 'welcome'; user: PublicUser; token: string; now: number; ice: IceServer[]; login?: { google: boolean; phone: boolean; playGames?: string } }
+  | { t: 'friends'; rows: FriendRow[] }
+  | { t: 'friendNews'; kind: 'request' | 'accepted' | 'added' | 'sent'; name: string }
+  | { t: 'invited'; from: { id: string; name: string; ch: number }; code: string; mode: Mode; stake: number }
   | { t: 'otp'; phone: string }
-  | { t: 'signedIn'; via: 'phone' | 'google'; fresh: boolean }
+  | { t: 'signedIn'; via: 'phone' | 'google' | 'playgames'; fresh: boolean }
   | { t: 'bonus'; coins: number }
   | { t: 'gift'; from: number; to: number; k: GiftKind }
   | { t: 'rtc'; from: number; data: RtcSignal }

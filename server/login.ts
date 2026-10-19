@@ -172,6 +172,31 @@ export class GoogleSignIn {
     return t.exp > Date.now() ? { sub: t.sub, email: t.email, name: t.name } : null;
   }
 
+  /** Google Play Games works with the same Google project (its web client id and secret); no web address needed. */
+  get playGamesEnabled() { return !!this.testPlayGames || !!(this.cfg.googleClientId && this.cfg.googleClientSecret); }
+  /** The client id the app asks Play Games for a server code with (public). */
+  get clientId() { return this.cfg.googleClientId; }
+  /** Tests: a fake Play Games exchange. */
+  testPlayGames: ((code: string) => GoogleProfile | null) | null = null;
+
+  /**
+   * Google Play Games: the app signed the player in with Play Games and got a one-time server code for us.
+   * Trading it (with our secret) gives an access token, and the Games API says which player that is.
+   */
+  async playGames(code: string): Promise<GoogleProfile> {
+    if (this.testPlayGames) { const p = this.testPlayGames(code); if (!p) throw new Error('play games: bad code'); return p; }
+    const r = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ code, client_id: this.cfg.googleClientId, client_secret: this.cfg.googleClientSecret, redirect_uri: '', grant_type: 'authorization_code' }),
+    });
+    const tok = await r.json().catch(() => ({})) as { access_token?: string; error?: string };
+    if (!r.ok || !tok.access_token) throw new Error('play games token: ' + (tok.error || r.status));
+    const me = await fetch('https://games.googleapis.com/games/v1/players/me', { headers: { Authorization: 'Bearer ' + tok.access_token } });
+    const p = await me.json().catch(() => ({})) as { playerId?: string; displayName?: string };
+    if (!me.ok || !p.playerId) throw new Error('play games player: ' + me.status);
+    return { sub: p.playerId, email: null, name: p.displayName ?? null };
+  }
+
   appLink(ticket: string) { return `${this.cfg.appScheme}://auth?ticket=${encodeURIComponent(ticket)}`; }
   webLink(ticket: string) { return this.cfg.publicUrl.replace(/\/$/, '') + '/?ticket=' + encodeURIComponent(ticket); }
 

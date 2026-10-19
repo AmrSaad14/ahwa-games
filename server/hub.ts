@@ -1,10 +1,10 @@
 import { PlayBilling } from './billing';
 import crypto from 'node:crypto';
 import { GAMES, GameId, MODES, MODE_PLAYERS, Mode, defaultTarget, gameOf, targetOptions, teamOf } from '../shared/engine';
-import type { C2S, Emote, IceServer, S2C } from '../shared/protocol';
+import type { C2S, Emote, FriendRow, IceServer, S2C } from '../shared/protocol';
 import { ECONOMY, STAKES, giftByKind, isStake, winnings, NO_ADS } from '../shared/gifts';
 import { EMOTES } from '../shared/protocol';
-import { Table } from '../shared/table';
+import { Table, publicId } from '../shared/table';
 import { BoardTable } from '../shared/boardtable';
 import type { BoardAction } from '../shared/games/defs';
 
@@ -57,6 +57,8 @@ export class Hub {
   private giftLimiter = new Limiter(1, 1200);
   private buyLimiter = new Limiter(20, 60_000);
   private reportLimiter = new Limiter(10, 60 * 60_000);
+  private friendLimiter = new Limiter(30, 60 * 60_000);
+  private inviteLimiter = new Limiter(20, 60_000);
   private ticker: ReturnType<typeof setInterval>;
 
   constructor(private store: Store, private tokens: Tokens, private opts: HubOptions) {
@@ -79,6 +81,7 @@ export class Hub {
     this.sessions.delete(s);
     if (!s.uid || this.byUser.get(s.uid) !== s) return;
     this.byUser.delete(s.uid);
+    this.friendsChanged(s.uid);
     this.dequeue(s.uid);
     this.userTable.get(s.uid)?.setOnline(s.uid, false);
   }
@@ -143,6 +146,56 @@ export class Hub {
         const p = this.opts.google?.take(m.ticket);
         if (!p) return err('ticket_expired');
         return this.signIn(s, 'google', p.sub, p.email, p.name);
+      }
+      case 'playGames': {
+        const g = this.opts.google;
+        if (!g?.playGamesEnabled || typeof m.code !== 'string' || !this.authLimiter.allow(uid)) return err('play_games_off');
+        g.playGames(m.code).then(p => this.signIn(s, 'playgames', p.sub, null, p.name), () => s.conn.send({ t: 'err', code: 'play_games_failed' }));
+        return;
+      }
+      /* ---------- friends ---------- */
+      case 'friends': return this.sendFriends(uid);
+      case 'friendAdd': {
+        if (!this.friendLimiter.allow(uid)) return err('slow_down');
+        let other: UserRow | undefined;
+        if (typeof m.code === 'string') other = this.store.byFriendCode(m.code.trim().replace(/[^a-z0-9]/gi, ''));
+        else if (typeof m.seat === 'number' && table) { const p = table.seats[m.seat]; if (p && !p.bot) other = this.store.get(p.uid); }
+        if (!other) return err('friend_not_found');
+        if (other.id === uid) return err('friend_self');
+        if (this.store.friendCount(uid) >= 300) return err('friends_full');
+        const r = this.store.friendRequest(uid, other.id);
+        const me = this.store.get(uid)!;
+        if (r === 'sent') { s.conn.send({ t: 'friendNews', kind: 'sent', name: other.name }); this.byUser.get(other.id)?.conn.send({ t: 'friendNews', kind: 'request', name: me.name }); }
+        if (r === 'friends') { s.conn.send({ t: 'friendNews', kind: 'added', name: other.name }); this.byUser.get(other.id)?.conn.send({ t: 'friendNews', kind: 'accepted', name: me.name }); }
+        if (r === 'already') s.conn.send({ t: 'friendNews', kind: 'added', name: other.name });
+        this.sendFriends(uid); this.sendFriends(other.id);
+        return;
+      }
+      case 'friendAnswer': {
+        const other = this.store.get(String(m.id));
+        if (!other) return err('friend_not_found');
+        if (m.yes) { if (this.store.friendAccept(uid, other.id)) this.byUser.get(other.id)?.conn.send({ t: 'friendNews', kind: 'accepted', name: this.store.get(uid)!.name }); }
+        else this.store.friendRemove(uid, other.id);
+        this.sendFriends(uid); this.sendFriends(other.id);
+        return;
+      }
+      case 'friendRemove': {
+        const id = String(m.id);
+        this.store.friendRemove(uid, id);
+        this.sendFriends(uid); this.sendFriends(id);
+        return;
+      }
+      case 'invite': {
+        // invite a friend to the private room you are in (still gathering players)
+        const id = String(m.id);
+        if (!this.inviteLimiter.allow(uid)) return err('slow_down');
+        if (this.store.friendStatus(uid, id) !== 'friend') return err('not_friends');
+        if (!table || !table.code || table.phase !== 'lobby') return err('no_room');
+        const to = this.byUser.get(id);
+        if (!to) return err('friend_offline');
+        const me = this.store.get(uid)!;
+        to.conn.send({ t: 'invited', from: { id: uid, name: me.name, ch: me.ch }, code: table.code, mode: table.mode, stake: table.stake });
+        return;
       }
       case 'logout': {
         this.detach(s);
@@ -332,6 +385,24 @@ export class Hub {
 
   /* ---------------- identity ---------------- */
 
+  /** A player's friends list, with who is online and who is in a game right now. */
+  private sendFriends(uid: string) {
+    const s = this.byUser.get(uid); if (!s) return;
+    const rows: FriendRow[] = [];
+    for (const l of this.store.friendLinks(uid)) {
+      const u = this.store.get(l.other); if (!u) continue;
+      const t = this.userTable.get(u.id);
+      rows.push({ id: u.id, pid: publicId(u.id), name: u.name, ch: u.ch, status: l.status, online: this.byUser.has(u.id), playing: !!t && !t.closed && t.phase !== 'lobby' });
+    }
+    rows.sort((a, b) => (a.status === 'incoming' ? 0 : 1) - (b.status === 'incoming' ? 0 : 1) || Number(b.online) - Number(a.online) || a.name.localeCompare(b.name));
+    s.conn.send({ t: 'friends', rows });
+  }
+  /** Someone came online or left: their online friends see it. */
+  private friendsChanged(uid: string) {
+    if (this.stopping) return;   // (shutting down: the database may be closed already)
+    for (const l of this.store.friendLinks(uid)) if (l.status === 'friend' && this.byUser.has(l.other)) this.sendFriends(l.other);
+  }
+
   private newGuest(): UserRow {
     return this.store.createGuest('Player' + Math.floor(1000 + Math.random() * 9000), Math.floor(Math.random() * 5));
   }
@@ -340,22 +411,22 @@ export class Hub {
    * Signing in with a phone number or Google: an account that already uses it is opened (as with email);
    * otherwise it is added to the account in use, so a guest keeps their coins, ratings and name.
    */
-  private signIn(s: Session, via: 'phone' | 'google', key: string, email: string | null, name: string | null) {
+  private signIn(s: Session, via: 'phone' | 'google' | 'playgames', key: string, email: string | null, name: string | null) {
     const uid = s.uid; if (!uid) return;
-    const existing = via === 'phone' ? this.store.byPhone(key) : this.store.byGoogle(key);
+    const existing = via === 'phone' ? this.store.byPhone(key) : via === 'google' ? this.store.byGoogle(key) : this.store.byPlayGames(key);
     if (existing) {
       if (existing.id !== uid) { this.detach(s); this.attach(s, existing); }
       return s.conn.send({ t: 'signedIn', via, fresh: false });
     }
     const link = (id: string) => {
-      if (via === 'phone') this.store.setPhone(id, key); else this.store.setGoogle(id, key, email);
+      if (via === 'phone') this.store.setPhone(id, key); else if (via === 'google') this.store.setGoogle(id, key, email); else this.store.setPlayGames(id, key);
       const u = this.store.get(id)!;
       // a guest name like Player1234 becomes the Google first name
       const clean = cleanName(name);
-      if (via === 'google' && clean && /^Player\d{4}$/.test(u.name)) this.store.setProfile(id, clean, u.ch);
+      if (via !== 'phone' && clean && /^Player\d{4}$/.test(u.name)) this.store.setProfile(id, clean, u.ch);
     };
     const me = this.store.get(uid)!;
-    if (via === 'phone' ? me.phone : me.google_sub) {
+    if (via === 'phone' ? me.phone : via === 'google' ? me.google_sub : me.pg_id) {
       // this account already has a different number / Google account: start a new account for this one
       this.detach(s);
       const u = this.newGuest(); link(u.id);
@@ -380,7 +451,8 @@ export class Hub {
     const bonus = this.store.claimDaily(u.id);
     const fresh = this.store.get(u.id) ?? u;
     s.conn.send({ t: 'welcome', user: this.store.publicUser(fresh), token: this.tokens.issue(u.id), now: Date.now(), ice: this.iceFor(u.id),
-      login: { google: !!this.opts.google?.enabled, phone: !!this.opts.phones?.enabled } });
+      login: { google: !!this.opts.google?.enabled, phone: !!this.opts.phones?.enabled, playGames: this.opts.google?.playGamesEnabled ? this.opts.google.clientId : undefined } });
+    this.friendsChanged(u.id);
     if (bonus) s.conn.send({ t: 'bonus', coins: bonus });
     const t = this.userTable.get(u.id);
     if (t && !t.closed) { t.setOnline(u.id, true); this.pushView(t, u.id); }

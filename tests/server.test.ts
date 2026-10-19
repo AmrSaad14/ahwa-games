@@ -463,3 +463,62 @@ test('skin shop: buying takes the coins once and wears the skin; no coins or not
   await a.until(() => a.msgs.some(m => m.t === 'err' && m.code === 'bad_skin'));
   a.ws.close();
 });
+
+test('friends: add by code, accept, see online, invite to a private room, remove', async () => {
+  const a = await new Client().open(), b = await new Client().open();
+  const codeB = a.last('welcome') && b.last('welcome')!.user.code!;
+  assert.match(codeB, /^[A-Z2-9]{6}$/);
+  a.send({ t: 'friendAdd', code: codeB.toLowerCase() });
+  await a.until(() => a.last('friends')?.rows.some(r => r.id === b.uid && r.status === 'outgoing') ?? false);
+  await b.until(() => b.last('friendNews')?.kind === 'request');
+  await b.until(() => b.last('friends')?.rows.some(r => r.id === a.uid && r.status === 'incoming') ?? false);
+  b.send({ t: 'friendAnswer', id: a.uid, yes: true });
+  await a.until(() => a.last('friends')?.rows.some(r => r.id === b.uid && r.status === 'friend' && r.online) ?? false);
+  // a opens a private room and invites b, who joins with the code
+  a.send({ t: 'create', mode: 'ffa2', target: 101, stake: 5000 });
+  await a.until(() => !!a.view?.code);
+  a.send({ t: 'invite', id: b.uid });
+  await b.until(() => !!b.last('invited'));
+  const inv = b.last('invited')!;
+  assert.equal(inv.from.id, a.uid); assert.equal(inv.code, a.view!.code);
+  b.send({ t: 'join', code: inv.code });
+  await b.until(() => b.view?.code === inv.code);
+  // not friends any more: no invites
+  b.send({ t: 'leave' }); a.send({ t: 'friendRemove', id: b.uid });
+  await a.until(() => !(a.last('friends')?.rows.some(r => r.id === b.uid) ?? true));
+  a.send({ t: 'invite', id: b.uid });
+  await a.until(() => a.last('err')?.code === 'not_friends');
+  a.ws.close(); b.ws.close();
+});
+
+test('friends: adding yourself or an unknown code fails, mutual requests become friends', async () => {
+  const a = await new Client().open(), b = await new Client().open();
+  a.send({ t: 'friendAdd', code: a.last('welcome')!.user.code! });
+  await a.until(() => a.last('err')?.code === 'friend_self');
+  a.send({ t: 'friendAdd', code: 'ZZZZZZ' });
+  await a.until(() => a.last('err')?.code === 'friend_not_found');
+  a.send({ t: 'friendAdd', code: b.last('welcome')!.user.code! });
+  await b.until(() => b.last('friendNews')?.kind === 'request');
+  b.send({ t: 'friendAdd', code: a.last('welcome')!.user.code! });
+  await b.until(() => b.last('friends')?.rows.some(r => r.id === a.uid && r.status === 'friend') ?? false);
+  a.ws.close(); b.ws.close();
+});
+
+test('Google Play Games sign-in links the player id to the account', async () => {
+  app.google.testPlayGames = code => (code === 'good-code' ? { sub: 'pg-777', email: null, name: 'Samy' } : null);
+  try {
+    const a = await new Client().open();
+    a.send({ t: 'playGames', code: 'bad' });
+    await a.until(() => a.last('err')?.code === 'play_games_failed');
+    a.send({ t: 'playGames', code: 'good-code' });
+    await a.until(() => a.last('signedIn')?.via === 'playgames');
+    await a.until(() => a.last('user')?.user.playGames === true);
+    const uid = a.uid; a.ws.close();
+    // on another phone, the same Play Games player opens the same account
+    const c = await new Client().open();
+    c.send({ t: 'playGames', code: 'good-code' });
+    await c.until(() => c.msgs.filter(m => m.t === 'welcome').length === 2);
+    assert.equal(c.uid, uid);
+    c.ws.close();
+  } finally { app.google.testPlayGames = null; }
+});
