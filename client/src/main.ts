@@ -1725,8 +1725,13 @@ document.addEventListener('pointerdown', unlockAudio, { once: true });
 net.connect();
 initAds();
 // the opening scene, once per launch (test runs skip it unless the address asks for ?intro)
+// (it starts as the splash screen opens onto the café)
+const splash = (window as unknown as { __splash?: { ready(): void; then(f: () => void): void } }).__splash;
 if (/[?&]intro\b/.test(location.search) || (!navigator.webdriver && !/[?&](rec|promo)\b/.test(location.search))) {
   S.intro = true;
-  scene.playIntro(() => { S.intro = false; render(); });
+  const go = () => scene.playIntro(() => { S.intro = false; render(); });
+  if (splash) splash.then(go); else go();
 }
 render();
+// the café is built and drawn: the splash may go once its animation has played
+requestAnimationFrame(() => requestAnimationFrame(() => splash?.ready()));
