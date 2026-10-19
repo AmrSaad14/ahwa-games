@@ -48,9 +48,14 @@ jobs:
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
         run: |
+          set +e
           mkdir -p ulf build logs
           printf '%s' "$UNITY_LICENSE" | tr -d '\r' > ulf/Unity_lic.ulf
-          docker pull -q $IMAGE
+          echo "license file: $(wc -c < ulf/Unity_lic.ulf) bytes" > logs/build-step.txt
+          df -h / >> logs/build-step.txt
+          docker pull -q $IMAGE >> logs/build-step.txt 2>&1
+          echo "pull exit $?" >> logs/build-step.txt
+          df -h / >> logs/build-step.txt
           docker run --rm -v "$PWD":/w -w /w $IMAGE bash -c '
             mkdir -p /root/.local/share/unity3d/Unity
             cp /w/ulf/Unity_lic.ulf /root/.local/share/unity3d/Unity/Unity_lic.ulf
@@ -58,10 +63,12 @@ jobs:
             echo "activate exit $?" > /w/logs/editor-exit.txt
             unity-editor -batchmode -nographics -quit -projectPath /w/unity -executeMethod BuildScript.BuildAll -logFile /w/logs/editor.log
             echo "build exit $?" >> /w/logs/editor-exit.txt
-            chmod -R a+rwX /w/build /w/logs /w/unity/Library 2>/dev/null || true'
+            chmod -R a+rwX /w/build /w/logs /w/unity/Library 2>/dev/null
+            true' >> logs/build-step.txt 2>&1
+          echo "docker exit $?" >> logs/build-step.txt
           rm -rf ulf
-          cat logs/editor-exit.txt
-          grep -E "^\[build|error CS|Error building|Scripts have compiler errors" logs/editor.log | head -60 || true
+          cat logs/build-step.txt logs/editor-exit.txt
+          grep -E "^\[build|error CS|Error building|Scripts have compiler errors" logs/editor.log | head -60
           test -f build/android/KingsBattle.apk
 
       - name: Screenshots of the desktop build
@@ -80,9 +87,11 @@ jobs:
       - name: Publish logs and screenshots
         if: always()
         run: |
-          [ -f logs/editor.log ] && tail -c 4000000 logs/editor.log > logs/editor-tail.log
-          files=$(ls logs/versions.txt logs/editor-exit.txt logs/activate.log logs/editor-tail.log logs/player.log logs/player-exit.txt shots/*.png 2>/dev/null)
-          gh release delete unity-logs --yes --cleanup-tag || true
+          set +e
+          if [ -f logs/editor.log ]; then tail -c 4000000 logs/editor.log > logs/editor-tail.log; fi
+          files=$(ls logs/*.txt logs/activate.log logs/editor-tail.log logs/player.log shots/*.png 2>/dev/null)
+          echo "publishing: $files"
+          gh release delete unity-logs --yes --cleanup-tag
           gh release create unity-logs $files --title "Unity build logs" --target "$GITHUB_SHA" --prerelease --notes "Unity build ${GITHUB_SHA::7}"
 
       - name: Publish the APK
