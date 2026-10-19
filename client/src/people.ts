@@ -647,7 +647,7 @@ export function makePerson(p: PersonSpec, key: string, standing = false, withBod
       // skin: the neck and the arms (the rest is always under clothes)
       { prims: [...neck, ...torso.slice(3, 5), ...armP(0), ...armP(1)], k: 0.16, grow: 0, material: handSkin },
       // the top: shirt, tee, blouse or galabeya, over the body and down the sleeves
-      { prims: [...torso, ...armP(0, sleeve ?? 2), ...armP(1, sleeve ?? 2), ...(robe ? [P(PIV, V(piv, 0, 0.2, 0.02), V(piv, 0, 1.7, 0.02), 1.0 * T, 0.88 * T, 0.78)] : [])], k: 0.2, grow: robe ? 0.07 : 0.045, material: p.top === 'suit' ? clothMat(0xf1eee6) : topMat,
+      { prims: [...torso, ...armP(0, sleeve ?? 2), ...armP(1, sleeve ?? 2), ...(robe ? [{ ...P(PIV, V(piv, 0, 0.2, 0.02), V(piv, 0, 1.7, 0.02), 1.0 * T, 0.88 * T, 0.78), noWeight: true }] : [])], k: 0.2, grow: robe ? 0.07 : 0.045, material: p.top === 'suit' ? clothMat(0xf1eee6) : topMat,
         // a shirt ends at the hips (the galabeya goes on down over the legs)
         clip: robe ? undefined : q => (fem ? 0.32 : 0.42) - pl(q).y },
       // trousers (or the galabeya's lower part), up to the waist
@@ -656,7 +656,7 @@ export function makePerson(p: PersonSpec, key: string, standing = false, withBod
     if (p.top === 'suit') {
       // the jacket over the shirt, open at the front in a V down to the buttons
       // (padded shoulders, a jacket's square line)
-      shells.push({ prims: [...torso, P(PIV, V(piv, -0.82 * B.sh, 2.36, -0.04), V(piv, 0.82 * B.sh, 2.36, -0.04), 0.3 * T, 0.3 * T, 0.8), ...armP(0, 2), ...armP(1, 2)], k: 0.2, grow: 0.085, material: sleeveMat,
+      shells.push({ prims: [...torso, { ...P(PIV, V(piv, -0.82 * B.sh, 2.36, -0.04), V(piv, 0.82 * B.sh, 2.36, -0.04), 0.3 * T, 0.3 * T, 0.8), noWeight: true }, ...armP(0, 2), ...armP(1, 2)], k: 0.2, grow: 0.085, material: sleeveMat,
         clip: q => { const l = pl(q); return Math.max(0.28 - l.y, -Math.max(0.15 - l.z, Math.abs(l.x) - Math.max(0, (l.y - 1.45) * 0.32), 1.42 - l.y, l.y - 3.1)); } });
     }
     buildBody(JSON.stringify([p, standing]), group, bones, shells);

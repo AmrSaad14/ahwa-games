@@ -570,9 +570,9 @@ export class TableScene {
   private camOverride: { pos: THREE.Vector3; look: THREE.Vector3 } | null = null;
   lookFrom(pos: number[] | null, look?: number[]) { this.camOverride = pos ? { pos: new THREE.Vector3(...pos), look: new THREE.Vector3(...look!) } : null; this.wake(3000); }
   /** Test hook: all six characters standing in a row on the café floor. */
-  lineup() {
+  lineup(swing = 0) {
     const g = new THREE.Group();
-    PEOPLE.forEach((spec, i) => { const p = makePerson(spec, 'l' + i, true); p.group.scale.setScalar(WALKER_SCALE); p.group.position.set(-9 + i * 3.6, FLOOR_Y + FEET_DROP * WALKER_SCALE, 9); p.piv.updateMatrix(); for (const [k, sx] of [[0, -1], [1, 1]] as const) reach(p.piv, p.arms[k], p.elbows[k], sx, new THREE.Vector3(sx * 1.14, -1.9, 0.18), 1); g.add(p.group); });
+    PEOPLE.forEach((spec, i) => { const p = makePerson(spec, 'l' + i, true); p.group.scale.setScalar(WALKER_SCALE); p.group.position.set(-9 + i * 3.6, FLOOR_Y + FEET_DROP * WALKER_SCALE, 9); p.piv.updateMatrix(); for (const [k, sx] of [[0, -1], [1, 1]] as const) { const sw = (k === 0 ? -swing : swing) * 0.77; reach(p.piv, p.arms[k], p.elbows[k], sx, new THREE.Vector3(sx * 1.14, -1.9 + Math.abs(sw) * 0.25, 0.18 + sw), 1); } g.add(p.group); });
     this.scene.add(g); if (this.walker) this.walker.group.visible = false; this.wake(5000);
   }
   pose(type: ActKind, k: string | undefined, fix: number) { this.posing = { type, k, fix }; this.wake(5000); }

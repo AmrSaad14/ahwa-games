@@ -14,7 +14,7 @@ import * as THREE from 'three';
  */
 
 type V = THREE.Vector3;
-export interface Prim { a: V; b: V; ra: number; rb: number; bone: number; zs?: number; cut?: (p: V) => number }
+export interface Prim { a: V; b: V; ra: number; rb: number; bone: number; zs?: number; cut?: (p: V) => number; noWeight?: boolean }   // noWeight: garment-only volume (a robe's skirt), not a body part
 
 /** Precomputed numbers for a primitive, so the distance needs no allocations. */
 interface Fast { ax: number; ay: number; az: number; bx: number; by: number; bz: number; ra: number; dr: number; il2: number; izs: number; zk: number; cx: number; cy: number; cz: number; br: number; cut?: (p: V) => number }
@@ -141,6 +141,9 @@ export function buildBody(key: string, root: THREE.Object3D, bones: THREE.Object
   if ((new THREE.BufferGeometry() as unknown as { isBufferGeometry?: unknown }).isBufferGeometry !== true) return [];   // test stub
   root.updateMatrixWorld(true);
   const skeleton = new THREE.Skeleton(bones as THREE.Bone[]);
+  // every layer takes its skin weights from the same shapes (all of them), so a sleeve bends exactly like the arm
+  // under it: weighted from its own shapes, a shirt's sleeve leaned to the chest and the arm swung out through it
+  const ref = shells.flatMap(s => s.prims).filter(P => !P.noWeight);
   return shells.map((sh, si) => {
     const ck = key + '#' + si;
     let geo = cache.get(ck);
@@ -157,7 +160,7 @@ export function buildBody(key: string, root: THREE.Object3D, bones: THREE.Object
         uv[v * 2] = Math.atan2(p.x, p.z) / (Math.PI * 2) + 0.5; uv[v * 2 + 1] = p.y * 0.16;
         // skin weights: the nearest joints by distance to their shapes, softly blended (a smooth bend at the shoulder, elbow, hip, knee)
         dist.fill(1e9);
-        for (const P of sh.prims) { const d = primDist(P, p, false); if (d < dist[P.bone]) dist[P.bone] = d; }
+        for (const P of ref) { const d = primDist(P, p, false); if (d < dist[P.bone]) dist[P.bone] = d; }
         let dmin = 1e9; for (let b = 0; b < bones.length; b++) dmin = Math.min(dmin, dist[b]);
         const ws: [number, number][] = [];
         for (let b = 0; b < bones.length; b++) if (dist[b] < 1e8) ws.push([b, Math.exp(-(dist[b] - dmin) / 0.11)]);
