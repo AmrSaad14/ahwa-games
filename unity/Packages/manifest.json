@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "com.unity.cloud.gltfast": "GLTFAST_VERSION",
+    "com.unity.cloud.gltfast": "7.0.0-exp.1",
     "com.unity.ugui": "2.0.0",
     "com.unity.modules.androidjni": "1.0.0",
     "com.unity.modules.animation": "1.0.0",

@@ -37,12 +37,10 @@ jobs:
           key: unity-library-${{ hashFiles('unity/Assets/**', 'unity/Packages/manifest.json') }}
           restore-keys: unity-library-
 
-      - name: Pick package versions
+      - name: Note the versions
         run: |
           mkdir -p logs
-          V=$(curl -s https://packages.unity.com/com.unity.cloud.gltfast | jq -r '."dist-tags".latest')
-          echo "glTFast $V" | tee logs/versions.txt
-          sed -i "s/GLTFAST_VERSION/$V/" unity/Packages/manifest.json
+          grep gltfast unity/Packages/manifest.json | tee logs/versions.txt
 
       - name: Build (desktop, then Android)
         env:
@@ -65,7 +63,7 @@ jobs:
             echo "activate exit $?" > /w/logs/editor-exit.txt
             unity-editor -batchmode -nographics -quit -projectPath /w/unity -executeMethod BuildScript.BuildAll -logFile /w/logs/editor.log
             echo "build exit $?" >> /w/logs/editor-exit.txt
-            "$LC" --return-ulf > /w/logs/return.log 2>&1
+            unity-editor -batchmode -nographics -quit -returnlicense -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD" -logFile /w/logs/return.log
             echo "return exit $?" >> /w/logs/editor-exit.txt
             chmod -R a+rwX /w/build /w/logs /w/unity/Library 2>/dev/null
             true' >> logs/build-step.txt 2>&1
@@ -77,15 +75,21 @@ jobs:
       - name: Screenshots of the desktop build
         if: always()
         run: |
+          set +e
           mkdir -p shots
           if [ -f build/linux/KingsBattle.x86_64 ]; then
-            sudo apt-get update -qq > /dev/null && sudo apt-get install -y -qq xvfb mesa-utils libgl1-mesa-dri libglu1-mesa > /dev/null
+            sudo apt-get update -qq > logs/shots-step.txt 2>&1
+            sudo apt-get install -y -qq xvfb mesa-utils libgl1 libegl1 libglx-mesa0 mesa-vulkan-drivers >> logs/shots-step.txt 2>&1
+            echo "apt exit $?" >> logs/shots-step.txt
             chmod +x build/linux/KingsBattle.x86_64
             cd build/linux
-            timeout 150 xvfb-run -a -s "-screen 0 1280x720x24" ./KingsBattle.x86_64 -screen-width 1280 -screen-height 720 -screen-fullscreen 0 -force-glcore -logFile "$GITHUB_WORKSPACE/logs/player.log" -shots || echo "player exit $?" > "$GITHUB_WORKSPACE/logs/player-exit.txt"
-            cp shots/*.png "$GITHUB_WORKSPACE/shots/" 2>/dev/null || true
+            timeout 150 xvfb-run -a -s "-screen 0 1280x720x24" ./KingsBattle.x86_64 -screen-width 1280 -screen-height 720 -screen-fullscreen 0 -force-glcore -logFile "$GITHUB_WORKSPACE/logs/player.log" -shots >> "$GITHUB_WORKSPACE/logs/shots-step.txt" 2>&1
+            echo "player exit $?" >> "$GITHUB_WORKSPACE/logs/shots-step.txt"
+            cp shots/*.png "$GITHUB_WORKSPACE/shots/" 2>/dev/null
+            cd "$GITHUB_WORKSPACE"
           fi
-          ls -la "$GITHUB_WORKSPACE/shots"
+          ls -la shots | tee -a logs/shots-step.txt
+          true
 
       - name: Publish logs and screenshots
         if: always()
