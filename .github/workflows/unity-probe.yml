@@ -1,5 +1,8 @@
 name: Unity probe
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+  push:
+    paths: ['.github/workflows/unity-probe.yml']
 permissions:
   contents: write
 jobs:
@@ -9,12 +12,12 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
     steps:
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost && df -h /
       - name: Inspect the Unity editor image
         run: |
           {
-          curl -s "https://hub.docker.com/v2/repositories/unityci/editor/tags?page_size=100&name=ubuntu-6000.0" | jq -r '.results[].name' | grep android | sort -V | tail -12
-          TAG=$(curl -s "https://hub.docker.com/v2/repositories/unityci/editor/tags?page_size=100&name=ubuntu-6000.0" | jq -r '.results[].name' | grep -E -- '-android-3(\.[0-9.]+)?$' | sort -V | tail -1)
-          echo "TAG=$TAG"
+          TAG=ubuntu-6000.0.84f1-base-3.2.2
           docker pull -q unityci/editor:$TAG
           docker run --rm unityci/editor:$TAG bash -c '
             E=/opt/unity/Editor/Data
