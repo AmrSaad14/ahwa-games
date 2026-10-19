@@ -69,28 +69,49 @@ REGULARS = [
 ]
 
 # ---------- materials ----------
+def base_image(m):
+    """The image node that feeds a material's base colour (directly or through a few nodes), or None."""
+    nt = m.node_tree
+    bsdf = next((n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"), None)
+    if bsdf is None: return None, None
+    seen, todo = set(), [bsdf.inputs["Base Color"]]
+    while todo:
+        sock = todo.pop()
+        for l in sock.links:
+            n = l.from_node
+            if n.name in seen: continue
+            seen.add(n.name)
+            if n.type == "TEX_IMAGE" and n.image: return bsdf, n
+            todo.extend(i for i in n.inputs if i.is_linked)
+    return bsdf, None
+
 def tint_material(obj, rgb, value=None, sat=None):
-    """Multiply every base colour of the object's materials by rgb (cloth and hair recoloured, texture kept)."""
+    """Recolour cloth and hair by changing the texture's pixels (so the colour survives the export to the game)."""
+    import numpy as np
     for slot in obj.material_slots:
         m = slot.material
         if not m or not m.use_nodes: continue
-        nt = m.node_tree
-        for bsdf in [n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"]:
-            inp = bsdf.inputs["Base Color"]
-            mix = nt.nodes.new("ShaderNodeMix"); mix.data_type = "RGBA"; mix.blend_type = "MULTIPLY"
-            mix.inputs[0].default_value = 1.0
-            mix.inputs[7].default_value = (*rgb, 1)
-            if inp.is_linked:
-                src = inp.links[0].from_socket
-                if sat is not None or value is not None:
-                    hsv = nt.nodes.new("ShaderNodeHueSaturation")
-                    hsv.inputs["Saturation"].default_value = 0 if sat is None else sat
-                    hsv.inputs["Value"].default_value = 1 if value is None else value
-                    nt.links.new(src, hsv.inputs["Color"]); src = hsv.outputs["Color"]
-                nt.links.new(src, mix.inputs[6])
-            else:
-                mix.inputs[6].default_value = inp.default_value
-            nt.links.new(mix.outputs[2], inp)
+        bsdf, node = base_image(m)
+        if bsdf is None: continue
+        if node is None:
+            c = bsdf.inputs["Base Color"].default_value
+            bsdf.inputs["Base Color"].default_value = (c[0] * rgb[0], c[1] * rgb[1], c[2] * rgb[2], 1); continue
+        img = node.image.copy(); img.name = obj.name + "_" + node.image.name
+        px = np.empty(len(img.pixels), dtype=np.float32); img.pixels.foreach_get(px)
+        px = px.reshape(-1, 4)
+        if sat is not None:
+            g = px[:, :3] @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+            px[:, :3] = g[:, None] + (px[:, :3] - g[:, None]) * sat
+        if value is not None: px[:, :3] *= value
+        px[:, :3] = np.clip(px[:, :3] * np.array(rgb, dtype=np.float32), 0, 1)
+        img.pixels.foreach_set(px.ravel()); img.update(); img.pack()
+        node.image = img
+
+def shrink_images(limit=1024):
+    for img in bpy.data.images:
+        if img.size[0] > limit or img.size[1] > limit:
+            k = limit / max(img.size[0], img.size[1])
+            img.scale(max(1, int(img.size[0] * k)), max(1, int(img.size[1] * k)))
 
 def flat_material(name, rgb, rough=0.7, sheen=0.0):
     m = bpy.data.materials.new(name); m.use_nodes = True
@@ -100,20 +121,31 @@ def flat_material(name, rgb, rough=0.7, sheen=0.0):
     if "Sheen Weight" in b.inputs: b.inputs["Sheen Weight"].default_value = sheen
     return m
 
-def stripes_material(name, base, stripe):
-    m = bpy.data.materials.new(name); m.use_nodes = True
+def stripes(obj, base, stripe, n=34):
+    """A striped galabeya: stripes painted into a texture in the garment's own UV layout (running down it)."""
+    import numpy as np
+    W = 1024
+    me = obj.data; uv = me.uv_layers.active
+    # which way is "down the garment" in UV space: compare UV spread against height
+    us = np.array([d.uv[0] for d in uv.data]); vs = np.array([d.uv[1] for d in uv.data])
+    zs = np.array([me.vertices[l.vertex_index].co.z for l in me.loops])
+    down_is_v = abs(np.corrcoef(vs, zs)[0, 1]) >= abs(np.corrcoef(us, zs)[0, 1])
+    x = np.linspace(0, 1, W, dtype=np.float32)
+    f = np.mod(x * n, 1.0)
+    band = ((f > 0.72) & (f < 0.8)).astype(np.float32) + 0.5 * ((f > 0.84) & (f < 0.87)).astype(np.float32)
+    col = np.array(base, np.float32)[None, :] * (1 - band[:, None]) + np.array(stripe, np.float32)[None, :] * band[:, None]
+    noise = (np.random.default_rng(1).random((W, W)).astype(np.float32) - 0.5) * 0.05
+    if down_is_v: rgb = np.broadcast_to(col[None, :, :], (W, W, 3)).copy()
+    else: rgb = np.broadcast_to(col[:, None, :], (W, W, 3)).copy()
+    rgb = np.clip(rgb + noise[:, :, None], 0, 1)
+    img = bpy.data.images.new("Galabeya", W, W)
+    img.pixels.foreach_set(np.concatenate([rgb, np.ones((W, W, 1), np.float32)], axis=2).ravel()); img.pack()
+    m = bpy.data.materials.new("Galabeya"); m.use_nodes = True
     nt = m.node_tree; b = nt.nodes["Principled BSDF"]
-    tex = nt.nodes.new("ShaderNodeTexWave"); tex.wave_type = "BANDS"; tex.bands_direction = "X"
-    tex.inputs["Scale"].default_value = 9; tex.inputs["Distortion"].default_value = 0.3
-    ramp = nt.nodes.new("ShaderNodeValToRGB")
-    ramp.color_ramp.elements[0].position = 0.7; ramp.color_ramp.elements[0].color = (*base, 1)
-    ramp.color_ramp.elements[1].position = 0.75; ramp.color_ramp.elements[1].color = (*stripe, 1)
-    coord = nt.nodes.new("ShaderNodeTexCoord")
-    nt.links.new(coord.outputs["Object"], tex.inputs["Vector"])
-    nt.links.new(tex.outputs["Fac"], ramp.inputs["Fac"])
-    nt.links.new(ramp.outputs["Color"], b.inputs["Base Color"])
+    t = nt.nodes.new("ShaderNodeTexImage"); t.image = img
+    nt.links.new(t.outputs["Color"], b.inputs["Base Color"])
     b.inputs["Roughness"].default_value = 0.85
-    return m
+    obj.data.materials.clear(); obj.data.materials.append(m)
 
 # ---------- the Egyptian pieces ----------
 def head_frame(basemesh):
@@ -225,7 +257,7 @@ def build(spec, x):
         path = find(fname, sub)
         if not path: continue
         try:
-            o = HumanService.add_mhclo_asset(path, basemesh, asset_type=kind, material_type="GAMEENGINE")
+            o = HumanService.add_mhclo_asset(path, basemesh, asset_type=kind, material_type="GAMEENGINE", subdiv_levels=0)
             objs[fname[:-6]] = o
             if kind == "Clothes" and o is not None and not any(w in fname for w in ("glasses", "beard", "moustache", "earrings")):
                 d = o.modifiers.new("Offset", "DISPLACE"); d.mid_level = 0.0; d.strength = 0.004
@@ -238,7 +270,7 @@ def build(spec, x):
     for c, rgb in spec.get("tints", {}).items():
         if c in objs: tint_material(objs[c], rgb, value=1.8 if sum(rgb) > 2 else None, sat=0.0 if sum(rgb) > 2 else None)
     if spec.get("stripes") and "mindfront_kimono" in objs:
-        k = objs["mindfront_kimono"]; k.data.materials.clear(); k.data.materials.append(stripes_material("Galabeya", (0.85, 0.82, 0.74), (0.45, 0.4, 0.33)))
+        stripes(objs["mindfront_kimono"], (0.78, 0.74, 0.66), (0.36, 0.3, 0.24))
     hat = spec.get("hat")
     extra = []
     if hat == "tarboosh": extra = make_tarboosh(basemesh, rig)
@@ -270,6 +302,36 @@ def shoot(cam, target, dist, lens, name, height_off=0.0):
     bpy.context.scene.render.filepath = os.path.join(OUT, name)
     bpy.ops.render.render(write_still=True)
 
+def export(spec, basemesh, rig):
+    """A copy of the character with the body shape baked in, as a .glb for the game (skinned to the Mixamo rig)."""
+    copy_root = ExportService.create_character_copy(rig, name_suffix="_x")
+    objs = [copy_root] + ObjectService.get_list_of_children(copy_root)
+    # hats ride on the head bone: the copy has to keep that
+    for src in ObjectService.get_list_of_children(rig):
+        if src.parent_type == "BONE":
+            c = bpy.data.objects.get(src.name + "_x")
+            if c is None: continue
+            mw = src.matrix_world.copy()
+            c.parent = copy_root; c.parent_type = "BONE"; c.parent_bone = src.parent_bone
+            bpy.context.view_layer.update(); c.matrix_world = mw
+    copy_body = next(o for o in objs if o.type == "MESH" and o.name.startswith(basemesh.name) and o.name.endswith("_x"))
+    ExportService.bake_modifiers_remove_helpers(copy_body, bake_masks=True)
+    for o in objs:
+        if o.type == "MESH" and o.data.shape_keys:
+            bpy.ops.object.select_all(action="DESELECT"); o.select_set(True)
+            bpy.context.view_layer.objects.active = o
+            bpy.ops.object.shape_key_remove(all=True, apply_mix=True)
+    copy_root.location = (0, 0, 0)
+    bpy.ops.object.select_all(action="DESELECT")
+    for o in objs: o.hide_render = False; o.hide_set(False); o.select_set(True)
+    bpy.context.view_layer.objects.active = copy_root
+    path = os.path.join(OUT, spec["name"] + ".glb")
+    bpy.ops.export_scene.gltf(filepath=path, use_selection=True, export_apply=True, export_skins=True, export_animations=False,
+                              export_morph=False, export_yup=True, export_image_format="AUTO", export_jpeg_quality=88)
+    tris = sum(len(o.evaluated_get(bpy.context.evaluated_depsgraph_get()).data.polygons) for o in objs if o.type == "MESH")
+    p("  exported", spec["name"], round(os.path.getsize(path) / 1e6, 1), "MB,", tris, "faces")
+    for o in objs: bpy.data.objects.remove(o, do_unlink=True)
+
 try:
     for o in list(bpy.data.objects): bpy.data.objects.remove(o, do_unlink=True)
     built = []
@@ -278,6 +340,7 @@ try:
             built.append((spec, *build(spec, (i - 2.5) * 1.2)))
         except Exception:
             p(traceback.format_exc())
+    shrink_images(1024)
     cam = studio()
     only = os.environ.get("ONLY")
     for spec, basemesh, rig in built:
@@ -293,6 +356,10 @@ try:
             shoot(cam, Vector((top.x, top.y, top.z * 0.52)), 3.4, 50, f"body-{spec['name']}.png", 0.15)
         except Exception:
             p(traceback.format_exc())
+    for spec, basemesh, rig in built:
+        if only and spec["name"] != only: continue
+        try: export(spec, basemesh, rig)
+        except Exception: p(traceback.format_exc())
     p("done")
 except Exception:
     p(traceback.format_exc())
