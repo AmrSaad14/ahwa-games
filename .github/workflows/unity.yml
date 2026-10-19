@@ -126,7 +126,7 @@ jobs:
           files=$(ls logs/*.txt logs/activate.log logs/return.log logs/editor-tail.log logs/player.log logs/server.log shots/*.png shots/*.mp4 2>/dev/null)
           echo "publishing: $files"
           gh release delete unity-logs --yes --cleanup-tag
-          gh release create unity-logs $files --title "Unity build logs" --target "$GITHUB_SHA" --prerelease --notes "Unity build ${GITHUB_SHA::7}"
+          for try in 1 2 3 4; do gh release create unity-logs $files --title "Unity build logs" --target "$GITHUB_SHA" --prerelease --notes "Unity build ${GITHUB_SHA::7}" && break; echo "release unity-logs: retry $try"; sleep 30; gh release delete unity-logs --yes --cleanup-tag; done
 
       - name: Publish the APK
         if: always()
@@ -134,5 +134,5 @@ jobs:
           if [ -f build/android/KingsBattle.apk ]; then
             cp build/android/KingsBattle.apk kings-battle-unity.apk
             gh release delete unity-apk --yes --cleanup-tag || true
-            gh release create unity-apk kings-battle-unity.apk --title "Unity APK" --target "$GITHUB_SHA" --prerelease --notes "Unity build ${GITHUB_SHA::7}"
+            for try in 1 2 3 4; do gh release create unity-apk kings-battle-unity.apk --title "Unity APK" --target "$GITHUB_SHA" --prerelease --notes "Unity build ${GITHUB_SHA::7}" && break; echo "release unity-apk: retry $try"; sleep 30; gh release delete unity-apk --yes --cleanup-tag; done
           fi

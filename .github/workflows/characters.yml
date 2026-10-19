@@ -22,10 +22,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/cache@v4
+        id: tools
+        with:
+          path: |
+            blender
+            packs
+            mpfb.zip
+          key: blender-4.2-mpfb-2.0.18-packs-v1
+
       - name: Blender, MPFB and the asset packs
         run: |
           set +e
           mkdir -p out packs
+          if [ -x blender/blender ] && [ $(ls packs/*.zip 2>/dev/null | wc -l) -ge 18 ]; then
+            echo "from the cache" | tee out/setup.txt
+            sudo apt-get update -qq > /dev/null; sudo apt-get install -y -qq libxi6 libxkbcommon0 libsm6 libgl1 libegl1 > /dev/null
+            ./blender/blender -b --command extension install-file -r user_default -e mpfb.zip >> out/setup.txt 2>&1
+            exit 0
+          fi
           V=$(curl -s https://download.blender.org/release/Blender4.2/ | grep -o 'blender-4\.2\.[0-9]*-linux-x64\.tar\.xz' | sort -V | tail -1)
           echo "Blender: $V" | tee out/setup.txt
           curl -sL --retry 3 --max-time 900 "https://download.blender.org/release/Blender4.2/$V" | tar -xJ
@@ -35,11 +50,17 @@ jobs:
           ls -la mpfb.zip | tee -a out/setup.txt
           ./blender/blender -b --command extension install-file -r user_default -e mpfb.zip >> out/setup.txt 2>&1
           echo "mpfb install exit $?" | tee -a out/setup.txt
+          # the packs: from our own copy (a release) if there is one, else from the MakeHuman server (then kept)
+          gh release download mpfb-packs -D packs --clobber 2>/dev/null && echo "packs from the mpfb-packs release: $(ls packs | wc -l)" >> out/setup.txt
           for p in makehuman_system_assets skins01 skins02 hair01 eyebrows01 eyelashes01 shirts01 pants01 shoes01 suits01 glasses01 bodyparts05 dress01 skirts01 jewelry01 hats01 system_hair_materials01 system_clothes_materials01; do
             for host in files2 files; do
+              [ -s packs/$p.zip ] && break
               if curl -sfL --retry 2 --connect-timeout 30 --max-time 600 -o packs/$p.zip "https://$host.makehumancommunity.org/asset_packs/$p/${p}_cc0.zip"; then echo "pack $p ok ($host, $(du -h packs/$p.zip | cut -f1))" >> out/setup.txt; break; else echo "pack $p failed on $host" >> out/setup.txt; rm -f packs/$p.zip; fi
             done
           done
+          if ! gh release view mpfb-packs >/dev/null 2>&1 && [ $(ls packs/*.zip | wc -l) -ge 18 ]; then
+            gh release create mpfb-packs packs/*.zip --title "MakeHuman CC0 asset packs (copy)" --prerelease --notes "CC0 asset packs from makehumancommunity.org, kept for the Characters workflow"
+          fi
           true
 
       - name: Make the regulars
@@ -57,10 +78,10 @@ jobs:
           tail -c 2000000 out/blender.txt > out/blender-tail.txt
           files=$(ls out/*.txt out/*.png 2>/dev/null | grep -v "out/blender.txt")
           gh release delete chars-preview --yes --cleanup-tag
-          gh release create chars-preview $files --title "Character previews" --target "$GITHUB_SHA" --prerelease --notes "Characters ${GITHUB_SHA::7}"
+          for try in 1 2 3 4; do gh release create chars-preview $files --title "Character previews" --target "$GITHUB_SHA" --prerelease --notes "Characters ${GITHUB_SHA::7}" && break; echo "release chars-preview: retry $try"; sleep 30; gh release delete chars-preview --yes --cleanup-tag; done
           # the models for the game (the Unity build downloads them) — only a complete set
           if [ $(ls out/*.glb 2>/dev/null | wc -l) -eq 6 ]; then
             gh release delete chars-glb --yes --cleanup-tag
-            gh release create chars-glb out/*.glb --title "Character models" --target "$GITHUB_SHA" --prerelease --notes "Characters ${GITHUB_SHA::7}"
+            for try in 1 2 3 4; do gh release create chars-glb out/*.glb --title "Character models" --target "$GITHUB_SHA" --prerelease --notes "Characters ${GITHUB_SHA::7}" && break; echo "release chars-glb: retry $try"; sleep 30; gh release delete chars-glb --yes --cleanup-tag; done
             gh workflow run unity.yml --ref main
           fi
