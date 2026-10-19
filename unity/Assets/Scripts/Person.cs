@@ -85,7 +85,7 @@ public class Person : MonoBehaviour
             toe[i] = Find(transform, lr[i] + "ToeBase");
             eye[i] = Find(transform, lr[i] + "Eye");
         }
-        foreach (var t in transform.GetComponentsInChildren<Transform>(true)) rest[t] = t.localRotation;
+        foreach (var t in hips.GetComponentsInChildren<Transform>(true)) rest[t] = t.localRotation;   // the skeleton only (not the person's own turn)
         hipsRest = transform.InverseTransformPoint(hips.position);
 
         // which way they face: the toes are in front of the ankles

@@ -44,27 +44,27 @@ def find(name, sub):
 # age: young 0.5 (25), old 1.0 (90); gender 0 female, 1 male; ethnicity mix for Egyptians
 REGULARS = [
     dict(name="AmFathi", gender=1, age=0.86, weight=0.62, muscle=0.35, height=0.42, proportions=0.45, eth=(0.15, 0.1, 0.75),
-         skin="onlytheghosts_old_eurasian_male", skin_dark=0.45, hair="short02", hair_tint=(0.82, 0.8, 0.76), brows="eyebrow005", brow_tint=(0.75, 0.72, 0.68),
+         skin="onlytheghosts_old_eurasian_male", skin_dark=0.3, hair="short02", hair_tint=(0.82, 0.8, 0.76), brows="eyebrow005", brow_tint=(0.75, 0.72, 0.68),
          clothes=["toigo_male_suit_tie_and_jacket", "shoes02", "kwnet_at_optical_glasses", "rehmanpolanski_moustache_viking"],
          tints={"rehmanpolanski_moustache_viking": (0.85, 0.83, 0.8)}, hat="tarboosh"),
     dict(name="CaptainSami", gender=1, age=0.66, weight=0.6, muscle=0.85, height=0.62, proportions=0.8, eth=(0.25, 0.05, 0.7),
-         skin="middleage_caucasian_male", skin_dark=0.6, hair="short04", hair_tint=(0.12, 0.09, 0.07), brows="eyebrow001",
+         skin="middleage_caucasian_male", skin_dark=0.4, hair="short04", hair_tint=(0.12, 0.09, 0.07), brows="eyebrow001",
          clothes=["namuhekam_male_polo_shirt", "toigo_wool_pants", "shoes01", "rehmanpolanski_moustache_viking"],
          tints={"namuhekam_male_polo_shirt": (0.14, 0.25, 0.42), "toigo_wool_pants": (0.49, 0.43, 0.33), "rehmanpolanski_moustache_viking": (0.1, 0.08, 0.06)}),
     dict(name="Ziko", gender=1, age=0.48, weight=0.45, muscle=0.6, height=0.6, proportions=0.6, eth=(0.35, 0.05, 0.6),
-         skin="toigo_light_skin_male_bronze", skin_dark=0.55, hair="short02", hair_tint=(0.1, 0.07, 0.05), brows="eyebrow003",
+         skin="toigo_light_skin_male_bronze", skin_dark=0.35, hair="short02", hair_tint=(0.1, 0.07, 0.05), brows="eyebrow003",
          clothes=["toigo_basic_tucked_t-shirt", "toigo_wool_pants", "shoes03", "grinsegold_beard_sigmund_wip"],
          tints={"toigo_basic_tucked_t-shirt": (0.18, 0.49, 0.36), "toigo_wool_pants": (0.16, 0.2, 0.3), "grinsegold_beard_sigmund_wip": (0.09, 0.06, 0.045)}),
     dict(name="Mona", gender=0, age=0.6, weight=0.58, muscle=0.35, height=0.42, proportions=0.35, eth=(0.15, 0.05, 0.8),
-         skin="onlytheghosts_middle_aged_eurasian_female", skin_dark=0.55, hair=None, brows="eyebrow010",
+         skin="onlytheghosts_middle_aged_eurasian_female", skin_dark=0.3, hair=None, brows="eyebrow010",
          clothes=["toigo_fisherman_sweater", "toigo_long_full_skirt", "toigo_flats"],
          tints={"toigo_fisherman_sweater": (0.5, 0.42, 0.62), "toigo_long_full_skirt": (0.17, 0.14, 0.2)}, hat="hijab", scarf=(0.2, 0.045, 0.028)),
     dict(name="Nada", gender=0, age=0.48, weight=0.42, muscle=0.4, height=0.48, proportions=0.4, eth=(0.1, 0.05, 0.85),
-         skin="onlytheghosts_young_eurasian_female", skin_dark=0.5, hair="long01", hair_tint=(0.16, 0.09, 0.05), brows="eyebrow012",
+         skin="onlytheghosts_young_eurasian_female", skin_dark=0.25, hair="long01", hair_tint=(0.16, 0.09, 0.05), brows="eyebrow012",
          clothes=["female_casualsuit01", "toigo_ballet_flats", "toigo_pearl_earrings"],
          tints={}),
     dict(name="HajjMahmoud", gender=1, age=0.88, weight=0.62, muscle=0.5, height=0.52, proportions=0.6, eth=(0.3, 0.05, 0.65),
-         skin="onlytheghosts_old_eurasian_male", skin_dark=0.5, hair="short02", hair_tint=(0.86, 0.84, 0.8), brows="eyebrow005", brow_tint=(0.8, 0.78, 0.74),
+         skin="onlytheghosts_old_eurasian_male", skin_dark=0.35, hair="short02", hair_tint=(0.86, 0.84, 0.8), brows="eyebrow005", brow_tint=(0.8, 0.78, 0.74),
          clothes=["mindfront_kimono", "shoes02", "grinsegold_beard_sigmund_wip"],
          tints={"mindfront_kimono": (0.85, 0.82, 0.75), "grinsegold_beard_sigmund_wip": (0.88, 0.86, 0.82)}, hat="emma", stripes=True),
 ]
@@ -369,7 +369,7 @@ def export(spec, basemesh, rig):
     for o in objs:
         if o.type != "MESH": continue
         low = o.name.lower()
-        hairlike = any(k in low for k in ("short", "long", "afro", "brow", "lash", "beard", "moustache", "hair"))
+        hairlike = any(k in low for k in ("short", "long", "afro", "brow", "lash", "beard", "moustache", "hair", "high-poly", "low-poly"))   # (eyes: a clear cornea)
         glass = "glasses" in low
         for slot in o.material_slots:
             m = slot.material
