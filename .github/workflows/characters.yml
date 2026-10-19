@@ -41,10 +41,10 @@ jobs:
           done
           true
 
-      - name: Explore the assets
+      - name: Make the regulars
         run: |
           set +e
-          OUT=$PWD/out PACKS=$PWD/packs ./blender/blender -b -P tools/characters/explore.py > out/blender.txt 2>&1
+          OUT=$PWD/out PACKS=$PWD/packs ./blender/blender -b -P tools/characters/make.py > out/blender.txt 2>&1
           echo "blender exit $?" >> out/setup.txt
           ls out
           true
