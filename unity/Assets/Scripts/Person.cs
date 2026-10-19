@@ -17,6 +17,8 @@ public class Person : MonoBehaviour
     public float tableY = 0, reach = 1.9f, spread = 0.8f;
     /// Height of the hip joint above the floor when sitting (meters).
     public float sitHips = 0.5f;
+    /// How far forward of the chair's centre the hips sit (meters).
+    public float sitForward = 0.1f;
 
     Animator anim;            // the old characters only
     bool rigged;              // the Mixamo skeleton was found
@@ -178,6 +180,7 @@ public class Person : MonoBehaviour
         float walkPhase = t * 6.2f;
         var hp = hipsRest;   // meters, in the character's own space
         hp.y = Mathf.Lerp(hipsRest.y, sitHips, wSit) + (Mathf.Abs(Mathf.Sin(walkPhase)) * 0.025f - 0.012f) * wWalk;
+        hp += localFwd * sitForward * wSit;   // on the front of the seat, clear of the chair back
         hips.position = transform.TransformPoint(hp);
 
         // ---- legs

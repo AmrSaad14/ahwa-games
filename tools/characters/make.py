@@ -356,7 +356,7 @@ def export(spec, basemesh, rig):
     for o in objs:
         if o.type != "MESH": continue
         n = len(o.data.polygons); low = o.name.lower()
-        if o is copy_body: target = n * 0.5
+        if o is copy_body: continue   # the face needs every polygon
         elif any(k in low for k in ("hair", "short", "long", "afro", "brow", "lash", "beard", "moustache", "high-poly", "glasses")): continue
         elif any(k in low for k in ("shoe", "flats")): target = 1500
         elif any(k in low for k in ("earring", "tarboosh", "tassel", "emma")): target = 1200
@@ -364,6 +364,30 @@ def export(spec, basemesh, rig):
         if n > target * 1.15:
             d = o.modifiers.new("Lighter", "DECIMATE"); d.ratio = max(0.08, target / n)
             o.modifiers.move(o.modifiers.find("Lighter"), 0)
+    # how each surface is drawn in the game: skin and cloth solid, hair-like cards cut out (alpha clip), lenses see-through
+    fixed = set()
+    for o in objs:
+        if o.type != "MESH": continue
+        low = o.name.lower()
+        hairlike = any(k in low for k in ("short", "long", "afro", "brow", "lash", "beard", "moustache", "hair"))
+        glass = "glasses" in low
+        for slot in o.material_slots:
+            m = slot.material
+            if not m or not m.use_nodes or m.name in fixed: continue
+            fixed.add(m.name)
+            nt = m.node_tree
+            bsdf = next((n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"), None)
+            if bsdf is None or glass: continue
+            al = bsdf.inputs["Alpha"]
+            if hairlike and al.is_linked:
+                src = al.links[0].from_socket
+                rnd = nt.nodes.new("ShaderNodeMath"); rnd.operation = "ROUND"
+                nt.links.new(src, rnd.inputs[0]); nt.links.new(rnd.outputs[0], al)
+            else:
+                for l in list(al.links): nt.links.remove(l)
+                al.default_value = 1.0
+                if hasattr(m, "blend_method"): m.blend_method = "OPAQUE"
+            if hasattr(m, "use_backface_culling"): m.use_backface_culling = o is copy_body   # cloth is seen from inside too
     # textures: small, and as JPEG unless they carry transparency (hair, brows, lashes)
     tmp = os.path.join(OUT, "_tex"); os.makedirs(tmp, exist_ok=True)
     done = set()
