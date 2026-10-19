@@ -2,7 +2,7 @@
 #  - a desktop build, run on a virtual screen to take screenshots (so changes can be checked without a phone)
 #  - the Android APK
 # Logs and screenshots go to the "unity-logs" release, the APK to the "unity-apk" release.
-# Needs the repository secret UNITY_LICENSE (the Unity_lic.ulf of a Unity Personal license).
+# Needs the repository secrets UNITY_EMAIL and UNITY_PASSWORD (a Unity account with a Personal license, no 2FA).
 name: Unity build
 on:
   push:
@@ -46,27 +46,30 @@ jobs:
 
       - name: Build (desktop, then Android)
         env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         run: |
           set +e
-          mkdir -p ulf build logs
-          printf '%s' "$UNITY_LICENSE" | tr -d '\r' > ulf/Unity_lic.ulf
-          echo "license file: $(wc -c < ulf/Unity_lic.ulf) bytes" > logs/build-step.txt
-          df -h / >> logs/build-step.txt
+          mkdir -p build logs
+          df -h / > logs/build-step.txt
           docker pull -q $IMAGE >> logs/build-step.txt 2>&1
           echo "pull exit $?" >> logs/build-step.txt
-          df -h / >> logs/build-step.txt
-          docker run --rm -v "$PWD":/w -w /w $IMAGE bash -c '
-            mkdir -p /root/.local/share/unity3d/Unity
-            cp /w/ulf/Unity_lic.ulf /root/.local/share/unity3d/Unity/Unity_lic.ulf
-            unity-editor -batchmode -nographics -quit -logFile /w/logs/activate.log -manualLicenseFile /root/.local/share/unity3d/Unity/Unity_lic.ulf
+          # a license file only works on the computer that made it, so the seat comes from the Unity account
+          # (Personal) for this run and goes back at the end
+          docker run --rm -e UNITY_EMAIL -e UNITY_PASSWORD -v "$PWD":/w -w /w $IMAGE bash -c '
+            LC=/opt/unity/Editor/Data/Resources/Licensing/Client/Unity.Licensing.Client
+            for i in 1 2 3; do
+              "$LC" --activate-all --include-personal --username "$UNITY_EMAIL" --password "$UNITY_PASSWORD" > /w/logs/activate.log 2>&1 && break
+              sleep 20
+            done
             echo "activate exit $?" > /w/logs/editor-exit.txt
             unity-editor -batchmode -nographics -quit -projectPath /w/unity -executeMethod BuildScript.BuildAll -logFile /w/logs/editor.log
             echo "build exit $?" >> /w/logs/editor-exit.txt
+            "$LC" --return-ulf > /w/logs/return.log 2>&1
+            echo "return exit $?" >> /w/logs/editor-exit.txt
             chmod -R a+rwX /w/build /w/logs /w/unity/Library 2>/dev/null
             true' >> logs/build-step.txt 2>&1
           echo "docker exit $?" >> logs/build-step.txt
-          rm -rf ulf
           cat logs/build-step.txt logs/editor-exit.txt
           grep -E "^\[build|error CS|Error building|Scripts have compiler errors" logs/editor.log | head -60
           test -f build/android/KingsBattle.apk
@@ -89,7 +92,7 @@ jobs:
         run: |
           set +e
           if [ -f logs/editor.log ]; then tail -c 4000000 logs/editor.log > logs/editor-tail.log; fi
-          files=$(ls logs/*.txt logs/activate.log logs/editor-tail.log logs/player.log shots/*.png 2>/dev/null)
+          files=$(ls logs/*.txt logs/activate.log logs/return.log logs/editor-tail.log logs/player.log shots/*.png 2>/dev/null)
           echo "publishing: $files"
           gh release delete unity-logs --yes --cleanup-tag
           gh release create unity-logs $files --title "Unity build logs" --target "$GITHUB_SHA" --prerelease --notes "Unity build ${GITHUB_SHA::7}"
