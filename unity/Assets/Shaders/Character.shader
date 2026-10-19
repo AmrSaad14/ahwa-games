@@ -20,8 +20,8 @@ Shader "KingsBattle/Character"
         Tags { "RenderType"="Opaque" }
         LOD 300
         CGPROGRAM
-        #pragma surface surf Standard fullforwardshadows vertex:vert
-        #pragma target 3.0
+        #pragma surface surf Standard fullforwardshadows vertex:vert nolightmap nodynlightmap nodirlightmap nometa noforwardadd
+        #pragma target 3.5
 
         sampler2D _MainTex;
         fixed4 _Color, _StripeColor;

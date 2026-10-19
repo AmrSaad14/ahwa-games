@@ -81,7 +81,7 @@ jobs:
         if: always()
         run: |
           set +e
-          npm ci --no-audit --no-fund > logs/server-setup.txt 2>&1
+          npm install --no-audit --no-fund > logs/server-setup.txt 2>&1
           node scripts/build-server.mjs >> logs/server-setup.txt 2>&1
           PORT=8080 HOST=127.0.0.1 DB_PATH=/tmp/test.db BOT_FILL_SECONDS=2 nohup node dist/server.cjs > logs/server.log 2>&1 &
           sleep 3

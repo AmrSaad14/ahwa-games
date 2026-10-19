@@ -129,7 +129,7 @@ namespace KingsBattle.Forge
                 P[leg + 2] = new Vector3(hx * 0.92f, 0.08f, -0.01f);
                 // eyes and lids (in the head)
                 int eye = side == 0 ? (int)B.EyeL : (int)B.EyeR, lid = side == 0 ? (int)B.LidL : (int)B.LidR;
-                P[eye] = r.H(sx * 0.031f, 0.108f, 0.072f);
+                P[eye] = r.H(sx * 0.031f, 0.107f, 0.066f);
                 P[lid] = P[eye];
             }
             return r;
@@ -353,7 +353,7 @@ namespace KingsBattle.Forge
             }
             else if (s.headwear == "hijab")
             {
-                var hw = new Layer { name = "Hijab", color = s.scarf, k = 0.04f, grow = 0.012f, cell = 0.008f };
+                var hw = new Layer { name = "Hijab", color = s.scarf, k = 0.04f, grow = 0.012f, cell = 0.0055f };
                 hw.prims.Add(Prim.Ell(Hd, r.H(0, 0.115f, -0.008f), V(0.085f, 0.1f, 0.098f) * r.headScale));
                 hw.prims.Add(Prim.Cap(Nk, V(0, 1.38f * t, -0.02f), r.H(0, 0.02f, -0.01f), 0.075f, 0.07f));
                 hw.prims.Add(Prim.Ell(Ch, V(0, 1.36f * t, -0.01f), V(0.17f, 0.06f, 0.13f)));
@@ -426,7 +426,8 @@ namespace KingsBattle.Forge
             {
                 p.Add(Prim.Ell(Hd, H(sd * 0.046f, 0.085f, 0.058f), R3(0.021f, 0.016f, 0.018f)).Paint(cheek));          // cheekbones
                 p.Add(Prim.Ell(Hd, H(sd * 0.077f, 0.098f, -0.004f), R3(0.011f, 0.029f, 0.019f), Quaternion.Euler(0, sd * 18f, 0)));   // ears
-                p.Add(Prim.Ball(Hd, H(sd * 0.031f, 0.108f, 0.083f), 0.0165f * k).Cut(0.009f * k));                     // eye sockets
+                p.Add(Prim.Ell(Hd, H(sd * 0.031f, 0.108f, 0.083f), R3(0.0145f, 0.0088f, 0.011f)).Cut(0.006f * k));           // eye openings (almond)
+                p.Add(Prim.Ell(Hd, H(sd * 0.031f, 0.094f, 0.081f), R3(0.016f, 0.006f, 0.008f)));                          // lower lids
             }
             p.Add(Prim.Cap(Hd, H(-0.04f, 0.127f, 0.075f), H(0.04f, 0.127f, 0.075f), (0.011f - fem * 0.003f) * k));    // brow ridge
             // the nose: bridge, tip and wings (longer and fuller with age)
@@ -449,13 +450,13 @@ namespace KingsBattle.Forge
             int Hd = (int)B.Head;
             float k = r.headScale;
             Vector3 H(float x, float y, float z) => r.H(x, y, z);
-            var L = new Layer { name = "Hair", color = s.hair, k = 0.01f * k, cell = 0.0045f };
+            var L = new Layer { name = "Hair", color = s.hair, k = 0.01f * k, cell = 0.0035f };
             var p = L.prims;
             bool scalp = s.hairStyle != "none" && s.headwear != "hijab";
             var o = r.headO;
             if (scalp)
             {
-                float thick = s.hairStyle == "curly" ? 0.016f : s.hairStyle == "long" ? 0.009f : 0.0065f;
+                float thick = s.hairStyle == "curly" ? 0.018f : s.hairStyle == "long" ? 0.012f : 0.0095f;
                 var cran = Prim.Ell(Hd, H(0, 0.118f, -0.008f), new Vector3(0.077f + thick, 0.094f + thick, 0.09f + thick) * k);
                 p.Add(cran);
                 if (s.hairStyle == "curly")
@@ -559,7 +560,9 @@ namespace KingsBattle.Forge
                     foreach (var pr in L.prims)
                     {
                         if (pr.carve) continue;
-                        float w = Mathf.Exp(-(pr.Dist(q) - best) / 0.004f);
+                        float dq = pr.Dist(q);
+                        float w = Mathf.Exp(-(dq - best) / 0.004f);
+                        if (pr.color.a > 0) w *= Mathf.Clamp01(1f - (dq - L.grow) / 0.004f);   // paint only where the shape reaches the surface
                         acc += (pr.color.a > 0 ? pr.color : L.color) * w; wsum += w;
                     }
                     if (wsum > 0) c = acc / wsum;
@@ -633,9 +636,9 @@ namespace KingsBattle.Forge
                 {
                     float dx = (x + 0.5f) / 128 - 0.5f, dy = (y + 0.5f) / 128 - 0.5f, d = Mathf.Sqrt(dx * dx + dy * dy);
                     Color c = white;
-                    float ir = 0.27f;
+                    float ir = 0.34f;
                     if (d < ir) c = Color.Lerp(s.iris * 1.25f, s.iris * 0.55f, d / ir);
-                    if (d < ir * 0.42f) c = new Color(0.03f, 0.02f, 0.02f);
+                    if (d < ir * 0.4f) c = new Color(0.03f, 0.02f, 0.02f);
                     if (Mathf.Abs(d - ir) < 0.012f) c = Color.Lerp(c, s.iris * 0.3f, 0.6f);
                     if (new Vector2(dx + 0.08f, dy - 0.08f).magnitude < 0.045f) c = Color.white;
                     c.a = 1; px[y * 128 + x] = c;
