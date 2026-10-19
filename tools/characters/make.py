@@ -25,6 +25,7 @@ LocationService = dyn("mpfb.services.locationservice", "LocationService")
 ExportService = dyn("mpfb.services.exportservice", "ExportService")
 ObjectService = dyn("mpfb.services.objectservice", "ObjectService")
 HumanObjectProperties = dyn("mpfb.entities.objectproperties", "HumanObjectProperties")
+GeneralObjectProperties = dyn("mpfb.entities.objectproperties", "GeneralObjectProperties")
 
 # ---------- the asset packs ----------
 data = LocationService.get_user_data()
@@ -43,27 +44,27 @@ def find(name, sub):
 # age: young 0.5 (25), old 1.0 (90); gender 0 female, 1 male; ethnicity mix for Egyptians
 REGULARS = [
     dict(name="AmFathi", gender=1, age=0.86, weight=0.62, muscle=0.35, height=0.42, proportions=0.45, eth=(0.15, 0.1, 0.75),
-         skin="onlytheghosts_old_eurasian_male", skin_dark=0.3, hair="short02", hair_tint=(0.82, 0.8, 0.76), brows="mindfront_eyebrows_06", brow_tint=(0.75, 0.72, 0.68),
+         skin="onlytheghosts_old_eurasian_male", skin_dark=0.45, hair="short02", hair_tint=(0.82, 0.8, 0.76), brows="mindfront_eyebrows_06", brow_tint=(0.75, 0.72, 0.68),
          clothes=["toigo_male_suit_tie_and_jacket", "shoes02", "kwnet_at_optical_glasses", "rehmanpolanski_moustache_viking"],
          tints={"rehmanpolanski_moustache_viking": (0.85, 0.83, 0.8)}, hat="tarboosh"),
     dict(name="CaptainSami", gender=1, age=0.66, weight=0.6, muscle=0.85, height=0.62, proportions=0.8, eth=(0.25, 0.05, 0.7),
-         skin="middleage_caucasian_male", skin_dark=0.45, hair="short04", hair_tint=(0.12, 0.09, 0.07), brows="mindfront_eyebrows_03",
+         skin="middleage_caucasian_male", skin_dark=0.6, hair="short04", hair_tint=(0.12, 0.09, 0.07), brows="mindfront_eyebrows_03",
          clothes=["namuhekam_male_polo_shirt", "toigo_wool_pants", "shoes01", "rehmanpolanski_moustache_viking"],
          tints={"namuhekam_male_polo_shirt": (0.14, 0.25, 0.42), "toigo_wool_pants": (0.49, 0.43, 0.33), "rehmanpolanski_moustache_viking": (0.1, 0.08, 0.06)}),
     dict(name="Ziko", gender=1, age=0.48, weight=0.45, muscle=0.6, height=0.6, proportions=0.6, eth=(0.35, 0.05, 0.6),
-         skin="toigo_light_skin_male_bronze", skin_dark=0.3, hair="short03", hair_tint=(0.1, 0.07, 0.05), brows="mindfront_eyebrows_02",
+         skin="toigo_light_skin_male_bronze", skin_dark=0.55, hair="short02", hair_tint=(0.1, 0.07, 0.05), brows="mindfront_eyebrows_02",
          clothes=["toigo_basic_tucked_t-shirt", "toigo_wool_pants", "shoes03", "grinsegold_beard_sigmund_wip"],
          tints={"toigo_basic_tucked_t-shirt": (0.18, 0.49, 0.36), "toigo_wool_pants": (0.16, 0.2, 0.3), "grinsegold_beard_sigmund_wip": (0.09, 0.06, 0.045)}),
     dict(name="Mona", gender=0, age=0.6, weight=0.58, muscle=0.35, height=0.42, proportions=0.35, eth=(0.15, 0.05, 0.8),
-         skin="onlytheghosts_middle_aged_eurasian_female", skin_dark=0.22, hair=None, brows="mindfront_eyebrows_09",
+         skin="onlytheghosts_middle_aged_eurasian_female", skin_dark=0.45, hair=None, brows="mindfront_eyebrows_09",
          clothes=["toigo_fisherman_sweater", "toigo_long_full_skirt", "toigo_flats"],
-         tints={"toigo_fisherman_sweater": (0.24, 0.2, 0.31), "toigo_long_full_skirt": (0.17, 0.14, 0.2)}, hat="hijab", scarf=(0.71, 0.32, 0.23)),
+         tints={"toigo_fisherman_sweater": (0.5, 0.42, 0.62), "toigo_long_full_skirt": (0.17, 0.14, 0.2)}, hat="hijab", scarf=(0.36, 0.09, 0.05)),
     dict(name="Nada", gender=0, age=0.48, weight=0.42, muscle=0.4, height=0.48, proportions=0.4, eth=(0.1, 0.05, 0.85),
-         skin="onlytheghosts_young_eurasian_female", skin_dark=0.22, hair="long01", hair_tint=(0.16, 0.09, 0.05), brows="mindfront_eyebrows_11",
+         skin="onlytheghosts_young_eurasian_female", skin_dark=0.4, hair="long01", hair_tint=(0.16, 0.09, 0.05), brows="mindfront_eyebrows_11",
          clothes=["female_casualsuit01", "toigo_ballet_flats", "toigo_pearl_earrings"],
          tints={}),
     dict(name="HajjMahmoud", gender=1, age=0.88, weight=0.62, muscle=0.5, height=0.52, proportions=0.6, eth=(0.3, 0.05, 0.65),
-         skin="onlytheghosts_old_eurasian_male", skin_dark=0.3, hair="short02", hair_tint=(0.86, 0.84, 0.8), brows="mindfront_eyebrows_06", brow_tint=(0.8, 0.78, 0.74),
+         skin="onlytheghosts_old_eurasian_male", skin_dark=0.5, hair="short02", hair_tint=(0.86, 0.84, 0.8), brows="mindfront_eyebrows_06", brow_tint=(0.8, 0.78, 0.74),
          clothes=["mindfront_kimono", "shoes02", "grinsegold_beard_sigmund_wip"],
          tints={"mindfront_kimono": (0.85, 0.82, 0.75), "grinsegold_beard_sigmund_wip": (0.88, 0.86, 0.82)}, hat="emma", stripes=True),
 ]
@@ -173,17 +174,17 @@ def smooth(obj, levels=1):
 
 def make_tarboosh(basemesh, rig):
     top, rx, ry = head_frame(basemesh)
-    r = max(rx, ry) * 0.93
-    bpy.ops.mesh.primitive_cone_add(vertices=64, radius1=r, radius2=r * 0.78, depth=0.14, end_fill_type="NGON")
+    r = max(rx, ry) * 1.02
+    bpy.ops.mesh.primitive_cone_add(vertices=64, radius1=r, radius2=r * 0.8, depth=0.135, end_fill_type="NGON")
     t = bpy.context.active_object; t.name = "Tarboosh"
-    t.location = (top.x, top.y + 0.004, top.z + 0.03); t.rotation_euler = (math.radians(-8), 0, 0)
+    t.location = (top.x, top.y + 0.01, top.z + 0.012); t.rotation_euler = (math.radians(-7), 0, 0)
     t.data.materials.append(flat_material("Tarboosh", (0.32, 0.015, 0.02), 0.75))
     for poly in t.data.polygons: poly.use_smooth = abs(poly.normal.z) < 0.5
     bev = t.modifiers.new("Bevel", "BEVEL"); bev.width = 0.004; bev.segments = 3; bev.limit_method = "ANGLE"
     # the black tassel from the centre of the top, falling down the back
     bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius=0.006, depth=0.09)
     s = bpy.context.active_object; s.name = "Tassel"
-    s.location = (top.x, top.y + r * 0.55, top.z + 0.06); s.rotation_euler = (math.radians(-35), 0, 0)
+    s.location = (top.x, top.y + r * 0.6, top.z + 0.04); s.rotation_euler = (math.radians(-35), 0, 0)
     s.data.materials.append(flat_material("Tassel", (0.015, 0.015, 0.015), 0.6))
     for poly in s.data.polygons: poly.use_smooth = True
     for o in (t, s): bone_parent(o, rig, "mixamorig:Head")
@@ -191,46 +192,69 @@ def make_tarboosh(basemesh, rig):
 
 def make_emma(basemesh, rig):
     top, rx, ry = head_frame(basemesh)
-    r = max(rx, ry) * 0.9
     parts = []
     mat = flat_material("Emma", (0.8, 0.79, 0.75), 0.9)
-    for i in range(4):
-        bpy.ops.mesh.primitive_torus_add(major_radius=r * (1.02 - i * 0.07), minor_radius=0.017, major_segments=64, minor_segments=12)
+    for i in range(6):
+        k = i / 5
+        bpy.ops.mesh.primitive_torus_add(major_radius=max(rx, ry) * (1.08 - 0.22 * k * k), minor_radius=0.016 - 0.003 * k, major_segments=64, minor_segments=12)
         o = bpy.context.active_object; o.name = f"EmmaWrap{i}"
-        o.location = (top.x, top.y, top.z - 0.035 + i * 0.019)
-        o.rotation_euler = (math.radians(-10 + (i % 2) * 9), math.radians((i % 2) * 8 - 4), math.radians(i * 40))
+        o.scale = (rx / max(rx, ry), ry / max(rx, ry) * 1.04, 1)
+        o.location = (top.x, top.y + 0.004, top.z - 0.07 + i * 0.017)
+        o.rotation_euler = (math.radians(-14 + (i % 2) * 12), math.radians((i % 3 - 1) * 6), math.radians(i * 37))
         o.data.materials.append(mat); smooth(o, 0); parts.append(o)
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=16, radius=r * 0.86)
-    cap = bpy.context.active_object; cap.name = "EmmaCap"; cap.scale = (1, 1.05, 0.62)
-    cap.location = (top.x, top.y, top.z - 0.005); cap.data.materials.append(flat_material("EmmaCap", (0.75, 0.73, 0.68), 0.9)); smooth(cap, 0); parts.append(cap)
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=16, radius=1)
+    cap = bpy.context.active_object; cap.name = "EmmaCap"; cap.scale = (rx * 0.92, ry * 0.95, 0.07)
+    cap.location = (top.x, top.y + 0.004, top.z - 0.005); cap.data.materials.append(flat_material("EmmaCap", (0.72, 0.7, 0.64), 0.9)); smooth(cap, 0); parts.append(cap)
     for o in parts: bone_parent(o, rig, "mixamorig:Head")
     return parts
 
 def make_hijab(basemesh, rig, rgb):
+    """A hijab grown from the head's own surface: the scalp, ears, neck and the top of the shoulders, pushed out a
+    little and thickened, with an oval opening for the face. It keeps the body's skin weights, so it moves with her."""
     top, rx, ry = head_frame(basemesh)
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=64, ring_count=40, radius=1)
-    h = bpy.context.active_object; h.name = "Hijab"
-    h.scale = (rx * 1.1, ry * 1.08, 0.125); h.location = (top.x, top.y + 0.008, top.z - 0.112)
-    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-    me = h.data; bm = bmesh.new(); bm.from_mesh(me)
+    h = basemesh.copy(); h.data = basemesh.data.copy(); h.name = "Hijab"
+    bpy.context.collection.objects.link(h)
+    GeneralObjectProperties.set_value("object_type", "Clothes", entity_reference=h)   # not a second body
+    for m in list(h.modifiers):
+        if m.type != "ARMATURE": h.modifiers.remove(m)
+    bpy.ops.object.select_all(action="DESELECT"); h.select_set(True); bpy.context.view_layer.objects.active = h
+    if h.data.shape_keys: bpy.ops.object.shape_key_remove(all=True, apply_mix=True)
+    h.data.materials.clear()
+    mw = h.matrix_world; inv = mw.inverted()
+    body = h.vertex_groups.get("body")
+    bm = bmesh.new(); bm.from_mesh(h.data)
+    dl = bm.verts.layers.deform.active
+    cx, cy, tz = top.x, top.y, top.z
+    def keep(v):
+        if body is not None and dl is not None and body.index not in v[dl]: return False   # the helper geometry
+        c = mw @ v.co
+        dz = tz - c.z
+        if dz > 0.36: return False                                              # below the shoulders
+        if dz > 0.26 and ((c.x - cx) / 0.2) ** 2 + ((c.y - cy - 0.01) / 0.14) ** 2 > 1: return False   # only around the neck
+        # the face: an oval from the brow to under the chin
+        fy = c.y - cy
+        if fy < -ry * 0.2 and ((c.x - cx) / (rx * 0.62)) ** 2 + ((dz - 0.145) / 0.098) ** 2 < 1: return False
+        return True
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not keep(v)], context="VERTS")
+    bm.normal_update()
     for v in bm.verts:
-        if v.co.z < -0.04:   # below the ears it drapes around the neck and onto the shoulders
-            k = min(1.0, (-0.04 - v.co.z) / 0.085)
-            v.co.x *= 1 + k * k * 0.7; v.co.y *= 1 + k * k * 0.35; v.co.z -= k * k * 0.07
-    # the oval face opening: brow to chin, cheek to cheek
-    def in_face(c):
-        return c.y < 0 and ((c.x / (rx * 0.66)) ** 2 + ((c.z + 0.035) / 0.075) ** 2) < 1 and c.y < -ry * 0.35
-    bmesh.ops.delete(bm, geom=[f for f in bm.faces if in_face(f.calc_center_median())], context="FACES")
-    bm.to_mesh(me); bm.free()
+        c = mw @ v.co; dz = tz - c.z
+        push = 0.016 + (0.03 if dz > 0.24 else 0) * min(1, (dz - 0.24) / 0.06) if dz > 0.24 else 0.016
+        v.co += v.normal * push
+    # a little volume at the back of the head (hair under it)
+    for v in bm.verts:
+        c = mw @ v.co
+        if c.y - cy > ry * 0.2 and tz - c.z < 0.16: v.co += (inv.to_3x3() @ Vector((0, 1, 0.3))).normalized() * 0.012
+    bm.to_mesh(h.data); bm.free()
     h.data.materials.append(flat_material("Hijab", rgb, 0.85))
-    sol = h.modifiers.new("Thick", "SOLIDIFY"); sol.thickness = 0.005
-    smooth(h, 1)
-    bpy.ops.object.select_all(action="DESELECT")
-    h.select_set(True); rig.select_set(True); bpy.context.view_layer.objects.active = rig
-    try:
-        bpy.ops.object.parent_set(type="ARMATURE_AUTO")
-    except Exception as e:
-        p("  hijab auto weights failed:", e); bone_parent(h, rig, "mixamorig:Head")
+    sol = h.modifiers.new("Thick", "SOLIDIFY"); sol.thickness = 0.004; sol.offset = 1
+    sub = h.modifiers.new("Smooth", "SUBSURF"); sub.levels = 1; sub.render_levels = 1
+    cs = h.modifiers.new("Relax", "CORRECTIVE_SMOOTH"); cs.iterations = 6; cs.smooth_type = "LENGTH_WEIGHTED"
+    for poly in h.data.polygons: poly.use_smooth = True
+    # the armature modifier last, so it bends the finished shape
+    arm = next((m for m in h.modifiers if m.type == "ARMATURE"), None)
+    if arm: h.modifiers.move(h.modifiers.find(arm.name), len(h.modifiers) - 1)
+    h.parent = basemesh.parent; h.matrix_world = mw
     return [h]
 
 # ---------- building ----------
@@ -245,7 +269,7 @@ def build(spec, x):
     TargetService.reapply_macro_details(basemesh)
     skin = find(spec["skin"] + ".mhmat", "skins")
     if skin: HumanService.set_character_skin(skin, basemesh, skin_type="GAMEENGINE")
-    if spec.get("skin_dark"): tint_material(basemesh, (1 - spec["skin_dark"] * 0.45, 1 - spec["skin_dark"] * 0.55, 1 - spec["skin_dark"] * 0.6))
+    if spec.get("skin_dark"): d = spec["skin_dark"]; tint_material(basemesh, (1 - d * 0.55, 1 - d * 0.75, 1 - d * 0.92))
     rig = HumanService.add_builtin_rig(basemesh, "mixamo_unity")
     rig.name = spec["name"] + "_Rig"
     parts = [("eyes", "high-poly.mhclo", "Eyes"), ("eyebrows", spec["brows"] + ".mhclo", "Eyebrows"), ("eyelashes", "mindfront_eyelashes_02.mhclo", "Eyelashes"),
