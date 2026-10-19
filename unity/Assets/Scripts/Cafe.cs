@@ -28,6 +28,8 @@ public class Cafe : MonoBehaviour
         ("Nada", "chess", 1), ("Mona", "ludo", 0),
     };
 
+    const float LobbyReach = (4.5f - 3.2f) + 0.55f;   // chair to table edge, then a little onto the table
+
     static Transform Find(Transform t, string name)
     {
         if (t.name == name) return t;
@@ -108,13 +110,12 @@ public class Cafe : MonoBehaviour
         {
             if (!tables.TryGetValue(table, out var t)) continue;
             var chair = Find(t, "Seat_" + table + "_" + seat);
-            var prefab = Resources.Load<GameObject>("Art/" + who + "_Sit");
-            if (prefab == null || chair == null) { Debug.LogWarning("[cafe] can't seat " + who); continue; }
-            var p = Instantiate(prefab);
-            p.name = who;
-            p.transform.position = new Vector3(chair.position.x, t.position.y, chair.position.z);
-            var person = p.AddComponent<Person>();
+            if (chair == null) { Debug.LogWarning("[cafe] no chair for " + who); continue; }
+            var person = Person.Make(who, chair.position);
+            if (person == null) continue;
+            person.reach = LobbyReach;
             person.Face(t.position);
+            var p = person.gameObject;
             regulars.Add(p);
         }
     }
@@ -210,6 +211,14 @@ public class Cafe : MonoBehaviour
         cam.transform.position = camPos + sway;
         cam.transform.LookAt(camLook);
     }
+
+    /// A fixed shot (test portraits); null goes back to the normal camera.
+    public void Shot(Vector3? pos, Vector3 look = default)
+    {
+        if (pos == null) { Focus(focus); return; }
+        camPos = camPosTo = pos.Value; camLook = camLookTo = look; drift = 0;
+    }
+    public IEnumerable<Person> Regulars() { foreach (var r in regulars) if (r != null) { var p = r.GetComponent<Person>(); if (p != null) yield return p; } }
 
     /// Flies in from close to the floor when the splash opens.
     public void Entrance()

@@ -7,13 +7,18 @@ using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using KingsBattle.Forge;
 
 public static class BuildScript
 {
     const string Scene = "Assets/Scenes/Main.unity";
 
+    static bool forged;
+
     static void Common()
     {
+        // the café regulars are made here, in Unity, before every build (see Editor/Characters)
+        if (!forged) { CharacterForge.BuildAll(); forged = true; }
         // one empty scene: the game builds itself at start (see App.cs)
         if (!File.Exists(Scene))
         {

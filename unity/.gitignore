@@ -12,3 +12,9 @@
 *.userprefs
 .vs/
 .idea/
+
+# made by the character generator on every build (Kings Battle → Build characters)
+/Assets/Generated/
+/Assets/Generated.meta
+/Assets/Resources/Characters/
+/Assets/Resources/Characters.meta

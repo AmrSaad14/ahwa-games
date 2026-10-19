@@ -36,7 +36,9 @@ public class App : MonoBehaviour
     public static readonly bool Recording = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-shots") >= 0;
     public const int RecordFps = 12;
     static string ShotDir => Path.Combine(Directory.GetCurrentDirectory(), "shots");
-    public static void Still(string name) { Directory.CreateDirectory(ShotDir); ScreenCapture.CaptureScreenshot(Path.Combine(ShotDir, name)); }
+    // a still is a copy of the video frame it was asked on (Unity takes one screenshot per frame)
+    static readonly List<(int frame, string name)> stills = new List<(int, string)>();
+    public static void Still(string name) { if (I != null) stills.Add((I.frame, name)); }
     int frame; bool recordOn = true;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -345,6 +347,30 @@ public class App : MonoBehaviour
     {
         yield return new WaitForSeconds(2.5f);
         Still("3-cafe.png");
+        // close-ups of the regulars
+        int n = 0;
+        foreach (var p in cafe.Regulars())
+        {
+            if (p.head == null) continue;
+            var face = p.head.position + Vector3.up * 0.55f;
+            var fwd = p.head.parent.forward; fwd.y = 0; fwd = fwd.sqrMagnitude > 0 ? fwd.normalized : Vector3.forward;
+            var f2 = (face - p.transform.position); f2.y = 0;
+            cafe.Shot(face + p.transform.TransformDirection(Vector3.forward) * 3.2f + Vector3.up * 0.35f + p.transform.TransformDirection(Vector3.right) * 0.8f, face);
+            yield return new WaitForSeconds(0.25f);
+            Still($"p{n++}-{p.name}.png");
+            yield return new WaitForSeconds(0.8f);
+        }
+        // and two of them from further back, the whole body
+        foreach (var p in cafe.Regulars())
+        {
+            var mid = p.transform.position + Vector3.up * 4.2f;
+            cafe.Shot(mid + p.transform.TransformDirection(new Vector3(0.6f, 0.15f, 1f)).normalized * 9.5f, mid);
+            yield return new WaitForSeconds(0.25f);
+            Still($"b-{p.name}.png");
+            yield return new WaitForSeconds(0.5f);
+        }
+        cafe.Shot(null);
+        yield return new WaitForSeconds(1.5f);
         Pick("ludo");
         yield return new WaitForSeconds(2.5f);
         Pick("domino");
@@ -392,6 +418,12 @@ public class App : MonoBehaviour
             }
         }
         Debug.Log("[app] recording done, frames=" + frame);
+        yield return null; yield return null;
+        foreach (var (f, name) in stills)
+        {
+            var src = Path.Combine(ShotDir, "frames", $"f{Mathf.Min(f, frame - 1):D4}.png");
+            try { File.Copy(src, Path.Combine(ShotDir, name), true); } catch (System.Exception e) { Debug.Log("[app] still " + name + ": " + e.Message); }
+        }
         Application.Quit();
     }
 

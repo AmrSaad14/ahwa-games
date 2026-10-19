@@ -178,7 +178,7 @@ public static class Ui
                 float ang = Mathf.Atan2(dy, dx) / (Mathf.PI * 2) * count;
                 float ray = (ang - Mathf.Floor(ang)) < 0.27f ? 1f : 0f;
                 float fade = Mathf.Clamp01(1 - r) * Mathf.Clamp01(r * 6);
-                px[y * size + x] = new Color32(255, 210, 122, (byte)(ray * fade * 60));
+                px[y * size + x] = new Color32(255, 210, 122, (byte)(ray * fade * 26));
             }
         t.SetPixels32(px); t.Apply();
         return t;

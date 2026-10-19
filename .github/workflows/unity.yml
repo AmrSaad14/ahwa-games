@@ -72,6 +72,22 @@ jobs:
           grep -E "^\[build|error CS|Error building|Scripts have compiler errors" logs/editor.log | head -60
           test -f build/android/KingsBattle.apk
 
+      - uses: actions/setup-node@v4
+        if: always()
+        with:
+          node-version: 22
+
+      - name: A local game server for the test run
+        if: always()
+        run: |
+          set +e
+          npm ci --no-audit --no-fund > logs/server-setup.txt 2>&1
+          node scripts/build-server.mjs >> logs/server-setup.txt 2>&1
+          PORT=8080 HOST=127.0.0.1 DB_PATH=/tmp/test.db BOT_FILL_SECONDS=2 nohup node dist/server.cjs > logs/server.log 2>&1 &
+          sleep 3
+          curl -s -o /dev/null -w "server: %{http_code}\n" http://127.0.0.1:8080/ | tee -a logs/server-setup.txt
+          true
+
       - name: Screenshots of the desktop build
         if: always()
         run: |
@@ -83,7 +99,7 @@ jobs:
             echo "apt exit $?" >> logs/shots-step.txt
             chmod +x build/linux/KingsBattle.x86_64
             cd build/linux
-            timeout 3000 xvfb-run -a -s "-screen 0 1280x720x24" ./KingsBattle.x86_64 -screen-width 1280 -screen-height 720 -screen-fullscreen 0 -force-glcore -logFile "$GITHUB_WORKSPACE/logs/player.log" -shots >> "$GITHUB_WORKSPACE/logs/shots-step.txt" 2>&1
+            timeout 3000 xvfb-run -a -s "-screen 0 1280x720x24" ./KingsBattle.x86_64 -screen-width 1280 -screen-height 720 -screen-fullscreen 0 -force-glcore -logFile "$GITHUB_WORKSPACE/logs/player.log" -shots -server ws://127.0.0.1:8080/ws >> "$GITHUB_WORKSPACE/logs/shots-step.txt" 2>&1
             echo "player exit $?" >> "$GITHUB_WORKSPACE/logs/shots-step.txt"
             cp shots/*.png "$GITHUB_WORKSPACE/shots/" 2>/dev/null
             # the recorded frames → a short video of the run
@@ -101,7 +117,7 @@ jobs:
         run: |
           set +e
           if [ -f logs/editor.log ]; then tail -c 4000000 logs/editor.log > logs/editor-tail.log; fi
-          files=$(ls logs/*.txt logs/activate.log logs/return.log logs/editor-tail.log logs/player.log shots/*.png shots/*.mp4 2>/dev/null)
+          files=$(ls logs/*.txt logs/activate.log logs/return.log logs/editor-tail.log logs/player.log logs/server.log shots/*.png shots/*.mp4 2>/dev/null)
           echo "publishing: $files"
           gh release delete unity-logs --yes --cleanup-tag
           gh release create unity-logs $files --title "Unity build logs" --target "$GITHUB_SHA" --prerelease --notes "Unity build ${GITHUB_SHA::7}"

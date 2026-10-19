@@ -25,7 +25,7 @@ public class DominoTable : MonoBehaviour
     readonly Dictionary<int, float> dropAt = new Dictionary<int, float>();
     readonly List<(float x, float z, float r, int y)> yard = new List<(float, float, float, int)>();
     TableView view;
-    string viewKey = "";
+    string viewKey = "", resultKey = "";
     public int sel = -1;
     public List<char> choose;
 
@@ -102,11 +102,9 @@ public class DominoTable : MonoBehaviour
         if (ch < 0 || ch >= CharNames.Length) return;
         var at = SeatPoint(pos);
         chairs[pos] = cafe.MakeChair(at, C);
-        var prefab = Resources.Load<GameObject>("Art/" + CharNames[ch] + "_Sit");
-        if (prefab == null) return;
-        var g = Instantiate(prefab, at, Quaternion.identity);
-        var p = g.AddComponent<Person>();
-        p.reachForward = SEAT_R - T + 0.5f;
+        var p = Person.Make(CharNames[ch], at);
+        if (p == null) return;
+        p.reach = SEAT_R - T + 0.55f;
         p.Face(C);
         chars[pos] = p;
     }
@@ -195,6 +193,19 @@ public class DominoTable : MonoBehaviour
                 var dir = (SeatPoint(pos) - C).normalized;
                 ring.transform.position = C + dir * (T - 0.6f) + U * 0.02f;
                 ring.SetActive(true);
+            }
+        }
+        // the end of a round: the winners cheer, the others take it badly
+        string rk = v.phase == "rend" || v.phase == "mend" ? v.id + ":" + v.round + ":" + v.phase : "";
+        if (rk != "" && rk != resultKey)
+        {
+            resultKey = rk;
+            int wt = v.phase == "mend" && v.match != null ? v.match.team : v.result != null ? v.result.team : -1;
+            for (int seat = 0; seat < v.seats.Count; seat++)
+            {
+                var who = CharAtSeat(seat);
+                if (who == null || wt < 0) continue;
+                if (v.TeamOf(seat) == wt) who.Win(); else who.Lose();
             }
         }
         // someone just played: their hand goes out to the tile

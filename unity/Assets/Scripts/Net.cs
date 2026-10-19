@@ -26,7 +26,15 @@ public class Net
     public event Action<Dictionary<string, object>> OnMessage;
     public event Action<bool> OnOnline;
 
-    public Net(string url = ServerUrl) { this.url = url; }
+    public Net(string url = null) { this.url = url ?? Arg("-server") ?? ServerUrl; }
+
+    /// A command-line value ("-server ws://…" points the test build at a local server).
+    public static string Arg(string name)
+    {
+        var a = System.Environment.GetCommandLineArgs();
+        int i = System.Array.IndexOf(a, name);
+        return i >= 0 && i + 1 < a.Length ? a[i + 1] : null;
+    }
 
     public string Token
     {
@@ -63,7 +71,7 @@ public class Net
             }
             catch (Exception e)
             {
-                if (!stop.IsCancellationRequested) inbox.Enqueue("\u0001log " + e.GetType().Name + ": " + e.Message);
+                if (!stop.IsCancellationRequested) inbox.Enqueue("\u0001log " + e.GetType().Name + ": " + e.Message + (e.InnerException != null ? " / " + e.InnerException.Message : ""));
             }
             inbox.Enqueue("\u0001closed");
             try { await Task.Delay(backoff, stop.Token); } catch { }
