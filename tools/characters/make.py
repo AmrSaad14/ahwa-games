@@ -249,7 +249,12 @@ def make_hijab(basemesh, rig, rgb):
         c = mw @ v.co
         if c.y - cy > ry * 0.2 and tz - c.z < 0.16: v.co += (inv.to_3x3() @ Vector((0, 1, 0.3))).normalized() * 0.012
     bm.to_mesh(h.data); bm.free()
-    h.data.materials.append(flat_material("Hijab", rgb, 0.85))
+    hm = flat_material("Hijab", rgb, 0.85)
+    h.data.materials.append(hm)
+    for slot in h.material_slots: slot.link = "DATA"
+    while len(h.material_slots) > 1: h.active_material_index = len(h.material_slots) - 1; bpy.ops.object.material_slot_remove()
+    h.material_slots[0].material = hm
+    for poly in h.data.polygons: poly.material_index = 0
     sol = h.modifiers.new("Thick", "SOLIDIFY"); sol.thickness = 0.004; sol.offset = 1
     sub = h.modifiers.new("Smooth", "SUBSURF"); sub.levels = 1; sub.render_levels = 1
     cs = h.modifiers.new("Relax", "CORRECTIVE_SMOOTH"); cs.iterations = 6; cs.smooth_type = "LENGTH_WEIGHTED"
