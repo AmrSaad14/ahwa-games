@@ -3,4 +3,5 @@ import '../../client/src/main';
 import * as THREE from 'three';
 import { GLTFExporter } from 'GLTFExporter';
 import { makePerson, PEOPLE } from '../../client/src/people';
-(window as unknown as { __export: unknown }).__export = { THREE, GLTFExporter, makePerson, PEOPLE };
+import { makeTable, makeTeaGlass } from '../../client/src/ahwa';
+(window as unknown as { __export: unknown }).__export = { THREE, GLTFExporter, makePerson, PEOPLE, makeTable, makeTeaGlass };

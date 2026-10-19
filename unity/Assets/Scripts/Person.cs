@@ -17,6 +17,10 @@ public class Person : MonoBehaviour
     public bool seated = true;
     public float reachForward = 1.9f, handHeight = 0.25f, handSpread = 0.8f;
 
+    Vector3 gesture; float gestureAt = -10f;
+    /// Reach out to a point on the table (playing a tile there) and come back.
+    public void Gesture(Vector3 point) { gesture = point; gestureAt = Time.time; }
+
     float seed, nextLook, lookYaw, lookYawTo, lookPitch, nextBlink, blinkAt = -1;
 
     static Transform Find(Transform t, string name)
@@ -117,6 +121,15 @@ public class Person : MonoBehaviour
                 if (upper[i] <= 0) continue;
                 float wob = Mathf.Sin(t * 0.5f + i * 2.1f) * 0.08f;
                 var target = root + fwd * (reachForward + wob) * s + right * side[i] * handSpread * s + up * handHeight * s;
+                // the hand on the side of the tile goes out to it
+                float gt = Time.time - gestureAt;
+                if (gt < 1f && (Vector3.Dot(gesture - root, right) >= 0 ? 1 : -1) == side[i])
+                {
+                    float k = gt < 0.35f ? Ui.Ease(gt / 0.35f) : gt < 0.6f ? 1f : 1f - Ui.Ease((gt - 0.6f) / 0.4f);
+                    var to = gesture + up * 0.25f * s;
+                    var lift = up * Mathf.Sin(Mathf.Clamp01(gt / 0.35f) * Mathf.PI) * 0.6f * s;
+                    target = Vector3.Lerp(target, to, k) + (gt < 0.35f ? lift : Vector3.zero);
+                }
                 Reach(i, target, fwd, right, up);
             }
         }

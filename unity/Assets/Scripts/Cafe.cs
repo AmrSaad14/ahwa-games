@@ -12,6 +12,11 @@ public class Cafe : MonoBehaviour
     public bool ready;
 
     Vector3 center, front;          // the middle of the four tables; the way toward the camera side of the room
+    public Vector3 Front => front;
+    Transform lobby;                // the four small game tables (hidden while a game is on)
+    Transform chairModel;           // a café chair, copied for the game table
+    readonly List<GameObject> regulars = new List<GameObject>();
+    bool inGame;
     Vector3 camPos, camLook, camPosTo, camLookTo;
     float drift;
 
@@ -51,6 +56,8 @@ public class Cafe : MonoBehaviour
             var t = Find(room.transform, "Table_" + g);
             if (t != null) tables[g] = t; else Debug.LogWarning("[cafe] no table for " + g);
         }
+        lobby = Find(room.transform, "Tables");
+        chairModel = Find(room.transform, "Seat_domino_0");
         Debug.Log($"[cafe] room loaded, {tables.Count} tables, {room.GetComponentsInChildren<Renderer>().Length} renderers");
         if (tables.Count == 4)
         {
@@ -108,6 +115,7 @@ public class Cafe : MonoBehaviour
             p.transform.position = new Vector3(chair.position.x, t.position.y, chair.position.z);
             var person = p.AddComponent<Person>();
             person.Face(t.position);
+            regulars.Add(p);
         }
     }
 
@@ -125,6 +133,43 @@ public class Cafe : MonoBehaviour
         var right = Vector3.Cross(Vector3.up, -front);   // screen right when looking over the room
         look = t + Vector3.down * 0.6f + right * 3.4f;
         return look + Vector3.up * 11.5f + front * 13.5f;
+    }
+
+    /// A café chair at `at`, facing `toward`.
+    public GameObject MakeChair(Vector3 at, Vector3 toward)
+    {
+        if (chairModel == null) return null;
+        var c = Instantiate(chairModel.gameObject);
+        c.name = "Chair";
+        // the model chair faces its own table: turn the copy from that way to the new one
+        var tbl = tables["domino"].position;
+        var was = tbl - chairModel.position; was.y = 0;
+        var want = toward - at; want.y = 0;
+        c.transform.rotation = Quaternion.FromToRotation(was.normalized, want.normalized) * chairModel.rotation;
+        c.transform.position = new Vector3(at.x, chairModel.position.y, at.z);
+        c.transform.localScale = chairModel.lossyScale;
+        return c;
+    }
+
+    /// The café while a game is on: the four small tables and their regulars step aside for the big table.
+    public void SetGame(bool on)
+    {
+        inGame = on;
+        if (lobby != null) lobby.gameObject.SetActive(!on);
+        foreach (var r in regulars) if (r != null) r.SetActive(!on);
+        if (on) camPosTo = GameShot(out camLookTo); else Focus(focus);
+    }
+
+    /// Looking down at the game table from your side, framed to the screen.
+    Vector3 GameShot(out Vector3 look)
+    {
+        float aspect = Mathf.Max(0.5f, (float)Screen.width / Mathf.Max(1, Screen.height));
+        float vf = cam.fieldOfView * Mathf.Deg2Rad;
+        float hf = 2 * Mathf.Atan(Mathf.Tan(vf / 2) * aspect);
+        float el = aspect < 0.9f ? 1.08f : 0.98f;
+        float d = Mathf.Max(9.6f / Mathf.Tan(hf / 2), 8.5f / Mathf.Tan(vf / 2)) * 1.02f;
+        look = Vector3.zero + front * 1.3f;
+        return look + front * d * Mathf.Cos(el) + Vector3.up * d * Mathf.Sin(el);
     }
 
     public void Focus(string g)
@@ -160,7 +205,8 @@ public class Cafe : MonoBehaviour
     void Apply()
     {
         // a slow sway, so the café never looks like a still picture
-        var sway = Vector3.Cross(Vector3.up, front) * Mathf.Sin(drift * 0.18f) * 0.6f + Vector3.up * Mathf.Sin(drift * 0.23f) * 0.25f;
+        float sw = inGame ? 0.25f : 1f;
+        var sway = sw * Vector3.Cross(Vector3.up, front) * Mathf.Sin(drift * 0.18f) * 0.6f + Vector3.up * Mathf.Sin(drift * 0.23f) * 0.25f * sw;
         cam.transform.position = camPos + sway;
         cam.transform.LookAt(camLook);
     }

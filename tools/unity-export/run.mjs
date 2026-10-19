@@ -26,8 +26,8 @@ await p.exposeFunction('saveGlb', (name, b64) => { fs.writeFileSync(path.join(ou
 await p.goto(`http://127.0.0.1:${PORT}/export.html?promo`);
 await p.waitForSelector('.table-tag', { state: 'attached', timeout: 170000 });
 await p.waitForTimeout(2000);
-await p.evaluate(async () => {
-  const { THREE, GLTFExporter, makePerson, PEOPLE } = window.__export;
+await p.evaluate(async (only) => { window.__onlyProps = only;
+  const { THREE, GLTFExporter, makePerson, PEOPLE, makeTable, makeTeaGlass } = window.__export;
   const ex = new GLTFExporter();
   const save = async (name, obj) => {
     const buf = await ex.parseAsync(obj, { binary: true, onlyVisible: true, maxTextureSize: 1024 });
@@ -55,7 +55,11 @@ await p.evaluate(async () => {
   }
   // drop invisible tap boxes left in the copy
   const gone = []; cafe.traverse(o => { if (o.isMesh && o.material && o.material.visible === false) gone.push(o); }); gone.forEach(o => o.parent.remove(o));
-  await save('cafe', cafe);
+  if (!only) await save('cafe', cafe);
+  // the big game table (half side 6, like the web game's) and a tea glass
+  { const t = makeTable(6); t.name = 'MainTable'; await save('MainTable', t); }
+  { const g = makeTeaGlass(); g.name = 'TeaGlass'; await save('TeaGlass', g); }
+  if (window.__onlyProps) return;
   // the six regulars, each standing (walking rig) and seated
   const names = ['AmFathi', 'CaptainSami', 'Ziko', 'Mona', 'Nada', 'HajjMahmoud'];
   for (let i = 0; i < PEOPLE.length; i++) for (const standing of [true, false]) {
@@ -68,6 +72,6 @@ await p.evaluate(async () => {
     per.group.children.forEach(c => { if (!c.name && c.type === 'Group') c.name = 'Legs'; });
     await save(names[i] + (standing ? '_Stand' : '_Sit'), per.group);
   }
-});
+}, process.env.ONLY_PROPS === "1");
 await b.close(); server.kill();
 console.log('done');

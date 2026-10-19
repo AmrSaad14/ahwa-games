@@ -36,6 +36,28 @@ public static class BuildScript
         var icon = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Resources/UI/AppIcon.png");
         if (icon != null) PlayerSettings.SetIcons(NamedBuildTarget.Unknown, new[] { icon }, IconKind.Any);
         QualitySettings.shadowDistance = 60;
+        // shaders the game makes materials from in code (tiles, highlights) must be in every build
+        IncludeShaders("Legacy Shaders/Specular", "Legacy Shaders/Diffuse", "Legacy Shaders/Transparent/Diffuse", "Unlit/Texture", "Unlit/Color");
+    }
+
+    static void IncludeShaders(params string[] names)
+    {
+        var gs = AssetDatabase.LoadAssetAtPath<Object>("ProjectSettings/GraphicsSettings.asset");
+        if (gs == null) { Debug.Log("[build] no GraphicsSettings asset"); return; }
+        var so = new SerializedObject(gs);
+        var arr = so.FindProperty("m_AlwaysIncludedShaders");
+        foreach (var n in names)
+        {
+            var sh = Shader.Find(n);
+            if (sh == null) { Debug.Log("[build] shader not found: " + n); continue; }
+            bool has = false;
+            for (int i = 0; i < arr.arraySize; i++) if (arr.GetArrayElementAtIndex(i).objectReferenceValue == sh) has = true;
+            if (has) continue;
+            arr.InsertArrayElementAtIndex(arr.arraySize);
+            arr.GetArrayElementAtIndex(arr.arraySize - 1).objectReferenceValue = sh;
+        }
+        so.ApplyModifiedProperties();
+        AssetDatabase.SaveAssets();
     }
 
     public static void BuildLinux() { if (!Linux()) EditorApplication.Exit(1); }

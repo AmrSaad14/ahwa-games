@@ -17,7 +17,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 200
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
@@ -83,12 +83,12 @@ jobs:
             echo "apt exit $?" >> logs/shots-step.txt
             chmod +x build/linux/KingsBattle.x86_64
             cd build/linux
-            timeout 900 xvfb-run -a -s "-screen 0 1280x720x24" ./KingsBattle.x86_64 -screen-width 1280 -screen-height 720 -screen-fullscreen 0 -force-glcore -logFile "$GITHUB_WORKSPACE/logs/player.log" -shots >> "$GITHUB_WORKSPACE/logs/shots-step.txt" 2>&1
+            timeout 3000 xvfb-run -a -s "-screen 0 1280x720x24" ./KingsBattle.x86_64 -screen-width 1280 -screen-height 720 -screen-fullscreen 0 -force-glcore -logFile "$GITHUB_WORKSPACE/logs/player.log" -shots >> "$GITHUB_WORKSPACE/logs/shots-step.txt" 2>&1
             echo "player exit $?" >> "$GITHUB_WORKSPACE/logs/shots-step.txt"
             cp shots/*.png "$GITHUB_WORKSPACE/shots/" 2>/dev/null
             # the recorded frames → a short video of the run
             if ls shots/frames/*.png > /dev/null 2>&1; then
-              ffmpeg -loglevel error -y -framerate 25 -i shots/frames/f%04d.png -vf scale=960:-2 -c:v libx264 -pix_fmt yuv420p -crf 24 -movflags +faststart "$GITHUB_WORKSPACE/shots/unity-run.mp4" >> "$GITHUB_WORKSPACE/logs/shots-step.txt" 2>&1
+              ffmpeg -loglevel error -y -framerate 12 -i shots/frames/f%04d.png -vf scale=960:-2 -c:v libx264 -pix_fmt yuv420p -crf 24 -movflags +faststart "$GITHUB_WORKSPACE/shots/unity-run.mp4" >> "$GITHUB_WORKSPACE/logs/shots-step.txt" 2>&1
               echo "frames: $(ls shots/frames | wc -l)" >> "$GITHUB_WORKSPACE/logs/shots-step.txt"
             fi
             cd "$GITHUB_WORKSPACE"
