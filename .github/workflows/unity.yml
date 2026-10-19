@@ -79,13 +79,18 @@ jobs:
           mkdir -p shots
           if [ -f build/linux/KingsBattle.x86_64 ]; then
             sudo apt-get update -qq > logs/shots-step.txt 2>&1
-            sudo apt-get install -y -qq xvfb mesa-utils libgl1 libegl1 libglx-mesa0 mesa-vulkan-drivers >> logs/shots-step.txt 2>&1
+            sudo apt-get install -y -qq xvfb mesa-utils libgl1 libegl1 libglx-mesa0 mesa-vulkan-drivers ffmpeg >> logs/shots-step.txt 2>&1
             echo "apt exit $?" >> logs/shots-step.txt
             chmod +x build/linux/KingsBattle.x86_64
             cd build/linux
-            timeout 150 xvfb-run -a -s "-screen 0 1280x720x24" ./KingsBattle.x86_64 -screen-width 1280 -screen-height 720 -screen-fullscreen 0 -force-glcore -logFile "$GITHUB_WORKSPACE/logs/player.log" -shots >> "$GITHUB_WORKSPACE/logs/shots-step.txt" 2>&1
+            timeout 900 xvfb-run -a -s "-screen 0 1280x720x24" ./KingsBattle.x86_64 -screen-width 1280 -screen-height 720 -screen-fullscreen 0 -force-glcore -logFile "$GITHUB_WORKSPACE/logs/player.log" -shots >> "$GITHUB_WORKSPACE/logs/shots-step.txt" 2>&1
             echo "player exit $?" >> "$GITHUB_WORKSPACE/logs/shots-step.txt"
             cp shots/*.png "$GITHUB_WORKSPACE/shots/" 2>/dev/null
+            # the recorded frames → a short video of the run
+            if ls shots/frames/*.png > /dev/null 2>&1; then
+              ffmpeg -loglevel error -y -framerate 25 -i shots/frames/f%04d.png -vf scale=960:-2 -c:v libx264 -pix_fmt yuv420p -crf 24 -movflags +faststart "$GITHUB_WORKSPACE/shots/unity-run.mp4" >> "$GITHUB_WORKSPACE/logs/shots-step.txt" 2>&1
+              echo "frames: $(ls shots/frames | wc -l)" >> "$GITHUB_WORKSPACE/logs/shots-step.txt"
+            fi
             cd "$GITHUB_WORKSPACE"
           fi
           ls -la shots | tee -a logs/shots-step.txt
@@ -96,7 +101,7 @@ jobs:
         run: |
           set +e
           if [ -f logs/editor.log ]; then tail -c 4000000 logs/editor.log > logs/editor-tail.log; fi
-          files=$(ls logs/*.txt logs/activate.log logs/return.log logs/editor-tail.log logs/player.log shots/*.png 2>/dev/null)
+          files=$(ls logs/*.txt logs/activate.log logs/return.log logs/editor-tail.log logs/player.log shots/*.png shots/*.mp4 2>/dev/null)
           echo "publishing: $files"
           gh release delete unity-logs --yes --cleanup-tag
           gh release create unity-logs $files --title "Unity build logs" --target "$GITHUB_SHA" --prerelease --notes "Unity build ${GITHUB_SHA::7}"

@@ -1,7 +1,6 @@
 // The opening splash, as in the web game: two swords fly in and clash with a spark, the gold king rises
 // in a glow, KINGS BATTLE writes itself in with معركة الملوك under it, a loading bar fills, then it opens
 // onto the café.
-using System.IO;
 using System.Text;
 using UnityEngine;
 using UnityEngine.UI;
@@ -22,11 +21,11 @@ public class Splash : MonoBehaviour
     int shot;
 
     public bool Opened => openAt >= 0;
-    public void Ready() { if (readyAt < 0) readyAt = Time.realtimeSinceStartup; }
+    public void Ready() { if (readyAt < 0) readyAt = Time.time; }
 
     public void Show()
     {
-        shots = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-shots") >= 0;
+        shots = App.Recording;
         canvas = Ui.MakeCanvas("Splash", 100);
         var root = Ui.Rect("Splash", canvas.transform).Fill();
         group = root.gameObject.AddComponent<CanvasGroup>();
@@ -61,7 +60,7 @@ public class Splash : MonoBehaviour
         barFill = fill.rectTransform;
         barFill.anchorMin = Vector2.zero; barFill.anchorMax = new Vector2(0, 1); barFill.offsetMin = barFill.offsetMax = Vector2.zero;
 
-        t0 = Time.realtimeSinceStartup;
+        t0 = Time.time;
         Update();
     }
 
@@ -82,7 +81,7 @@ public class Splash : MonoBehaviour
     void Update()
     {
         if (canvas == null) return;
-        float t = Time.realtimeSinceStartup - t0;
+        float t = Time.time - t0;
 
         // background rays turn slowly; the glow swells behind the emblem
         raysImg.color = new Color(1, 1, 1, Ui.Ease(Seg(t, 0.2f, 1.4f)));
@@ -134,20 +133,20 @@ public class Splash : MonoBehaviour
         float p = readyAt < 0 ? 0.9f * (1 - Mathf.Exp(-t * 0.6f)) : Mathf.Lerp(barFill.anchorMax.x, 1f, 0.2f);
         barFill.anchorMax = new Vector2(p, 1);
 
-        if (shots && shot == 0 && t > 0.62f) { shot++; Capture("1-splash-clash.png"); }
-        if (shots && shot == 1 && t > 2.5f) { shot++; Capture("2-splash.png"); }
+        if (shots && shot == 0 && t > 0.62f) { shot++; App.Still("1-splash-clash.png"); }
+        if (shots && shot == 1 && t > 2.5f) { shot++; App.Still("2-splash.png"); }
 
         // open onto the café
-        if (openAt < 0 && readyAt >= 0 && t >= MinTime && (!shots || shot >= 2)) openAt = Time.realtimeSinceStartup + 0.25f;
-        if (openAt >= 0 && Time.realtimeSinceStartup > openAt)
+        if (openAt < 0 && readyAt >= 0 && t >= MinTime && (!shots || shot >= 2)) openAt = Time.time + 0.25f;
+        if (openAt >= 0 && Time.time > openAt)
         {
-            float o = Mathf.Clamp01((Time.realtimeSinceStartup - openAt) / 0.65f);
+            float o = Mathf.Clamp01((Time.time - openAt) / 0.65f);
             group.alpha = 1 - Ui.Ease(o);
             group.transform.localScale = Vector3.one * Mathf.Lerp(1f, 1.18f, Ui.Ease(o));
             group.blocksRaycasts = false;
             if (o >= 1) { Destroy(canvas.gameObject); canvas = null; }
         }
-        if (t > 15f && openAt < 0) openAt = Time.realtimeSinceStartup;   // never stuck on the splash
+        if (t > 15f && openAt < 0) openAt = Time.time;   // never stuck on the splash
     }
 
     static void Sword(RectTransform r, RawImage img, int dir, float p, float a)
@@ -158,10 +157,4 @@ public class Splash : MonoBehaviour
         r.localRotation = Quaternion.Euler(0, 0, -dir * 70f * (1 - p));
     }
 
-    static void Capture(string name)
-    {
-        var dir = Path.Combine(Directory.GetCurrentDirectory(), "shots");
-        Directory.CreateDirectory(dir);
-        ScreenCapture.CaptureScreenshot(Path.Combine(dir, name));
-    }
 }

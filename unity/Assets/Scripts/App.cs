@@ -25,6 +25,12 @@ public class App : MonoBehaviour
         ["domino"] = "دومينو", ["tawla"] = "طاولة", ["chess"] = "شطرنج", ["ludo"] = "لودو",
     };
 
+    /// Test mode (GitHub's desktop build, "-shots"): records the run as video frames plus a few stills, then quits.
+    public static readonly bool Recording = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-shots") >= 0;
+    static string ShotDir => Path.Combine(Directory.GetCurrentDirectory(), "shots");
+    public static void Still(string name) { Directory.CreateDirectory(ShotDir); ScreenCapture.CaptureScreenshot(Path.Combine(ShotDir, name)); }
+    int frame;
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Boot()
     {
@@ -41,6 +47,13 @@ public class App : MonoBehaviour
         Screen.sleepTimeout = SleepTimeout.NeverSleep;
         QualitySettings.shadowDistance = 60;
         QualitySettings.shadows = ShadowQuality.All;
+        // recording: game time steps 1/25 s per frame however slow the test machine draws, so the video plays smoothly
+        if (Recording) { Time.captureFramerate = 25; Directory.CreateDirectory(Path.Combine(ShotDir, "frames")); }
+    }
+
+    void LateUpdate()
+    {
+        if (Recording && frame < 25 * 24) ScreenCapture.CaptureScreenshot(Path.Combine(ShotDir, "frames", $"f{frame++:D4}.png"));
     }
 
     IEnumerator Start()
@@ -63,7 +76,7 @@ public class App : MonoBehaviour
         cafe.Entrance();
         StartCoroutine(FadeIn(homeGroup, 0.6f));
 
-        if (System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-shots") >= 0) StartCoroutine(Shots());
+        if (Recording) StartCoroutine(Shots());
     }
 
     void Update()
@@ -171,23 +184,21 @@ public class App : MonoBehaviour
         g.alpha = 1;
     }
 
-    /// Test mode (GitHub's desktop build): screenshots of the splash and the café, then quit.
+    /// Test mode: the café, then moving in on two tables, then quit (the frames make the video).
     IEnumerator Shots()
     {
-        var dir = Path.Combine(Directory.GetCurrentDirectory(), "shots");
-        Directory.CreateDirectory(dir);
         yield return new WaitForSeconds(3.5f);
-        ScreenCapture.CaptureScreenshot(Path.Combine(dir, "3-cafe.png"));
-        yield return new WaitForSeconds(4f);
-        ScreenCapture.CaptureScreenshot(Path.Combine(dir, "4-cafe-later.png"));
+        Still("3-cafe.png");
+        yield return new WaitForSeconds(2.5f);
         Pick("domino");
         yield return new WaitForSeconds(3.5f);
-        ScreenCapture.CaptureScreenshot(Path.Combine(dir, "5-domino.png"));
+        Still("4-domino.png");
         Pick("ludo");
         yield return new WaitForSeconds(3.5f);
-        ScreenCapture.CaptureScreenshot(Path.Combine(dir, "6-ludo.png"));
-        yield return new WaitForSeconds(0.5f);
-        Debug.Log("[app] screenshots done, online=" + (net != null && net.Online));
+        Still("5-ludo.png");
+        Pick("tawla");
+        yield return new WaitForSeconds(3f);
+        Debug.Log("[app] recording done, online=" + (net != null && net.Online) + ", frames=" + frame);
         Application.Quit();
     }
 }
