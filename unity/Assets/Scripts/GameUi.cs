@@ -476,7 +476,7 @@ public class GameUi : MonoBehaviour
         {
             if (v.MyTurn) msg = app.boardGame.TurnHint() ?? Loc.T("دورك");
             else if (v.turn >= 0) msg = NameOf(v, v.turn) + Loc.T(" يلعب");
-            if (v.last != null && v.last.t == "pass" && v.last.s >= 0 && v.last.s != v.you) msg = NameOf(v, v.last.s) + Loc.T(" مالوش لعب");
+            if (!v.MyTurn && v.last != null && v.last.t == "pass" && v.last.s >= 0 && v.last.s != v.you) msg = NameOf(v, v.last.s) + Loc.T(" مالوش لعب");
         }
         turnText.Set(msg);
         rollButton.SetActive(app.boardGame.NeedsRoll());
