@@ -173,6 +173,7 @@ public class App : MonoBehaviour
                 var vm = m.Obj("view");
                 if (vm == null) break;
                 var v = TableView.Parse(vm);
+                if (view == null || view.id != v.id) Debug.Log($"[app] table {v.game} {v.mode} {v.phase} {v.id.Substring(0, Mathf.Min(6, v.id.Length))} (was {(view == null ? "none" : view.game + " " + view.id.Substring(0, Mathf.Min(6, view.id.Length)))})");
                 serverOffset = v.now - LocalMs();
                 if (view == null) EnterGame();
                 // the choice of end only lasts while it's still your turn and the tile is still in hand
@@ -186,6 +187,7 @@ public class App : MonoBehaviour
                 Redraw();
                 break;
             case "left":
+                Debug.Log("[app] left the table" + (view != null ? " (" + view.game + " " + view.phase + ")" : ""));
                 if (view != null && view.phase == "mend") { view = null; break; }   // the result stays up until you choose
                 ExitGame();
                 break;
@@ -248,7 +250,12 @@ public class App : MonoBehaviour
         game.Render(view, sel, choose);
     }
 
-    public void Send(Dictionary<string, object> m) => net?.Send(m);
+    public void Send(Dictionary<string, object> m)
+    {
+        var t = m.Str("t");
+        if (t != "act" && t != "ping") Debug.Log("[app] send " + t + (m.TryGetValue("mode", out var md) ? " " + md : ""));
+        net?.Send(m);
+    }
 
     /* ---------- actions ---------- */
 
@@ -511,8 +518,9 @@ public class App : MonoBehaviour
                 yield return new WaitForSeconds(0.5f);
                 Practice(mode);
                 float tw = Time.realtimeSinceStartup;
-                while ((view == null || !view.Board) && Time.realtimeSinceStartup - tw < 30) yield return null;
-                if (view == null || !view.Board) { Debug.Log("[app] no " + tag + " game"); continue; }
+                string want = tag == "tawla" ? "tawla" : tag == "chess" ? "chess" : "ludo";
+                while ((view == null || view.game != want) && Time.realtimeSinceStartup - tw < 30) yield return null;
+                if (view == null || view.game != want) { Debug.Log("[app] no " + tag + " game (have " + (view == null ? "none" : view.game) + ")"); continue; }
                 recordOn = true;
                 Debug.Log("[app] playing " + tag);
                 yield return new WaitForSeconds(1.2f);
