@@ -292,25 +292,52 @@ def make_hood(basemesh, rig, mat, top, rx, ry):
     would show through): an egg over the head and hair, narrowing round the neck down under the cape, with an
     oval opening for the face. It takes the body's skin weights, so it moves with her head."""
     cx, cy, tz = top.x, top.y, top.z
-    c0 = Vector((cx, cy + 0.01, tz - 0.115)); A, B, C = rx * 1.3, ry * 1.18, 0.142
-    bm = bmesh.new()
-    bmesh.ops.create_uvsphere(bm, u_segments=64, v_segments=40, radius=1.0)
+    c0 = Vector((cx, cy + 0.012, tz - 0.108)); A, B, C = rx * 1.26, ry * 1.16, 0.13
     neck_z = tz - 0.33
-    for v in bm.verts:
-        d = v.co.copy()
-        p = Vector((c0.x + d.x * A, c0.y + d.y * B, c0.z + d.z * C))
-        if d.z < -0.2:   # below the jaw: narrow to the neck and run down under the cape
-            k = min(1.0, (-0.2 - d.z) / 0.8)
-            e = k * k * (3 - 2 * k)
-            p.x = c0.x + d.x * (A + (0.075 - A) * e)
-            p.y = c0.y + 0.005 + d.y * (B + (0.08 - B) * e)
-            p.z = c0.z + (-0.2 * C) + (neck_z - (c0.z - 0.2 * C)) * k
-        v.co = p
-    # the face opening: an oval from the brow to under the chin; and nothing below the neck
-    def face(c):
-        dz = tz - c.z
-        return c.y - cy < -ry * 0.25 and ((c.x - cx) / (rx * 0.66)) ** 2 + ((dz - 0.145) / 0.1) ** 2 < 1
-    bmesh.ops.delete(bm, geom=[f for f in bm.faces if face(f.calc_center_median())], context="FACES")
+    # the face opening, on the unit sphere seen from the front (x across, z up): a smooth oval from the brow
+    # to under the chin. The hood is made of rings running from that edge round to the back of the head, so the
+    # edge is one clean curve (no stair steps from deleted faces).
+    jaw = c0.z - 0.2 * C
+    def unit_z(zw):   # the inverse of the height mapping below (the egg above the jaw, the neck below it)
+        return (zw - c0.z) / C if zw >= jaw else -0.2 - 0.8 * (jaw - zw) / (jaw - neck_z)
+    brow, chin = unit_z(tz - 0.045), unit_z(tz - 0.25)
+    fa, fb, fz = (rx * 0.66) / A, (brow - chin) / 2, (brow + chin) / 2
+    U, R = 64, 22
+    bm = bmesh.new()
+    grid = []
+    back = Vector((0.0, 1.0, 0.0))
+    for i in range(R):
+        u = i / (R - 1)
+        ring = []
+        for j in range(U):
+            ph = 2 * math.pi * j / U
+            x, z = fa * math.cos(ph), fz + fb * math.sin(ph)
+            y = -math.sqrt(max(0.0, 1 - x * x - z * z))
+            a = Vector((x, y, z)).normalized()
+            # along the great circle from the edge of the opening round to the back of the head
+            om = a.angle(back)
+            d = a if om < 1e-6 else (a * math.sin((1 - u) * om) + back * math.sin(u * om)) / math.sin(om)
+            if i == R - 1: d = back.copy()
+            p_ = Vector((c0.x + d.x * A, c0.y + d.y * B, c0.z + d.z * C))
+            if d.z < -0.2:   # below the jaw: narrow to the neck and run down under the cape
+                k = min(1.0, (-0.2 - d.z) / 0.8)
+                e = k * k * (3 - 2 * k)
+                p_.x = c0.x + d.x * (A + (0.075 - A) * e)
+                p_.y = c0.y + 0.005 + d.y * (B + (0.08 - B) * e)
+                p_.z = c0.z + (-0.2 * C) + (neck_z - (c0.z - 0.2 * C)) * k
+            ring.append(bm.verts.new(p_))
+            if i == R - 1: break
+        grid.append(ring)
+    for i in range(R - 2):
+        for j in range(U):
+            bm.faces.new((grid[i][j], grid[i][(j + 1) % U], grid[i + 1][(j + 1) % U], grid[i + 1][j]))
+    tip = grid[R - 1][0]
+    for j in range(U):
+        bm.faces.new((grid[R - 2][j], grid[R - 2][(j + 1) % U], tip))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    # the normals point out of the head
+    if sum((f.normal.dot(f.calc_center_median() - c0)) for f in bm.faces) < 0:
+        bmesh.ops.reverse_faces(bm, faces=list(bm.faces))
     mesh = bpy.data.meshes.new("Hood"); bm.to_mesh(mesh); bm.free()
     hood = bpy.data.objects.new("Hood", mesh)
     bpy.context.collection.objects.link(hood)
@@ -342,23 +369,26 @@ def make_cape(basemesh, rig, mat, top, rx, ry):
     cx, cy, tz = top.x, top.y, top.z
     rings, n = 14, 56
     # how far the body reaches (chest, back, sides) anywhere between the shoulders and the waist, arms left out
-    torso = [p for p in pts if 0.3 <= tz - p.z <= 0.62 and abs(p.x - cx) < 0.2]
+    torso = [p for p in pts if 0.3 <= tz - p.z <= 0.72 and abs(p.x - cx) < 0.2]
     sx = max(abs(p.x - cx) for p in torso); sf = max(cy - p.y for p in torso); sb = max(p.y - cy for p in torso)
     prof = []   # per ring: height, half width, reach to the front, reach to the back
     for i in range(rings):
         t = i / (rings - 1)
-        dz = 0.22 + t * (0.62 - 0.22)
-        # from the neck (inside the hood) over the shoulders, eased like cloth, then falling straight and flaring a little
-        k = min(1.0, max(0.0, (dz - 0.27) / 0.12)); e = 1 - (1 - k) ** 2   # tight to the neck under the hood, then out
-        flare = max(0.0, dz - 0.39) * 0.25
-        prof.append((tz - dz, 0.085 + (sx + 0.045 - 0.085) * e + flare, 0.08 + (sf + 0.04 - 0.08) * e + flare, 0.085 + (sb + 0.035 - 0.085) * e + flare))
+        # from the neck (inside the hood) down over the shoulders like a cone of cloth, then falling and flaring
+        prof.append(t)
+    def shape(t, side):
+        dz = 0.22 + t * (0.70 - 0.07 * side - 0.22)       # the hem is a little shorter at the sides
+        k = min(1.0, max(0.0, (dz - 0.25) / 0.2)); e = k * k * (3 - 2 * k)
+        flare = max(0.0, dz - 0.42) * 0.42
+        return (tz - dz, 0.085 + (sx + 0.05 - 0.085) * e + flare, 0.08 + (sf + 0.045 - 0.08) * e + flare, 0.085 + (sb + 0.04 - 0.085) * e + flare)
     bm = bmesh.new()
     grid = []
-    for z, ax, af, ab in prof:
+    for t in prof:
         ring = []
         for j in range(n):
             a = 2 * math.pi * j / n
             s, c = math.sin(a), math.cos(a)
+            z, ax, af, ab = shape(t, c * c)
             ring.append(bm.verts.new((cx + ax * c, cy + (-af if s < 0 else ab) * abs(s), z)))
         grid.append(ring)
     for i in range(rings - 1):
