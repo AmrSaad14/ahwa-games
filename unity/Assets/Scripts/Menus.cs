@@ -113,7 +113,8 @@ public class Menus : MonoBehaviour
                 Sfx.Coins();
                 break;
             case "lb":
-                lbRows = m.Arr("rows"); lbMe = m.Obj("me");
+                lbRows = m.Arr("rows") ?? new List<object>(); lbMe = m.Obj("me");
+                Debug.Log($"[menus] leaderboard {m.Str("game")}: {lbRows.Count} rows (showing {lbGame})");
                 if (m.Str("game") == lbGame) refreshOpen?.Invoke();
                 break;
             case "adTicket":
@@ -410,6 +411,7 @@ public class Menus : MonoBehaviour
     {
         lbTab = tab; lbGame = GameIds[tab]; lbRows = null; lbMe = null;
         app.Send(new Dictionary<string, object> { ["t"] = "lb", ["game"] = lbGame });
+        StartCoroutine(AskAgain(lbGame));
         Panel(Loc.T("المتصدرين"), out var body, new Vector2(600, 340));
         refreshOpen = () =>
         {
@@ -441,6 +443,13 @@ public class Menus : MonoBehaviour
             }
         };
         refreshOpen();
+    }
+
+    /// No answer yet after a moment (a dropped message, a sleepy server)? Ask once more.
+    IEnumerator AskAgain(string game)
+    {
+        yield return new WaitForSeconds(1f);
+        if (lbRows == null && lbGame == game && open != null) { Debug.Log("[menus] asking for the leaderboard again"); app.Send(new Dictionary<string, object> { ["t"] = "lb", ["game"] = game }); }
     }
 
     static void LbCells(RectTransform row, string rank, string name, string rating, string wins, Color c, int size)
@@ -576,15 +585,15 @@ public class Menus : MonoBehaviour
         Ui.Label(root, "دومينو · طاولة · شطرنج · لودو", 15, Ui.GoldLight).rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(600, 24), new Vector2(0, -116));
         var count = Ui.Label(root, "", 14, Color.white, TextAnchor.MiddleRight, Ui.Bold);
         count.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(240, 26), new Vector2(-14, -12));
-        for (float t = 5f; t > 0; t -= Time.unscaledDeltaTime)
+        for (float t = 5f; t > 0; t -= Time.deltaTime)
         {
             count.Set(Loc.T("المكافأة بعد") + " " + Mathf.CeilToInt(t));
-            logo.rectTransform.localScale = Vector3.one * (1 + Mathf.Sin(Time.unscaledTime * 3) * 0.03f);
+            logo.rectTransform.localScale = Vector3.one * (1 + Mathf.Sin(Time.time * 3) * 0.03f);
             yield return null;
         }
         app.Send(new Dictionary<string, object> { ["t"] = "adWatched", ["ticket"] = ticket });
         count.Set(Loc.T("+٥٬٠٠٠ عملة"));
-        yield return new WaitForSecondsRealtime(0.9f);
+        yield return new WaitForSeconds(0.9f);
         Destroy(root.gameObject);
         adShowing = false;
     }

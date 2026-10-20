@@ -408,7 +408,7 @@ public class App : MonoBehaviour
             menus.OpenSettings(); yield return new WaitForSeconds(0.8f); Still("m1-settings.png");
             menus.OpenShop(0); yield return new WaitForSeconds(0.8f); Still("m2-shop-coins.png");
             menus.OpenShop(1); yield return new WaitForSeconds(0.8f); Still("m3-shop-tiles.png");
-            menus.OpenLeaders(0); yield return new WaitForSeconds(1.5f); Still("m4-leaders.png");
+            menus.OpenLeaders(0); yield return new WaitForSeconds(2.5f); Still("m4-leaders.png");
             menus.OpenHowTo(0); yield return new WaitForSeconds(0.8f); Still("m5-howto.png");
             menus.Close();
             menus.WatchAd(); yield return new WaitForSeconds(1.5f); Still("m6-ad.png");
