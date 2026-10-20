@@ -59,7 +59,7 @@ REGULARS = [
          skin="onlytheghosts_middle_aged_eurasian_female", skin_dark=0.3, hair=None, brows="eyebrow010",
          # a jilbab: a long loose robe to the ankles, and a long khimar over the head, shoulders and chest
          clothes=["mindfront_kimono", "toigo_flats"],
-         tints={}, hat="khimar", scarf=(0.3, 0.2, 0.17), robe=(0.075, 0.08, 0.13)),
+         tints={}, hat="khimar", scarf=(0.12, 0.075, 0.08), robe=(0.06, 0.065, 0.11)),
     dict(name="Nada", gender=0, age=0.48, weight=0.42, muscle=0.4, height=0.48, proportions=0.4, eth=(0.1, 0.05, 0.85),
          skin="onlytheghosts_young_eurasian_female", skin_dark=0.25, hair="long01", hair_tint=(0.16, 0.09, 0.05), brows="eyebrow012",
          clothes=["female_casualsuit01", "toigo_ballet_flats", "toigo_pearl_earrings"],
@@ -233,12 +233,8 @@ def make_hijab(basemesh, rig, rgb, long=False):
         if body is not None and dl is not None and body.index not in v[dl]: return False   # the helper geometry
         c = mw @ v.co
         dz = tz - c.z
-        if long:   # a khimar: down over the shoulders, chest and back to the waist, not the arms
-            if dz > 0.6: return False
-            if dz > 0.26 and abs(c.x - cx) > 0.19: return False
-        else:
-            if dz > 0.36: return False                                              # below the shoulders
-            if dz > 0.26 and ((c.x - cx) / 0.2) ** 2 + ((c.y - cy - 0.01) / 0.14) ** 2 > 1: return False   # only around the neck
+        if dz > 0.36: return False                                              # below the shoulders
+        if dz > 0.26 and ((c.x - cx) / 0.2) ** 2 + ((c.y - cy - 0.01) / 0.14) ** 2 > 1: return False   # only around the neck
         # the face: an oval from the brow to under the chin
         fy = c.y - cy
         if fy < -ry * 0.2 and ((c.x - cx) / (rx * 0.62)) ** 2 + ((dz - 0.145) / 0.098) ** 2 < 1: return False
@@ -249,14 +245,16 @@ def make_hijab(basemesh, rig, rgb, long=False):
         c = mw @ v.co; dz = tz - c.z
         push = 0.022 + (0.03 * min(1, (dz - 0.24) / 0.06) if dz > 0.24 else 0)
         v.co += v.normal * push
-        if long and dz > 0.24:   # the cloth hangs loose and flares a little as it falls
-            k = min(1, (dz - 0.24) / 0.34)
-            out = Vector((c.x - cx, c.y - cy, 0))
-            if out.length > 1e-6: v.co += inv.to_3x3() @ (out.normalized() * 0.045 * k)
-    # a little volume at the back of the head (hair under it)
+    # over the head the cloth doesn't follow the ears and the hair: it makes a smooth dome
+    c0 = Vector((cx, cy + 0.008, tz - 0.115)); A, B, C = rx * 1.16, ry * 1.14, 0.135
     for v in bm.verts:
-        c = mw @ v.co
-        if c.y - cy > ry * 0.2 and tz - c.z < 0.16: v.co += (inv.to_3x3() @ Vector((0, 1, 0.3))).normalized() * 0.012
+        c = mw @ v.co; d = c - c0
+        w = min(1.0, max(0.0, (c.z - (c0.z - 0.09)) / 0.06))
+        if w <= 0: continue
+        q = (d.x / A) ** 2 + (d.y / B) ** 2 + (d.z / C) ** 2
+        if q < 1e-9: continue
+        sc = 1 / math.sqrt(q)
+        if sc > 1: v.co = inv @ (c + (c0 + d * sc - c) * w)
     bm.to_mesh(h.data); bm.free()
     hm = flat_material("Hijab", rgb, 0.85)
     h.data.materials.append(hm)
@@ -272,7 +270,65 @@ def make_hijab(basemesh, rig, rgb, long=False):
     arm = next((m for m in h.modifiers if m.type == "ARMATURE"), None)
     if arm: h.modifiers.move(h.modifiers.find(arm.name), len(h.modifiers) - 1)
     h.parent = basemesh.parent; h.matrix_world = mw
-    return [h]
+    if not long: return [h]
+    return [h, make_cape(basemesh, rig, hm, top, rx, ry)]
+
+
+def make_cape(basemesh, rig, mat, top, rx, ry):
+    """The long part of a khimar: a cape from the neck that falls straight over the shoulders, chest and back
+    to the waist, wide enough to clear the body at every height (it doesn't follow the bust), flaring a little.
+    It takes the body's skin weights where it lies, so it moves with her."""
+    dg = bpy.context.evaluated_depsgraph_get()
+    ev = basemesh.evaluated_get(dg); me = ev.to_mesh(); mw = basemesh.matrix_world
+    pts = [mw @ v.co for v in me.vertices]
+    ev.to_mesh_clear()
+    cx, cy, tz = top.x, top.y, top.z
+    rings, n = 12, 56
+    prof = []   # per ring: height, half width, reach to the front, reach to the back
+    sx = sf = sb = 0.0
+    for i in range(rings):
+        t = i / (rings - 1)
+        dz = 0.255 + t * (0.6 - 0.255)
+        near = [p for p in pts if abs((tz - p.z) - dz) < 0.012 and abs(p.x - cx) < 0.235]
+        if near:
+            sx = max(sx, max(abs(p.x - cx) for p in near))
+            sf = max(sf, max(cy - p.y for p in near))
+            sb = max(sb, max(p.y - cy for p in near))
+        m = 0.028 + 0.055 * t   # clear of the body, and flaring as it falls
+        prof.append((tz - dz, sx + m, sf + m, sb + m))
+    bm = bmesh.new()
+    grid = []
+    for z, ax, af, ab in prof:
+        ring = []
+        for j in range(n):
+            a = 2 * math.pi * j / n
+            s, c = math.sin(a), math.cos(a)
+            ring.append(bm.verts.new((cx + ax * c, cy + (-af if s < 0 else ab) * abs(s), z)))
+        grid.append(ring)
+    for i in range(rings - 1):
+        for j in range(n):
+            bm.faces.new((grid[i][j], grid[i][(j + 1) % n], grid[i + 1][(j + 1) % n], grid[i + 1][j]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    mesh = bpy.data.meshes.new("Khimar"); bm.to_mesh(mesh); bm.free()
+    cape = bpy.data.objects.new("Khimar", mesh)
+    bpy.context.collection.objects.link(cape)
+    GeneralObjectProperties.set_value("object_type", "Clothes", entity_reference=cape)
+    mesh.materials.append(mat)
+    for poly in mesh.polygons: poly.use_smooth = True
+    # the body's skin weights, from the nearest part of the body
+    bpy.ops.object.select_all(action="DESELECT"); cape.select_set(True); bpy.context.view_layer.objects.active = cape
+    dt = cape.modifiers.new("Weights", "DATA_TRANSFER")
+    dt.object = basemesh; dt.use_vert_data = True; dt.data_types_verts = {"VGROUP_WEIGHTS"}; dt.vert_mapping = "POLYINTERP_NEAREST"
+    try:
+        bpy.ops.object.datalayout_transfer(modifier="Weights")
+        bpy.ops.object.modifier_apply(modifier="Weights")
+    except Exception as e:
+        p("  khimar weights:", e)
+    sol = cape.modifiers.new("Thick", "SOLIDIFY"); sol.thickness = 0.004; sol.offset = 1
+    sub = cape.modifiers.new("Smooth", "SUBSURF"); sub.levels = 1; sub.render_levels = 1
+    arm = cape.modifiers.new("Armature", "ARMATURE"); arm.object = rig
+    cape.parent = rig; cape.matrix_parent_inverse = rig.matrix_world.inverted()
+    return cape
 
 # ---------- building ----------
 def build(spec, x):
