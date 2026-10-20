@@ -104,7 +104,7 @@ jobs:
           mkdir -p shots
           if [ -f build/linux/BoardBattles.x86_64 ]; then
             sudo apt-get update -qq > logs/shots-step.txt 2>&1
-            sudo apt-get install -y -qq xvfb mesa-utils libgl1 libegl1 libglx-mesa0 mesa-vulkan-drivers ffmpeg >> logs/shots-step.txt 2>&1
+            sudo apt-get install -y -qq xvfb mesa-utils libgl1 libegl1 libglx-mesa0 mesa-vulkan-drivers ffmpeg libx11-dev libxrandr2 libxi6 libxcursor1 libxinerama1 libpulse0 libasound2t64 >> logs/shots-step.txt 2>&1
             echo "apt exit $?" >> logs/shots-step.txt
             chmod +x build/linux/BoardBattles.x86_64
             cd build/linux
