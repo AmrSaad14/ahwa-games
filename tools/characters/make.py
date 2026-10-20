@@ -233,6 +233,7 @@ def make_hijab(basemesh, rig, rgb, long=False):
         if body is not None and dl is not None and body.index not in v[dl]: return False   # the helper geometry
         c = mw @ v.co
         dz = tz - c.z
+        if long and dz > 0.29: return False                                    # a khimar's cape takes over below the neck
         if dz > 0.36: return False                                              # below the shoulders
         if dz > 0.26 and ((c.x - cx) / 0.2) ** 2 + ((c.y - cy - 0.01) / 0.14) ** 2 > 1: return False   # only around the neck
         # the face: an oval from the brow to under the chin
@@ -256,6 +257,15 @@ def make_hijab(basemesh, rig, rgb, long=False):
         if q < 1e-9: continue
         sc = 1 / math.sqrt(q)
         v.co = inv @ (c + (c0 + d * sc - c) * w)
+    # the ears and hair folded flat onto that shape leave pieces facing inward: they go
+    bm.normal_update()
+    inward = []
+    for f in bm.faces:
+        cf = mw @ f.calc_center_median()
+        if cf.z < c0.z - 0.1: continue
+        n = (mw.to_3x3() @ f.normal)
+        if n.dot(cf - c0) < 0: inward.append(f)
+    bmesh.ops.delete(bm, geom=inward, context="FACES")
     bm.to_mesh(h.data); bm.free()
     hm = flat_material("Hijab", rgb, 0.85)
     h.data.materials.append(hm)
@@ -284,27 +294,18 @@ def make_cape(basemesh, rig, mat, top, rx, ry):
     pts = [mw @ v.co for v in me.vertices]
     ev.to_mesh_clear()
     cx, cy, tz = top.x, top.y, top.z
-    rings, n = 12, 56
+    rings, n = 14, 56
+    # how far the body reaches (chest, back, sides) anywhere between the shoulders and the waist, arms left out
+    torso = [p for p in pts if 0.3 <= tz - p.z <= 0.62 and abs(p.x - cx) < 0.2]
+    sx = max(abs(p.x - cx) for p in torso); sf = max(cy - p.y for p in torso); sb = max(p.y - cy for p in torso)
     prof = []   # per ring: height, half width, reach to the front, reach to the back
-    sx = sf = sb = 0.0
     for i in range(rings):
         t = i / (rings - 1)
-        dz = 0.255 + t * (0.6 - 0.255)
-        near = [p for p in pts if abs((tz - p.z) - dz) < 0.012 and abs(p.x - cx) < 0.235]
-        if near:
-            sx = max(sx, max(abs(p.x - cx) for p in near))
-            sf = max(sf, max(cy - p.y for p in near))
-            sb = max(sb, max(p.y - cy for p in near))
-        m = 0.028 + 0.055 * t   # clear of the body, and flaring as it falls
-        prof.append((tz - dz, sx + m, sf + m, sb + m))
-    # the top slopes like cloth over the shoulders: from the neck out to the shoulders, eased, no shelf
-    shoulder = next((i for i, (z, ax, af, ab) in enumerate(prof) if tz - z >= 0.34), 3)
-    z0, ax0, af0, ab0 = prof[0]
-    zs, axs, afs, abs_ = prof[shoulder]
-    neck = (0.085, 0.075, 0.085)
-    for i in range(shoulder):
-        k = i / shoulder; e = 1 - (1 - k) ** 2   # rounded over the shoulder
-        prof[i] = (prof[i][0], neck[0] + (axs - neck[0]) * e, neck[1] + (afs - neck[1]) * e, neck[2] + (abs_ - neck[2]) * e)
+        dz = 0.22 + t * (0.62 - 0.22)
+        # from the neck (inside the hood) over the shoulders, eased like cloth, then falling straight and flaring a little
+        k = min(1.0, (dz - 0.22) / 0.15); e = 1 - (1 - k) ** 2
+        flare = max(0.0, dz - 0.37) * 0.25
+        prof.append((tz - dz, 0.085 + (sx + 0.045 - 0.085) * e + flare, 0.08 + (sf + 0.04 - 0.08) * e + flare, 0.085 + (sb + 0.035 - 0.085) * e + flare))
     bm = bmesh.new()
     grid = []
     for z, ax, af, ab in prof:
