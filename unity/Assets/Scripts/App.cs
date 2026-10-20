@@ -80,7 +80,6 @@ public class App : MonoBehaviour
     {
         var splash = gameObject.AddComponent<Splash>();
         splash.Show();
-        Ambience.Begin();   // the café's crowd, from the first frame
         yield return null;   // let the splash draw its first frame before the heavy loading
 
         cafe = new GameObject("Cafe").AddComponent<Cafe>();
@@ -260,7 +259,6 @@ public class App : MonoBehaviour
         game.HidePicker();
         homeGroup.alpha = 0; homeGroup.blocksRaycasts = false;
         cafe.SetGame(true);
-        Ambience.Home(false);
         dominoTable.Show(true);
         game.ShowHud(true);
     }
@@ -274,7 +272,6 @@ public class App : MonoBehaviour
         boardGame.Show(false);
         voice.Leave(); voice.Sync(null);
         cafe.SetGame(false);
-        Ambience.Home(true);
         homeGroup.alpha = 1; homeGroup.blocksRaycasts = true;
     }
 
