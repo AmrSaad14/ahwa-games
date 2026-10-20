@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import type { CoinRow, LeaderRow, PublicUser } from '../shared/protocol';
+import type { CashoutRow, CoinRow, LeaderRow, PublicUser } from '../shared/protocol';
 import type { GameId } from '../shared/engine';
 import { ECONOMY } from '../shared/gifts';
 import { Equipped, skinById } from '../shared/skins';
@@ -76,6 +76,13 @@ export class Store {
     // every store purchase, so the same purchase can never be credited twice
     this.db.exec(`CREATE TABLE IF NOT EXISTS purchases (
       token TEXT PRIMARY KEY, user_id TEXT NOT NULL, product TEXT NOT NULL, order_id TEXT, ts INTEGER NOT NULL, coins INTEGER NOT NULL DEFAULT 0, until INTEGER NOT NULL DEFAULT 0)`);
+    // phones for push reminders (Firebase Cloud Messaging), and cash-out requests paid by hand
+    this.db.exec(`CREATE TABLE IF NOT EXISTS push_tokens (token TEXT PRIMARY KEY, user_id TEXT NOT NULL, lang TEXT NOT NULL DEFAULT 'ar', platform TEXT NOT NULL DEFAULT 'android', ts INTEGER NOT NULL);
+      CREATE INDEX IF NOT EXISTS push_user ON push_tokens(user_id);
+      CREATE TABLE IF NOT EXISTS cashouts (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, coins INTEGER NOT NULL, egp INTEGER NOT NULL,
+        phone TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', ts INTEGER NOT NULL, done_ts INTEGER, note TEXT);
+      CREATE INDEX IF NOT EXISTS cashouts_user ON cashouts(user_id, id DESC);
+      CREATE INDEX IF NOT EXISTS cashouts_status ON cashouts(status, id)`);
     this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_phone ON users(phone) WHERE phone IS NOT NULL; CREATE UNIQUE INDEX IF NOT EXISTS users_google ON users(google_sub) WHERE google_sub IS NOT NULL');
     // coins moved to stakes from 5K to 1M: older balances are scaled up once
     if (!this.db.prepare("SELECT v FROM meta WHERE k = 'coins_v2'").get()) {
@@ -164,6 +171,7 @@ export class Store {
     this.db.prepare('DELETE FROM ratings WHERE user_id = ?').run(id);
     this.db.prepare('DELETE FROM coin_log WHERE user_id = ?').run(id);
     this.db.prepare('DELETE FROM friends WHERE a = ? OR b = ?').run(id, id);
+    this.db.prepare('DELETE FROM push_tokens WHERE user_id = ?').run(id);
   }
 
   /** Gives the daily coin bonus once per (UTC) day. Returns the coins added, or 0. */
@@ -320,6 +328,54 @@ export class Store {
   }
 
   /** Rows changed since the database was opened (to skip backups when nothing happened). */
+  /* ---------- push reminders ---------- */
+
+  savePushToken(uid: string, token: string, lang: string, platform: string) {
+    this.db.prepare('INSERT INTO push_tokens (token, user_id, lang, platform, ts) VALUES (?, ?, ?, ?, ?) ON CONFLICT(token) DO UPDATE SET user_id = excluded.user_id, lang = excluded.lang, ts = excluded.ts')
+      .run(token, uid, lang, platform, Date.now());
+  }
+  dropPushToken(token: string) { this.db.prepare('DELETE FROM push_tokens WHERE token = ?').run(token); }
+  /** Every phone to remind, skipping players who were in the game in the last `quietMs`. */
+  pushTargets(quietMs: number): { token: string; user_id: string; lang: string; name: string; coins: number }[] {
+    return this.db.prepare(`SELECT p.token, p.user_id, p.lang, u.name, u.coins FROM push_tokens p JOIN users u ON u.id = p.user_id WHERE u.seen < ?`)
+      .all(Date.now() - quietMs) as { token: string; user_id: string; lang: string; name: string; coins: number }[];
+  }
+  pushTokensOf(uid: string): { token: string; lang: string }[] { return this.db.prepare('SELECT token, lang FROM push_tokens WHERE user_id = ?').all(uid) as { token: string; lang: string }[]; }
+  metaGet(k: string): string | null { return (this.db.prepare('SELECT v FROM meta WHERE k = ?').get(k) as { v: string } | undefined)?.v ?? null; }
+  metaSet(k: string, v: string) { this.db.prepare('INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v').run(k, v); }
+
+  /* ---------- cash out (Vodafone Cash, paid by hand) ---------- */
+
+  /** Takes the coins and files the request, in one step; null when the coins aren't there or one is already waiting. */
+  requestCashout(uid: string, coins: number, egp: number, phone: string): number | null | 'pending' {
+    this.db.exec('BEGIN');
+    try {
+      if (this.db.prepare("SELECT 1 FROM cashouts WHERE user_id = ? AND status = 'pending'").get(uid)) { this.db.exec('ROLLBACK'); return 'pending'; }
+      const r = this.db.prepare('UPDATE users SET coins = coins - ? WHERE id = ? AND coins >= ?').run(coins, uid, coins);
+      if (!Number(r.changes)) { this.db.exec('ROLLBACK'); return null; }
+      const ins = this.db.prepare('INSERT INTO cashouts (user_id, coins, egp, phone, ts) VALUES (?, ?, ?, ?, ?)').run(uid, coins, egp, phone, Date.now());
+      this.db.exec('COMMIT');
+      this.logCoins(uid, 'cashout', -coins);
+      return Number(ins.lastInsertRowid);
+    } catch (e) { this.db.exec('ROLLBACK'); throw e; }
+  }
+  cashoutsOf(uid: string, limit = 20): CashoutRow[] {
+    return (this.db.prepare('SELECT * FROM cashouts WHERE user_id = ? ORDER BY id DESC LIMIT ?').all(uid, limit) as CashoutDb[]).map(toCashout);
+  }
+  cashoutsAll(status: string | null, limit = 300): (CashoutDb & { name: string; coins_now: number })[] {
+    const where = status ? 'WHERE c.status = ?' : '';
+    const args: (string | number)[] = status ? [status, limit] : [limit];
+    return this.db.prepare(`SELECT c.*, u.name, u.coins AS coins_now FROM cashouts c LEFT JOIN users u ON u.id = c.user_id ${where} ORDER BY c.id DESC LIMIT ?`).all(...args) as (CashoutDb & { name: string; coins_now: number })[];
+  }
+  /** The admin paid it, or turned it down (the coins go back). Returns the request, or null if it wasn't waiting. */
+  settleCashout(id: number, paid: boolean, note: string): CashoutDb | null {
+    const c = this.db.prepare("SELECT * FROM cashouts WHERE id = ? AND status = 'pending'").get(id) as CashoutDb | undefined;
+    if (!c) return null;
+    this.db.prepare('UPDATE cashouts SET status = ?, done_ts = ?, note = ? WHERE id = ?').run(paid ? 'paid' : 'rejected', Date.now(), note.slice(0, 200), id);
+    if (!paid) { this.addCoins(c.user_id, c.coins); this.logCoins(c.user_id, 'cashout_refund', c.coins); }
+    return c;
+  }
+
   changes(): number { return Number((this.db.prepare('SELECT total_changes() AS n').get() as { n: number }).n); }
   /** A consistent copy of the whole database in one file (safe while the game keeps running). */
   snapshot(file: string) { fs.rmSync(file, { force: true }); this.db.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`); }
@@ -333,3 +389,6 @@ export function parseEquip(raw: string | null | undefined): Equipped {
 }
 export const toPublic = (u: UserRow): PublicUser => ({ id: u.id, name: u.name, ch: u.ch, email: u.email, rating: u.rating, games: u.games, wins: u.wins, coins: u.coins, gifts: u.gifts, ratings: {}, adsLeft: 0, adFreeUntil: u.ad_free_until ?? 0, skins: [], equip: parseEquip(u.equip),
   phone: u.phone ? maskPhone(u.phone) : null, google: u.google_sub ? (u.google_email || 'Google') : null, playGames: !!u.pg_id, code: u.friend_code ?? '' });
+
+export interface CashoutDb { id: number; user_id: string; coins: number; egp: number; phone: string; status: 'pending' | 'paid' | 'rejected'; ts: number; done_ts: number | null; note: string | null }
+const toCashout = (c: CashoutDb): CashoutRow => ({ id: c.id, coins: c.coins, egp: c.egp, phone: c.phone, status: c.status, ts: c.ts, doneTs: c.done_ts });

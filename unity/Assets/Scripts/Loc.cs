@@ -115,5 +115,18 @@ public static class Loc
         // voice chat
         ["الصوت شغال"] = "Voice on", ["الميك مقفول"] = "Mic muted", ["اسمح بالميكروفون عشان تتكلم"] = "Allow the microphone to talk",
         ["دردشة صوتية"] = "Voice chat",
+        // cash out
+        ["اسحب فلوسك"] = "Cash out", ["اسحب على فودافون كاش"] = "Cash out to Vodafone Cash", ["كل"] = "Every", ["كوين"] = "coins", ["جنيه"] = "EGP",
+        ["رصيدك"] = "Your coins", ["فاضلك"] = "You need", ["كوين وتقدر تسحب"] = "more coins to cash out",
+        ["العب واكسب، وخد مكافأتك اليومية، وشوف إعلانات عشان تجمع أسرع"] = "Win games, take your daily bonus and watch ads to collect faster",
+        ["سجّل دخول الأول عشان تقدر تسحب فلوسك، وعشان كوينزك تتحفظ"] = "Sign in first to cash out (and keep your coins safe)",
+        ["تسجيل الدخول بجوجل"] = "Sign in with Google", ["اطلب السحب"] = "Request payout",
+        ["رقم فودافون كاش 010xxxxxxxx"] = "Vodafone Cash number 010xxxxxxxx",
+        ["الفلوس بتتحول على محفظة فودافون كاش خلال يوم عمل واحد"] = "Money is sent to your Vodafone Cash wallet within 1 working day",
+        ["لسه مطلبتش سحب"] = "No payouts yet", ["اتحولت"] = "Paid", ["اترفض (الكوينز رجعت)"] = "Declined (coins returned)", ["بيتحول…"] = "Processing…",
+        ["طلبك وصل! هيتحولك"] = "Request received! You'll get", ["ج.م"] = "EGP", ["خلال يوم عمل واحد"] = "within 1 working day",
+        ["سجّل دخول الأول عشان تقدر تسحب"] = "Sign in first to cash out", ["اكتب رقم فودافون صحيح يبدأ بـ 010"] = "Enter a valid Vodafone number starting with 010",
+        ["عندك طلب لسه بيتحول، استنى لما يخلص"] = "You already have a payout in progress", ["المبلغ مش مظبوط"] = "That amount isn't right",
+        ["استنى شوية وجرّب تاني"] = "Wait a bit and try again",
     };
 }

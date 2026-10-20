@@ -11,6 +11,8 @@ import { GoogleSignIn, PhoneCodes, backToAppPage } from './login';
 import { verifySsv } from './ads';
 import { GitHubBackup } from './backup';
 import { PlayBilling } from './billing';
+import { Push } from './push';
+import { cashoutPage } from './admin';
 import type { S2C } from '../shared/protocol';
 
 const MIME: Record<string, string> = {
@@ -26,6 +28,8 @@ export function createServer(opts = config) {
   const billing = new PlayBilling(opts.billing);
   const hub = new Hub(store, tokens, { phones, google, billing, defaultCountry: opts.login.defaultCountry, adsSsv: opts.adsSsv, turnMs: opts.turnMs, botFillMs: opts.botFillMs, nextRoundMs: opts.nextRoundMs, botDelay: opts.botDelay, lobbyAfterMatchMs: opts.lobbyAfterMatchMs, msgsPer5s: (opts as { msgsPer5s?: number }).msgsPer5s,
     stunUrls: opts.stunUrls, turnUrls: opts.turnUrls, turnSecret: opts.turnSecret, autoMoveMs: opts.autoMoveMs, chessClockMs: opts.chessClockMs });
+  const push = new Push(store, opts.push);
+  const pushTimer = setInterval(() => { push.tick().catch(e => console.error('[push]', (e as Error).message)); }, 60_000);
   const staticRoot = path.resolve(opts.staticDir);
   const perIp = new Map<string, number>();
 
@@ -52,6 +56,45 @@ export function createServer(opts = config) {
       const ok = !!opts.adminKey && key.length === opts.adminKey.length && crypto.timingSafeEqual(Buffer.from(key), Buffer.from(opts.adminKey));
       res.writeHead(ok ? 200 : 403, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
       return res.end(JSON.stringify(ok ? { reports: store.reports(200) } : { error: 'forbidden' }));
+    }
+    const isAdmin = (key: string) => !!opts.adminKey && key.length === opts.adminKey.length && crypto.timingSafeEqual(Buffer.from(key), Buffer.from(opts.adminKey));
+    // the reminders: a free cron service can call this to wake a sleeping server (see server/push.ts)
+    if (url.pathname === '/api/cron/push') {
+      if (!isAdmin(url.searchParams.get('key') || '')) { res.writeHead(403); return res.end(); }
+      const force = url.searchParams.get('now') === '1';
+      push.tick(new Date(), force)
+        .then(r => { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify({ enabled: push.enabled, ...r })); })
+        .catch(e => { res.writeHead(500, { 'Content-Type': 'text/plain' }); res.end((e as Error).message); });
+      return;
+    }
+    // cash-out requests: a page to see them and mark them paid (or turn them down: the coins go back)
+    if (url.pathname === '/admin/cashouts') {
+      if (req.method === 'POST') {
+        let raw = '';
+        req.on('data', c => { raw += c; if (raw.length > 4096) req.destroy(); });
+        req.on('end', () => {
+          const f = new URLSearchParams(raw);
+          const key = f.get('key') || '';
+          if (!isAdmin(key)) { res.writeHead(403); return res.end(); }
+          const id = Number(f.get('id')), paid = f.get('action') === 'paid';
+          const c = store.settleCashout(id, paid, f.get('note') || '');
+          if (c) {
+            console.log(`[cashout] #${id} ${paid ? 'paid' : 'rejected'}`);
+            hub.refreshPlayer(c.user_id);
+            push.toUser(c.user_id,
+              paid ? ['تم التحويل 💸', `اتحولك ${c.egp} جنيه على فودافون كاش`] : ['طلب السحب اترفض', 'رجعنالك الكوينز، كلمنا لو محتاج مساعدة'],
+              paid ? ['Paid 💸', `${c.egp} EGP was sent to your Vodafone Cash`] : ['Cash-out declined', 'Your coins are back in your balance']).catch(() => {});
+          }
+          res.writeHead(303, { Location: `/admin/cashouts?key=${encodeURIComponent(key)}`, 'Cache-Control': 'no-store' });
+          res.end();
+        });
+        return;
+      }
+      const key = url.searchParams.get('key') || '';
+      if (!isAdmin(key)) { res.writeHead(403, { 'Content-Type': 'text/plain' }); return res.end('forbidden'); }
+      const status = url.searchParams.get('status');
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex', 'Referrer-Policy': 'no-referrer' });
+      return res.end(cashoutPage(store.cashoutsAll(status === 'all' ? null : status || 'pending'), key, status || 'pending', push.enabled));
     }
     // AdMob server-side verification: Google calls this after a player watched a rewarded ad
     if (url.pathname === '/ads/ssv') {
@@ -139,7 +182,7 @@ export function createServer(opts = config) {
     listen: () => new Promise<number>(r => server.listen(opts.port, opts.host, () => r((server.address() as { port: number }).port))),
     /** Stop the game (stakes in play are refunded); `last` runs just before the database closes (final backup). */
     close: async (last?: () => Promise<void>) => {
-      clearInterval(heartbeat); hub.stop();
+      clearInterval(heartbeat); clearInterval(pushTimer); hub.stop();
       wss.clients.forEach(c => c.terminate());
       await new Promise(r => server.close(r));
       if (last) await last().catch(e => console.error('[backup]', (e as Error).message));

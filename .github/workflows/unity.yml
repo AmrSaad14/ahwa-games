@@ -40,6 +40,12 @@ jobs:
           gh release download chars-glb -p "*.glb" -D unity/Assets/Resources/People --clobber || echo "no characters yet: the generated ones will be used"
           ls -la unity/Assets/Resources/People
 
+      - name: Push reminders (the Firebase project, from the GOOGLE_SERVICES_JSON secret; without it push is off)
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then printf '%s' "$GOOGLE_SERVICES_JSON" > unity/google-services.json; echo "push: on"; else echo "push: off (no GOOGLE_SERVICES_JSON secret)"; fi
+
       - uses: actions/cache@v4
         with:
           path: unity/Library
@@ -79,6 +85,8 @@ jobs:
           echo "docker exit $?" >> logs/build-step.txt
           cat logs/build-step.txt logs/editor-exit.txt
           grep -E "^\[build|error CS|Error building|Scripts have compiler errors" logs/editor.log | head -60
+          grep -E "^\[push\]" logs/editor.log | head
+          grep -A12 "What went wrong" logs/editor.log | head -60
           test -f build/android/BoardBattles.apk
 
       - uses: actions/setup-node@v4
@@ -92,7 +100,7 @@ jobs:
           set +e
           npm install --no-audit --no-fund > logs/server-setup.txt 2>&1
           node scripts/build-server.mjs >> logs/server-setup.txt 2>&1
-          PORT=8080 HOST=127.0.0.1 DB_PATH=/tmp/test.db BOT_FILL_SECONDS=2 nohup node dist/server.cjs > logs/server.log 2>&1 &
+          PORT=8080 HOST=127.0.0.1 DB_PATH=/tmp/test.db BOT_FILL_SECONDS=2 ADMIN_KEY=test nohup node dist/server.cjs > logs/server.log 2>&1 &
           sleep 3
           curl -s -o /dev/null -w "server: %{http_code}\n" http://127.0.0.1:8080/ | tee -a logs/server-setup.txt
           true

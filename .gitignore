@@ -7,3 +7,4 @@ ios/
 .env
 *.db
 *.db-*
+unity/google-services.json

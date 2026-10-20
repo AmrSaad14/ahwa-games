@@ -31,6 +31,12 @@ export const config = {
     packageName: process.env.ANDROID_PACKAGE || 'com.ahwa.domino',
     testMode: process.env.PURCHASES_TEST === '1',
   },
+  // Push reminders with Firebase Cloud Messaging (server/push.ts)
+  push: {
+    serviceAccount: process.env.FIREBASE_SERVICE_ACCOUNT || '',
+    times: process.env.PUSH_TIMES || '14:00,20:00',
+    tz: process.env.PUSH_TZ || 'Africa/Cairo',
+  },
   // Hosts that wipe the disk on restart (free plans): back the database up to a private GitHub repo (server/backup.ts)
   backup: {
     repo: process.env.BACKUP_GITHUB_REPO || '',

@@ -59,6 +59,7 @@ export class Hub {
   private reportLimiter = new Limiter(10, 60 * 60_000);
   private friendLimiter = new Limiter(30, 60 * 60_000);
   private inviteLimiter = new Limiter(20, 60_000);
+  private cashLimiter = new Limiter(6, 60 * 60_000);
   private ticker: ReturnType<typeof setInterval>;
 
   constructor(private store: Store, private tokens: Tokens, private opts: HubOptions) {
@@ -386,6 +387,32 @@ export class Hub {
         this.byUser.get(target.uid)?.conn.send({ t: 'rtc', from, data: { type, sdp: m.data.sdp, table: table.id } });
         return;
       }
+      case 'pushToken': {
+        const tok = String(m.token || '');
+        if (tok.length < 20 || tok.length > 4096) return;
+        this.store.savePushToken(uid, tok, m.lang === 'en' ? 'en' : 'ar', m.platform === 'ios' ? 'ios' : 'android');
+        return;
+      }
+      case 'cashouts': return this.sendCashouts(uid);
+      case 'cashout': {
+        const u = this.store.get(uid);
+        if (!u) return;
+        // paid to a real wallet: only for accounts that can be got back (Google, mobile number or e-mail)
+        if (!u.google_sub && !u.phone && !u.email) return err('sign_in_first');
+        const phone = walletNumber(String(m.phone || ''));
+        if (!phone) return err('bad_wallet');
+        const millions = Math.floor(Number(m.millions));
+        if (!(millions >= 1 && millions <= CASHOUT.maxMillions)) return err('bad_amount');
+        if (!this.cashLimiter.allow(uid)) return err('slow_down');
+        const coins = millions * CASHOUT.coins, egp = millions * CASHOUT.egp;
+        const r = this.store.requestCashout(uid, coins, egp, phone);
+        if (r === 'pending') return err('cashout_pending');
+        if (r === null) return err('not_enough_coins');
+        console.log(`[cashout] #${r} ${egp} EGP for ${coins} coins`);
+        s.conn.send({ t: 'cashoutDone', id: r, egp, coins, phone });
+        this.sendUser(uid); this.sendCashouts(uid);
+        return;
+      }
       case 'report': {
         if (!table) return err('no_table');
         const about = table.seats[Number(m.seat)];
@@ -492,6 +519,13 @@ export class Hub {
     }
     return out;
   }
+
+  private sendCashouts(uid: string) {
+    this.byUser.get(uid)?.conn.send({ t: 'cashouts', rows: this.store.cashoutsOf(uid), rate: { coins: CASHOUT.coins, egp: CASHOUT.egp }, maxMillions: CASHOUT.maxMillions });
+  }
+
+  /** Lets the player know (cash-out paid or turned down), if they're connected. */
+  refreshPlayer(uid: string) { this.sendUser(uid); this.sendCashouts(uid); }
 
   private sendUser(uid: string) {
     const u = this.store.get(uid); const s = this.byUser.get(uid);
@@ -708,4 +742,16 @@ export class Hub {
       if (!q.length) this.queues.delete(key);
     }
   }
+}
+
+/** Cash out: every 1,000,000 coins is 10 EGP on Vodafone Cash, paid by hand (see /admin/cashouts). */
+export const CASHOUT = { coins: 1_000_000, egp: 10, maxMillions: 10 };
+
+/** A Vodafone Cash number as 010xxxxxxxx (accepts +20 / 0020, spaces and Arabic digits), or null. */
+export function walletNumber(raw: string): string | null {
+  let d = raw.replace(/[\u0660-\u0669]/g, c => String(c.charCodeAt(0) - 0x0660)).replace(/[\u06F0-\u06F9]/g, c => String(c.charCodeAt(0) - 0x06F0)).replace(/\D/g, '');
+  if (d.startsWith('0020')) d = '0' + d.slice(4);
+  else if (d.startsWith('20') && d.length === 12) d = '0' + d.slice(2);
+  else if (d.length === 10 && d.startsWith('10')) d = '0' + d;
+  return /^010\d{8}$/.test(d) ? d : null;
 }

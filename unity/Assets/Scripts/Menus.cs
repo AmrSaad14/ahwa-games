@@ -19,6 +19,9 @@ public class Menus : MonoBehaviour
     Dictionary<string, object> user;
     bool googleOn = true;
     string pendingTicket;
+    // cash out: your requests and the rate, from the server
+    List<object> cashRows; long cashCoins = 1_000_000; int cashEgp = 10, cashMax = 10, cashMillions = 1;
+    InputField walletField;
 
     // the leaderboard currently asked for
     string lbGame = "domino"; List<object> lbRows; Dictionary<string, object> lbMe;
@@ -38,11 +41,12 @@ public class Menus : MonoBehaviour
         canvas = Ui.MakeCanvas("Menus", 40);
 
         // down the left side: shop, leaderboard, how to play, settings
-        var rail = Ui.Rect("Rail", home).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(64, 290), new Vector2(10, -88));
+        var rail = Ui.Rect("Rail", home).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(64, 362), new Vector2(10, -88));
         RailButton(rail, 0, "shop", "المتجر", () => OpenShop(0));
         RailButton(rail, 1, "trophy", "المتصدرين", () => OpenLeaders(0));
         RailButton(rail, 2, "help", "طريقة اللعب", () => OpenHowTo(0));
         RailButton(rail, 3, "settings", "الإعدادات", OpenSettings);
+        RailButton(rail, 4, "wallet", "اسحب فلوسك", OpenCashout);
 
         // along the top, left of your name and coins: watch an ad, sign in, language
         var ad = Chip(home, "video", "+5K", new Vector2(-252, -10), 98, new Color32(0x2f, 0x6b, 0x3a, 0xf0), Color.white, WatchAd);
@@ -121,6 +125,17 @@ public class Menus : MonoBehaviour
                 if (m.Bool("ssv")) { app.Toast(Loc.T("الإعلان مش جاهز، جرّب تاني")); break; }   // the server only pays AdMob's own signed calls
                 StartCoroutine(PlayAd(m.Str("ticket")));
                 break;
+            case "cashouts":
+                cashRows = m.Arr("rows") ?? new List<object>();
+                var rate = m.Obj("rate");
+                if (rate != null) { cashCoins = (long)rate.Num("coins", 1_000_000); cashEgp = (int)rate.Num("egp", 10); }
+                cashMax = (int)m.Num("maxMillions", 10);
+                refreshOpen?.Invoke();
+                break;
+            case "cashoutDone":
+                app.Toast(Loc.T("طلبك وصل! هيتحولك") + " " + (int)m.Num("egp") + " " + Loc.T("ج.م") + " " + Loc.T("خلال يوم عمل واحد"));
+                Sfx.Coins(); Sfx.Buzz();
+                break;
             case "adReward":
                 app.Toast("+" + ((long)m.Num("coins")).ToString("N0") + " " + Loc.T("عملة"));
                 Sfx.Coins();
@@ -134,6 +149,11 @@ public class Menus : MonoBehaviour
         {
             case "ad_limit": app.Toast(Loc.T("خلصت إعلانات النهارده، تعالى بكرة")); return true;
             case "ticket_expired": app.Toast(Loc.T("تسجيل الدخول بجوجل مش متاح على السيرفر ده")); return true;
+            case "sign_in_first": app.Toast(Loc.T("سجّل دخول الأول عشان تقدر تسحب")); return true;
+            case "bad_wallet": app.Toast(Loc.T("اكتب رقم فودافون صحيح يبدأ بـ 010")); return true;
+            case "cashout_pending": app.Toast(Loc.T("عندك طلب لسه بيتحول، استنى لما يخلص")); return true;
+            case "bad_amount": app.Toast(Loc.T("المبلغ مش مظبوط")); return true;
+            case "slow_down": app.Toast(Loc.T("استنى شوية وجرّب تاني")); return true;
         }
         return false;
     }
@@ -282,6 +302,115 @@ public class Menus : MonoBehaviour
             var t = b.GetComponentInChildren<Text>(); t.Set(Loc.T(on ? "تشغيل" : "إيقاف")); t.color = on ? Ui.Ink : Ui.GoldLight;
         });
         At((RectTransform)b.transform, 384, 100, 32);
+    }
+
+    /* ---------- cash out: coins to Vodafone Cash ---------- */
+
+    public void OpenCashout()
+    {
+        if (app.net == null || !app.net.Online) { app.Toast(Loc.T("مش متصل بالسيرفر لسه")); return; }
+        app.Send(new Dictionary<string, object> { ["t"] = "cashouts" });
+        Panel(Loc.T("اسحب على فودافون كاش"), out var body, new Vector2(640, 350));
+        refreshOpen = () =>
+        {
+            foreach (Transform c in body) Destroy(c.gameObject);
+            long coins = (long)(user?.Num("coins") ?? 0);
+            int canMillions = (int)Math.Min(cashMax, coins / Math.Max(1, cashCoins));
+            cashMillions = Mathf.Clamp(cashMillions, 1, Math.Max(1, canMillions));
+            bool signed = user != null && (!string.IsNullOrEmpty(user.Str("google")) || !string.IsNullOrEmpty(user.Str("phone")) || !string.IsNullOrEmpty(user.Str("email")));
+
+            // the rate and your balance
+            var top = Ui.Box(body, "Rate", Card).rectTransform;
+            top.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(600, 54), new Vector2(0, 0));
+            var ci = Ui.Picture(top, "Coin", Icon("coin"));
+            At(ci.rectTransform, 12, 34, 34);
+            At(Ui.Label(top, Loc.T("كل") + " " + cashCoins.ToString("N0") + " " + Loc.T("كوين") + " = " + cashEgp + " " + Loc.T("جنيه"), 17, Ui.Gold, StartAlign, Ui.Bold).rectTransform, 54, 330, 30);
+            var bal = Ui.Label(top, Loc.T("رصيدك") + ": " + coins.ToString("N0"), 14, Ui.GoldLight, Loc.En ? TextAnchor.MiddleRight : TextAnchor.MiddleLeft, Ui.Bold);
+            bal.rectTransform.Place(new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(210, 30), new Vector2(Loc.En ? -12 : 12, 0));
+
+            var form = Ui.Rect("Form", body);
+            form.anchorMin = Vector2.zero; form.anchorMax = Vector2.one; form.offsetMin = new Vector2(0, 0); form.offsetMax = new Vector2(0, -62);
+            if (!signed)
+            {
+                Ui.Label(form, "سجّل دخول الأول عشان تقدر تسحب فلوسك، وعشان كوينزك تتحفظ", 15, Color.white, TextAnchor.MiddleCenter, Ui.Bold).rectTransform
+                    .Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(580, 50), new Vector2(0, -20));
+                var b = Ui.Button(form, "تسجيل الدخول بجوجل", Color.white, Ui.Ink, 15, SignIn);
+                var br = ((RectTransform)b.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(250, 42), new Vector2(0, -86));
+                var gi = Ui.Picture(br, "G", Icon("google")); gi.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(22, 22), new Vector2(10, 0));
+            }
+            else if (coins < cashCoins)
+            {
+                Ui.Label(form, Loc.T("فاضلك") + " " + (cashCoins - coins).ToString("N0") + " " + Loc.T("كوين وتقدر تسحب") + " " + cashEgp + " " + Loc.T("جنيه"), 17, Color.white, TextAnchor.MiddleCenter, Ui.Bold).rectTransform
+                    .Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(580, 34), new Vector2(0, -14));
+                // how far you are
+                var bar = Ui.Box(form, "Bar", new Color(1, 1, 1, 0.08f)).rectTransform;
+                bar.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(460, 16), new Vector2(0, -58));
+                var fill = Ui.Box(bar, "Fill", Ui.Gold).rectTransform;
+                fill.anchorMin = new Vector2(0, 0); fill.anchorMax = new Vector2(Mathf.Clamp01(coins / (float)cashCoins), 1); fill.offsetMin = fill.offsetMax = Vector2.zero;
+                Ui.Label(form, "العب واكسب، وخد مكافأتك اليومية، وشوف إعلانات عشان تجمع أسرع", 13, Ui.GoldLight, TextAnchor.MiddleCenter).rectTransform
+                    .Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(580, 26), new Vector2(0, -86));
+            }
+            else
+            {
+                // how much: − N million = 10·N EGP +
+                var amt = Ui.Rect("Amount", form).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(600, 44), new Vector2(0, -2));
+                var minus = Ui.Button(amt, "−", new Color(1, 1, 1, 0.1f), Ui.GoldLight, 24, () => { Sfx.Tap(); cashMillions = Math.Max(1, cashMillions - 1); refreshOpen(); });
+                ((RectTransform)minus.transform).Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(44, 40), new Vector2(Loc.En ? -170 : 170, 0));
+                var plus = Ui.Button(amt, "+", new Color(1, 1, 1, 0.1f), Ui.GoldLight, 24, () => { Sfx.Tap(); cashMillions = Math.Min(Math.Max(1, canMillions), cashMillions + 1); refreshOpen(); });
+                ((RectTransform)plus.transform).Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(44, 40), new Vector2(Loc.En ? 170 : -170, 0));
+                Ui.Label(amt, (cashMillions * cashCoins).ToString("N0") + " " + Loc.T("كوين") + "  =  " + (cashMillions * cashEgp) + " " + Loc.T("جنيه"), 19, Ui.Gold, TextAnchor.MiddleCenter, Ui.Display).rectTransform
+                    .Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(290, 40), Vector2.zero);
+                // the Vodafone Cash number
+                walletField = WalletField(form);
+                ((RectTransform)walletField.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 44), new Vector2(Loc.En ? -82 : 82, -56));
+                var go = Ui.Button(form, "اطلب السحب", Ui.Gold, Ui.Ink, 17, () =>
+                {
+                    Sfx.Tap();
+                    var phone = walletField.text.Trim();
+                    if (phone.Length < 10) { app.Toast(Loc.T("اكتب رقم فودافون صحيح يبدأ بـ 010")); return; }
+                    PlayerPrefs.SetString("wallet", phone);
+                    app.Send(new Dictionary<string, object> { ["t"] = "cashout", ["phone"] = phone, ["millions"] = (double)cashMillions });
+                });
+                ((RectTransform)go.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(150, 44), new Vector2(Loc.En ? 160 : -160, -56));
+            }
+            // the promise
+            var note = Ui.Label(form, Loc.T("الفلوس بتتحول على محفظة فودافون كاش خلال يوم عمل واحد"), 13, new Color(0.75f, 0.95f, 0.75f), TextAnchor.MiddleCenter, Ui.Bold);
+            note.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(600, 24), new Vector2(0, -112));
+            // your requests
+            var list = Ui.Rect("Requests", form);
+            list.anchorMin = Vector2.zero; list.anchorMax = Vector2.one; list.offsetMin = Vector2.zero; list.offsetMax = new Vector2(0, -140);
+            var rows = Scroll(list, 4);
+            if (cashRows == null) Ui.Label(Row(rows, 24), "جاري التحميل…", 12, new Color(1, 1, 1, 0.5f)).rectTransform.Fill();
+            else if (cashRows.Count == 0) Ui.Label(Row(rows, 24), "لسه مطلبتش سحب", 12, new Color(1, 1, 1, 0.5f)).rectTransform.Fill();
+            else foreach (var o in cashRows)
+            {
+                var r = o as Dictionary<string, object>; if (r == null) continue;
+                var st = r.Str("status");
+                var row = Row(rows, 30, Card);
+                string when = DateTimeOffset.FromUnixTimeMilliseconds((long)r.Num("ts")).ToLocalTime().ToString("dd/MM HH:mm");
+                At(Ui.Label(row, "#" + (int)r.Num("id") + "  ·  " + (int)r.Num("egp") + " " + Loc.T("ج.م") + "  ·  " + r.Str("phone") + "  ·  " + when, 13, Color.white, StartAlign).rectTransform, 12, 420, 28);
+                var stl = Ui.Label(row, st == "paid" ? "اتحولت" : st == "rejected" ? "اترفض (الكوينز رجعت)" : "بيتحول…", 13,
+                    st == "paid" ? new Color(0.5f, 0.95f, 0.5f) : st == "rejected" ? new Color(1f, 0.55f, 0.5f) : Ui.Gold, Loc.En ? TextAnchor.MiddleRight : TextAnchor.MiddleLeft, Ui.Bold);
+                stl.rectTransform.Place(new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(170, 28), new Vector2(Loc.En ? -10 : 10, 0));
+            }
+        };
+        refreshOpen();
+    }
+
+    static InputField WalletField(Transform parent)
+    {
+        var bg = Ui.Box(parent, "Wallet", new Color(1, 1, 1, 0.94f));
+        bg.raycastTarget = true;
+        var text = Ui.Label(bg.transform, "", 19, Ui.Ink, TextAnchor.MiddleCenter, Ui.Bold);
+        text.rectTransform.Fill(6); text.raycastTarget = false; text.supportRichText = false;
+        var hint = Ui.Label(bg.transform, "رقم فودافون كاش 010xxxxxxxx", 14, new Color(0, 0, 0, 0.38f), TextAnchor.MiddleCenter, Ui.Body);
+        hint.rectTransform.Fill(6);
+        var f = bg.gameObject.AddComponent<InputField>();
+        f.textComponent = text; f.placeholder = hint; f.characterLimit = 14;
+        f.contentType = InputField.ContentType.IntegerNumber;
+        f.keyboardType = TouchScreenKeyboardType.PhonePad;
+        f.text = PlayerPrefs.GetString("wallet", "");
+        return f;
     }
 
     /* ---------- the shop ---------- */

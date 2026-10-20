@@ -131,6 +131,33 @@ Until then the shop says it isn't open yet; the demo uses a pretend checkout. Co
 A full-screen ad (video when AdMob has one; AdMob decides the length, usually up to 30 seconds) shows after
 every finished game, never during play, and never on the ad-free plan.
 
+## Push reminders (Firebase Cloud Messaging)
+
+Twice a day (14:00 and 20:00 Cairo time by default) every phone whose player hasn't played in the last two hours gets
+a "come and play" notification, in the player's language.
+
+1. In the [Firebase console](https://console.firebase.google.com) create a project and add an **Android app** with the
+   package name `com.ahwa.boardbattles`. Download its `google-services.json`.
+2. GitHub → this repo → Settings → Secrets and variables → Actions → New secret `GOOGLE_SERVICES_JSON`: paste the
+   whole file. The next Unity build has push turned on (without it the app builds with push off).
+3. Firebase console → Project settings → Service accounts → **Generate new private key**. On the server (Render →
+   Environment) add `FIREBASE_SERVICE_ACCOUNT` with the whole JSON file as its value.
+4. Optional: `PUSH_TIMES` (default `14:00,20:00`), `PUSH_TZ` (default `Africa/Cairo`).
+5. Free hosts sleep when nobody plays, so their clock stops: at [cron-job.org](https://cron-job.org) (free) add a job
+   that opens `https://YOUR-SERVER/api/cron/push?key=ADMIN_KEY` every 15 minutes. Each reminder still goes out once.
+   Add `&now=1` once to send a reminder right away (a test).
+
+## Cash out to Vodafone Cash
+
+Players can turn every **1,000,000 coins into 10 EGP**, paid to a Vodafone Cash number (010…) within one working day.
+The coins are taken when the request is made; one request at a time, up to 10 million coins each, signed-in players
+only (Google, mobile number or e-mail).
+
+Pay them by hand from the admin page: `https://YOUR-SERVER/admin/cashouts?key=ADMIN_KEY` (set `ADMIN_KEY` on the
+server to a long random password). Send the money from your Vodafone Cash wallet, then press **تم الدفع** (you can add
+the transaction number); **رفض** turns a request down and gives the coins back. The player gets a notification
+either way.
+
 ## Free hosting for testing (Render)
 
 Until you rent a server, the game runs on Render's free plan, with no card needed. `render.yaml` describes everything:

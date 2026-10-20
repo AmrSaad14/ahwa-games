@@ -94,7 +94,7 @@ public class App : MonoBehaviour
         BuildHome();
         menus = gameObject.AddComponent<Menus>();
         menus.Build(this, homeGroup.GetComponent<RectTransform>());
-        Loc.Changed += () => { SetStatus(net != null && net.Online); Redraw(); };
+        Loc.Changed += () => { SetStatus(net != null && net.Online); Redraw(); SendPushToken(); };
         game = gameObject.AddComponent<GameUi>();
         game.Build(this);
 
@@ -102,6 +102,7 @@ public class App : MonoBehaviour
         net.OnMessage += OnMessage;
         net.OnOnline += SetStatus;
         net.Start();
+        Push.Begin();
 
         splash.Ready();
         while (!splash.Opened) yield return null;
@@ -146,6 +147,21 @@ public class App : MonoBehaviour
 
     void OnApplicationQuit() { net?.Stop(); }
 
+    /* ---------- push reminders (Push.cs) ---------- */
+
+    // called from Java (BBPush / BBMessagingService) on this object, "Board Battles"
+    public void OnPushToken(string token) { Push.Token = token; Debug.Log("[push] token ready"); SendPushToken(); }
+    public void OnPushError(string e) { Debug.Log("[push] " + e); }
+    string sentPushToken;
+    void SendPushToken()
+    {
+        if (string.IsNullOrEmpty(Push.Token) || net == null || !net.Online || user == null) return;
+        string key = Push.Token + (Loc.En ? "en" : "ar");
+        if (key == sentPushToken) return;
+        sentPushToken = key;
+        net.Send(new Dictionary<string, object> { ["t"] = "pushToken", ["token"] = Push.Token, ["lang"] = Loc.En ? "en" : "ar", ["platform"] = "android" });
+    }
+
     void OnMessage(Dictionary<string, object> m)
     {
         menus?.OnMessage(m);
@@ -154,9 +170,11 @@ public class App : MonoBehaviour
             case "welcome":
                 voice.ice.Clear();
                 foreach (var o in m.Arr("ice") ?? new List<object>()) if (o is Dictionary<string, object> d) voice.ice.Add(d);
+                sentPushToken = null;   // (a new connection, maybe a different account)
                 goto case "user";
             case "user":
                 user = m.Obj("user");
+                SendPushToken();
                 if (user != null)
                 {
                     nameText.Set(user.Str("name"));
@@ -524,6 +542,7 @@ public class App : MonoBehaviour
             menus.Close();
             menus.WatchAd(); yield return new WaitForSeconds(1.5f); Still("m6-ad.png");
             yield return new WaitForSeconds(5f); Still("m7-ad-reward.png");
+            menus.OpenCashout(); yield return new WaitForSeconds(1.2f); Still("m12-cashout.png"); menus.Close();
             Loc.Set(true); yield return new WaitForSeconds(0.8f); Still("m8-home-en.png");
             menus.OpenShop(1); yield return new WaitForSeconds(0.8f); Still("m9-shop-en.png");
             menus.OpenHowTo(0); yield return new WaitForSeconds(0.8f); Still("m10-howto-en.png");
