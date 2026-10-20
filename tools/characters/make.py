@@ -287,6 +287,50 @@ def make_hijab(basemesh, rig, rgb, long=False):
     return [h, make_cape(basemesh, rig, hm, top, rx, ry)]
 
 
+def make_hood(basemesh, rig, mat, top, rx, ry):
+    """A khimar's hood, made as one clean smooth shape (not from the head's own surface, whose ears and hair
+    would show through): an egg over the head and hair, narrowing round the neck down under the cape, with an
+    oval opening for the face. It takes the body's skin weights, so it moves with her head."""
+    cx, cy, tz = top.x, top.y, top.z
+    c0 = Vector((cx, cy + 0.01, tz - 0.115)); A, B, C = rx * 1.3, ry * 1.18, 0.142
+    bm = bmesh.new()
+    bmesh.ops.create_uvsphere(bm, u_segments=64, v_segments=40, radius=1.0)
+    neck_z = tz - 0.33
+    for v in bm.verts:
+        d = v.co.copy()
+        p = Vector((c0.x + d.x * A, c0.y + d.y * B, c0.z + d.z * C))
+        if d.z < -0.2:   # below the jaw: narrow to the neck and run down under the cape
+            k = min(1.0, (-0.2 - d.z) / 0.8)
+            e = k * k * (3 - 2 * k)
+            p.x = c0.x + d.x * (A + (0.075 - A) * e)
+            p.y = c0.y + 0.005 + d.y * (B + (0.08 - B) * e)
+            p.z = c0.z + (-0.2 * C) + (neck_z - (c0.z - 0.2 * C)) * k
+        v.co = p
+    # the face opening: an oval from the brow to under the chin; and nothing below the neck
+    def face(c):
+        dz = tz - c.z
+        return c.y - cy < -ry * 0.25 and ((c.x - cx) / (rx * 0.66)) ** 2 + ((dz - 0.145) / 0.1) ** 2 < 1
+    bmesh.ops.delete(bm, geom=[f for f in bm.faces if face(f.calc_center_median())], context="FACES")
+    mesh = bpy.data.meshes.new("Hood"); bm.to_mesh(mesh); bm.free()
+    hood = bpy.data.objects.new("Hood", mesh)
+    bpy.context.collection.objects.link(hood)
+    GeneralObjectProperties.set_value("object_type", "Clothes", entity_reference=hood)
+    mesh.materials.append(mat)
+    for poly in mesh.polygons: poly.use_smooth = True
+    bpy.ops.object.select_all(action="DESELECT"); hood.select_set(True); bpy.context.view_layer.objects.active = hood
+    dt = hood.modifiers.new("Weights", "DATA_TRANSFER")
+    dt.object = basemesh; dt.use_vert_data = True; dt.data_types_verts = {"VGROUP_WEIGHTS"}; dt.vert_mapping = "POLYINTERP_NEAREST"
+    try:
+        bpy.ops.object.datalayout_transfer(modifier="Weights")
+        bpy.ops.object.modifier_apply(modifier="Weights")
+    except Exception as e:
+        p("  hood weights:", e)
+    sol = hood.modifiers.new("Thick", "SOLIDIFY"); sol.thickness = 0.004; sol.offset = 1
+    arm = hood.modifiers.new("Armature", "ARMATURE"); arm.object = rig
+    hood.parent = rig; hood.matrix_parent_inverse = rig.matrix_world.inverted()
+    return hood
+
+
 def make_cape(basemesh, rig, mat, top, rx, ry):
     """The long part of a khimar: a cape from the neck that falls straight over the shoulders, chest and back
     to the waist, wide enough to clear the body at every height (it doesn't follow the bust), flaring a little.
@@ -387,7 +431,10 @@ def build(spec, x):
     if hat == "tarboosh": extra = make_tarboosh(basemesh, rig)
     elif hat == "emma": extra = make_emma(basemesh, rig)
     elif hat == "hijab": extra = make_hijab(basemesh, rig, spec["scarf"])
-    elif hat == "khimar": extra = make_hijab(basemesh, rig, spec["scarf"], long=True)
+    elif hat == "khimar":
+        top, rx, ry = head_frame(basemesh)
+        km = flat_material("Khimar", spec["scarf"], 0.85)
+        extra = [make_hood(basemesh, rig, km, top, rx, ry), make_cape(basemesh, rig, km, top, rx, ry)]
     rig.location.x = x
     p("  objects:", sorted(objs.keys()), "+", [e.name for e in extra])
     return basemesh, rig
