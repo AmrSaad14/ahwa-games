@@ -257,7 +257,7 @@ def make_hijab(basemesh, rig, rgb, long=False):
         if q < 1e-9: continue
         sc = 1 / math.sqrt(q)
         # the ears would lie flat on the surface and flicker through it: tuck them just under
-        if abs(c.x - cx) > rx * 0.8 and 0.07 < tz - c.z < 0.2 and abs(c.y - cy) < ry * 0.6: sc *= 0.96
+        if abs(c.x - cx) > rx * 0.8 and 0.07 < tz - c.z < 0.2 and abs(c.y - cy) < ry * 0.6: sc *= 0.92
         v.co = inv @ (c + (c0 + d * sc - c) * w)
     # the ears and hair folded flat onto that shape leave pieces facing inward: they go
     bm.normal_update()
