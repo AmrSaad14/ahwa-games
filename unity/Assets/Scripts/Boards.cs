@@ -90,7 +90,7 @@ public class ChessBoard : Board
             if (x % 64 == 0 || y % 64 == 0) c *= 0.75f;
             return c;
         });
-        Art.Sheet("Squares", spin, B, B, new Vector3(0, 0.303f, 0), Art.Mat(Color.white, 0.55f, 0, tex));
+        Art.Sheet("Squares", spin, B, B, new Vector3(0, 0.303f, 0), Art.Mat(new Color(0.85f, 0.83f, 0.8f), 0.4f, 0, tex));
     }
 
     /// Square to board position: a1 at your bottom-left when you play white (the board turns for black).
@@ -298,7 +298,7 @@ public class TawlaBoard : Board
             }
             return wood;
         });
-        Art.Sheet("Field", spin, TW, TD, new Vector3(0, FIELD_Y + 0.001f, 0), Art.Mat(Color.white, 0.45f, 0, tex));
+        Art.Sheet("Field", spin, TW, TD, new Vector3(0, FIELD_Y + 0.001f, 0), Art.Mat(new Color(0.82f, 0.8f, 0.78f), 0.3f, 0, tex));
         // the rails: four sides, the middle bar and the tray's divider, with a mother-of-pearl strip on top
         var railTop = Art.Mat(Art.Hex("#efe6d6"), 0.85f, 0.1f);
         void Rail(float x, float z, float w, float d)
@@ -546,7 +546,7 @@ public class LudoBoard : Board
             }
             return c * (0.97f + Mathf.PerlinNoise(px * 0.15f, py * 0.15f) * 0.05f);
         });
-        Art.Sheet("Card", spin, size, size, new Vector3(0, 0.301f, 0), Art.Mat(Color.white, 0.15f, 0, tex));
+        Art.Sheet("Card", spin, size, size, new Vector3(0, 0.301f, 0), Art.Mat(new Color(0.85f, 0.84f, 0.82f), 0.1f, 0, tex));
     }
 
     static bool Star(float x, float y, float r)

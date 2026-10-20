@@ -40,7 +40,7 @@ public class DominoTable : MonoBehaviour
         if (table != null)
         {
             var lamp = new GameObject("Lamp").AddComponent<Light>();
-            lamp.type = LightType.Point; lamp.color = new Color(1f, 0.8f, 0.55f); lamp.intensity = 2.6f; lamp.range = 22f;
+            lamp.type = LightType.Point; lamp.color = new Color(1f, 0.8f, 0.55f); lamp.intensity = 1.7f; lamp.range = 22f;
             lamp.shadows = LightShadows.None;
             lamp.transform.SetParent(table.transform, false);
             lamp.transform.position = C + Vector3.up * 9f + F * 1.5f;

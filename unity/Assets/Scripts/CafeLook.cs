@@ -5,7 +5,7 @@ using UnityEngine;
 [RequireComponent(typeof(Camera))]
 public class CafeLook : MonoBehaviour
 {
-    public float threshold = 0.9f, bloom = 0.55f, exposure = 1.0f, saturation = 1.1f, vignette = 0.55f;
+    public float threshold = 1.1f, bloom = 0.35f, exposure = 0.95f, saturation = 1.08f, vignette = 0.5f;
     public Color warm = new Color(1.04f, 1.0f, 0.93f);
     Material mat;
 

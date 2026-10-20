@@ -335,7 +335,7 @@ public class GameUi : MonoBehaviour
 
         // tawla and ludo: throw the dice
         var roll = Ui.Button(hud, "ارمي الزهر", Ui.Gold, Ui.Ink, 20, () => { app.boardGame.Roll(); });
-        ((RectTransform)roll.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(220, 52), new Vector2(0, 24));
+        ((RectTransform)roll.transform).Place(new Vector2(1, 0), new Vector2(1, 0), new Vector2(170, 56), new Vector2(-18, 22));   // at the side, clear of the board
         roll.gameObject.AddComponent<Outline>().effectColor = new Color(0, 0, 0, 0.4f);
         rollButton = roll.gameObject; rollButton.SetActive(false);
 
