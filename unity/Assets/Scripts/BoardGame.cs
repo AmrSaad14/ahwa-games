@@ -137,15 +137,30 @@ public class BoardGame : MonoBehaviour
 
     void Act(Dictionary<string, object> a) => app.Send(new Dictionary<string, object> { ["t"] = "act", ["a"] = a });
 
+    bool PickAtScreen(Vector3 screen, out Pick pick)
+    {
+        pick = default;
+        var ray = app.cafe.cam.ScreenPointToRay(screen);
+        var plane = new Plane(Vector3.up, board.spin.TransformPoint(new Vector3(0, board.topY, 0)));
+        if (!plane.Raycast(ray, out float dist)) return false;
+        pick = board.PickAt(board.spin.InverseTransformPoint(ray.GetPoint(dist)));
+        return true;
+    }
+
+    /// A piece dragged and let go: if it was dropped on a place it can go (a tawla checker straight to the point
+    /// both dice reach, for example), it moves there; anywhere else it stays picked.
+    public void Drop(Vector3 screen)
+    {
+        if (board == null || view == null || !view.MyTurn || sel == -1000) return;
+        if (!PickAtScreen(screen, out var pick)) return;
+        if ((pick.kind == "square" || pick.kind == "point") && targets.Contains(pick.v)) Tap(screen);
+    }
+
     /// A tap on the screen while at a board.
     public void Tap(Vector3 screen)
     {
         if (board == null || view == null || !view.MyTurn) return;
-        var ray = app.cafe.cam.ScreenPointToRay(screen);
-        var plane = new Plane(Vector3.up, board.spin.TransformPoint(new Vector3(0, board.topY, 0)));
-        if (!plane.Raycast(ray, out float dist)) return;
-        var local = board.spin.InverseTransformPoint(ray.GetPoint(dist));
-        var pick = board.PickAt(local);
+        if (!PickAtScreen(screen, out var pick)) return;
         if (NeedsRoll()) { Roll(); return; }   // a tap anywhere on the board throws the dice
         if (view.game == "ludo")
         {
@@ -213,9 +228,9 @@ public class BoardGame : MonoBehaviour
     {
         if (view == null || !view.MyTurn) return null;
         if (NeedsRoll()) return Loc.T("دورك: ارمي الزهر");
-        if (view.game == "chess") return view.chess != null && view.chess.Num("check", -1) >= 0 ? Loc.T("كش! احمي الملك") : sel != -1000 ? Loc.T("اختار المكان") : Loc.T("دورك: حرّك قطعة");
-        if (view.game == "tawla") return sel != -1000 ? Loc.T("اختار المكان") : Loc.T("حرّك قشاطاتك");
-        if (view.game == "ludo") return Loc.T("اختار قطعة تتحرك");
+        if (view.game == "chess") return view.chess != null && view.chess.Num("check", -1) >= 0 ? Loc.T("كش! احمي الملك") : sel != -1000 ? Loc.T("اختار هتحطها فين") : Loc.T("دورك: حرّك قطعة");
+        if (view.game == "tawla") return sel != -1000 ? Loc.T("اختار هتحطها فين") : Loc.T("حرّك قشاطاتك");
+        if (view.game == "ludo") return Loc.T("اختار العسكري اللي هيتحرك");
         return Loc.T("دورك");
     }
 }

@@ -39,8 +39,23 @@ public static class BuildScript
         PlayerSettings.productName = "Board Battles";
         PlayerSettings.bundleVersion = "0.1.0";
         PlayerSettings.colorSpace = ColorSpace.Linear;
-        PlayerSettings.SplashScreen.show = false;
+        // the app's own logo on the brand red from the very first moment (instead of a black screen while the
+        // engine loads); the animated splash (Scripts/Splash.cs) takes over once the game starts
+        const string splashLogo = "Assets/Splash/SplashLogo.png";
+        if (AssetImporter.GetAtPath(splashLogo) is TextureImporter imp && imp.textureType != TextureImporterType.Sprite)
+        {
+            imp.textureType = TextureImporterType.Sprite; imp.alphaIsTransparency = true; imp.mipmapEnabled = false;
+            imp.SaveAndReimport();
+        }
+        var logoSprite = AssetDatabase.LoadAssetAtPath<Sprite>(splashLogo);
+        PlayerSettings.SplashScreen.show = logoSprite != null;
         PlayerSettings.SplashScreen.showUnityLogo = false;
+        PlayerSettings.SplashScreen.backgroundColor = new Color32(0x4a, 0x0b, 0x16, 0xff);
+        PlayerSettings.SplashScreen.overlayOpacity = 0;
+        PlayerSettings.SplashScreen.animationMode = PlayerSettings.SplashScreen.AnimationMode.Static;
+        PlayerSettings.SplashScreen.drawMode = PlayerSettings.SplashScreen.DrawMode.AllSequential;
+        if (logoSprite != null) PlayerSettings.SplashScreen.logos = new[] { PlayerSettings.SplashScreenLogo.Create(1.5f, logoSprite) };
+        Debug.Log("[build] splash logo " + (logoSprite != null ? "on" : "missing"));
         PlayerSettings.runInBackground = true;
         PlayerSettings.defaultInterfaceOrientation = UIOrientation.AutoRotation;
         PlayerSettings.allowedAutorotateToLandscapeLeft = true;

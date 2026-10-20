@@ -453,7 +453,7 @@ public class Menus : MonoBehaviour
                     var c = ShopCard(row, i, Packs.Length);
                     var ci = Ui.Picture(c, "Coin", Icon("coin")); ci.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(56, 56), new Vector2(0, -14));
                     Ui.Label(c, Loc.Short(p.coins), 22, Ui.Gold, TextAnchor.MiddleCenter, Ui.Display).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(140, 30), new Vector2(0, -74));
-                    BuyButton(c, p.egp + " " + Loc.T("ج.م"), Ui.Gold, Ui.Ink, () => app.Toast(Loc.T("الشراء بالفلوس جاي قريباً في نسخة Unity")));
+                    BuyButton(c, p.egp + " " + Loc.T("ج.م"), Ui.Gold, Ui.Ink, () => app.Toast(Loc.T("الشراء بالفلوس جاي قريب")));
                 }
             else if (shopTab == 1 || shopTab == 2)
             {
@@ -480,7 +480,7 @@ public class Menus : MonoBehaviour
                 c.sizeDelta = new Vector2(300, c.sizeDelta.y);
                 var vi = Ui.Picture(c, "Icon", Icon("video")); vi.color = Ui.Gold; vi.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(50, 50), new Vector2(0, -16));
                 Ui.Label(c, "بدون إعلانات", 20, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(280, 30), new Vector2(0, -76));
-                BuyButton(c, "199 " + Loc.T("ج.م") + " / " + Loc.T("شهرياً"), Ui.Gold, Ui.Ink, () => app.Toast(Loc.T("الشراء بالفلوس جاي قريباً في نسخة Unity")));
+                BuyButton(c, "199 " + Loc.T("ج.م") + " / " + Loc.T("شهرياً"), Ui.Gold, Ui.Ink, () => app.Toast(Loc.T("الشراء بالفلوس جاي قريب")));
             }
         };
         refreshOpen();

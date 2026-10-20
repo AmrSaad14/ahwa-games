@@ -24,7 +24,8 @@ public class App : MonoBehaviour
     bool searching;
     int tilesOnTable;
     string leftTableId = "";
-    OfflineGame offline;            // a practice game played on the phone, with no server
+    OfflineGame offline;
+    bool boardDragging; Vector2 boardDragFrom;            // a practice game played on the phone, with no server
 
     // the home menu
     Canvas ui, toastCanvas;
@@ -124,11 +125,17 @@ public class App : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Escape) && menus != null && menus.IsOpen) { menus.Close(); return; }   // Android's back button
         if (menus != null && menus.IsOpen) return;
         if (toastGroup != null) toastGroup.alpha = Mathf.MoveTowards(toastGroup.alpha, Time.time < toastUntil ? 1 : 0, Time.deltaTime * 4);
+        // a piece dragged on a board and let go somewhere else: move it there
+        if (boardDragging && Input.GetMouseButtonUp(0))
+        {
+            boardDragging = false;
+            if (view != null && view.Board && ((Vector2)Input.mousePosition - boardDragFrom).magnitude > Screen.height * 0.04f) boardGame.Drop(Input.mousePosition);
+        }
         if (cafe == null || !cafe.ready || !Input.GetMouseButtonDown(0) || OverUi()) return;
         if (view != null)
         {
             // chess, tawla, ludo: the board works out what you tapped
-            if (view.Board) { boardGame.Tap(Input.mousePosition); return; }
+            if (view.Board) { boardGame.Tap(Input.mousePosition); boardDragFrom = Input.mousePosition; boardDragging = true; return; }
             // at the table: a glowing spot picks the end for the chosen tile
             var ray = cafe.cam.ScreenPointToRay(Input.mousePosition);
             if (Physics.Raycast(ray, out var hit, 200f))
@@ -234,8 +241,15 @@ public class App : MonoBehaviour
             case "room_full": return Loc.T("الغرفة مليانة");
             case "player_short": return Loc.T("حد من اللاعبين رصيده مش كفاية");
             case "must_roll": return Loc.T("ارمي الزهر الأول");
+            case "must_open": return Loc.T("لازم تفتح بأكبر دوش معاك");
+            case "choose_end": return Loc.T("اختار هتحطها في أنهي ناحية");
+            case "can_play": return Loc.T("معاك حجر ينفع، العبه");
+            case "must_draw": return Loc.T("اسحب من الكوم الأول");
+            case "already_rolled": return Loc.T("انت رميت الزهر خلاص");
+            case "must_move": return Loc.T("لسه عندك لعب، حرّك");
+            case "not_playing": case "no_tile": case "bad_action": return Loc.T("الحركة دي مش هينفع دلوقتي");
             case "illegal_move": return Loc.T("الحجر ده مش هينفع هنا");
-            default: return Loc.T("خطأ: ") + code;
+            default: return Loc.T("حصلت مشكلة: ") + code;
         }
     }
 
@@ -312,7 +326,7 @@ public class App : MonoBehaviour
         string name = user != null ? user.Str("name") : "";
         int ch = user != null ? (int)user.Num("ch", 0) : 0;
         try { offline = OfflineGame.Create(mode, name, ch); }
-        catch (System.Exception e) { Debug.LogException(e); Toast(Loc.T("خطأ: ") + e.Message); offline = null; return; }
+        catch (System.Exception e) { Debug.LogException(e); Toast(Loc.T("حصلت مشكلة: ") + e.Message); offline = null; return; }
         Debug.Log("[app] practice " + mode + " on the phone");
         PumpOffline();
     }
@@ -400,8 +414,23 @@ public class App : MonoBehaviour
         var ends = Domino.EndsFor(v.line, id);
         if (ends.Count == 0) { Toast(Loc.T("الحجر ده مش هيركب")); return; }
         if (ends.Count == 1) { Play(id, ends[0]); return; }
+        // both ends show the same number: either way is the same move, so play it on the shorter arm
+        if (Domino.LeftVal(v.line) == Domino.RightVal(v.line)) { Play(id, v.line.L.Count <= v.line.R.Count ? 'L' : 'R'); return; }
         sel = id; choose = ends;
         Redraw();
+    }
+
+    /// A tile dragged from your hand and let go over the table: it goes on the end it was dropped nearest to.
+    public void DropTile(int id, Vector2 screen)
+    {
+        var v = view;
+        if (v == null || !v.MyTurn) return;
+        if (v.open >= 0 && v.line.Empty && id != v.open) { Toast(Loc.T("افتح بالـ ") + Domino.Tiles[v.open][0] + "|" + Domino.Tiles[v.open][1]); return; }
+        var ends = Domino.EndsFor(v.line, id);
+        if (ends.Count == 0) { Toast(Loc.T("الحجر ده مش هيركب")); return; }
+        if (ends.Count == 1) { Play(id, ends[0]); return; }
+        char best = dominoTable.NearestEnd(v.line, id, ends, screen);
+        Play(id, best);
     }
 
     public void PlayEnd(char e)

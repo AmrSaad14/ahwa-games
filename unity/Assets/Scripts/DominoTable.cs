@@ -57,6 +57,21 @@ public class DominoTable : MonoBehaviour
 
     /// Where a point of the layout (tile units) is on the table.
     Vector3 At(float x, float y, float lift = 0) => C + R * (x * TS) + F * (y * TS) + U * (TileArt.H * TS / 2 + lift);
+    /// Which of these ends a tile dropped at a screen point is closest to (where it would land on each).
+    public char NearestEnd(Domino.Line line, int id, List<char> ends, Vector2 screen)
+    {
+        char best = ends[0]; float bd = float.MaxValue;
+        var cam = cafe.cam;
+        foreach (var e in ends)
+        {
+            var g = Domino.Preview(line, id, e, XMax);
+            Vector3 sp = cam.WorldToScreenPoint(At(g.x, g.y));
+            float d = (new Vector2(sp.x, sp.y) - screen).sqrMagnitude;
+            if (d < bd) { bd = d; best = e; }
+        }
+        return best;
+    }
+
     Quaternion Along(float ang)
     {
         var dir = R * Mathf.Cos(ang) + F * Mathf.Sin(ang);

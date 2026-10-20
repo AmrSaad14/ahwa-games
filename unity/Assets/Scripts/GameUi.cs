@@ -274,7 +274,7 @@ public class GameUi : MonoBehaviour
     {
         var card = Ui.Box(root, "Queue", new Color(0.1f, 0.06f, 0.04f, 0.95f));
         queuePanel = card.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(340, 170), Vector2.zero);
-        queueText = Ui.Label(queuePanel, "البحث عن لاعبين", 22, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold);
+        queueText = Ui.Label(queuePanel, "بندوّر على لاعبين…", 22, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold);
         queueText.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(320, 34), new Vector2(0, -18));
         queueSub = Ui.Label(queuePanel, "", 15, Color.white);
         queueSub.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(320, 26), new Vector2(0, -60));
@@ -367,7 +367,7 @@ public class GameUi : MonoBehaviour
         matchSub.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(380, 30), new Vector2(0, -60));
         payoutText = Ui.Label(matchPanel, "", 20, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Bold);
         payoutText.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(380, 30), new Vector2(0, -96));
-        var again = Ui.Button(matchPanel, "العب مرة أخرى", Ui.Gold, Ui.Ink, 17, () => app.PlayAgain());
+        var again = Ui.Button(matchPanel, "العب تاني", Ui.Gold, Ui.Ink, 17, () => app.PlayAgain());
         ((RectTransform)again.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(170, 44), new Vector2(90, 18));
         var home = Ui.Button(matchPanel, "خروج", Ui.Panel, Ui.GoldLight, 17, () => app.Leave());
         ((RectTransform)home.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(150, 44), new Vector2(-90, 18));
@@ -389,6 +389,37 @@ public class GameUi : MonoBehaviour
 
     static readonly string[] CharAr = { "عم فتحي", "كابتن سامي", "زيكو", "منى", "ندى", "الحاج محمود" };
     static readonly string[] CharEn = { "Am Fathi", "Captain Samy", "Ziko", "Mona", "Nada", "Hajj Mahmoud" };
+    /// Mona and Nada (and players who picked them) are spoken of as women.
+    static bool Female(TableView v, int seat) => seat >= 0 && seat < v.seats.Count && v.seats[seat] != null && (v.seats[seat].ch == 3 || v.seats[seat].ch == 4);
+
+    /// The game's sentences about a player, said the way people talk (you / him / her), in both languages.
+    public static string Say(TableView v, int seat, string what)
+    {
+        bool you = seat == v.you, f = Female(v, seat);
+        string n = NameOf(v, seat);
+        if (Loc.En)
+            switch (what)
+            {
+                case "turn": return you ? "Your turn" : n + "'s turn";
+                case "pass": return you ? "You passed" : n + " passed";
+                case "nomove": return you ? "You have no move" : n + " has no move";
+                case "round": return you ? "You won the round!" : n + " won the round";
+                case "match": return you ? "Congrats! You won the match" : n + " won the match";
+            }
+        switch (what)
+        {
+            case "turn": return you ? "دورك" : "دور " + n;
+            case "pass": return you ? "قلت باص" : n + (f ? " قالت باص" : " قال باص");
+            case "nomove": return you ? "مالكش لعب" : n + (f ? " مالهاش لعب" : " مالوش لعب");
+            case "round": return you ? "كسبت الجولة!" : n + (f ? " كسبت الجولة" : " كسب الجولة");
+            case "match": return you ? "مبروك! كسبت الماتش" : n + (f ? " كسبت الماتش" : " كسب الماتش");
+        }
+        return n;
+    }
+    static string TeamSay(bool mine, bool match) => Loc.En
+        ? (mine ? (match ? "Congrats! Your team won the match" : "Your team won the round!") : (match ? "The other team won the match" : "The other team won the round"))
+        : (mine ? (match ? "مبروك! فريقك كسب الماتش" : "فريقك كسب الجولة!") : (match ? "الفريق التاني كسب الماتش" : "الفريق التاني كسب الجولة"));
+
     /// A seat's name; computer players have none, so they go by their character (as in the web game).
     public static string NameOf(TableView v, int seat)
     {
@@ -422,9 +453,9 @@ public class GameUi : MonoBehaviour
         string msg = "";
         if (v.phase == "play")
         {
-            if (v.MyTurn) msg = choose != null && choose.Count > 1 ? Loc.T("الحجر يناسب الطرفين. اختار المكان.") : v.open >= 0 && v.line.Empty ? Loc.T("افتح بالـ ") + Domino.Tiles[v.open][0] + "|" + Domino.Tiles[v.open][1] : Loc.T("دورك");
-            else if (v.turn >= 0) msg = NameOf(v, v.turn) + Loc.T(" يلعب");
-            if (v.last != null && v.last.t == "pass" && v.last.s != v.you && v.last.s >= 0) msg = NameOf(v, v.last.s) + Loc.T(" قال باص");
+            if (v.MyTurn) msg = choose != null && choose.Count > 1 ? Loc.T("الحجر ينفع في الناحيتين، دوس على ناحية أو اسحبه لها") : v.open >= 0 && v.line.Empty ? Loc.T("افتح بالـ ") + Domino.Tiles[v.open][0] + "|" + Domino.Tiles[v.open][1] : Loc.T("دورك");
+            else if (v.turn >= 0) msg = Say(v, v.turn, "turn");
+            if (v.last != null && v.last.t == "pass" && v.last.s != v.you && v.last.s >= 0) msg = Say(v, v.last.s, "pass");
         }
         turnText.Set(msg);
 
@@ -441,7 +472,7 @@ public class GameUi : MonoBehaviour
         if (rend)
         {
             var r = v.result;
-            string title = r.winner < 0 ? Loc.T("تعادل. لا أحد يسجل.") : v.mode == "team" ? ((v.you >= 0 && r.team == v.TeamOf(v.you)) ? Loc.T("فريقك فاز بالجولة") : Loc.T("الفريق التاني فاز بالجولة")) : NameOf(v, r.winner) + Loc.T(" فاز بالجولة");
+            string title = r.winner < 0 ? Loc.T("تعادل، محدش سجّل") : v.mode == "team" ? TeamSay(v.you >= 0 && r.team == v.TeamOf(v.you), false) : Say(v, r.winner, "round");
             resultTitle.Set(title);
             resultSub.Set((r.blocked ? Loc.T("اللعبة مقفولة  ·  ") : "") + (r.points > 0 ? "+" + r.points + Loc.T(" نقطة") : ""));
         }
@@ -450,7 +481,7 @@ public class GameUi : MonoBehaviour
         {
             var m = v.match;
             bool won = v.you >= 0 && m.team == v.TeamOf(v.you);
-            matchTitle.Set(m.team < 0 ? Loc.T("تعادل") : won ? (v.mode == "team" ? Loc.T("فريقك فاز!") : Loc.T("فزت بالمباراة!")) : (v.mode == "team" ? Loc.T("الفريق التاني فاز") : NameOf(v, m.team) + Loc.T(" فاز بالمباراة")));
+            matchTitle.Set(m.team < 0 ? Loc.T("تعادل") : v.mode == "team" ? TeamSay(won, true) : Say(v, m.team, "match"));
             matchSub.Set(string.Join("  ·  ", m.scores));
         }
     }
@@ -475,8 +506,8 @@ public class GameUi : MonoBehaviour
         if (v.phase == "play")
         {
             if (v.MyTurn) msg = app.boardGame.TurnHint() ?? Loc.T("دورك");
-            else if (v.turn >= 0) msg = NameOf(v, v.turn) + Loc.T(" يلعب");
-            if (!v.MyTurn && v.last != null && v.last.t == "pass" && v.last.s >= 0 && v.last.s != v.you) msg = NameOf(v, v.last.s) + Loc.T(" مالوش لعب");
+            else if (v.turn >= 0) msg = Say(v, v.turn, "turn");
+            if (!v.MyTurn && v.last != null && v.last.t == "pass" && v.last.s >= 0 && v.last.s != v.you) msg = Say(v, v.last.s, "nomove");
         }
         turnText.Set(msg);
         rollButton.SetActive(app.boardGame.NeedsRoll());
@@ -487,7 +518,7 @@ public class GameUi : MonoBehaviour
         resultPanel.gameObject.SetActive(rend);
         if (rend)
         {
-            resultTitle.Set(v.endWinner < 0 ? Loc.T("تعادل") : NameOf(v, v.endWinner) + (v.endWinner == v.you ? Loc.T(" كسبت الجولة") : Loc.T(" فاز بالجولة")));
+            resultTitle.Set(v.endWinner < 0 ? Loc.T("تعادل") : Say(v, v.endWinner, "round"));
             resultSub.Set((v.endKind == "mars" ? Loc.T("مارس!") + "  ·  " : "") + (v.endPoints > 0 ? "+" + v.endPoints + Loc.T(" نقطة") : ""));
         }
         matchPanel.gameObject.SetActive(mend);
@@ -495,8 +526,8 @@ public class GameUi : MonoBehaviour
         {
             var m = v.match;
             bool won = v.you >= 0 && m.team == v.you;
-            string kind = (v.endKind == "checkmate" || v.endKind == "mate") ? Loc.T("كش مات") : v.endKind == "stalemate" ? Loc.T("مات بلا كش") : v.endKind == "time" ? Loc.T("الوقت خلص") : "";
-            matchTitle.Set(m.team < 0 ? Loc.T("تعادل") : won ? Loc.T("فزت بالمباراة!") : NameOf(v, m.team) + Loc.T(" فاز بالمباراة"));
+            string kind = (v.endKind == "checkmate" || v.endKind == "mate") ? Loc.T("كش مات") : v.endKind == "stalemate" ? Loc.T("بات (تعادل)") : v.endKind == "time" ? Loc.T("الوقت خلص") : "";
+            matchTitle.Set(m.team < 0 ? Loc.T("تعادل") : Say(v, m.team, "match"));
             matchSub.Set((kind != "" ? kind + "  ·  " : "") + string.Join("  ·  ", m.scores));
         }
     }
@@ -534,6 +565,13 @@ public class GameUi : MonoBehaviour
             if (id == sel) bg.gameObject.AddComponent<Outline>().effectColor = Ui.Gold;
             var b = bg.gameObject.AddComponent<Button>();
             b.onClick.AddListener(() => app.TapTile(id));
+            if (fits)
+            {
+                // or drag it onto the table, next to the end it should go on
+                var drag = bg.gameObject.AddComponent<UiDrag>();
+                drag.home = handBar;
+                drag.onDrop = p => app.DropTile(id, p);
+            }
         }
     }
 
@@ -542,7 +580,7 @@ public class GameUi : MonoBehaviour
         if (queuePanel.gameObject.activeSelf)
         {
             float left = botsAtLocal - Time.time;
-            queueText.Set(left > 0 ? Loc.T("سينضم لاعبو الكمبيوتر خلال ") + Mathf.CeilToInt(left) + Loc.T(" ث") : Loc.T("البحث عن لاعبين"));
+            queueText.Set(left > 0 ? Loc.T("الكمبيوتر هيدخل يلعب بعد ") + Mathf.CeilToInt(left) + Loc.T(" ث") : Loc.T("بندوّر على لاعبين…"));
         }
         var v = app.view;
         if (!hud.gameObject.activeSelf || v == null) return;
