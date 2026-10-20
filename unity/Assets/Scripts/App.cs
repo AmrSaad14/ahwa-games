@@ -571,7 +571,6 @@ public class App : MonoBehaviour
             menus.Close();
             menus.WatchAd(); yield return new WaitForSeconds(1.5f); Still("m6-ad.png");
             yield return new WaitForSeconds(5f); Still("m7-ad-reward.png");
-            menus.OpenCashout(); yield return new WaitForSeconds(1.2f); Still("m12-cashout.png"); menus.Close();
             Loc.Set(true); yield return new WaitForSeconds(0.8f); Still("m8-home-en.png");
             menus.OpenShop(1); yield return new WaitForSeconds(0.8f); Still("m9-shop-en.png");
             menus.OpenHowTo(0); yield return new WaitForSeconds(0.8f); Still("m10-howto-en.png");

@@ -41,12 +41,12 @@ public class Menus : MonoBehaviour
         canvas = Ui.MakeCanvas("Menus", 40);
 
         // down the left side: shop, leaderboard, how to play, settings
-        var rail = Ui.Rect("Rail", home).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(64, 300), new Vector2(10, -84));
+        var rail = Ui.Rect("Rail", home).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(64, 300), new Vector2(10, -88));
         RailButton(rail, 0, "shop", "المتجر", () => OpenShop(0));
         RailButton(rail, 1, "trophy", "المتصدرين", () => OpenLeaders(0));
         RailButton(rail, 2, "help", "طريقة اللعب", () => OpenHowTo(0));
         RailButton(rail, 3, "settings", "الإعدادات", OpenSettings);
-        RailButton(rail, 4, "wallet", "اسحب فلوسك", OpenCashout);
+        // (cash out to Vodafone Cash: OpenCashout, switched off for now)
 
         // along the top, left of your name and coins: watch an ad, sign in, language
         var ad = Chip(home, "video", "+5K", new Vector2(-252, -10), 98, new Color32(0x2f, 0x6b, 0x3a, 0xf0), Color.white, WatchAd);

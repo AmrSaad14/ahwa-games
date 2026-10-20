@@ -147,7 +147,9 @@ a "come and play" notification, in the player's language.
    that opens `https://YOUR-SERVER/api/cron/push?key=ADMIN_KEY` every 15 minutes. Each reminder still goes out once.
    Add `&now=1` once to send a reminder right away (a test).
 
-## Cash out to Vodafone Cash
+## Cash out to Vodafone Cash (switched off)
+
+Not offered for now: the app has no cash-out button and the server refuses requests unless `CASHOUT_ENABLED=1`.
 
 Players can turn every **1,000,000 coins into 10 EGP**, paid to a Vodafone Cash number (010…) within one working day.
 The coins are taken when the request is made; one request at a time, up to 10 million coins each, signed-in players

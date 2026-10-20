@@ -395,6 +395,7 @@ export class Hub {
       }
       case 'cashouts': return this.sendCashouts(uid);
       case 'cashout': {
+        if (!CASHOUT.enabled) return err('cashout_off');   // not offered for now (CASHOUT_ENABLED=1 turns it on)
         const u = this.store.get(uid);
         if (!u) return;
         // paid to a real wallet: only for accounts that can be got back (Google, mobile number or e-mail)
@@ -745,7 +746,7 @@ export class Hub {
 }
 
 /** Cash out: every 1,000,000 coins is 10 EGP on Vodafone Cash, paid by hand (see /admin/cashouts). */
-export const CASHOUT = { coins: 1_000_000, egp: 10, maxMillions: 10 };
+export const CASHOUT = { coins: 1_000_000, egp: 10, maxMillions: 10, enabled: process.env.CASHOUT_ENABLED === '1' };
 
 /** A Vodafone Cash number as 010xxxxxxxx (accepts +20 / 0020, spaces and Arabic digits), or null. */
 export function walletNumber(raw: string): string | null {

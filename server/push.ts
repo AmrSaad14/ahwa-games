@@ -17,10 +17,10 @@ const b64url = (b: Buffer | string) => Buffer.from(b).toString('base64').replace
 /** The reminder texts, a different one each time (Arabic and English). */
 const REMINDERS: { ar: [string, string]; en: [string, string] }[] = [
   { ar: ['القهوة مستنياك ☕', 'الترابيزة جاهزة والعيال مستنيين… العب دور واكسب كوينز'], en: ['The café is waiting ☕', 'The table is set and the regulars are waiting. Play a round and win coins'] },
-  { ar: ['مكافأتك اليومية مستنياك 🎁', 'ادخل خد كوينز النهارده واقرب من السحب على فودافون كاش'], en: ['Your daily bonus is waiting 🎁', 'Grab today\'s coins and get closer to a Vodafone Cash payout'] },
+  { ar: ['مكافأتك اليومية مستنياك 🎁', 'ادخل خد كوينز النهارده'], en: ['Your daily bonus is waiting 🎁', 'Come and grab today\'s free coins'] },
   { ar: ['دور دومينو؟ 🁣', 'عم فتحي بيقول محدش يقدر يغلبه… وريه'], en: ['A round of dominoes? 🁣', 'Am Fathi says nobody can beat him. Show him'] },
-  { ar: ['طاولة على السريع 🎲', 'ارمي الزهر واكسب كوينز تحولها فلوس'], en: ['A quick game of tawla 🎲', 'Roll the dice and win coins you can cash out'] },
-  { ar: ['كل مليون كوين = ١٠ جنيه 💰', 'العب واجمع كوينز واسحبهم على فودافون كاش'], en: ['Every 1M coins = 10 EGP 💰', 'Play, collect coins and cash them out to Vodafone Cash'] },
+  { ar: ['طاولة على السريع 🎲', 'ارمي الزهر واكسب كوينز'], en: ['A quick game of tawla 🎲', 'Roll the dice and win coins'] },
+  { ar: ['الشلة مستنياك 🃏', 'ادخل العب دور لودو مع صحابك'], en: ['Your friends are waiting 🃏', 'Jump in for a round of ludo'] },
   { ar: ['الكابتن سامي عايز ماتش شطرنج ♟️', 'ادخل العب ماتش سريع'], en: ['Captain Samy wants a chess match ♟️', 'Jump in for a quick game'] },
 ];
 
