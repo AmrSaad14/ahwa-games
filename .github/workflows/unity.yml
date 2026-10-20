@@ -121,18 +121,36 @@ jobs:
       - name: Publish logs and screenshots
         if: always()
         run: |
+          publish() {   # tag, title, files…: create the release, or fill in what's missing; never delete on a retry
+            tag=$1; title=$2; shift 2
+            for try in 1 2 3 4; do
+              if gh release view "$tag" >/dev/null 2>&1; then gh release upload "$tag" "$@" --clobber && return 0
+              else gh release create "$tag" "$@" --title "$title" --target "$GITHUB_SHA" --prerelease --notes "$title ${GITHUB_SHA::7}" && return 0; fi
+              echo "release $tag: retry $try"; sleep 30
+            done
+            return 1
+          }
           set +e
           if [ -f logs/editor.log ]; then tail -c 4000000 logs/editor.log > logs/editor-tail.log; fi
           files=$(ls logs/*.txt logs/activate.log logs/return.log logs/editor-tail.log logs/player.log logs/server.log shots/*.png shots/*.mp4 2>/dev/null)
           echo "publishing: $files"
           gh release delete unity-logs --yes --cleanup-tag
-          for try in 1 2 3 4; do gh release create unity-logs $files --title "Unity build logs" --target "$GITHUB_SHA" --prerelease --notes "Unity build ${GITHUB_SHA::7}" && break; echo "release unity-logs: retry $try"; sleep 30; gh release delete unity-logs --yes --cleanup-tag; done
+          publish unity-logs "Unity build logs" $files
 
       - name: Publish the APK
         if: always()
         run: |
+          publish() {   # tag, title, files…: create the release, or fill in what's missing; never delete on a retry
+            tag=$1; title=$2; shift 2
+            for try in 1 2 3 4; do
+              if gh release view "$tag" >/dev/null 2>&1; then gh release upload "$tag" "$@" --clobber && return 0
+              else gh release create "$tag" "$@" --title "$title" --target "$GITHUB_SHA" --prerelease --notes "$title ${GITHUB_SHA::7}" && return 0; fi
+              echo "release $tag: retry $try"; sleep 30
+            done
+            return 1
+          }
           if [ -f build/android/BoardBattles.apk ]; then
             cp build/android/BoardBattles.apk board-battles.apk
             gh release delete unity-apk --yes --cleanup-tag || true
-            for try in 1 2 3 4; do gh release create unity-apk board-battles.apk --title "Unity APK" --target "$GITHUB_SHA" --prerelease --notes "Unity build ${GITHUB_SHA::7}" && break; echo "release unity-apk: retry $try"; sleep 30; gh release delete unity-apk --yes --cleanup-tag; done
+            publish unity-apk "Unity APK" board-battles.apk
           fi

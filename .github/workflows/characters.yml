@@ -74,14 +74,23 @@ jobs:
       - name: Publish
         if: always()
         run: |
+          publish() {   # tag, title, files…: create the release, or fill in what's missing; never delete on a retry
+            tag=$1; title=$2; shift 2
+            for try in 1 2 3 4; do
+              if gh release view "$tag" >/dev/null 2>&1; then gh release upload "$tag" "$@" --clobber && return 0
+              else gh release create "$tag" "$@" --title "$title" --target "$GITHUB_SHA" --prerelease --notes "$title ${GITHUB_SHA::7}" && return 0; fi
+              echo "release $tag: retry $try"; sleep 30
+            done
+            return 1
+          }
           set +e
           tail -c 2000000 out/blender.txt > out/blender-tail.txt
           files=$(ls out/*.txt out/*.png 2>/dev/null | grep -v "out/blender.txt")
           gh release delete chars-preview --yes --cleanup-tag
-          for try in 1 2 3 4; do gh release create chars-preview $files --title "Character previews" --target "$GITHUB_SHA" --prerelease --notes "Characters ${GITHUB_SHA::7}" && break; echo "release chars-preview: retry $try"; sleep 30; gh release delete chars-preview --yes --cleanup-tag; done
+          publish chars-preview "Character previews" $files
           # the models for the game (the Unity build downloads them) — only a complete set
           if [ $(ls out/*.glb 2>/dev/null | wc -l) -eq 6 ]; then
             gh release delete chars-glb --yes --cleanup-tag
-            for try in 1 2 3 4; do gh release create chars-glb out/*.glb --title "Character models" --target "$GITHUB_SHA" --prerelease --notes "Characters ${GITHUB_SHA::7}" && break; echo "release chars-glb: retry $try"; sleep 30; gh release delete chars-glb --yes --cleanup-tag; done
+            publish chars-glb "Character models" out/*.glb
             gh workflow run unity.yml --ref main
           fi
