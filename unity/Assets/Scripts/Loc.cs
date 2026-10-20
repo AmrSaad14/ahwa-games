@@ -94,5 +94,26 @@ public static class Loc
         ["إعلان"] = "Ad", ["المكافأة بعد"] = "Reward in", ["+٥٬٠٠٠ عملة"] = "+5,000 coins", ["فاضل النهارده"] = "left today",
         ["العب بورد باتلز مع أصحابك"] = "Play Board Battles with your friends",
         ["دومينو · طاولة · شطرنج · لودو"] = "Dominoes · Backgammon · Chess · Ludo",
+        // the board games
+        ["ارمي الزهر"] = "Roll the dice", ["دورك: ارمي الزهر"] = "Your turn: roll the dice", ["كش! احمي الملك"] = "Check! Save your king",
+        ["اختار المكان"] = "Pick where it goes", ["دورك: حرّك قطعة"] = "Your turn: move a piece", ["حرّك قشاطاتك"] = "Move your checkers",
+        ["اختار قطعة تتحرك"] = "Pick a pawn to move", ["مالوش لعب"] = "has no move", ["إلى"] = "to", ["كسبت الجولة"] = "won the round",
+        ["مارس!"] = "Mars (double)!", ["كش مات"] = "Checkmate", ["مات بلا كش"] = "Stalemate", ["الوقت خلص"] = "Out of time", ["وقتك"] = "Your clock",
+        ["طاولة عادة"] = "Backgammon", ["محبوسة"] = "Mahbousa", ["٣١"] = "31", ["جلبهار"] = "Gulbahar", ["عادة"] = "Classic",
+        ["٥ دقايق"] = "5 minutes", ["٢ لاعبين"] = "2 players",
+        // ways to play
+        ["العب مع صاحبك"] = "Play with a friend", ["تدريب"] = "Practice", ["التدريب ببلاش"] = "practice is free",
+        ["اعمل غرفة وابعت الكود"] = "Make a room and send the code", ["غرفة ودية (من غير رهان)"] = "Friendly room (no stake)",
+        ["أو ادخل بكود صاحبك"] = "or enter your friend's code", ["الكود"] = "Code", ["ادخل"] = "Join", ["رجوع"] = "Back",
+        ["غرفة صحابك"] = "Your friends' room", ["انسخ"] = "Copy", ["شارك"] = "Share", ["ابدأ اللعب"] = "Start the game",
+        ["الكود اتنسخ"] = "Code copied", ["كله جاهز، ابدأ"] = "Everyone's here — start",
+        ["ابعت الكود لصحابك، أو حط الكمبيوتر مكانهم"] = "Send the code to your friends, or fill seats with the computer",
+        ["مستنيين صاحب الغرفة يبدأ"] = "Waiting for the host to start", ["مكان فاضي…"] = "Empty seat…", ["كمبيوتر"] = "Computer",
+        ["صاحب الغرفة"] = "Host", ["+ كمبيوتر"] = "+ Computer",
+        ["مفيش غرفة بالكود ده"] = "No room with that code", ["لسه في أماكن فاضية"] = "Some seats are still empty", ["الغرفة مليانة"] = "The room is full",
+        ["حد من اللاعبين رصيده مش كفاية"] = "A player doesn't have enough coins", ["ارمي الزهر الأول"] = "Roll the dice first",
+        // voice chat
+        ["الصوت شغال"] = "Voice on", ["الميك مقفول"] = "Mic muted", ["اسمح بالميكروفون عشان تتكلم"] = "Allow the microphone to talk",
+        ["دردشة صوتية"] = "Voice chat",
     };
 }

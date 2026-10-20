@@ -14,6 +14,8 @@ public class App : MonoBehaviour
     public DominoTable dominoTable;
     public GameUi game;
     public Menus menus;
+    public BoardGame boardGame;
+    public Voice voice;
     public TableView view;
     Dictionary<string, object> user;
     double serverOffset;            // server clock minus ours (ms)
@@ -59,19 +61,23 @@ public class App : MonoBehaviour
         Screen.sleepTimeout = SleepTimeout.NeverSleep;
         QualitySettings.shadowDistance = 60;
         QualitySettings.shadows = ShadowQuality.All;
+        QualitySettings.shadowResolution = ShadowResolution.High;
+        QualitySettings.antiAliasing = 4;            // smooth edges
+        QualitySettings.anisotropicFiltering = AnisotropicFiltering.Enable;
         // recording: game time steps a fixed amount per frame however slow the test machine draws, so the video plays smoothly
         if (Recording) { Time.captureFramerate = RecordFps; Directory.CreateDirectory(Path.Combine(ShotDir, "frames")); }
     }
 
     void LateUpdate()
     {
-        if (Recording && recordOn && frame < RecordFps * 120) ScreenCapture.CaptureScreenshot(Path.Combine(ShotDir, "frames", $"f{frame++:D4}.png"));
+        if (Recording && recordOn && frame < RecordFps * 200) ScreenCapture.CaptureScreenshot(Path.Combine(ShotDir, "frames", $"f{frame++:D4}.png"));
     }
 
     IEnumerator Start()
     {
         var splash = gameObject.AddComponent<Splash>();
         splash.Show();
+        Ambience.Begin();   // the café's crowd, from the first frame
         yield return null;   // let the splash draw its first frame before the heavy loading
 
         cafe = new GameObject("Cafe").AddComponent<Cafe>();
@@ -79,6 +85,10 @@ public class App : MonoBehaviour
         dominoTable = new GameObject("Domino").AddComponent<DominoTable>();
         dominoTable.Init(cafe);
         dominoTable.Show(false);
+        boardGame = gameObject.AddComponent<BoardGame>();
+        boardGame.Init(this);
+        voice = gameObject.AddComponent<Voice>();
+        voice.Init(this);
         BuildHome();
         menus = gameObject.AddComponent<Menus>();
         menus.Build(this, homeGroup.GetComponent<RectTransform>());
@@ -113,6 +123,8 @@ public class App : MonoBehaviour
         if (cafe == null || !cafe.ready || !Input.GetMouseButtonDown(0) || OverUi()) return;
         if (view != null)
         {
+            // chess, tawla, ludo: the board works out what you tapped
+            if (view.Board) { boardGame.Tap(Input.mousePosition); return; }
             // at the table: a glowing spot picks the end for the chosen tile
             var ray = cafe.cam.ScreenPointToRay(Input.mousePosition);
             if (Physics.Raycast(ray, out var hit, 200f))
@@ -137,6 +149,9 @@ public class App : MonoBehaviour
         switch (m.Str("t"))
         {
             case "welcome":
+                voice.ice.Clear();
+                foreach (var o in m.Arr("ice") ?? new List<object>()) if (o is Dictionary<string, object> d) voice.ice.Add(d);
+                goto case "user";
             case "user":
                 user = m.Obj("user");
                 if (user != null)
@@ -147,6 +162,9 @@ public class App : MonoBehaviour
                     Debug.Log($"[app] signed in as {user.Str("name")} with {user.Num("coins")} coins");
                 }
                 break;
+            case "rtc":
+                voice.OnSignal((int)m.Num("from", -1), m.Obj("data"));
+                break;
             case "queue":
                 searching = m.TryGetValue("mode", out var md) && md is string;
                 game.ShowQueue(searching ? m : null);
@@ -155,7 +173,6 @@ public class App : MonoBehaviour
                 var vm = m.Obj("view");
                 if (vm == null) break;
                 var v = TableView.Parse(vm);
-                if (v.game != "domino") { Toast("اللعبة دي لسه جاية في نسخة Unity"); net.Send(new Dictionary<string, object> { ["t"] = "leave" }); break; }
                 serverOffset = v.now - LocalMs();
                 if (view == null) EnterGame();
                 // the choice of end only lasts while it's still your turn and the tile is still in hand
@@ -188,6 +205,11 @@ public class App : MonoBehaviour
         {
             case "not_enough_coins": return Loc.T("رصيدك مش كفاية للرهان ده");
             case "not_your_turn": return Loc.T("مش دورك");
+            case "room_not_found": return Loc.T("مفيش غرفة بالكود ده");
+            case "seats_empty": return Loc.T("لسه في أماكن فاضية");
+            case "room_full": return Loc.T("الغرفة مليانة");
+            case "player_short": return Loc.T("حد من اللاعبين رصيده مش كفاية");
+            case "must_roll": return Loc.T("ارمي الزهر الأول");
             case "illegal_move": return Loc.T("الحجر ده مش هينفع هنا");
             default: return Loc.T("خطأ: ") + code;
         }
@@ -200,6 +222,7 @@ public class App : MonoBehaviour
         game.HidePicker();
         homeGroup.alpha = 0; homeGroup.blocksRaycasts = false;
         cafe.SetGame(true);
+        Ambience.Home(false);
         dominoTable.Show(true);
         game.ShowHud(true);
     }
@@ -209,13 +232,18 @@ public class App : MonoBehaviour
         view = null; sel = -1; choose = null;
         game.ShowHud(false);
         dominoTable.Show(false);
+        boardGame.Show(false);
+        voice.Leave(); voice.Sync(null);
         cafe.SetGame(false);
+        Ambience.Home(true);
         homeGroup.alpha = 1; homeGroup.blocksRaycasts = true;
     }
 
     void Redraw()
     {
         if (view == null) return;
+        voice.Sync(view);
+        if (view.Board) { dominoTable.Set(view, -1, null); boardGame.Set(view); game.Render(view, -1, null); return; }
         dominoTable.Set(view, sel, choose);
         game.Render(view, sel, choose);
     }
@@ -239,8 +267,31 @@ public class App : MonoBehaviour
         lastMode = mode; lastStake = stake;
         Send(new Dictionary<string, object> { ["t"] = "quick", ["mode"] = mode, ["stake"] = (double)stake });
         searching = true;
-        game.ShowQueue(new Dictionary<string, object> { ["count"] = 1.0, ["need"] = (double)Domino.Players(mode), ["botsAt"] = 0.0, ["now"] = 0.0 });
+        game.ShowQueue(new Dictionary<string, object> { ["count"] = 1.0, ["need"] = (double)GameUi.Players(mode), ["botsAt"] = 0.0, ["now"] = 0.0 });
     }
+
+    /// A free game against the computer, starting at once (no stake, no rating).
+    public void Practice(string mode)
+    {
+        if (net == null || !net.Online) { Toast(Loc.T("مش متصل بالسيرفر لسه")); return; }
+        lastMode = mode; lastStake = 0;
+        Send(new Dictionary<string, object> { ["t"] = "practice", ["mode"] = mode });
+    }
+
+    /// A room for friends: you get a code to send them; 0 is a friendly game with no stake.
+    public void CreateRoom(string mode, int stake)
+    {
+        if (net == null || !net.Online) { Toast(Loc.T("مش متصل بالسيرفر لسه")); return; }
+        if (stake > 0 && user != null && user.Num("coins") < stake) { Toast(Loc.T("رصيدك مش كفاية للرهان ده")); return; }
+        Send(new Dictionary<string, object> { ["t"] = "create", ["mode"] = mode, ["target"] = 0.0, ["stake"] = (double)stake });
+    }
+    public void JoinRoom(string code)
+    {
+        if (net == null || !net.Online) { Toast(Loc.T("مش متصل بالسيرفر لسه")); return; }
+        Send(new Dictionary<string, object> { ["t"] = "join", ["code"] = code });
+    }
+    public void AddBot(int seat) => Send(new Dictionary<string, object> { ["t"] = "bot", ["seat"] = (double)seat });
+    public void StartRoom() => Send(new Dictionary<string, object> { ["t"] = "start" });
 
     public void CancelQueue()
     {
@@ -259,7 +310,7 @@ public class App : MonoBehaviour
     {
         if (view != null && view.phase == "mend") Send(new Dictionary<string, object> { ["t"] = "leave" });
         ExitGame();
-        Quick(lastMode, lastStake);
+        if (lastStake == 0) Practice(lastMode); else Quick(lastMode, lastStake);
     }
 
     public void TapTile(int id)
@@ -428,7 +479,7 @@ public class App : MonoBehaviour
                 Debug.Log("[app] at the table: " + view.mode + " seats " + view.seats.Count);
                 float played = 0;
                 int lastV = -1;
-                while (played < 40f && view != null)
+                while (played < 22f && view != null)
                 {
                     if (view.MyTurn && view.v != lastV)
                     {
@@ -452,6 +503,41 @@ public class App : MonoBehaviour
                 Still("7-later.png");
                 yield return new WaitForSeconds(0.5f);
             }
+            // the board games, each a practice game against the computer, played by the test for a while
+            foreach (var (mode, tag) in new[] { ("tawla", "tawla"), ("chess", "chess"), ("ludo4", "ludo") })
+            {
+                recordOn = false;
+                if (view != null) Leave();
+                yield return new WaitForSeconds(0.5f);
+                Practice(mode);
+                float tw = Time.realtimeSinceStartup;
+                while ((view == null || !view.Board) && Time.realtimeSinceStartup - tw < 30) yield return null;
+                if (view == null || !view.Board) { Debug.Log("[app] no " + tag + " game"); continue; }
+                recordOn = true;
+                Debug.Log("[app] playing " + tag);
+                yield return new WaitForSeconds(1.2f);
+                Still($"g-{tag}-1.png");
+                float playedB = 0; int shotN = 2;
+                while (playedB < 16f && view != null)
+                {
+                    if (view.MyTurn) { yield return new WaitForSeconds(0.7f); boardGame.AutoMove(); yield return new WaitForSeconds(0.5f); }
+                    if (playedB > 5f * (shotN - 1) && shotN <= 3) { Still($"g-{tag}-{shotN}.png"); shotN++; }
+                    playedB += Time.deltaTime;
+                    yield return null;
+                }
+            }
+            // a room for friends: the lobby with its code
+            recordOn = false;
+            if (view != null) Leave();
+            yield return new WaitForSeconds(0.5f);
+            CreateRoom("ffa4", 0);
+            float tl = Time.realtimeSinceStartup;
+            while (view == null && Time.realtimeSinceStartup - tl < 20) yield return null;
+            recordOn = true;
+            yield return new WaitForSeconds(1.0f);
+            Still("r-lobby.png");
+            if (view != null) { AddBot(1); yield return new WaitForSeconds(0.6f); Still("r-lobby-bot.png"); }
+            yield return new WaitForSeconds(0.4f);
         }
         Debug.Log("[app] recording done, frames=" + frame);
         yield return null; yield return null;

@@ -47,6 +47,8 @@ public class Cafe : MonoBehaviour
         cam.clearFlags = CameraClearFlags.SolidColor;
         cam.backgroundColor = new Color32(0x1c, 0x10, 0x0a, 0xff);
         cam.allowHDR = true;
+        cam.allowMSAA = true;
+        camGo.AddComponent<CafeLook>();   // bloom, tone mapping, warm grade, vignette
 
         // the room
         var prefab = Resources.Load<GameObject>("Art/cafe");
@@ -70,12 +72,40 @@ public class Cafe : MonoBehaviour
         }
         else { center = Vector3.zero; front = Vector3.forward; }
 
+        SettleProps(room.transform);
         Lights();
         People(room.transform);
 
         camPos = camPosTo = Overview(out camLook); camLookTo = camLook;
         Apply();
         ready = true;
+    }
+
+    /// Each table's game (its board, or the domino tiles) sits in the middle of that table's top, resting on it.
+    void SettleProps(Transform room)
+    {
+        foreach (var g in Games)
+        {
+            if (!tables.TryGetValue(g, out var table)) continue;
+            var board = Find(room, "Board_" + g);
+            if (board == null) continue;
+            // the table top: the widest flat part of the table (not its chairs, not the board)
+            Renderer top = null; float best = 0;
+            foreach (var r in table.GetComponentsInChildren<Renderer>())
+            {
+                if (r.transform.IsChildOf(board) || r.name.StartsWith("Seat") || (r.transform.parent != null && r.transform.parent.name.StartsWith("Seat"))) continue;
+                var b = r.bounds; float area = b.size.x * b.size.z;
+                if (area > best) { best = area; top = r; }
+            }
+            if (top == null) continue;
+            var tb = top.bounds;
+            Bounds bb = default; bool any = false;
+            foreach (var r in board.GetComponentsInChildren<Renderer>()) { if (!any) { bb = r.bounds; any = true; } else bb.Encapsulate(r.bounds); }
+            if (!any) continue;
+            var move = new Vector3(tb.center.x - bb.center.x, tb.max.y - bb.min.y + 0.005f, tb.center.z - bb.center.z);
+            board.position += move;
+            Debug.Log($"[cafe] {g}: board moved by {move}");
+        }
     }
 
     void Lights()

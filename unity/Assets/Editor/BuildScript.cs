@@ -51,7 +51,16 @@ public static class BuildScript
         if (icon != null) PlayerSettings.SetIcons(NamedBuildTarget.Unknown, new[] { icon }, IconKind.Any);
         QualitySettings.shadowDistance = 60;
         // shaders the game makes materials from in code (tiles, highlights) must be in every build
-        IncludeShaders("Legacy Shaders/Specular", "Legacy Shaders/Diffuse", "Legacy Shaders/Transparent/Diffuse", "Unlit/Texture", "Unlit/Color");
+        IncludeShaders("Legacy Shaders/Specular", "Legacy Shaders/Diffuse", "Legacy Shaders/Transparent/Diffuse", "Unlit/Texture", "Unlit/Color", "Standard", "KingsBattle/CafeLook");
+        // voice chat is built when Unity's WebRTC package is installed (Scripts/Voice.cs)
+        bool webrtc = UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.webrtc") != null;
+        foreach (var t in new[] { NamedBuildTarget.Android, NamedBuildTarget.Standalone })
+        {
+            var defs = PlayerSettings.GetScriptingDefineSymbols(t);
+            bool has = defs.Contains("BB_VOICE");
+            if (webrtc && !has) PlayerSettings.SetScriptingDefineSymbols(t, string.IsNullOrEmpty(defs) ? "BB_VOICE" : defs + ";BB_VOICE");
+        }
+        Debug.Log("[build] voice chat " + (webrtc ? "on" : "off (no WebRTC package)"));
     }
 
     static void IncludeShaders(params string[] names)

@@ -52,6 +52,22 @@ public static class Sfx
         return s * 0.18f;
     }), 0.9f);
 
+    /// Two dice rattling and landing on wood.
+    static AudioClip dice;
+    public static void Dice() => Play(dice ??= Make("dice", 0.55f, t =>
+    {
+        float s = 0;
+        float[] hits = { 0f, 0.07f, 0.12f, 0.2f, 0.26f, 0.33f, 0.37f };
+        for (int k = 0; k < hits.Length; k++)
+        {
+            float d = t - hits[k];
+            if (d < 0) continue;
+            float amp = 0.55f - k * 0.06f;
+            s += (Noise(t * (1 + k)) * 0.6f + Mathf.Sin(d * 2 * Mathf.PI * (1300f + k * 170f)) * 0.5f) * amp * Mathf.Exp(-d * 70f);
+        }
+        return s * 0.6f;
+    }), 0.9f);
+
     public static void Tap() => Play(tap ??= Make("tap", 0.05f, t => Mathf.Sin(t * 2 * Mathf.PI * 1400f) * 0.2f * Mathf.Exp(-t * 120f)), 0.6f);
 
     static void Play(AudioClip c, float vol) { if (SoundOn && !App.Recording) Src.PlayOneShot(c, vol); }

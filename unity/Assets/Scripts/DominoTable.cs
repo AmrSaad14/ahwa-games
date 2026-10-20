@@ -136,6 +136,7 @@ public class DominoTable : MonoBehaviour
         Clear(lineG); Clear(propsG); Clear(ghostG);
         ring.SetActive(false);
         if (v == null || v.phase == "lobby") return;
+        if (v.Board) { TurnAndCheers(v); return; }   // chess, tawla, ludo: their board is drawn by BoardGame
         float now = Time.time;
         foreach (var pl in Domino.LayoutLine(v.line, XMax))
         {
@@ -194,6 +195,19 @@ public class DominoTable : MonoBehaviour
             t.transform.position = C + R * p.x + F * p.z + U * (TileArt.H * TS / 2 + p.y * TileArt.H * TS);
             t.transform.rotation = Quaternion.AngleAxis(p.r, U);
         }
+        TurnAndCheers(v);
+        // someone just played: their hand goes out to the tile
+        if (v.last != null && v.last.t == "play" && v.last.k.ToString() != viewKey)
+        {
+            viewKey = v.last.k.ToString();
+            var who = CharAtSeat(v.last.s);
+            foreach (var pl in Domino.LayoutLine(v.line, XMax)) if (pl.id == v.last.id && who != null) who.Gesture(At(pl.x, pl.y));
+        }
+    }
+
+    /// The gold ring in front of whoever's turn it is; at the end of a round the winners cheer, the others sulk.
+    void TurnAndCheers(TableView v)
+    {
         if (v.phase == "play" && v.turn >= 0)
         {
             int pos = System.Array.IndexOf(posToSeat, v.turn);
@@ -204,25 +218,17 @@ public class DominoTable : MonoBehaviour
                 ring.SetActive(true);
             }
         }
-        // the end of a round: the winners cheer, the others take it badly
         string rk = v.phase == "rend" || v.phase == "mend" ? v.id + ":" + v.round + ":" + v.phase : "";
         if (rk != "" && rk != resultKey)
         {
             resultKey = rk;
-            int wt = v.phase == "mend" && v.match != null ? v.match.team : v.result != null ? v.result.team : -1;
+            int wt = v.phase == "mend" && v.match != null ? v.match.team : v.Board ? v.endWinner : v.result != null ? v.result.team : -1;
             for (int seat = 0; seat < v.seats.Count; seat++)
             {
                 var who = CharAtSeat(seat);
                 if (who == null || wt < 0) continue;
                 if (v.TeamOf(seat) == wt) who.Win(); else who.Lose();
             }
-        }
-        // someone just played: their hand goes out to the tile
-        if (v.last != null && v.last.t == "play" && v.last.k.ToString() != viewKey)
-        {
-            viewKey = v.last.k.ToString();
-            var who = CharAtSeat(v.last.s);
-            foreach (var pl in Domino.LayoutLine(v.line, XMax)) if (pl.id == v.last.id && who != null) who.Gesture(At(pl.x, pl.y));
         }
     }
 
