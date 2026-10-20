@@ -205,7 +205,18 @@ public class GameUi : MonoBehaviour
         payoutText.color = delta >= 0 ? new Color(0.6f, 0.9f, 0.5f) : new Color(1f, 0.6f, 0.5f);
     }
 
-    string NameOf(TableView v, int seat) => seat == v.you ? Loc.T("أنت") : seat >= 0 && seat < v.seats.Count && v.seats[seat] != null ? v.seats[seat].name : "";
+    static readonly string[] CharAr = { "عم فتحي", "كابتن سامي", "زيكو", "منى", "ندى", "الحاج محمود" };
+    static readonly string[] CharEn = { "Am Fathi", "Captain Samy", "Ziko", "Mona", "Nada", "Hajj Mahmoud" };
+    /// A seat's name; computer players have none, so they go by their character (as in the web game).
+    public static string NameOf(TableView v, int seat)
+    {
+        if (seat == v.you) return Loc.T("أنت");
+        if (seat < 0 || seat >= v.seats.Count || v.seats[seat] == null) return "";
+        var s = v.seats[seat];
+        if (!string.IsNullOrEmpty(s.name)) return s.name;
+        int ch = Mathf.Clamp(s.ch, 0, CharAr.Length - 1);
+        return Loc.En ? CharEn[ch] : CharAr[ch];
+    }
 
     public void Render(TableView v, int sel, List<char> choose)
     {
@@ -317,7 +328,7 @@ public class GameUi : MonoBehaviour
             float halfH = root.rect.height / 2, halfW = root.rect.width / 2;
             local.y = Mathf.Min(local.y, halfH - 66); local.x = Mathf.Clamp(local.x, -halfW + 70, halfW - 70);
             rt.anchoredPosition = local;
-            seatTags[pos].Set(s.name + "  ·  " + s.count);
+            seatTags[pos].Set(NameOf(v, seat) + "  ·  " + s.count);
             bool active = v.phase == "play" && v.turn == seat;
             seatTagBg[pos].color = active ? new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.95f) : new Color(0.1f, 0.06f, 0.04f, 0.8f);
             seatTags[pos].color = active ? Ui.Ink : Color.white;
