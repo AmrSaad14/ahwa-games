@@ -42,12 +42,17 @@ public static class BuildScript
         // the app's own logo on the brand red from the very first moment (instead of a black screen while the
         // engine loads); the animated splash (Scripts/Splash.cs) takes over once the game starts
         const string splashLogo = "Assets/Splash/SplashLogo.png";
-        if (AssetImporter.GetAtPath(splashLogo) is TextureImporter imp && imp.textureType != TextureImporterType.Sprite)
+        AssetDatabase.ImportAsset(splashLogo, ImportAssetOptions.ForceSynchronousImport);
+        if (AssetImporter.GetAtPath(splashLogo) is TextureImporter imp && (imp.textureType != TextureImporterType.Sprite || imp.spriteImportMode != SpriteImportMode.Single))
         {
-            imp.textureType = TextureImporterType.Sprite; imp.alphaIsTransparency = true; imp.mipmapEnabled = false;
+            imp.textureType = TextureImporterType.Sprite; imp.spriteImportMode = SpriteImportMode.Single;
+            imp.alphaIsTransparency = true; imp.mipmapEnabled = false;
             imp.SaveAndReimport();
+            AssetDatabase.ImportAsset(splashLogo, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
         }
-        var logoSprite = AssetDatabase.LoadAssetAtPath<Sprite>(splashLogo);
+        Sprite logoSprite = null;
+        foreach (var o in AssetDatabase.LoadAllAssetsAtPath(splashLogo)) if (o is Sprite sp) logoSprite = sp;
+        if (logoSprite == null) Debug.Log("[build] splash logo: importer " + (AssetImporter.GetAtPath(splashLogo)?.GetType().Name ?? "none"));
         PlayerSettings.SplashScreen.show = logoSprite != null;
         PlayerSettings.SplashScreen.showUnityLogo = false;
         PlayerSettings.SplashScreen.backgroundColor = new Color32(0x4a, 0x0b, 0x16, 0xff);
