@@ -23,6 +23,7 @@ public class App : MonoBehaviour
     string lastMode = "ffa2"; int lastStake;
     bool searching;
     int tilesOnTable;
+    string leftTableId = "";
 
     // the home menu
     Canvas ui, toastCanvas;
@@ -70,7 +71,7 @@ public class App : MonoBehaviour
 
     void LateUpdate()
     {
-        if (Recording && recordOn && frame < RecordFps * 200) ScreenCapture.CaptureScreenshot(Path.Combine(ShotDir, "frames", $"f{frame++:D4}.png"));
+        if (Recording && recordOn && frame < RecordFps * 330) ScreenCapture.CaptureScreenshot(Path.Combine(ShotDir, "frames", $"f{frame++:D4}.png"));
     }
 
     IEnumerator Start()
@@ -173,6 +174,7 @@ public class App : MonoBehaviour
                 var vm = m.Obj("view");
                 if (vm == null) break;
                 var v = TableView.Parse(vm);
+                if (v.id == leftTableId) break;   // a late message from a table you just left: it doesn't pull you back in
                 if (view == null || view.id != v.id) Debug.Log($"[app] table {v.game} {v.mode} {v.phase} {v.id.Substring(0, Mathf.Min(6, v.id.Length))} (was {(view == null ? "none" : view.game + " " + view.id.Substring(0, Mathf.Min(6, view.id.Length)))})");
                 serverOffset = v.now - LocalMs();
                 if (view == null) EnterGame();
@@ -309,6 +311,7 @@ public class App : MonoBehaviour
 
     public void Leave()
     {
+        if (view != null) leftTableId = view.id;
         if (view != null && view.phase != "mend") Send(new Dictionary<string, object> { ["t"] = "leave" });
         ExitGame();
     }

@@ -298,9 +298,9 @@ public class TawlaBoard : Board
             }
             return wood;
         });
-        Art.Sheet("Field", spin, TW, TD, new Vector3(0, FIELD_Y + 0.001f, 0), Art.Mat(new Color(0.82f, 0.8f, 0.78f), 0.3f, 0, tex));
+        Art.Sheet("Field", spin, TW, TD, new Vector3(0, FIELD_Y + 0.001f, 0), Art.Mat(new Color(0.68f, 0.66f, 0.64f), 0.25f, 0, tex));
         // the rails: four sides, the middle bar and the tray's divider, with a mother-of-pearl strip on top
-        var railTop = Art.Mat(Art.Hex("#efe6d6"), 0.85f, 0.1f);
+        var railTop = Art.Mat(Art.Hex("#bdb3a2"), 0.55f, 0.05f);
         void Rail(float x, float z, float w, float d)
         {
             Art.Box("Rail", spin, w, RAIL_H, d, new Vector3(x, FIELD_Y, z), side);
