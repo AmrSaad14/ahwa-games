@@ -495,7 +495,7 @@ public class GameUi : MonoBehaviour
         {
             var m = v.match;
             bool won = v.you >= 0 && m.team == v.you;
-            string kind = v.endKind == "checkmate" ? Loc.T("كش مات") : v.endKind == "stalemate" ? Loc.T("مات بلا كش") : v.endKind == "time" ? Loc.T("الوقت خلص") : "";
+            string kind = (v.endKind == "checkmate" || v.endKind == "mate") ? Loc.T("كش مات") : v.endKind == "stalemate" ? Loc.T("مات بلا كش") : v.endKind == "time" ? Loc.T("الوقت خلص") : "";
             matchTitle.Set(m.team < 0 ? Loc.T("تعادل") : won ? Loc.T("فزت بالمباراة!") : NameOf(v, m.team) + Loc.T(" فاز بالمباراة"));
             matchSub.Set((kind != "" ? kind + "  ·  " : "") + string.Join("  ·  ", m.scores));
         }

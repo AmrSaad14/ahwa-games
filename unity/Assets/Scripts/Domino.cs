@@ -60,10 +60,11 @@ public static class Domino
 
         public void Put(ArmTile t)
         {
-            if (vertical) { vertical = false; hdir = -hdir; Corner(t, hdir, 0); return; }
+            // a double always lies across the line (never turns a corner itself), as on a real table;
+            // the tile after it turns the corner if there is no room left
             bool dbl = t.inner == t.outer;
-            float len = dbl ? 1 : 2;
-            if (Math.Abs(px + dx * len) > xMax) { vertical = true; Corner(t, 0, sign); return; }
+            if (!dbl && vertical) { vertical = false; hdir = -hdir; Corner(t, hdir, 0); return; }
+            if (!dbl && Math.Abs(px + dx * 2) > xMax) { vertical = true; Corner(t, 0, sign); return; }
             if (dbl)
             {
                 Out.Add(new Placement { id = t.id, a = t.inner, b = t.outer, x = px + dx * 0.5f, y = py + dy * 0.5f, ang = (float)Math.Atan2(dy, dx) + (float)Math.PI / 2 });

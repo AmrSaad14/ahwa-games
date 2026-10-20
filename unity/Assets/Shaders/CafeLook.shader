@@ -23,6 +23,7 @@ Shader "KingsBattle/CafeLook"
         float2 d = _MainTex_TexelSize.xy;
         half3 c = (tex2D(_MainTex, i.uv + d * float2(-1, -1)).rgb + tex2D(_MainTex, i.uv + d * float2(1, -1)).rgb
                  + tex2D(_MainTex, i.uv + d * float2(-1, 1)).rgb + tex2D(_MainTex, i.uv + d * float2(1, 1)).rgb) * 0.25;
+        c = min(c, 2.5);   // one tiny very bright highlight must not bloom into a cloud
         half b = max(c.r, max(c.g, c.b));
         half k = saturate((b - _Threshold) / max(0.0001, b));
         return half4(c * k, 1);

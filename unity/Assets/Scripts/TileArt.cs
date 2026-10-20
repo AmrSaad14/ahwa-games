@@ -8,7 +8,7 @@ public static class TileArt
     public const float W = 1.94f, D = 0.96f, H = 0.3f;
     static readonly int[][] Pips =
     {
-        new int[0], new[] { 4 }, new[] { 0, 8 }, new[] { 0, 4, 8 }, new[] { 0, 2, 6, 8 }, new[] { 0, 2, 4, 6, 8 }, new[] { 0, 2, 3, 5, 6, 8 },
+        new int[0], new[] { 4 }, new[] { 0, 8 }, new[] { 0, 4, 8 }, new[] { 0, 2, 6, 8 }, new[] { 0, 2, 4, 6, 8 }, new[] { 0, 1, 2, 6, 7, 8 },   // a six: two rows of three along the tile (2 columns × 3 rows when it stands upright)
     };
 
     static Mesh body, face;
