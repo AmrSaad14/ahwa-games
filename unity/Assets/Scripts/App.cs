@@ -24,6 +24,7 @@ public class App : MonoBehaviour
     bool searching;
     int tilesOnTable;
     string leftTableId = "";
+    OfflineGame offline;            // a practice game played on the phone, with no server
 
     // the home menu
     Canvas ui, toastCanvas;
@@ -118,6 +119,7 @@ public class App : MonoBehaviour
     void Update()
     {
         net?.Pump();
+        PumpOffline();
         if (Input.GetKeyDown(KeyCode.Escape) && menus != null && menus.IsOpen) { menus.Close(); return; }   // Android's back button
         if (menus != null && menus.IsOpen) return;
         if (toastGroup != null) toastGroup.alpha = Mathf.MoveTowards(toastGroup.alpha, Time.time < toastUntil ? 1 : 0, Time.deltaTime * 4);
@@ -233,6 +235,7 @@ public class App : MonoBehaviour
 
     public void ExitGame()
     {
+        offline = null;
         view = null; sel = -1; choose = null;
         game.ShowHud(false);
         dominoTable.Show(false);
@@ -255,6 +258,7 @@ public class App : MonoBehaviour
     public void Send(Dictionary<string, object> m)
     {
         var t = m.Str("t");
+        if (offline != null && SendOffline(t, m)) return;
         if (t != "act" && t != "ping") Debug.Log("[app] send " + t + (m.TryGetValue("mode", out var md) ? " " + md : ""));
         net?.Send(m);
     }
@@ -271,6 +275,7 @@ public class App : MonoBehaviour
 
     public void Quick(string mode, int stake)
     {
+        if (offline != null) { offline = null; if (view != null) ExitGame(); }
         if (net == null || !net.Online) { Toast(Loc.T("مش متصل بالسيرفر لسه")); return; }
         if (user != null && user.Num("coins") < stake) { Toast(Loc.T("رصيدك مش كفاية للرهان ده")); return; }
         lastMode = mode; lastStake = stake;
@@ -279,17 +284,62 @@ public class App : MonoBehaviour
         game.ShowQueue(new Dictionary<string, object> { ["count"] = 1.0, ["need"] = (double)GameUi.Players(mode), ["botsAt"] = 0.0, ["now"] = 0.0 });
     }
 
-    /// A free game against the computer, starting at once (no stake, no rating).
+    /// A free game against the computer, starting at once (no stake, no rating). It runs on the phone itself,
+    /// so it works without the server (Offline/*.cs).
     public void Practice(string mode)
     {
-        if (net == null || !net.Online) { Toast(Loc.T("مش متصل بالسيرفر لسه")); return; }
         lastMode = mode; lastStake = 0;
-        Send(new Dictionary<string, object> { ["t"] = "practice", ["mode"] = mode });
+        if (view != null) Leave();
+        if (searching) CancelQueue();
+        string name = user != null ? user.Str("name") : "";
+        int ch = user != null ? (int)user.Num("ch", 0) : 0;
+        try { offline = OfflineGame.Create(mode, name, ch); }
+        catch (System.Exception e) { Debug.LogException(e); Toast(Loc.T("خطأ: ") + e.Message); offline = null; return; }
+        Debug.Log("[app] practice " + mode + " on the phone");
+        PumpOffline();
+    }
+
+    /// Runs the practice game's timers and computer players, and shows its table when it changed.
+    void PumpOffline()
+    {
+        if (offline == null) return;
+        try
+        {
+            offline.Tick();
+            if (!offline.dirty) return;
+            offline.dirty = false;
+            // through JSON, so the view has exactly the shape (and number types) of a server message
+            var vm = Json.Parse(Json.Write(offline.View())) as Dictionary<string, object>;
+            OnMessage(new Dictionary<string, object> { ["t"] = "table", ["view"] = vm });
+        }
+        catch (System.Exception e) { Debug.LogException(e); }
+    }
+
+    /// Messages for the practice game stay on the phone; the rest (shop, leaderboard, account) go to the server.
+    bool SendOffline(string t, Dictionary<string, object> m)
+    {
+        switch (t)
+        {
+            case "act":
+                string err = null;
+                try { err = offline.Act(m.Obj("a")); }
+                catch (System.Exception e) { Debug.LogException(e); err = "bad_action"; }
+                if (err != null) { Debug.Log("[app] practice move refused: " + err); OnMessage(new Dictionary<string, object> { ["t"] = "err", ["code"] = err }); }
+                PumpOffline();
+                return true;
+            case "leave":
+                offline = null;
+                return true;
+            case "voice": case "rtc": case "emote": case "start": case "bot": case "kick": case "setup": case "cancel":
+                return true;
+        }
+        return false;
     }
 
     /// A room for friends: you get a code to send them; 0 is a friendly game with no stake.
     public void CreateRoom(string mode, int stake)
     {
+        if (offline != null) { offline = null; if (view != null) ExitGame(); }
         if (net == null || !net.Online) { Toast(Loc.T("مش متصل بالسيرفر لسه")); return; }
         if (stake > 0 && user != null && user.Num("coins") < stake) { Toast(Loc.T("رصيدك مش كفاية للرهان ده")); return; }
         Send(new Dictionary<string, object> { ["t"] = "create", ["mode"] = mode, ["target"] = 0.0, ["stake"] = (double)stake });
@@ -480,7 +530,7 @@ public class App : MonoBehaviour
             menus.OpenSettings(); yield return new WaitForSeconds(0.8f); Still("m11-settings-en.png");
             menus.Close(); Loc.Set(false);
             recordOn = false;
-            Quick("ffa2", Stakes0());
+            Practice("team");      // practice runs on the phone: no server needed
             t0 = Time.realtimeSinceStartup;
             while (view == null && Time.realtimeSinceStartup - t0 < 90) yield return null;
             recordOn = true;
@@ -514,14 +564,14 @@ public class App : MonoBehaviour
                 yield return new WaitForSeconds(0.5f);
             }
             // the board games, each a practice game against the computer, played by the test for a while
-            foreach (var (mode, tag) in new[] { ("tawla", "tawla"), ("chess", "chess"), ("ludo4", "ludo") })
+            foreach (var (mode, tag) in new[] { ("tawla", "tawla"), ("chess", "chess"), ("ludo4", "ludo"), ("mahbousa", "mahbousa") })
             {
                 recordOn = false;
                 if (view != null) Leave();
                 yield return new WaitForSeconds(0.5f);
                 Practice(mode);
                 float tw = Time.realtimeSinceStartup;
-                string want = tag == "tawla" ? "tawla" : tag == "chess" ? "chess" : "ludo";
+                string want = tag == "mahbousa" ? "tawla" : tag;
                 while ((view == null || view.game != want) && Time.realtimeSinceStartup - tw < 30) yield return null;
                 if (view == null || view.game != want) { Debug.Log("[app] no " + tag + " game (have " + (view == null ? "none" : view.game) + ")"); continue; }
                 recordOn = true;
