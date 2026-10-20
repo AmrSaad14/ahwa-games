@@ -1,6 +1,6 @@
 {
   "appId": "com.ahwa.domino",
-  "appName": "Kings Battle",
+  "appName": "Board Battles",
   "webDir": "client/dist",
   "backgroundColor": "#2a0710",
   "server": { "androidScheme": "https" },

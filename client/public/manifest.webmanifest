@@ -1,6 +1,6 @@
 {
-  "name": "Kings Battle",
-  "short_name": "Kings Battle",
+  "name": "Board Battles",
+  "short_name": "Board Battles",
   "description": "Domino, tawla, chess and ludo with friends, in Arabic and English.",
   "start_url": "/",
   "display": "fullscreen",

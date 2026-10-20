@@ -85,7 +85,7 @@ public class GameUi : MonoBehaviour
         bool domino = game == "domino";
         foreach (var mb in modeButtons) mb.bg.gameObject.SetActive(domino);
         stakeRow.SetActive(domino); quickButton.SetActive(domino);
-        pickerNote.Set(domino ? "الرهان: كل لاعب يدفع، والفايز ياخد" : "قريباً في نسخة Unity");
+        pickerNote.Set(domino ? Loc.T("الرهان: كل لاعب يدفع، والفايز ياخد") : Loc.T("قريباً في نسخة Unity"));
         RefreshPicker();
     }
     public void HidePicker() { picker.gameObject.SetActive(false); }
@@ -94,7 +94,7 @@ public class GameUi : MonoBehaviour
     {
         PlayerPrefs.SetInt("ahwa.stake", stakeIndex);
         foreach (var mb in modeButtons) { bool on = mb.mode == mode; mb.bg.color = on ? Ui.Gold : Ui.Panel; mb.label.color = on ? Ui.Ink : Ui.GoldLight; }
-        stakeText.Set("رهان " + Short(Stakes[stakeIndex]));
+        stakeText.Set(Loc.T("رهان ") + Short(Stakes[stakeIndex]));
     }
 
     public static string Short(long n) => n >= 1000000 ? (n / 1000000f).ToString("0.#") + "M" : n >= 1000 ? (n / 1000f).ToString("0.#") + "K" : n.ToString();
@@ -131,7 +131,8 @@ public class GameUi : MonoBehaviour
         ((RectTransform)leave.transform).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(80, 34), new Vector2(12, -10));
 
         var sb = Ui.Box(hud, "Scores", new Color(0.1f, 0.06f, 0.04f, 0.85f));
-        sb.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(360, 34), new Vector2(0, -10));
+        // the scores sit top left, beside "leave", so the player across the table is never covered
+        sb.rectTransform.Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(300, 34), new Vector2(100, -10));
         scoreText = Ui.Label(sb.transform, "", 15, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
         scoreText.rectTransform.Fill(6);
         roundText = Ui.Label(hud, "", 13, Ui.GoldLight, TextAnchor.MiddleRight);
@@ -200,11 +201,11 @@ public class GameUi : MonoBehaviour
 
     public void ShowPayout(string kind, double delta)
     {
-        payoutText.Set(delta > 0 ? "+" + Short((long)delta) + " عملة" : delta < 0 ? "−" + Short((long)-delta) + " عملة" : "");
+        payoutText.Set(delta > 0 ? "+" + Short((long)delta) + Loc.T(" عملة") : delta < 0 ? "−" + Short((long)-delta) + Loc.T(" عملة") : "");
         payoutText.color = delta >= 0 ? new Color(0.6f, 0.9f, 0.5f) : new Color(1f, 0.6f, 0.5f);
     }
 
-    string NameOf(TableView v, int seat) => seat == v.you ? "أنت" : seat >= 0 && seat < v.seats.Count && v.seats[seat] != null ? v.seats[seat].name : "";
+    string NameOf(TableView v, int seat) => seat == v.you ? Loc.T("أنت") : seat >= 0 && seat < v.seats.Count && v.seats[seat] != null ? v.seats[seat].name : "";
 
     public void Render(TableView v, int sel, List<char> choose)
     {
@@ -213,27 +214,27 @@ public class GameUi : MonoBehaviour
         if (v.mode == "team")
         {
             int mine = v.you >= 0 ? v.TeamOf(v.you) : 0;
-            parts.Add("فريقك " + (v.scores.Count > mine ? v.scores[mine] : 0));
-            parts.Add("هم " + (v.scores.Count > 1 - mine ? v.scores[1 - mine] : 0));
+            parts.Add(Loc.T("فريقك ") + (v.scores.Count > mine ? v.scores[mine] : 0));
+            parts.Add(Loc.T("هم ") + (v.scores.Count > 1 - mine ? v.scores[1 - mine] : 0));
         }
         else for (int s = 0; s < v.seats.Count; s++) parts.Add(NameOf(v, s) + " " + (v.scores.Count > s ? v.scores[s] : 0));
         scoreText.Set(string.Join("   ·   ", parts));
-        roundText.Set("الجولة " + v.round + "  ·  إلى " + v.target + (v.stake > 0 ? "  ·  رهان " + Short(v.stake) : ""));
+        roundText.Set(Loc.T("الجولة ") + v.round + Loc.T("  ·  إلى ") + v.target + (v.stake > 0 ? Loc.T("  ·  رهان ") + Short(v.stake) : ""));
 
         // whose turn
         string msg = "";
         if (v.phase == "play")
         {
-            if (v.MyTurn) msg = choose != null && choose.Count > 1 ? "الحجر يناسب الطرفين. اختار المكان." : v.open >= 0 && v.line.Empty ? "افتح بالـ " + Domino.Tiles[v.open][0] + "|" + Domino.Tiles[v.open][1] : "دورك";
-            else if (v.turn >= 0) msg = NameOf(v, v.turn) + " يلعب";
-            if (v.last != null && v.last.t == "pass" && v.last.s != v.you && v.last.s >= 0) msg = NameOf(v, v.last.s) + " قال باص";
+            if (v.MyTurn) msg = choose != null && choose.Count > 1 ? Loc.T("الحجر يناسب الطرفين. اختار المكان.") : v.open >= 0 && v.line.Empty ? Loc.T("افتح بالـ ") + Domino.Tiles[v.open][0] + "|" + Domino.Tiles[v.open][1] : Loc.T("دورك");
+            else if (v.turn >= 0) msg = NameOf(v, v.turn) + Loc.T(" يلعب");
+            if (v.last != null && v.last.t == "pass" && v.last.s != v.you && v.last.s >= 0) msg = NameOf(v, v.last.s) + Loc.T(" قال باص");
         }
         turnText.Set(msg);
 
         // the two ends, when the chosen tile fits both
         bool two = sel >= 0 && choose != null && choose.Count > 1;
         endButtons.gameObject.SetActive(two);
-        if (two) { endL.Set("شمال · " + Domino.LeftVal(v.line)); endR.Set("يمين · " + Domino.RightVal(v.line)); }
+        if (two) { endL.Set(Loc.T("شمال · ") + Domino.LeftVal(v.line)); endR.Set(Loc.T("يمين · ") + Domino.RightVal(v.line)); }
 
         Hand(v, sel);
 
@@ -243,16 +244,16 @@ public class GameUi : MonoBehaviour
         if (rend)
         {
             var r = v.result;
-            string title = r.winner < 0 ? "تعادل. لا أحد يسجل." : v.mode == "team" ? ((v.you >= 0 && r.team == v.TeamOf(v.you)) ? "فريقك فاز بالجولة" : "الفريق التاني فاز بالجولة") : NameOf(v, r.winner) + " فاز بالجولة";
+            string title = r.winner < 0 ? Loc.T("تعادل. لا أحد يسجل.") : v.mode == "team" ? ((v.you >= 0 && r.team == v.TeamOf(v.you)) ? Loc.T("فريقك فاز بالجولة") : Loc.T("الفريق التاني فاز بالجولة")) : NameOf(v, r.winner) + Loc.T(" فاز بالجولة");
             resultTitle.Set(title);
-            resultSub.Set((r.blocked ? "اللعبة مقفولة  ·  " : "") + (r.points > 0 ? "+" + r.points + " نقطة" : ""));
+            resultSub.Set((r.blocked ? Loc.T("اللعبة مقفولة  ·  ") : "") + (r.points > 0 ? "+" + r.points + Loc.T(" نقطة") : ""));
         }
         matchPanel.gameObject.SetActive(mend);
         if (mend)
         {
             var m = v.match;
             bool won = v.you >= 0 && m.team == v.TeamOf(v.you);
-            matchTitle.Set(m.team < 0 ? "تعادل" : won ? (v.mode == "team" ? "فريقك فاز!" : "فزت بالمباراة!") : (v.mode == "team" ? "الفريق التاني فاز" : NameOf(v, m.team) + " فاز بالمباراة"));
+            matchTitle.Set(m.team < 0 ? Loc.T("تعادل") : won ? (v.mode == "team" ? Loc.T("فريقك فاز!") : Loc.T("فزت بالمباراة!")) : (v.mode == "team" ? Loc.T("الفريق التاني فاز") : NameOf(v, m.team) + Loc.T(" فاز بالمباراة")));
             matchSub.Set(string.Join("  ·  ", m.scores));
         }
     }
@@ -289,7 +290,7 @@ public class GameUi : MonoBehaviour
         if (queuePanel.gameObject.activeSelf)
         {
             float left = botsAtLocal - Time.time;
-            queueText.Set(left > 0 ? "سينضم لاعبو الكمبيوتر خلال " + Mathf.CeilToInt(left) + " ث" : "البحث عن لاعبين");
+            queueText.Set(left > 0 ? Loc.T("سينضم لاعبو الكمبيوتر خلال ") + Mathf.CeilToInt(left) + Loc.T(" ث") : Loc.T("البحث عن لاعبين"));
         }
         var v = app.view;
         if (!hud.gameObject.activeSelf || v == null) return;
@@ -312,6 +313,9 @@ public class GameUi : MonoBehaviour
             RectTransformUtility.ScreenPointToLocalPointInRectangle(root, sp, null, out var local);
             var rt = seatTagBg[pos].rectTransform;
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            // on screen, and clear of the top bar
+            float halfH = root.rect.height / 2, halfW = root.rect.width / 2;
+            local.y = Mathf.Min(local.y, halfH - 66); local.x = Mathf.Clamp(local.x, -halfW + 70, halfW - 70);
             rt.anchoredPosition = local;
             seatTags[pos].Set(s.name + "  ·  " + s.count);
             bool active = v.phase == "play" && v.turn == seat;

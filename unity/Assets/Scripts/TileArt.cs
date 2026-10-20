@@ -15,8 +15,47 @@ public static class TileArt
     static Material bodyMat, ghostMat;
     static readonly Dictionary<int, Material> faceMats = new Dictionary<int, Material>();
     static readonly Dictionary<int, Texture2D> faceTex = new Dictionary<int, Texture2D>();
-    public static readonly Color Ivory = new Color(0.96f, 0.93f, 0.85f);
-    public static readonly Color PipInk = new Color(0.1f, 0.07f, 0.05f);
+    public static Color Ivory = new Color(0.96f, 0.93f, 0.85f);
+    public static Color PipInk = new Color(0.1f, 0.07f, 0.05f);
+    static Color Divider = new Color(0.62f, 0.5f, 0.28f);
+    static bool Veins;
+    public static string SkinId { get; private set; } = "tiles_ivory";
+
+    /// The tile look bought in the shop (the server's skin ids): face, pips, the line between, marble veins.
+    public static void SetSkin(string id)
+    {
+        if (string.IsNullOrEmpty(id)) id = "tiles_ivory";
+        if (id == SkinId) return;
+        SkinId = id;
+        Look(id, out Ivory, out PipInk, out Divider, out Veins);
+        faceTex.Clear(); faceMats.Clear();
+        if (bodyMat != null) bodyMat.color = Ivory;
+        Changed?.Invoke();
+    }
+    public static event System.Action Changed;
+
+    static void Look(string id, out Color face, out Color pip, out Color line, out bool veins)
+    {
+        veins = false;
+        switch (id)
+        {
+            case "tiles_ebony": face = new Color(0.13f, 0.1f, 0.09f); pip = new Color(0.96f, 0.9f, 0.78f); line = new Color(0.85f, 0.68f, 0.3f); break;
+            case "tiles_marble": face = new Color(0.93f, 0.93f, 0.95f); pip = new Color(0.12f, 0.13f, 0.2f); line = new Color(0.55f, 0.56f, 0.62f); veins = true; break;
+            case "tiles_jade": face = new Color(0.3f, 0.6f, 0.46f); pip = new Color(0.98f, 0.96f, 0.88f); line = new Color(0.85f, 0.75f, 0.45f); break;
+            case "tiles_gold": face = new Color(0.93f, 0.74f, 0.33f); pip = new Color(0.28f, 0.13f, 0.04f); line = new Color(0.55f, 0.35f, 0.1f); break;
+            default: face = new Color(0.96f, 0.93f, 0.85f); pip = new Color(0.1f, 0.07f, 0.05f); line = new Color(0.62f, 0.5f, 0.28f); break;
+        }
+    }
+
+    /// A 6 | 5 tile in another look, for the shop.
+    public static Texture2D Preview(string id)
+    {
+        var keep = (Ivory, PipInk, Divider, Veins);
+        Look(id, out Ivory, out PipInk, out Divider, out Veins);
+        var t = Paint(6, 5);
+        (Ivory, PipInk, Divider, Veins) = keep;
+        return t;
+    }
 
     public static Shader Lit => Shader.Find("Legacy Shaders/Specular") ?? Shader.Find("Standard");
     public static Shader Clear => Shader.Find("Legacy Shaders/Transparent/Diffuse") ?? Shader.Find("Sprites/Default");
@@ -104,16 +143,33 @@ public static class TileArt
     {
         int key = a * 7 + b;
         if (faceTex.TryGetValue(key, out var t)) return t;
+        t = Paint(a, b);
+        faceTex[key] = t;
+        return t;
+    }
+
+    static Texture2D Paint(int a, int b)
+    {
         const int TW = 256, TH = 128;
         var px = new Color[TW * TH];
-        for (int i = 0; i < px.Length; i++) px[i] = Ivory;
+        for (int y = 0; y < TH; y++)
+            for (int x = 0; x < TW; x++)
+            {
+                var c = Ivory;
+                if (Veins)
+                {
+                    float n = Mathf.PerlinNoise(x * 0.025f + 3.1f, y * 0.06f) * 6f + x * 0.03f;
+                    float v = Mathf.Pow(1 - Mathf.Abs(Mathf.Sin(n)), 10f);
+                    c = Color.Lerp(c, new Color(0.6f, 0.62f, 0.68f), v * 0.55f);
+                }
+                px[y * TW + x] = c;
+            }
         // the line between the halves
-        for (int y = 14; y < TH - 14; y++) for (int x = TW / 2 - 2; x < TW / 2 + 2; x++) px[y * TW + x] = new Color(0.62f, 0.5f, 0.28f);
+        for (int y = 14; y < TH - 14; y++) for (int x = TW / 2 - 2; x < TW / 2 + 2; x++) px[y * TW + x] = Divider;
         DrawPips(px, TW, TH, a, 0);
         DrawPips(px, TW, TH, b, TW / 2);
-        t = new Texture2D(TW, TH, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp, anisoLevel = 4 };
+        var t = new Texture2D(TW, TH, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp, anisoLevel = 4 };
         t.SetPixels(px); t.Apply(true);
-        faceTex[key] = t;
         return t;
     }
 

@@ -28,6 +28,16 @@ public class Net
 
     public Net(string url = null) { this.url = url ?? Arg("-server") ?? ServerUrl; }
 
+    /// The same server over https (sign-in pages): wss://host/ws → https://host
+    public string HttpBase
+    {
+        get
+        {
+            var u = url.StartsWith("wss://") ? "https://" + url.Substring(6) : url.StartsWith("ws://") ? "http://" + url.Substring(5) : url;
+            return u.EndsWith("/ws") ? u.Substring(0, u.Length - 3) : u.TrimEnd('/');
+        }
+    }
+
     /// A command-line value ("-server ws://…" points the test build at a local server).
     public static string Arg(string name)
     {

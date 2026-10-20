@@ -1,4 +1,4 @@
-// Kings Battle in Unity: starts by itself (no scene setup needed), shows the splash, builds the café,
+// Board Battles in Unity: starts by itself (no scene setup needed), shows the splash, builds the café,
 // connects to the game server, puts the home menu over the café floor, and runs the domino game.
 using System.Collections;
 using System.Collections.Generic;
@@ -13,12 +13,14 @@ public class App : MonoBehaviour
     public Cafe cafe;
     public DominoTable dominoTable;
     public GameUi game;
+    public Menus menus;
     public TableView view;
     Dictionary<string, object> user;
     double serverOffset;            // server clock minus ours (ms)
     int sel = -1; List<char> choose;
     string lastMode = "ffa2"; int lastStake;
     bool searching;
+    int tilesOnTable;
 
     // the home menu
     Canvas ui, toastCanvas;
@@ -45,7 +47,7 @@ public class App : MonoBehaviour
     static void Boot()
     {
         if (I != null) return;
-        var go = new GameObject("Kings Battle");
+        var go = new GameObject("Board Battles");
         DontDestroyOnLoad(go);
         go.AddComponent<App>();
     }
@@ -63,7 +65,7 @@ public class App : MonoBehaviour
 
     void LateUpdate()
     {
-        if (Recording && recordOn && frame < RecordFps * 80) ScreenCapture.CaptureScreenshot(Path.Combine(ShotDir, "frames", $"f{frame++:D4}.png"));
+        if (Recording && recordOn && frame < RecordFps * 120) ScreenCapture.CaptureScreenshot(Path.Combine(ShotDir, "frames", $"f{frame++:D4}.png"));
     }
 
     IEnumerator Start()
@@ -78,12 +80,15 @@ public class App : MonoBehaviour
         dominoTable.Init(cafe);
         dominoTable.Show(false);
         BuildHome();
+        menus = gameObject.AddComponent<Menus>();
+        menus.Build(this, homeGroup.GetComponent<RectTransform>());
+        Loc.Changed += () => { SetStatus(net != null && net.Online); Redraw(); };
         game = gameObject.AddComponent<GameUi>();
         game.Build(this);
 
         net = new Net();
         net.OnMessage += OnMessage;
-        net.OnOnline += on => { statusText.Set(on ? "متصل" : "جاري الاتصال…"); statusText.color = on ? new Color(0.55f, 0.85f, 0.5f) : Ui.GoldLight; };
+        net.OnOnline += SetStatus;
         net.Start();
 
         splash.Ready();
@@ -94,12 +99,16 @@ public class App : MonoBehaviour
         if (Recording) StartCoroutine(Shots());
     }
 
+    void SetStatus(bool on) { statusText.Set(on ? Loc.T("متصل") : Loc.T("جاري الاتصال…")); statusText.color = on ? new Color(0.55f, 0.85f, 0.5f) : Ui.GoldLight; }
+
     public static double LocalMs() => (System.DateTime.UtcNow - new System.DateTime(1970, 1, 1)).TotalMilliseconds;
     public double ServerNow() => LocalMs() + serverOffset;
 
     void Update()
     {
         net?.Pump();
+        if (Input.GetKeyDown(KeyCode.Escape) && menus != null && menus.IsOpen) { menus.Close(); return; }   // Android's back button
+        if (menus != null && menus.IsOpen) return;
         if (toastGroup != null) toastGroup.alpha = Mathf.MoveTowards(toastGroup.alpha, Time.time < toastUntil ? 1 : 0, Time.deltaTime * 4);
         if (cafe == null || !cafe.ready || !Input.GetMouseButtonDown(0) || OverUi()) return;
         if (view != null)
@@ -124,6 +133,7 @@ public class App : MonoBehaviour
 
     void OnMessage(Dictionary<string, object> m)
     {
+        menus?.OnMessage(m);
         switch (m.Str("t"))
         {
             case "welcome":
@@ -133,6 +143,7 @@ public class App : MonoBehaviour
                 {
                     nameText.Set(user.Str("name"));
                     coinsText.text = ((long)user.Num("coins")).ToString("N0");
+                    menus?.OnUser(user);
                     Debug.Log($"[app] signed in as {user.Str("name")} with {user.Num("coins")} coins");
                 }
                 break;
@@ -149,6 +160,11 @@ public class App : MonoBehaviour
                 if (view == null) EnterGame();
                 // the choice of end only lasts while it's still your turn and the tile is still in hand
                 if (!v.MyTurn || !v.hand.Contains(sel)) { sel = -1; choose = null; }
+                // a tile going down clacks; your turn chimes (and buzzes the phone)
+                int tilesNow = v.line.Empty ? 0 : 1 + v.line.L.Count + v.line.R.Count;
+                if (view != null && tilesNow > tilesOnTable) Sfx.Clack();
+                if (v.MyTurn && v.phase == "play" && (view == null || !view.MyTurn)) { Sfx.Chime(); Sfx.Buzz(); }
+                tilesOnTable = tilesNow;
                 view = v;
                 Redraw();
                 break;
@@ -160,6 +176,7 @@ public class App : MonoBehaviour
                 game.ShowPayout(m.Str("kind"), m.Num("delta"));
                 break;
             case "err":
+                if (menus != null && menus.OnError(m.Str("code"))) break;
                 Toast(ErrorText(m.Str("code")));
                 break;
         }
@@ -169,10 +186,10 @@ public class App : MonoBehaviour
     {
         switch (code)
         {
-            case "not_enough_coins": return "رصيدك مش كفاية للرهان ده";
-            case "not_your_turn": return "مش دورك";
-            case "illegal_move": return "الحجر ده مش هينفع هنا";
-            default: return "خطأ: " + code;
+            case "not_enough_coins": return Loc.T("رصيدك مش كفاية للرهان ده");
+            case "not_your_turn": return Loc.T("مش دورك");
+            case "illegal_move": return Loc.T("الحجر ده مش هينفع هنا");
+            default: return Loc.T("خطأ: ") + code;
         }
     }
 
@@ -203,7 +220,7 @@ public class App : MonoBehaviour
         game.Render(view, sel, choose);
     }
 
-    void Send(Dictionary<string, object> m) => net.Send(m);
+    public void Send(Dictionary<string, object> m) => net?.Send(m);
 
     /* ---------- actions ---------- */
 
@@ -212,13 +229,13 @@ public class App : MonoBehaviour
         cafe.Focus(g);
         foreach (var kv in gameButtons) kv.Value.color = kv.Key == g ? Ui.Gold : Ui.Panel;
         foreach (var kv in gameButtons) kv.Value.GetComponentInChildren<Text>().color = kv.Key == g ? Ui.Ink : Ui.GoldLight;
-        game.ShowPicker(g, GameNames[g]);
+        game.ShowPicker(g, Loc.T(GameNames[g]));
     }
 
     public void Quick(string mode, int stake)
     {
-        if (net == null || !net.Online) { Toast("مش متصل بالسيرفر لسه"); return; }
-        if (user != null && user.Num("coins") < stake) { Toast("رصيدك مش كفاية للرهان ده"); return; }
+        if (net == null || !net.Online) { Toast(Loc.T("مش متصل بالسيرفر لسه")); return; }
+        if (user != null && user.Num("coins") < stake) { Toast(Loc.T("رصيدك مش كفاية للرهان ده")); return; }
         lastMode = mode; lastStake = stake;
         Send(new Dictionary<string, object> { ["t"] = "quick", ["mode"] = mode, ["stake"] = (double)stake });
         searching = true;
@@ -250,9 +267,9 @@ public class App : MonoBehaviour
         var v = view;
         if (v == null || !v.MyTurn) return;
         if (sel == id) { sel = -1; choose = null; Redraw(); return; }
-        if (v.open >= 0 && v.line.Empty && id != v.open) { Toast("افتح بالـ " + Domino.Tiles[v.open][0] + "|" + Domino.Tiles[v.open][1]); return; }
+        if (v.open >= 0 && v.line.Empty && id != v.open) { Toast(Loc.T("افتح بالـ ") + Domino.Tiles[v.open][0] + "|" + Domino.Tiles[v.open][1]); return; }
         var ends = Domino.EndsFor(v.line, id);
-        if (ends.Count == 0) { Toast("الحجر ده مش هيركب"); return; }
+        if (ends.Count == 0) { Toast(Loc.T("الحجر ده مش هيركب")); return; }
         if (ends.Count == 1) { Play(id, ends[0]); return; }
         sel = id; choose = ends;
         Redraw();
@@ -288,10 +305,9 @@ public class App : MonoBehaviour
         homeGroup = root.gameObject.AddComponent<CanvasGroup>();
         homeGroup.alpha = 0;
 
-        // the brand, top left
-        var brand = Ui.Label(root, "KINGS BATTLE", 22, Ui.Gold, TextAnchor.MiddleLeft, Ui.Display);
-        brand.rectTransform.Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(260, 30), new Vector2(18, -10));
-        brand.gameObject.AddComponent<Shadow>().effectColor = new Color(0, 0, 0, 0.6f);
+        // the logo, top left
+        var logo = Ui.Picture(root, "Logo", Resources.Load<Texture2D>("UI/Logo"));
+        logo.rectTransform.Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(66, 77), new Vector2(8, -4));
 
         // you: name and coins, top right
         var me = Ui.Box(root, "Me", Ui.Panel);
@@ -368,7 +384,7 @@ public class App : MonoBehaviour
             cafe.Shot(mid + (pr * 0.6f + Vector3.up * 0.15f + pf).normalized * 9.5f, mid);
             yield return new WaitForSeconds(0.25f);
             Still($"b-{p.name}.png");
-            yield return new WaitForSeconds(0.5f);
+            yield return new WaitForSeconds(0.2f);
         }
         cafe.Shot(null);
         yield return new WaitForSeconds(1.5f);
@@ -384,6 +400,25 @@ public class App : MonoBehaviour
         Debug.Log("[app] online=" + (net != null && net.Online) + " after " + (Time.realtimeSinceStartup - t0) + " s");
         if (net != null && net.Online)
         {
+            // the menus, in Arabic and then in English
+            recordOn = true;
+            Pick("domino"); game.HidePicker();
+            yield return new WaitForSeconds(0.6f);
+            Still("m0-home.png");
+            menus.OpenSettings(); yield return new WaitForSeconds(0.8f); Still("m1-settings.png");
+            menus.OpenShop(0); yield return new WaitForSeconds(0.8f); Still("m2-shop-coins.png");
+            menus.OpenShop(1); yield return new WaitForSeconds(0.8f); Still("m3-shop-tiles.png");
+            menus.OpenLeaders(0); yield return new WaitForSeconds(1.5f); Still("m4-leaders.png");
+            menus.OpenHowTo(0); yield return new WaitForSeconds(0.8f); Still("m5-howto.png");
+            menus.Close();
+            menus.WatchAd(); yield return new WaitForSeconds(1.5f); Still("m6-ad.png");
+            yield return new WaitForSeconds(5f); Still("m7-ad-reward.png");
+            Loc.Set(true); yield return new WaitForSeconds(0.8f); Still("m8-home-en.png");
+            menus.OpenShop(1); yield return new WaitForSeconds(0.8f); Still("m9-shop-en.png");
+            menus.OpenHowTo(0); yield return new WaitForSeconds(0.8f); Still("m10-howto-en.png");
+            menus.OpenSettings(); yield return new WaitForSeconds(0.8f); Still("m11-settings-en.png");
+            menus.Close(); Loc.Set(false);
+            recordOn = false;
             Quick("ffa2", Stakes0());
             t0 = Time.realtimeSinceStartup;
             while (view == null && Time.realtimeSinceStartup - t0 < 90) yield return null;

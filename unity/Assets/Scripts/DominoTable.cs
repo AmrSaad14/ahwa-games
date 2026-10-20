@@ -124,7 +124,7 @@ public class DominoTable : MonoBehaviour
         int pos = System.Array.IndexOf(posToSeat, seat);
         if (pos < 0) return C;
         var c = chars[pos];
-        if (c != null && c.Head != null) return c.Head.position + U * 1.1f;
+        if (c != null && c.Head != null) return c.Top + U * 0.45f;   // just above the head (and hat)
         return C + (SeatPoint(pos) - C) * 0.8f + U * 0.5f;
     }
 

@@ -36,7 +36,7 @@ public static class BuildScript
             EditorSceneManager.SaveScene(s, Scene);
         }
         PlayerSettings.companyName = "Ahwa";
-        PlayerSettings.productName = "Kings Battle";
+        PlayerSettings.productName = "Board Battles";
         PlayerSettings.bundleVersion = "0.1.0";
         PlayerSettings.colorSpace = ColorSpace.Linear;
         PlayerSettings.SplashScreen.show = false;
@@ -85,20 +85,22 @@ public static class BuildScript
         PlayerSettings.defaultScreenWidth = 1280;
         PlayerSettings.defaultScreenHeight = 720;
         PlayerSettings.resizableWindow = true;
-        return Build(BuildTarget.StandaloneLinux64, BuildTargetGroup.Standalone, "../build/linux/KingsBattle.x86_64");
+        return Build(BuildTarget.StandaloneLinux64, BuildTargetGroup.Standalone, "../build/linux/BoardBattles.x86_64");
     }
 
     static bool Android()
     {
         Common();
-        PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, "com.ahwa.kingsbattle");
+        PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, "com.ahwa.boardbattles");
+        // the classic activity, so the custom manifest (Plugins/Android) can add the sign-in link to it
+        PlayerSettings.Android.applicationEntry = AndroidApplicationEntry.Activity;
         PlayerSettings.Android.bundleVersionCode = 1;
         PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel24;
         PlayerSettings.SetScriptingBackend(NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
         PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
         PlayerSettings.Android.forceInternetPermission = true;
         EditorUserBuildSettings.buildAppBundle = false;
-        return Build(BuildTarget.Android, BuildTargetGroup.Android, "../build/android/KingsBattle.apk");
+        return Build(BuildTarget.Android, BuildTargetGroup.Android, "../build/android/BoardBattles.apk");
     }
 
     /// The desktop build (for the screenshots) and the phone build, in one editor session.

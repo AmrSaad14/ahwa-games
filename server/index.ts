@@ -164,7 +164,7 @@ async function main() {
   }
   const app = createServer();
   await app.listen();
-  console.log(`Kings Battle server listening on http://${config.host}:${config.port}${backup ? (canSave ? ' (backups on)' : ' (backups OFF)') : ''}`);
+  console.log(`Board Battles server listening on http://${config.host}:${config.port}${backup ? (canSave ? ' (backups on)' : ' (backups OFF)') : ''}`);
 
   let savedAt = -1, saving: Promise<void> | null = null;
   const save = async (force = false) => {

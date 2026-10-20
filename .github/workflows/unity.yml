@@ -76,7 +76,7 @@ jobs:
           echo "docker exit $?" >> logs/build-step.txt
           cat logs/build-step.txt logs/editor-exit.txt
           grep -E "^\[build|error CS|Error building|Scripts have compiler errors" logs/editor.log | head -60
-          test -f build/android/KingsBattle.apk
+          test -f build/android/BoardBattles.apk
 
       - uses: actions/setup-node@v4
         if: always()
@@ -99,13 +99,13 @@ jobs:
         run: |
           set +e
           mkdir -p shots
-          if [ -f build/linux/KingsBattle.x86_64 ]; then
+          if [ -f build/linux/BoardBattles.x86_64 ]; then
             sudo apt-get update -qq > logs/shots-step.txt 2>&1
             sudo apt-get install -y -qq xvfb mesa-utils libgl1 libegl1 libglx-mesa0 mesa-vulkan-drivers ffmpeg >> logs/shots-step.txt 2>&1
             echo "apt exit $?" >> logs/shots-step.txt
-            chmod +x build/linux/KingsBattle.x86_64
+            chmod +x build/linux/BoardBattles.x86_64
             cd build/linux
-            timeout 3000 xvfb-run -a -s "-screen 0 1280x720x24" ./KingsBattle.x86_64 -screen-width 1280 -screen-height 720 -screen-fullscreen 0 -force-glcore -logFile "$GITHUB_WORKSPACE/logs/player.log" -shots -server ws://127.0.0.1:8080/ws >> "$GITHUB_WORKSPACE/logs/shots-step.txt" 2>&1
+            timeout 3000 xvfb-run -a -s "-screen 0 1280x720x24" ./BoardBattles.x86_64 -screen-width 1280 -screen-height 720 -screen-fullscreen 0 -force-glcore -logFile "$GITHUB_WORKSPACE/logs/player.log" -shots -server ws://127.0.0.1:8080/ws >> "$GITHUB_WORKSPACE/logs/shots-step.txt" 2>&1
             echo "player exit $?" >> "$GITHUB_WORKSPACE/logs/shots-step.txt"
             cp shots/*.png "$GITHUB_WORKSPACE/shots/" 2>/dev/null
             # the recorded frames → a short video of the run
@@ -131,8 +131,8 @@ jobs:
       - name: Publish the APK
         if: always()
         run: |
-          if [ -f build/android/KingsBattle.apk ]; then
-            cp build/android/KingsBattle.apk kings-battle-unity.apk
+          if [ -f build/android/BoardBattles.apk ]; then
+            cp build/android/BoardBattles.apk board-battles.apk
             gh release delete unity-apk --yes --cleanup-tag || true
-            for try in 1 2 3 4; do gh release create unity-apk kings-battle-unity.apk --title "Unity APK" --target "$GITHUB_SHA" --prerelease --notes "Unity build ${GITHUB_SHA::7}" && break; echo "release unity-apk: retry $try"; sleep 30; gh release delete unity-apk --yes --cleanup-tag; done
+            for try in 1 2 3 4; do gh release create unity-apk board-battles.apk --title "Unity APK" --target "$GITHUB_SHA" --prerelease --notes "Unity build ${GITHUB_SHA::7}" && break; echo "release unity-apk: retry $try"; sleep 30; gh release delete unity-apk --yes --cleanup-tag; done
           fi

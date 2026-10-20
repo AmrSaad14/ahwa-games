@@ -1,0 +1,113 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: Kufi; src: url(ReemKufi.ttf); font-weight: 400 800; }
+@font-face { font-family: Plex; src: url(PlexArabicBold.ttf); }
+html, body { margin: 0; background: transparent; }
+svg { display: block; }
+.layer { position: absolute; left: 0; top: 0; }
+</style></head>
+<body>
+<!-- One frame (600 × 700) shared by every layer, so the splash can stack them. -->
+<svg id="defs" width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff3c4"/><stop offset="0.35" stop-color="#f3cd62"/><stop offset="0.7" stop-color="#c88f2a"/><stop offset="1" stop-color="#8a5a14"/>
+    </linearGradient>
+    <linearGradient id="goldH" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff3c4"/><stop offset="0.45" stop-color="#f3cd62"/><stop offset="1" stop-color="#a06a18"/>
+    </linearGradient>
+    <radialGradient id="crest" cx="0.5" cy="0.38" r="0.7">
+      <stop offset="0" stop-color="#9c2034"/><stop offset="0.6" stop-color="#5a0d1b"/><stop offset="1" stop-color="#2a050c"/>
+    </radialGradient>
+    <linearGradient id="ivory" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fffdf5"/><stop offset="0.6" stop-color="#f1e8d2"/><stop offset="1" stop-color="#d6c7a2"/>
+    </linearGradient>
+    <linearGradient id="ribbon" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7a1426"/><stop offset="1" stop-color="#3e0913"/>
+    </linearGradient>
+    <pattern id="checks" width="60" height="60" patternUnits="userSpaceOnUse" patternTransform="rotate(45 300 360)">
+      <rect width="30" height="30" fill="#f3cd62"/><rect x="30" y="30" width="30" height="30" fill="#f3cd62"/>
+    </pattern>
+    <clipPath id="shieldClip"><path d="M120,150 Q300,96 480,150 L480,360 Q480,522 300,612 Q120,522 120,360 Z"/></clipPath>
+    <filter id="drop" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#000" flood-opacity="0.45"/></filter>
+    <radialGradient id="sparkG"><stop offset="0" stop-color="#fffbe6"/><stop offset="0.35" stop-color="#ffe08a" stop-opacity="0.9"/><stop offset="1" stop-color="#ffb400" stop-opacity="0"/></radialGradient>
+  </defs>
+</svg>
+
+<!-- the crest -->
+<svg class="layer" id="shield" width="600" height="700" viewBox="0 0 600 700">
+  <g filter="url(#drop)">
+    <path d="M120,150 Q300,96 480,150 L480,360 Q480,522 300,612 Q120,522 120,360 Z" fill="url(#crest)"/>
+    <g clip-path="url(#shieldClip)" opacity="0.09"><rect width="600" height="700" fill="url(#checks)"/></g>
+    <path d="M120,150 Q300,96 480,150 L480,360 Q480,522 300,612 Q120,522 120,360 Z" fill="none" stroke="url(#goldH)" stroke-width="16" stroke-linejoin="round"/>
+    <path d="M142,166 Q300,118 458,166 L458,360 Q458,506 300,586 Q142,506 142,360 Z" fill="none" stroke="#f3cd62" stroke-opacity="0.55" stroke-width="3"/>
+  </g>
+</svg>
+
+<!-- a domino tile (4 | 6), leaning left -->
+<svg class="layer" id="domino" width="600" height="700" viewBox="0 0 600 700">
+  <g transform="translate(-58 6) rotate(-30 300 380)" filter="url(#drop)">
+    <rect x="236" y="236" width="128" height="256" rx="22" fill="#2a1a0e"/>
+    <rect x="240" y="232" width="120" height="248" rx="20" fill="url(#ivory)" stroke="#bfa66e" stroke-width="3"/>
+    <line x1="256" y1="356" x2="344" y2="356" stroke="#8c6d3a" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="300" cy="356" r="8" fill="url(#gold)" stroke="#8a5a14" stroke-width="2"/>
+    <g fill="#1d1410">
+      <circle cx="270" cy="264" r="11"/><circle cx="330" cy="264" r="11"/><circle cx="270" cy="324" r="11"/><circle cx="330" cy="324" r="11"/>
+      <circle cx="270" cy="388" r="11"/><circle cx="330" cy="388" r="11"/><circle cx="270" cy="418" r="11"/><circle cx="330" cy="418" r="11"/><circle cx="270" cy="448" r="11"/><circle cx="330" cy="448" r="11"/>
+    </g>
+  </g>
+</svg>
+
+<!-- a die (showing five), leaning right -->
+<svg class="layer" id="die" width="600" height="700" viewBox="0 0 600 700">
+  <g transform="translate(66 34) rotate(22 300 390)" filter="url(#drop)">
+    <!-- a little depth: the side and the bottom of the cube -->
+    <path d="M232,322 L368,322 L392,300 L392,436 L368,460 L232,460 Z" fill="#c9b78f"/>
+    <path d="M368,322 L392,300 L392,436 L368,460 Z" fill="#a8956b"/>
+    <path d="M232,322 L256,300 L392,300 L368,322 Z" fill="#fff8e6"/>
+    <rect x="232" y="322" width="136" height="138" rx="20" fill="url(#ivory)" stroke="#bfa66e" stroke-width="3"/>
+    <g fill="#8e1022">
+      <circle cx="266" cy="356" r="13"/><circle cx="334" cy="356" r="13"/><circle cx="300" cy="391" r="13"/><circle cx="266" cy="426" r="13"/><circle cx="334" cy="426" r="13"/>
+    </g>
+  </g>
+</svg>
+
+<!-- the crown over the crest -->
+<svg class="layer" id="crown" width="600" height="700" viewBox="0 0 600 700">
+  <g filter="url(#drop)">
+    <path d="M196,148 L182,62 L238,104 L270,40 L300,92 L330,40 L362,104 L418,62 L404,148 Z" fill="url(#gold)" stroke="#7a4e10" stroke-width="4" stroke-linejoin="round"/>
+    <rect x="190" y="136" width="220" height="30" rx="8" fill="url(#gold)" stroke="#7a4e10" stroke-width="4"/>
+    <circle cx="182" cy="58" r="11" fill="url(#gold)" stroke="#7a4e10" stroke-width="3"/>
+    <circle cx="270" cy="36" r="11" fill="url(#gold)" stroke="#7a4e10" stroke-width="3"/>
+    <circle cx="330" cy="36" r="11" fill="url(#gold)" stroke="#7a4e10" stroke-width="3"/>
+    <circle cx="418" cy="58" r="11" fill="url(#gold)" stroke="#7a4e10" stroke-width="3"/>
+    <circle cx="300" cy="151" r="9" fill="#b3122b" stroke="#fff3c4" stroke-width="2"/>
+    <circle cx="250" cy="151" r="7" fill="#1f6b4a" stroke="#fff3c4" stroke-width="2"/>
+    <circle cx="350" cy="151" r="7" fill="#1f6b4a" stroke="#fff3c4" stroke-width="2"/>
+    <path d="M300,92 L300,128" stroke="#fff3c4" stroke-opacity="0.7" stroke-width="3" stroke-linecap="round"/>
+  </g>
+</svg>
+
+<!-- the spark where they meet -->
+<svg class="layer" id="spark" width="600" height="700" viewBox="0 0 600 700">
+  <circle cx="300" cy="380" r="120" fill="url(#sparkG)"/>
+  <g fill="#fffbe6" transform="translate(300 380)">
+    <path d="M0,-110 L12,-12 L110,0 L12,12 L0,110 L-12,12 L-110,0 L-12,-12 Z"/>
+    <path d="M0,-60 L7,-7 L60,0 L7,7 L0,60 L-7,7 L-60,0 L-7,-7 Z" transform="rotate(45)" opacity="0.8"/>
+  </g>
+</svg>
+
+<!-- the wordmark on a ribbon, under the crest -->
+<svg class="layer" id="ribbon" width="600" height="700" viewBox="0 0 600 700">
+  <g filter="url(#drop)">
+    <path d="M40,560 L110,548 L110,640 L40,652 L66,606 Z" fill="#3e0913" stroke="url(#goldH)" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M560,560 L490,548 L490,640 L560,652 L534,606 Z" fill="#3e0913" stroke="url(#goldH)" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M90,540 Q300,500 510,540 L510,628 Q300,588 90,628 Z" fill="url(#ribbon)" stroke="url(#goldH)" stroke-width="6" stroke-linejoin="round"/>
+    <path id="arc" d="M96,600 Q300,560 504,600" fill="none"/>
+    <text font-family="Kufi" font-weight="700" font-size="44" letter-spacing="1.5" fill="#ffd96e" stroke="#2a050c" stroke-width="3" paint-order="stroke" text-anchor="middle">
+      <textPath href="#arc" startOffset="50%">BOARD BATTLES</textPath>
+    </text>
+  </g>
+</svg>
+</body></html>

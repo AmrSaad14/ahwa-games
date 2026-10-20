@@ -168,8 +168,9 @@ public class Cafe : MonoBehaviour
         float vf = cam.fieldOfView * Mathf.Deg2Rad;
         float hf = 2 * Mathf.Atan(Mathf.Tan(vf / 2) * aspect);
         float el = aspect < 0.9f ? 1.08f : 0.98f;
-        float d = Mathf.Max(9.6f / Mathf.Tan(hf / 2), 8.5f / Mathf.Tan(vf / 2)) * 1.02f;
-        look = Vector3.zero + front * 1.3f;
+        // framed so the player across the table shows head to chest, below the top bar
+        float d = Mathf.Max(9.6f / Mathf.Tan(hf / 2), 9.6f / Mathf.Tan(vf / 2)) * 1.04f;
+        look = Vector3.zero + front * 0.5f + Vector3.up * 0.6f;
         return look + front * d * Mathf.Cos(el) + Vector3.up * d * Mathf.Sin(el);
     }
 

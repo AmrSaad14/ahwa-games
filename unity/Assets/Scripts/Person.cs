@@ -87,6 +87,13 @@ public class Person : MonoBehaviour
         }
         foreach (var t in hips.GetComponentsInChildren<Transform>(true)) rest[t] = t.localRotation;   // the skeleton only (not the person's own turn)
         hipsRest = transform.InverseTransformPoint(hips.position);
+        // how far the head (and anything worn on it) reaches above the head bone, standing in the rest pose
+        if (head != null)
+        {
+            float top = float.MinValue;
+            foreach (var r in GetComponentsInChildren<Renderer>(true)) top = Mathf.Max(top, r.bounds.max.y);
+            if (top > float.MinValue) headTop = Mathf.Clamp((top - head.position.y) / transform.lossyScale.y, 0.15f, 0.5f);
+        }
 
         // which way they face: the toes are in front of the ankles
         if (toe[0] != null && foot[0] != null)
@@ -122,6 +129,9 @@ public class Person : MonoBehaviour
     }
 
     public Transform Head => head != null ? head : lHead;
+    float headTop = 0.25f;   // meters from the head bone to the top of the head (or the hat on it)
+    /// The very top of the person's head (hat included), for names and bubbles over them.
+    public Vector3 Top => Head != null ? Head.position + Vector3.up * (headTop * transform.lossyScale.y) : transform.position + Vector3.up * 1.4f * transform.lossyScale.y;
     public Vector3 Forward { get { var f = transform.TransformDirection(localFwd); f.y = 0; return f.normalized; } }
 
     public void Face(Vector3 point)

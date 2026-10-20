@@ -107,11 +107,12 @@ public static class Ui
         t.horizontalOverflow = HorizontalWrapMode.Overflow;
         t.verticalOverflow = VerticalWrapMode.Overflow;
         t.raycastTarget = false;
-        t.text = Arabic.Fix(text);
+        t.text = Arabic.Fix(Loc.T(text));
+        Loc.Track(t, text);   // changes language with the rest
         return t;
     }
 
-    public static void Set(this Text t, string text) { t.text = Arabic.Fix(text); }
+    public static void Set(this Text t, string text) { Loc.Untrack(t); t.text = Arabic.Fix(text); }
 
     public static RawImage Picture(Transform parent, string name, Texture tex)
     {
