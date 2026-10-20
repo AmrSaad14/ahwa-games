@@ -41,7 +41,7 @@ public class Menus : MonoBehaviour
         canvas = Ui.MakeCanvas("Menus", 40);
 
         // down the left side: shop, leaderboard, how to play, settings
-        var rail = Ui.Rect("Rail", home).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(64, 362), new Vector2(10, -88));
+        var rail = Ui.Rect("Rail", home).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(64, 300), new Vector2(10, -84));
         RailButton(rail, 0, "shop", "المتجر", () => OpenShop(0));
         RailButton(rail, 1, "trophy", "المتصدرين", () => OpenLeaders(0));
         RailButton(rail, 2, "help", "طريقة اللعب", () => OpenHowTo(0));
@@ -64,12 +64,12 @@ public class Menus : MonoBehaviour
     void RailButton(RectTransform rail, int i, string icon, string label, Action onClick)
     {
         var b = Ui.Button(rail, "", Ui.Panel, Ui.GoldLight, 10, () => { Sfx.Tap(); onClick(); });
-        var r = ((RectTransform)b.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(60, 64), new Vector2(0, -i * 72));
+        var r = ((RectTransform)b.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(60, 54), new Vector2(0, -i * 60));
         b.gameObject.AddComponent<Outline>().effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.3f);
         var ic = Ui.Picture(r, "Icon", Icon(icon)); ic.color = Ui.Gold;
-        ic.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(30, 30), new Vector2(0, -8));
-        var t = Ui.Label(r, label, 10, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Bold);
-        t.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(60, 18), new Vector2(0, 5));
+        ic.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(26, 26), new Vector2(0, -6));
+        var t = Ui.Label(r, label, 9, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Bold);
+        t.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(62, 16), new Vector2(0, 3));
     }
 
     Button Chip(RectTransform parent, string icon, string label, Vector2 pos, float w, Color bg, Color fg, Action onClick)
@@ -333,9 +333,9 @@ public class Menus : MonoBehaviour
             if (!signed)
             {
                 Ui.Label(form, "سجّل دخول الأول عشان تقدر تسحب فلوسك، وعشان كوينزك تتحفظ", 15, Color.white, TextAnchor.MiddleCenter, Ui.Bold).rectTransform
-                    .Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(580, 50), new Vector2(0, -20));
+                    .Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(580, 34), new Vector2(0, -8));
                 var b = Ui.Button(form, "تسجيل الدخول بجوجل", Color.white, Ui.Ink, 15, SignIn);
-                var br = ((RectTransform)b.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(250, 42), new Vector2(0, -86));
+                var br = ((RectTransform)b.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(250, 40), new Vector2(0, -50));
                 var gi = Ui.Picture(br, "G", Icon("google")); gi.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(22, 22), new Vector2(10, 0));
             }
             else if (coins < cashCoins)
