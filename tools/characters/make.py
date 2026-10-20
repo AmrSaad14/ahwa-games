@@ -57,8 +57,9 @@ REGULARS = [
          tints={"toigo_basic_tucked_t-shirt": (0.18, 0.49, 0.36), "toigo_wool_pants": (0.16, 0.2, 0.3), "grinsegold_beard_sigmund_wip": (0.09, 0.06, 0.045)}),
     dict(name="Mona", gender=0, age=0.6, weight=0.58, muscle=0.35, height=0.42, proportions=0.35, eth=(0.15, 0.05, 0.8),
          skin="onlytheghosts_middle_aged_eurasian_female", skin_dark=0.3, hair=None, brows="eyebrow010",
-         clothes=["toigo_fisherman_sweater", "toigo_long_full_skirt", "toigo_flats"],
-         tints={"toigo_fisherman_sweater": (0.5, 0.42, 0.62), "toigo_long_full_skirt": (0.17, 0.14, 0.2)}, hat="hijab", scarf=(0.2, 0.045, 0.028)),
+         # a jilbab: a long loose robe to the ankles, and a long khimar over the head, shoulders and chest
+         clothes=["mindfront_kimono", "toigo_flats"],
+         tints={}, hat="khimar", scarf=(0.3, 0.2, 0.17), robe=(0.075, 0.08, 0.13)),
     dict(name="Nada", gender=0, age=0.48, weight=0.42, muscle=0.4, height=0.48, proportions=0.4, eth=(0.1, 0.05, 0.85),
          skin="onlytheghosts_young_eurasian_female", skin_dark=0.25, hair="long01", hair_tint=(0.16, 0.09, 0.05), brows="eyebrow012",
          clothes=["female_casualsuit01", "toigo_ballet_flats", "toigo_pearl_earrings"],
@@ -211,7 +212,7 @@ def make_emma(basemesh, rig):
     for o in parts: bone_parent(o, rig, "mixamorig:Head")
     return parts
 
-def make_hijab(basemesh, rig, rgb):
+def make_hijab(basemesh, rig, rgb, long=False):
     """A hijab grown from the head's own surface: the scalp, ears, neck and the top of the shoulders, pushed out a
     little and thickened, with an oval opening for the face. It keeps the body's skin weights, so it moves with her."""
     top, rx, ry = head_frame(basemesh)
@@ -232,8 +233,12 @@ def make_hijab(basemesh, rig, rgb):
         if body is not None and dl is not None and body.index not in v[dl]: return False   # the helper geometry
         c = mw @ v.co
         dz = tz - c.z
-        if dz > 0.36: return False                                              # below the shoulders
-        if dz > 0.26 and ((c.x - cx) / 0.2) ** 2 + ((c.y - cy - 0.01) / 0.14) ** 2 > 1: return False   # only around the neck
+        if long:   # a khimar: down over the shoulders, chest and back to the waist, not the arms
+            if dz > 0.6: return False
+            if dz > 0.26 and abs(c.x - cx) > 0.19: return False
+        else:
+            if dz > 0.36: return False                                              # below the shoulders
+            if dz > 0.26 and ((c.x - cx) / 0.2) ** 2 + ((c.y - cy - 0.01) / 0.14) ** 2 > 1: return False   # only around the neck
         # the face: an oval from the brow to under the chin
         fy = c.y - cy
         if fy < -ry * 0.2 and ((c.x - cx) / (rx * 0.62)) ** 2 + ((dz - 0.145) / 0.098) ** 2 < 1: return False
@@ -244,6 +249,10 @@ def make_hijab(basemesh, rig, rgb):
         c = mw @ v.co; dz = tz - c.z
         push = 0.022 + (0.03 * min(1, (dz - 0.24) / 0.06) if dz > 0.24 else 0)
         v.co += v.normal * push
+        if long and dz > 0.24:   # the cloth hangs loose and flares a little as it falls
+            k = min(1, (dz - 0.24) / 0.34)
+            out = Vector((c.x - cx, c.y - cy, 0))
+            if out.length > 1e-6: v.co += inv.to_3x3() @ (out.normalized() * 0.045 * k)
     # a little volume at the back of the head (hair under it)
     for v in bm.verts:
         c = mw @ v.co
@@ -302,11 +311,15 @@ def build(spec, x):
         if c in objs: tint_material(objs[c], rgb, value=1.8 if sum(rgb) > 2 else None, sat=0.0 if sum(rgb) > 2 else None)
     if spec.get("stripes") and "mindfront_kimono" in objs:
         stripes(objs["mindfront_kimono"], (0.78, 0.74, 0.66), (0.36, 0.3, 0.24))
+    if spec.get("robe") and "mindfront_kimono" in objs:   # a plain dark robe (a faint weave, no stripes to speak of)
+        r = spec["robe"]
+        stripes(objs["mindfront_kimono"], r, tuple(c * 0.85 for c in r), n=90)
     hat = spec.get("hat")
     extra = []
     if hat == "tarboosh": extra = make_tarboosh(basemesh, rig)
     elif hat == "emma": extra = make_emma(basemesh, rig)
     elif hat == "hijab": extra = make_hijab(basemesh, rig, spec["scarf"])
+    elif hat == "khimar": extra = make_hijab(basemesh, rig, spec["scarf"], long=True)
     rig.location.x = x
     p("  objects:", sorted(objs.keys()), "+", [e.name for e in extra])
     return basemesh, rig
