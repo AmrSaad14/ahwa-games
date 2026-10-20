@@ -233,7 +233,7 @@ def make_hijab(basemesh, rig, rgb, long=False):
         if body is not None and dl is not None and body.index not in v[dl]: return False   # the helper geometry
         c = mw @ v.co
         dz = tz - c.z
-        if long and dz > 0.29: return False                                    # a khimar's cape takes over below the neck
+        if long and dz > 0.31: return False                                    # a khimar's cape takes over below the neck
         if dz > 0.36: return False                                              # below the shoulders
         if dz > 0.26 and ((c.x - cx) / 0.2) ** 2 + ((c.y - cy - 0.01) / 0.14) ** 2 > 1: return False   # only around the neck
         # the face: an oval from the brow to under the chin
@@ -256,6 +256,8 @@ def make_hijab(basemesh, rig, rgb, long=False):
         q = (d.x / A) ** 2 + (d.y / B) ** 2 + (d.z / C) ** 2
         if q < 1e-9: continue
         sc = 1 / math.sqrt(q)
+        # the ears would lie flat on the surface and flicker through it: tuck them just under
+        if abs(c.x - cx) > rx * 0.8 and 0.07 < tz - c.z < 0.2 and abs(c.y - cy) < ry * 0.6: sc *= 0.96
         v.co = inv @ (c + (c0 + d * sc - c) * w)
     # the ears and hair folded flat onto that shape leave pieces facing inward: they go
     bm.normal_update()
@@ -303,8 +305,8 @@ def make_cape(basemesh, rig, mat, top, rx, ry):
         t = i / (rings - 1)
         dz = 0.22 + t * (0.62 - 0.22)
         # from the neck (inside the hood) over the shoulders, eased like cloth, then falling straight and flaring a little
-        k = min(1.0, (dz - 0.22) / 0.15); e = 1 - (1 - k) ** 2
-        flare = max(0.0, dz - 0.37) * 0.25
+        k = min(1.0, max(0.0, (dz - 0.27) / 0.12)); e = 1 - (1 - k) ** 2   # tight to the neck under the hood, then out
+        flare = max(0.0, dz - 0.39) * 0.25
         prof.append((tz - dz, 0.085 + (sx + 0.045 - 0.085) * e + flare, 0.08 + (sf + 0.04 - 0.08) * e + flare, 0.085 + (sb + 0.035 - 0.085) * e + flare))
     bm = bmesh.new()
     grid = []
