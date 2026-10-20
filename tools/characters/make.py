@@ -246,15 +246,16 @@ def make_hijab(basemesh, rig, rgb, long=False):
         push = 0.022 + (0.03 * min(1, (dz - 0.24) / 0.06) if dz > 0.24 else 0)
         v.co += v.normal * push
     # over the head the cloth doesn't follow the ears and the hair: it makes a smooth dome
-    c0 = Vector((cx, cy + 0.008, tz - 0.115)); A, B, C = rx * 1.16, ry * 1.14, 0.135
+    # every point of the head part goes onto one smooth egg shape, big enough to cover the ears and hair
+    c0 = Vector((cx, cy + 0.01, tz - 0.115)); A, B, C = rx * 1.27, ry * 1.17, 0.14
     for v in bm.verts:
         c = mw @ v.co; d = c - c0
-        w = min(1.0, max(0.0, (c.z - (c0.z - 0.09)) / 0.06))
+        w = min(1.0, max(0.0, (c.z - (c0.z - 0.1)) / 0.07))
         if w <= 0: continue
         q = (d.x / A) ** 2 + (d.y / B) ** 2 + (d.z / C) ** 2
         if q < 1e-9: continue
         sc = 1 / math.sqrt(q)
-        if sc > 1: v.co = inv @ (c + (c0 + d * sc - c) * w)
+        v.co = inv @ (c + (c0 + d * sc - c) * w)
     bm.to_mesh(h.data); bm.free()
     hm = flat_material("Hijab", rgb, 0.85)
     h.data.materials.append(hm)
@@ -296,6 +297,14 @@ def make_cape(basemesh, rig, mat, top, rx, ry):
             sb = max(sb, max(p.y - cy for p in near))
         m = 0.028 + 0.055 * t   # clear of the body, and flaring as it falls
         prof.append((tz - dz, sx + m, sf + m, sb + m))
+    # the top slopes like cloth over the shoulders: from the neck out to the shoulders, eased, no shelf
+    shoulder = next((i for i, (z, ax, af, ab) in enumerate(prof) if tz - z >= 0.34), 3)
+    z0, ax0, af0, ab0 = prof[0]
+    zs, axs, afs, abs_ = prof[shoulder]
+    neck = (0.085, 0.075, 0.085)
+    for i in range(shoulder):
+        k = i / shoulder; e = 1 - (1 - k) ** 2   # rounded over the shoulder
+        prof[i] = (prof[i][0], neck[0] + (axs - neck[0]) * e, neck[1] + (afs - neck[1]) * e, neck[2] + (abs_ - neck[2]) * e)
     bm = bmesh.new()
     grid = []
     for z, ax, af, ab in prof:
