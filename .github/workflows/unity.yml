@@ -23,6 +23,9 @@ jobs:
       GH_REPO: ${{ github.repository }}
       IMAGE: unityci/editor:ubuntu-6000.0.84f1-android-3.2.2
     steps:
+      - name: Remove the previous logs (they are replaced at the end of this build)
+        run: gh release delete unity-logs --yes --cleanup-tag || true
+
       - name: Free disk space (the Unity image is large)
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /usr/local/share/boost /usr/local/share/powershell /usr/share/swift /opt/az /opt/microsoft /opt/google /usr/lib/jvm /opt/hostedtoolcache/CodeQL /opt/hostedtoolcache/go /opt/hostedtoolcache/PyPy || true
@@ -132,6 +135,8 @@ jobs:
           }
           set +e
           if [ -f logs/editor.log ]; then tail -c 4000000 logs/editor.log > logs/editor-tail.log; fi
+          # the logs are public: blank out the Unity account's email wherever a tool printed it
+          for f in logs/*.txt logs/*.log; do [ -f "$f" ] && sudo sed -i "s/${UNITY_EMAIL//\//\\/}/***/g; s/[A-Za-z0-9._%+-]*@[A-Za-z0-9.-]*\.[A-Za-z]\{2,\}/***@***/g" "$f"; done
           files=$(ls logs/*.txt logs/activate.log logs/return.log logs/editor-tail.log logs/player.log logs/server.log shots/*.png shots/*.mp4 2>/dev/null)
           echo "publishing: $files"
           gh release delete unity-logs --yes --cleanup-tag

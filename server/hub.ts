@@ -265,10 +265,24 @@ export class Hub {
         }).catch(e => { console.error('[billing]', (e as Error).message); fail('store_unreachable'); });
         return;
       }
+      case 'practice': {
+        // a free, unrated game against computer players, started at once (the Unity app's practice mode)
+        if (!MODES.includes(m.mode)) return err('bad_mode');
+        this.dequeue(uid);
+        if (table) this.leaveTable(uid);
+        const t = this.newTable(m.mode, defaultTarget(m.mode), true, 0);
+        const u = this.store.get(uid)!;
+        t.join({ uid, name: u.name, ch: u.ch, bot: false, rating: this.store.ratingOf(uid, gameOf(m.mode)) });
+        this.userTable.set(uid, t);
+        t.fillBots();
+        t.start(null);
+        return;
+      }
       case 'create': {
         if (!MODES.includes(m.mode)) return err('bad_mode');
         const target = targetOptions(m.mode).includes(m.target) ? m.target : defaultTarget(m.mode);
-        const stake = isStake(m.stake) ? m.stake : STAKES[0];
+        // a room for friends: any stake from the list, or 0 to play just for fun
+        const stake = m.stake === 0 ? 0 : isStake(m.stake) ? m.stake : STAKES[0];
         if (this.store.coinsOf(uid) < stake) return err('not_enough_coins');
         this.dequeue(uid);
         if (table) this.leaveTable(uid);
