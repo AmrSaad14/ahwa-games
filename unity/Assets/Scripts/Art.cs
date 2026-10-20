@@ -7,7 +7,17 @@ using UnityEngine;
 public static class Art
 {
     static Shader std;
-    public static Shader Std => std != null ? std : (std = Shader.Find("Standard") ?? Shader.Find("Legacy Shaders/Specular"));
+    public static Shader Std
+    {
+        get
+        {
+            if (std != null) return std;
+            var keep = Resources.Load<Material>("Materials/Standard");   // keeps the shader in the build
+            std = keep != null ? keep.shader : Shader.Find("Standard");
+            if (std == null) std = Shader.Find("Legacy Shaders/Specular");
+            return std;
+        }
+    }
 
     /// A Standard (physically based) material: colour or texture, how glossy, how metallic.
     public static Material Mat(Color c, float smooth = 0.5f, float metal = 0f, Texture tex = null)

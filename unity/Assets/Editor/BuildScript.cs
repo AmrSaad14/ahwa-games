@@ -51,7 +51,12 @@ public static class BuildScript
         if (icon != null) PlayerSettings.SetIcons(NamedBuildTarget.Unknown, new[] { icon }, IconKind.Any);
         QualitySettings.shadowDistance = 60;
         // shaders the game makes materials from in code (tiles, highlights) must be in every build
-        IncludeShaders("Legacy Shaders/Specular", "Legacy Shaders/Diffuse", "Legacy Shaders/Transparent/Diffuse", "Unlit/Texture", "Unlit/Color", "Standard", "KingsBattle/CafeLook");
+        IncludeShaders("Legacy Shaders/Specular", "Legacy Shaders/Diffuse", "Legacy Shaders/Transparent/Diffuse", "Unlit/Texture", "Unlit/Color", "KingsBattle/CafeLook");
+        // the board games' Standard material: kept in the build through one plain material (only the variants it
+        // needs), not the whole shader (thousands of variants and a very long build)
+        Directory.CreateDirectory("Assets/Resources/Materials");
+        if (AssetDatabase.LoadAssetAtPath<Material>("Assets/Resources/Materials/Standard.mat") == null)
+            AssetDatabase.CreateAsset(new Material(Shader.Find("Standard")), "Assets/Resources/Materials/Standard.mat");
         // voice chat is built when Unity's WebRTC package is installed (Scripts/Voice.cs)
         bool webrtc = UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.webrtc") != null;
         foreach (var t in new[] { NamedBuildTarget.Android, NamedBuildTarget.Standalone })

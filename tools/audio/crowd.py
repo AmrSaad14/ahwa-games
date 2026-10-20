@@ -109,7 +109,7 @@ N = int(DUR * SR)
 mix = np.zeros((2, N + SR * 8), np.float32)
 
 def place(clip, t, pan, gain, dist):
-    clip = lowpass(clip, 9000 - 6500 * dist) * gain
+    clip = lowpass(clip, 7000 - 5000 * dist) * gain
     i = int(t * SR)
     if i >= mix.shape[1]: return
     clip = clip[: mix.shape[1] - i]
@@ -165,7 +165,7 @@ def chair():   # a chair dragged on tiles
     return (lowpass(noise, rng.uniform(500, 1200)) * shape * 0.5).astype(np.float32)
 
 print('the café…', flush=True)
-for maker, every, gain in [(clink, 1.6, 0.35), (stir, 9, 0.3), (slap, 2.2, 0.55), (dice, 6, 0.4), (chair, 14, 0.35)]:
+for maker, every, gain in [(clink, 3.5, 0.16), (stir, 16, 0.14), (slap, 5.0, 0.22), (dice, 12, 0.16), (chair, 22, 0.14)]:
     t = rng.uniform(0, every)
     while t < DUR + 4:
         d = rng.uniform(0.3, 1.0)
@@ -183,9 +183,9 @@ irn = int(1.1 * SR)
 ir = rng.standard_normal((2, irn)).astype(np.float32) * env(irn, 5.5)[None, :]
 ir[:, 0] = 1.0
 for c in range(2):
-    ir[c] = lowpass(ir[c], 5000)
+    ir[c] = lowpass(ir[c], 3200)
 wet = np.stack([fftconvolve(mix[c], ir[c])[: mix.shape[1]] for c in range(2)])
-out = mix * 0.65 + wet / np.abs(wet).max() * np.abs(mix).max() * 0.35
+out = mix * 0.72 + wet / np.abs(wet).max() * np.abs(mix).max() * 0.28
 
 # a seamless loop: the tail fades into the beginning
 fade = int(4 * SR)
