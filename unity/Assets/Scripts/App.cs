@@ -682,7 +682,11 @@ public class App : MonoBehaviour
             var src = Path.Combine(ShotDir, "frames", $"f{Mathf.Min(f, frame - 1):D4}.png");
             try { File.Copy(src, Path.Combine(ShotDir, name), true); } catch (System.Exception e) { Debug.Log("[app] still " + name + ": " + e.Message); }
         }
+        offline = null;
         Application.Quit();
+        // the desktop test player sometimes hangs while shutting down: make sure it ends
+        yield return new WaitForSecondsRealtime(5);
+        System.Diagnostics.Process.GetCurrentProcess().Kill();
     }
 
     static int Stakes0() => GameUi.Stakes[0];
