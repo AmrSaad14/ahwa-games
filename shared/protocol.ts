@@ -195,6 +195,8 @@ export type C2S =
   /** Cash out: every 1,000,000 coins pays 10 EGP to a Vodafone Cash number, paid by hand within one working day. */
   | { t: 'cashout'; phone: string; millions: number }
   | { t: 'cashouts' }
+  /** A message to the team from "Contact support". */
+  | { t: 'support'; text: string; contact?: string; app?: string }
   | { t: 'ping'; c: number };
 
 /** Server → client */
@@ -224,6 +226,7 @@ export type S2C =
   | { t: 'lb'; game: GameId; rows: LeaderRow[]; me: LeaderRow | null }
   | { t: 'cashouts'; rows: CashoutRow[]; rate: { coins: number; egp: number }; maxMillions: number }
   | { t: 'cashoutDone'; id: number; egp: number; coins: number; phone: string }
+  | { t: 'supportSent'; id: number }
   | { t: 'pong'; c: number; now: number };
 
 export interface CashoutRow { id: number; coins: number; egp: number; phone: string; status: 'pending' | 'paid' | 'rejected'; ts: number; doneTs: number | null }

@@ -147,6 +147,17 @@ a "come and play" notification, in the player's language.
    that opens `https://YOUR-SERVER/api/cron/push?key=ADMIN_KEY` every 15 minutes. Each reminder still goes out once.
    Add `&now=1` once to send a reminder right away (a test).
 
+## Contact support
+
+Settings → Contact support sends a message to the server, which keeps it (read them at
+`https://YOUR-SERVER/admin/support?key=ADMIN_KEY`) and e-mails it to `SUPPORT_EMAIL` (default amrsaadamer14@gmail.com)
+when SMTP is set up. The web app or anything else can send one with `POST /api/support` and a JSON body
+`{"text": "...", "contact": "...", "name": "..."}`.
+
+E-mail through Gmail: turn on 2-step verification for the sending Google account, make an **app password**
+(myaccount.google.com → Security → App passwords), then set on the server `SMTP_HOST=smtp.gmail.com`,
+`SMTP_PORT=465`, `SMTP_USER=that address`, `SMTP_PASS=the app password`.
+
 ## Cash out to Vodafone Cash (switched off)
 
 Not offered for now: the app has no cash-out button and the server refuses requests unless `CASHOUT_ENABLED=1`.

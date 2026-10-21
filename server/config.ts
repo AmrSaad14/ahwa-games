@@ -37,6 +37,14 @@ export const config = {
     times: process.env.PUSH_TIMES || '14:00,20:00',
     tz: process.env.PUSH_TZ || 'Africa/Cairo',
   },
+  // Support messages from the app ("Contact support" in settings) are kept on the server and e-mailed (server/mail.ts)
+  support: {
+    to: process.env.SUPPORT_EMAIL || 'amrsaadamer14@gmail.com',
+    smtp: {
+      host: process.env.SMTP_HOST || '', port: num(process.env.SMTP_PORT, 465),
+      user: process.env.SMTP_USER || '', pass: process.env.SMTP_PASS || '', from: process.env.MAIL_FROM || '',
+    },
+  },
   // Hosts that wipe the disk on restart (free plans): back the database up to a private GitHub repo (server/backup.ts)
   backup: {
     repo: process.env.BACKUP_GITHUB_REPO || '',

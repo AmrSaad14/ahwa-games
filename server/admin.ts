@@ -54,3 +54,13 @@ export function cashoutPage(rows: (CashoutDb & { name: string; coins_now: number
 <tbody>${body || '<tr><td colspan="7" class="muted">مفيش طلبات</td></tr>'}</tbody></table></div>
 </body></html>`;
 }
+
+/** The support inbox: /admin/support?key=ADMIN_KEY */
+export function supportPage(rows: { id: number; user_id: string | null; name: string; contact: string; text: string; app: string; ts: number; mailed: number }[], mailOn: boolean, to: string): string {
+  const body = rows.map(r => `<div class="m"><div class="h"><b>#${r.id}</b> · ${esc(when(r.ts))} · ${esc(r.name || 'player')} ${r.contact ? '· <span dir="ltr">' + esc(r.contact) + '</span>' : ''} ${r.mailed ? '· ✉️' : ''}<span class="sub"> ${esc(r.app)} ${esc(r.user_id ?? '')}</span></div><div class="t">${esc(r.text)}</div></div>`).join('');
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Support · Board Battles</title>
+<style>body{font-family:system-ui,Segoe UI,Tahoma,sans-serif;background:#1b120c;color:#ffe9b0;margin:0;padding:16px}h1{color:#f3cd62;font-size:22px;margin:0 0 4px}
+.muted{opacity:.7;font-size:13px;margin-bottom:14px}.m{background:#22150e;border-radius:10px;padding:12px;margin-bottom:10px}.h{font-size:13px;opacity:.85;margin-bottom:6px}
+.t{white-space:pre-wrap;font-size:15px;line-height:1.5;color:#fff}.sub{opacity:.5;font-size:11px}</style></head><body>
+<h1>Support messages</h1><div class="muted">${rows.length} messages · e-mail to ${esc(to)}: ${mailOn ? 'on' : 'off (set SMTP_HOST, SMTP_USER, SMTP_PASS)'}</div>${body || '<div class="muted">No messages yet</div>'}</body></html>`;
+}

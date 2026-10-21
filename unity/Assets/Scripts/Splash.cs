@@ -11,6 +11,7 @@ public class Splash : MonoBehaviour
     static readonly Vector2 Frame = new Vector2(240, 280);   // the logo's frame on screen
 
     Canvas canvas;
+    Camera splashCam;
     CanvasGroup group;
     RectTransform stage, rays, glow, barFill;
     RawImage raysImg, glowImg, shield, domino, die, spark, crown, ribbon;
@@ -26,6 +27,12 @@ public class Splash : MonoBehaviour
     public void Show()
     {
         shots = App.Recording;
+        // its own camera: until the café's camera exists nothing else draws, and some phones show black
+        var cg = new GameObject("SplashCam", typeof(Camera));
+        cg.transform.SetParent(transform, false);
+        splashCam = cg.GetComponent<Camera>();
+        splashCam.clearFlags = CameraClearFlags.SolidColor; splashCam.backgroundColor = new Color32(0x1c, 0x06, 0x09, 0xff);
+        splashCam.cullingMask = 0; splashCam.depth = -100;
         canvas = Ui.MakeCanvas("Splash", 100);
         var root = Ui.Rect("Splash", canvas.transform).Fill();
         group = root.gameObject.AddComponent<CanvasGroup>();
@@ -137,7 +144,7 @@ public class Splash : MonoBehaviour
             group.alpha = 1 - Ui.Ease(o);
             group.transform.localScale = Vector3.one * Mathf.Lerp(1f, 1.18f, Ui.Ease(o));
             group.blocksRaycasts = false;
-            if (o >= 1) { Destroy(canvas.gameObject); canvas = null; }
+            if (o >= 1) { Destroy(canvas.gameObject); canvas = null; if (splashCam != null) Destroy(splashCam.gameObject); }
         }
         if (t > 15f && openAt < 0) openAt = Time.time;   // never stuck on the splash
     }

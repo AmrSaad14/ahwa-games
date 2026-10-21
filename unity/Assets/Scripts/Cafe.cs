@@ -37,7 +37,10 @@ public class Cafe : MonoBehaviour
         return null;
     }
 
-    public void Build()
+    public void Build() { var it = BuildSteps(); while (it.MoveNext()) { } }
+
+    /// Builds the café a piece at a time, so the splash keeps moving while it loads.
+    public System.Collections.IEnumerator BuildSteps()
     {
         // camera
         var camGo = new GameObject("Camera", typeof(Camera), typeof(AudioListener));
@@ -52,7 +55,7 @@ public class Cafe : MonoBehaviour
 
         // the room
         var prefab = Resources.Load<GameObject>("Art/cafe");
-        if (prefab == null) { Debug.LogError("[cafe] Art/cafe not found (is glTFast importing the .glb files?)"); return; }
+        if (prefab == null) { Debug.LogError("[cafe] Art/cafe not found (is glTFast importing the .glb files?)"); yield break; }
         var room = Instantiate(prefab);
         room.name = "Cafe";
         foreach (var g in Games)
@@ -72,9 +75,11 @@ public class Cafe : MonoBehaviour
         }
         else { center = Vector3.zero; front = Vector3.forward; }
 
+        yield return null;
         SettleProps(room.transform);
         Lights();
-        People(room.transform);
+        yield return null;
+        foreach (var _ in People(room.transform)) yield return null;
 
         camPos = camPosTo = Overview(out camLook); camLookTo = camLook;
         Apply();
@@ -134,7 +139,7 @@ public class Cafe : MonoBehaviour
         }
     }
 
-    void People(Transform room)
+    System.Collections.Generic.IEnumerable<int> People(Transform room)
     {
         foreach (var (who, table, seat) in Seating)
         {
@@ -147,6 +152,7 @@ public class Cafe : MonoBehaviour
             person.Face(t.position);
             var p = person.gameObject;
             regulars.Add(p);
+            yield return 0;   // one person a frame
         }
     }
 

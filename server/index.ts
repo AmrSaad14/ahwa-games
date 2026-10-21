@@ -5,14 +5,15 @@ import path from 'node:path';
 import { WebSocketServer, WebSocket } from 'ws';
 import { config } from './config';
 import { Store } from './db';
-import { Tokens } from './auth';
+import { Limiter, Tokens } from './auth';
 import { Hub } from './hub';
 import { GoogleSignIn, PhoneCodes, backToAppPage } from './login';
 import { verifySsv } from './ads';
 import { GitHubBackup } from './backup';
 import { PlayBilling } from './billing';
 import { Push } from './push';
-import { cashoutPage } from './admin';
+import { cashoutPage, supportPage } from './admin';
+import { supportDesk } from './support';
 import type { S2C } from '../shared/protocol';
 
 const MIME: Record<string, string> = {
@@ -26,12 +27,14 @@ export function createServer(opts = config) {
   const tokens = new Tokens(store.secret(opts.secret));
   const phones = new PhoneCodes(opts.login), google = new GoogleSignIn(opts.login);
   const billing = new PlayBilling(opts.billing);
-  const hub = new Hub(store, tokens, { phones, google, billing, defaultCountry: opts.login.defaultCountry, adsSsv: opts.adsSsv, turnMs: opts.turnMs, botFillMs: opts.botFillMs, nextRoundMs: opts.nextRoundMs, botDelay: opts.botDelay, lobbyAfterMatchMs: opts.lobbyAfterMatchMs, msgsPer5s: (opts as { msgsPer5s?: number }).msgsPer5s,
+  const desk = supportDesk(store, opts.support);
+  const hub = new Hub(store, tokens, { phones, google, billing, support: m => desk.file(m), defaultCountry: opts.login.defaultCountry, adsSsv: opts.adsSsv, turnMs: opts.turnMs, botFillMs: opts.botFillMs, nextRoundMs: opts.nextRoundMs, botDelay: opts.botDelay, lobbyAfterMatchMs: opts.lobbyAfterMatchMs, msgsPer5s: (opts as { msgsPer5s?: number }).msgsPer5s,
     stunUrls: opts.stunUrls, turnUrls: opts.turnUrls, turnSecret: opts.turnSecret, autoMoveMs: opts.autoMoveMs, chessClockMs: opts.chessClockMs });
   const push = new Push(store, opts.push);
   const pushTimer = setInterval(() => { push.tick().catch(e => console.error('[push]', (e as Error).message)); }, 60_000);
   const staticRoot = path.resolve(opts.staticDir);
   const perIp = new Map<string, number>();
+  const supportLimiter = new Limiter(10, 60 * 60_000);
 
   const clientIp = (req: http.IncomingMessage) => {
     const fwd = opts.trustProxy ? String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() : '';
@@ -66,6 +69,29 @@ export function createServer(opts = config) {
         .then(r => { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify({ enabled: push.enabled, ...r })); })
         .catch(e => { res.writeHead(500, { 'Content-Type': 'text/plain' }); res.end((e as Error).message); });
       return;
+    }
+    // support: the web app (and anything else) can send a message here too; the team reads them at /admin/support
+    if (url.pathname === '/api/support' && req.method === 'POST') {
+      const ip = clientIp(req);
+      if (!supportLimiter.allow(ip)) { res.writeHead(429); return res.end(); }
+      let raw = '';
+      req.on('data', c => { raw += c; if (raw.length > 16_384) req.destroy(); });
+      req.on('end', () => {
+        let j: { text?: unknown; contact?: unknown; name?: unknown; app?: unknown } = {};
+        try { j = JSON.parse(raw || '{}'); } catch { /* not JSON */ }
+        const text = String(j.text ?? '').trim().slice(0, 4000);
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        if (text.length < 3) { res.writeHead(400, { 'Content-Type': 'application/json' }); return res.end('{"error":"empty"}'); }
+        const id = desk.file({ uid: null, name: String(j.name ?? '').slice(0, 60), contact: String(j.contact ?? '').slice(0, 200), text, app: String(j.app ?? 'web').slice(0, 80) });
+        res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: true, id }));
+      });
+      return;
+    }
+    if (url.pathname === '/admin/support') {
+      const key = url.searchParams.get('key') || '';
+      if (!isAdmin(key)) { res.writeHead(403, { 'Content-Type': 'text/plain' }); return res.end('forbidden'); }
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' });
+      return res.end(supportPage(store.supportAll(300), desk.mailOn, opts.support.to));
     }
     // cash-out requests: a page to see them and mark them paid (or turn them down: the coins go back)
     if (url.pathname === '/admin/cashouts') {

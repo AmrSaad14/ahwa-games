@@ -82,7 +82,9 @@ export class Store {
       CREATE TABLE IF NOT EXISTS cashouts (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, coins INTEGER NOT NULL, egp INTEGER NOT NULL,
         phone TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', ts INTEGER NOT NULL, done_ts INTEGER, note TEXT);
       CREATE INDEX IF NOT EXISTS cashouts_user ON cashouts(user_id, id DESC);
-      CREATE INDEX IF NOT EXISTS cashouts_status ON cashouts(status, id)`);
+      CREATE INDEX IF NOT EXISTS cashouts_status ON cashouts(status, id);
+      CREATE TABLE IF NOT EXISTS support (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, name TEXT, contact TEXT, text TEXT NOT NULL,
+        app TEXT, ts INTEGER NOT NULL, mailed INTEGER NOT NULL DEFAULT 0)`);
     this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_phone ON users(phone) WHERE phone IS NOT NULL; CREATE UNIQUE INDEX IF NOT EXISTS users_google ON users(google_sub) WHERE google_sub IS NOT NULL');
     // coins moved to stakes from 5K to 1M: older balances are scaled up once
     if (!this.db.prepare("SELECT v FROM meta WHERE k = 'coins_v2'").get()) {
@@ -375,6 +377,15 @@ export class Store {
     if (!paid) { this.addCoins(c.user_id, c.coins); this.logCoins(c.user_id, 'cashout_refund', c.coins); }
     return c;
   }
+
+  /* ---------- support messages ---------- */
+
+  addSupport(m: { uid: string | null; name: string; contact: string; text: string; app: string }): number {
+    const r = this.db.prepare('INSERT INTO support (user_id, name, contact, text, app, ts) VALUES (?, ?, ?, ?, ?, ?)').run(m.uid, m.name, m.contact, m.text, m.app, Date.now());
+    return Number(r.lastInsertRowid);
+  }
+  supportMailed(id: number) { this.db.prepare('UPDATE support SET mailed = 1 WHERE id = ?').run(id); }
+  supportAll(limit = 200) { return this.db.prepare('SELECT * FROM support ORDER BY id DESC LIMIT ?').all(limit) as { id: number; user_id: string | null; name: string; contact: string; text: string; app: string; ts: number; mailed: number }[]; }
 
   changes(): number { return Number((this.db.prepare('SELECT total_changes() AS n').get() as { n: number }).n); }
   /** A consistent copy of the whole database in one file (safe while the game keeps running). */

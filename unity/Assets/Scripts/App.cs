@@ -82,8 +82,11 @@ public class App : MonoBehaviour
         splash.Show();
         yield return null;   // let the splash draw its first frame before the heavy loading
 
+        float tBuild = Time.realtimeSinceStartup;
         cafe = new GameObject("Cafe").AddComponent<Cafe>();
-        cafe.Build();
+        yield return cafe.BuildSteps();
+        Debug.Log($"[app] café built in {Time.realtimeSinceStartup - tBuild:0.0} s");
+        yield return null;
         dominoTable = new GameObject("Domino").AddComponent<DominoTable>();
         dominoTable.Init(cafe);
         dominoTable.Show(false);
@@ -571,7 +574,7 @@ public class App : MonoBehaviour
             Loc.Set(true); yield return new WaitForSeconds(0.8f); Still("m8-home-en.png");
             menus.OpenShop(1); yield return new WaitForSeconds(0.8f); Still("m9-shop-en.png");
             menus.OpenHowTo(0); yield return new WaitForSeconds(0.8f); Still("m10-howto-en.png");
-            menus.OpenSettings(); yield return new WaitForSeconds(0.8f); Still("m11-settings-en.png");
+            menus.OpenSettings(); yield return new WaitForSeconds(0.8f); Still("m11-settings-en.png"); menus.OpenSupport(); yield return new WaitForSeconds(0.8f); Still("m12-support-en.png");
             menus.Close(); Loc.Set(false);
             recordOn = false;
             Practice("team");      // practice runs on the phone: no server needed

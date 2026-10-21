@@ -33,6 +33,8 @@ export interface HubOptions {
   phones?: PhoneCodes; google?: GoogleSignIn; defaultCountry?: string;
   adsSsv?: boolean;
   billing?: PlayBilling;
+  /** Files a support message (and e-mails it); the server sets it up (server/support.ts). */
+  support?: (m: { uid: string | null; name: string; contact: string; text: string; app: string }) => number;
 }
 
 const CODE_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
@@ -60,6 +62,7 @@ export class Hub {
   private friendLimiter = new Limiter(30, 60 * 60_000);
   private inviteLimiter = new Limiter(20, 60_000);
   private cashLimiter = new Limiter(6, 60 * 60_000);
+  private supportLimiter = new Limiter(5, 60 * 60_000);
   private ticker: ReturnType<typeof setInterval>;
 
   constructor(private store: Store, private tokens: Tokens, private opts: HubOptions) {
@@ -394,6 +397,15 @@ export class Hub {
         return;
       }
       case 'cashouts': return this.sendCashouts(uid);
+      case 'support': {
+        const text = String(m.text || '').trim().slice(0, 4000);
+        if (text.length < 3) return err('support_empty');
+        if (!this.supportLimiter.allow(uid) || !this.opts.support) return err('slow_down');
+        const u = this.store.get(uid);
+        const contact = String(m.contact || '').trim().slice(0, 200) || u?.google_email || u?.email || u?.phone || '';
+        const id = this.opts.support({ uid, name: u?.name ?? '', contact, text, app: String(m.app || '').slice(0, 80) });
+        return s.conn.send({ t: 'supportSent', id });
+      }
       case 'cashout': {
         if (!CASHOUT.enabled) return err('cashout_off');   // not offered for now (CASHOUT_ENABLED=1 turns it on)
         const u = this.store.get(uid);

@@ -132,6 +132,10 @@ public class Menus : MonoBehaviour
                 cashMax = (int)m.Num("maxMillions", 10);
                 refreshOpen?.Invoke();
                 break;
+            case "supportSent":
+                app.Toast(Loc.T("وصلتنا رسالتك، شكراً! هنرد عليك قريب"));
+                Sfx.Chime();
+                break;
             case "cashoutDone":
                 app.Toast(Loc.T("طلبك وصل! هيتحولك") + " " + (int)m.Num("egp") + " " + Loc.T("ج.م") + " " + Loc.T("خلال يوم عمل واحد"));
                 Sfx.Coins(); Sfx.Buzz();
@@ -154,6 +158,7 @@ public class Menus : MonoBehaviour
             case "cashout_pending": app.Toast(Loc.T("عندك طلب لسه بيتحول، استنى لما يخلص")); return true;
             case "bad_amount": app.Toast(Loc.T("المبلغ مش مظبوط")); return true;
             case "slow_down": app.Toast(Loc.T("استنى شوية وجرّب تاني")); return true;
+            case "support_empty": app.Toast(Loc.T("اكتب رسالتك الأول")); return true;
         }
         return false;
     }
@@ -284,10 +289,58 @@ public class Menus : MonoBehaviour
                 var b = Ui.Button(acc, "تسجيل الخروج", new Color(1, 1, 1, 0.08f), Ui.GoldLight, 14, () => { app.Send(new Dictionary<string, object> { ["t"] = "logout" }); Close(); });
                 ((RectTransform)b.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(180, 32), new Vector2(0, 6));
             }
+            // help: a message straight to the team
+            var sup = Row(list, 44, Card);
+            At(Ui.Label(sup, "الدعم الفني", 16, Color.white, StartAlign, Ui.Bold).rectTransform, 14, 200, 40);
+            var sb = Ui.Button(sup, "كلّمنا", Ui.Gold, Ui.Ink, 14, OpenSupport);
+            At((RectTransform)sb.transform, 384, 100, 32);
             var ver = Row(list, 22);
             Ui.Label(ver, "Board Battles  ·  " + Application.version, 11, new Color(1, 1, 1, 0.4f)).rectTransform.Fill();
+            var by = Row(list, 20);
+            Ui.Label(by, "Powered by Qimma Labs  ·  2027", 11, new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.7f), TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Fill();
         };
         refreshOpen();
+    }
+
+    /* ---------- contact support ---------- */
+
+    public void OpenSupport()
+    {
+        if (app.net == null || !app.net.Online) { app.Toast(Loc.T("مش متصل بالسيرفر لسه")); return; }
+        Panel(Loc.T("الدعم الفني"), out var body, new Vector2(560, 330));
+        refreshOpen = null;
+        Ui.Label(body, "اكتب مشكلتك أو اقتراحك وهنرد عليك في أقرب وقت", 14, Ui.GoldLight, TextAnchor.MiddleCenter).rectTransform
+            .Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(520, 24), new Vector2(0, 0));
+        var msg = Field(body, "رسالتك…", 15, true);
+        ((RectTransform)msg.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(520, 130), new Vector2(0, -30));
+        var contact = Field(body, "إيميلك أو رقمك (اختياري)", 14, false);
+        ((RectTransform)contact.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(520, 38), new Vector2(0, -168));
+        contact.text = user?.Str("google") ?? "";
+        var send = Ui.Button(body, "ابعت", Ui.Gold, Ui.Ink, 17, () =>
+        {
+            Sfx.Tap();
+            var text = msg.text.Trim();
+            if (text.Length < 3) { app.Toast(Loc.T("اكتب رسالتك الأول")); return; }
+            app.Send(new Dictionary<string, object> { ["t"] = "support", ["text"] = text, ["contact"] = contact.text.Trim(), ["app"] = "android " + Application.version + (Loc.En ? " en" : " ar") });
+            Close();
+        });
+        ((RectTransform)send.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(180, 40), new Vector2(0, 0));
+    }
+
+    static InputField Field(Transform parent, string hintText, int size, bool multi)
+    {
+        var bg = Ui.Box(parent, "Field", new Color(1, 1, 1, 0.94f));
+        bg.raycastTarget = true;
+        var text = Ui.Label(bg.transform, "", size, Ui.Ink, multi ? TextAnchor.UpperLeft : TextAnchor.MiddleLeft, Ui.Body);
+        text.rectTransform.Fill(8); text.raycastTarget = false; text.supportRichText = false;
+        text.horizontalOverflow = HorizontalWrapMode.Wrap; text.verticalOverflow = VerticalWrapMode.Truncate;
+        var hint = Ui.Label(bg.transform, hintText, size, new Color(0, 0, 0, 0.38f), multi ? TextAnchor.UpperLeft : TextAnchor.MiddleLeft, Ui.Body);
+        hint.rectTransform.Fill(8);
+        var f = bg.gameObject.AddComponent<InputField>();
+        f.textComponent = text; f.placeholder = hint;
+        f.lineType = multi ? InputField.LineType.MultiLineNewline : InputField.LineType.SingleLine;
+        f.characterLimit = multi ? 2000 : 120;
+        return f;
     }
 
     void Toggle(RectTransform list, string label, bool on, Action<bool> set)
