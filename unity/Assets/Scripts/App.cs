@@ -106,6 +106,7 @@ public class App : MonoBehaviour
         net.OnOnline += SetStatus;
         net.Start();
         Push.Begin();
+        Ads.Begin();
 
         splash.Ready();
         while (!splash.Opened) yield return null;
@@ -161,6 +162,7 @@ public class App : MonoBehaviour
     // called from Java (BBPush / BBMessagingService) on this object, "Board Battles"
     public void OnPushToken(string token) { Push.Token = token; Debug.Log("[push] token ready"); SendPushToken(); }
     public void OnPushError(string e) { Debug.Log("[push] " + e); }
+    public void OnAdEvent(string e) => Ads.OnEvent(e);
     string sentPushToken;
     void SendPushToken()
     {
@@ -402,7 +404,10 @@ public class App : MonoBehaviour
     {
         if (view != null && view.phase == "mend") Send(new Dictionary<string, object> { ["t"] = "leave" });
         ExitGame();
-        if (lastStake == 0) Practice(lastMode); else Quick(lastMode, lastStake);
+        // an ad between games (not for players on the ad-free plan), then the next game
+        bool adFree = user != null && user.Num("adFreeUntil") > LocalMs();
+        System.Action next = () => { if (lastStake == 0) Practice(lastMode); else Quick(lastMode, lastStake); };
+        if (adFree || Recording) next(); else Ads.Interstitial(next);
     }
 
     public void TapTile(int id)
@@ -608,6 +613,8 @@ public class App : MonoBehaviour
                     yield return null;
                 }
                 Still("7-later.png");
+                cafe.SetView(true); dominoTable.ApplyView(); yield return new WaitForSeconds(1.6f); Still("v-board-view.png");
+                cafe.SetView(false); dominoTable.ApplyView(); yield return new WaitForSeconds(0.6f);
                 yield return new WaitForSeconds(0.5f);
             }
             // the board games, each a practice game against the computer, played by the test for a while

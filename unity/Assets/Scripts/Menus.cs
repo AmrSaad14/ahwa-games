@@ -122,9 +122,24 @@ public class Menus : MonoBehaviour
                 if (m.Str("game") == lbGame) refreshOpen?.Invoke();
                 break;
             case "adTicket":
-                if (m.Bool("ssv")) { app.Toast(Loc.T("الإعلان مش جاهز، جرّب تاني")); break; }   // the server only pays AdMob's own signed calls
-                StartCoroutine(PlayAd(m.Str("ticket")));
+            {
+                string ticket = m.Str("ticket"); bool ssv = m.Bool("ssv");
+                if (Ads.Available)
+                {
+                    // a real rewarded video; the coins come from the server once it is watched (AdMob tells the server
+                    // itself when server-side verification is on)
+                    adShowing = true;
+                    Ads.Rewarded(user?.Str("id"), ticket, watched =>
+                    {
+                        adShowing = false;
+                        if (!watched) { app.Toast(Loc.T("الإعلان مش جاهز، جرّب تاني")); return; }
+                        if (!ssv) app.Send(new Dictionary<string, object> { ["t"] = "adWatched", ["ticket"] = ticket });
+                    });
+                }
+                else if (ssv) app.Toast(Loc.T("الإعلان مش جاهز، جرّب تاني"));
+                else StartCoroutine(PlayAd(ticket));   // off the phone: the game's own short spot
                 break;
+            }
             case "cashouts":
                 cashRows = m.Arr("rows") ?? new List<object>();
                 var rate = m.Obj("rate");
@@ -262,6 +277,12 @@ public class Menus : MonoBehaviour
             var list = Scroll(area, 8);
             Toggle(list, "الصوت", Sfx.SoundOn, v => { Sfx.SoundOn = v; if (v) Sfx.Tap(); });
             Toggle(list, "الاهتزاز", Sfx.VibrateOn, v => { Sfx.VibrateOn = v; if (v) Sfx.Buzz(); });
+            // how the game table is seen
+            var vr = Row(list, 44, Card);
+            At(Ui.Label(vr, "طريقة العرض", 16, Color.white, StartAlign, Ui.Bold).rectTransform, 14, 160, 40);
+            var full = Ui.Button(vr, "كامل", !Cafe.BoardView ? Ui.Gold : new Color(1, 1, 1, 0.08f), !Cafe.BoardView ? Ui.Ink : Ui.GoldLight, 14, () => { SetView(false); });
+            var brd = Ui.Button(vr, "اللوح بس", Cafe.BoardView ? Ui.Gold : new Color(1, 1, 1, 0.08f), Cafe.BoardView ? Ui.Ink : Ui.GoldLight, 14, () => { SetView(true); });
+            At((RectTransform)full.transform, 280, 100, 32); At((RectTransform)brd.transform, 384, 100, 32);
             // language
             var lr = Row(list, 44, Card);
             At(Ui.Label(lr, "اللغة", 16, Color.white, StartAlign, Ui.Bold).rectTransform, 14, 160, 40);
@@ -341,6 +362,14 @@ public class Menus : MonoBehaviour
         f.lineType = multi ? InputField.LineType.MultiLineNewline : InputField.LineType.SingleLine;
         f.characterLimit = multi ? 2000 : 120;
         return f;
+    }
+
+    void SetView(bool board)
+    {
+        Sfx.Tap();
+        if (app.cafe != null) app.cafe.SetView(board); else Cafe.BoardView = board;
+        app.dominoTable?.ApplyView(); app.game?.ShowViewIcon();
+        refreshOpen?.Invoke();
     }
 
     void Toggle(RectTransform list, string label, bool on, Action<bool> set)

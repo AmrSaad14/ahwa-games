@@ -131,6 +131,18 @@ public class DominoTable : MonoBehaviour
         p.reach = SEAT_R - T + 0.55f;
         p.Face(C);
         chars[pos] = p;
+        ApplyView();
+    }
+
+    /// Board-only view: the players (and their chairs) step out of the picture.
+    public void ApplyView()
+    {
+        bool show = !Cafe.BoardView;
+        for (int p = 0; p < 4; p++)
+        {
+            if (chars[p] != null) chars[p].gameObject.SetActive(show);
+            if (chairs[p] != null) chairs[p].SetActive(show);
+        }
     }
 
     public Person CharAtSeat(int seat) { int pos = System.Array.IndexOf(posToSeat, seat); return pos >= 0 ? chars[pos] : null; }

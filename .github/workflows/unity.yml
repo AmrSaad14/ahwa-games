@@ -61,6 +61,10 @@ jobs:
         env:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          # AdMob (empty: Google's test ads)
+          ADMOB_APP_ID: ${{ secrets.ADMOB_APP_ID }}
+          ADMOB_INTERSTITIAL_ID: ${{ secrets.ADMOB_INTERSTITIAL_ID }}
+          ADMOB_REWARDED_ID: ${{ secrets.ADMOB_REWARDED_ID }}
         run: |
           set +e
           mkdir -p build logs
@@ -69,7 +73,7 @@ jobs:
           echo "pull exit $?" >> logs/build-step.txt
           # a license file only works on the computer that made it, so the seat comes from the Unity account
           # (Personal) for this run and goes back at the end
-          docker run --rm -e UNITY_EMAIL -e UNITY_PASSWORD -v "$PWD":/w -w /w $IMAGE bash -c '
+          docker run --rm -e UNITY_EMAIL -e UNITY_PASSWORD -e ADMOB_APP_ID -e ADMOB_INTERSTITIAL_ID -e ADMOB_REWARDED_ID -v "$PWD":/w -w /w $IMAGE bash -c '
             LC=/opt/unity/Editor/Data/Resources/Licensing/Client/Unity.Licensing.Client
             for i in 1 2 3; do
               "$LC" --activate-all --include-personal --username "$UNITY_EMAIL" --password "$UNITY_PASSWORD" > /w/logs/activate.log 2>&1 && break
@@ -85,7 +89,7 @@ jobs:
           echo "docker exit $?" >> logs/build-step.txt
           cat logs/build-step.txt logs/editor-exit.txt
           grep -E "^\[build|error CS|Error building|Scripts have compiler errors" logs/editor.log | head -60
-          grep -E "^\[push\]" logs/editor.log | head
+          grep -E "^\[push\]|^\[ads\]" logs/editor.log | head
           grep -A12 "What went wrong" logs/editor.log | head -60
           test -f build/android/BoardBattles.apk
 

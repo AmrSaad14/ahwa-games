@@ -33,7 +33,30 @@ public class GameUi : MonoBehaviour
     RectTransform hud, handBar, endButtons, resultPanel, matchPanel;
     Text scoreText, roundText, turnText, resultTitle, resultSub, matchTitle, matchSub, payoutText;
     Image timerFill, turnChipBg; Text timerSecs; RectTransform turnChip;
-    static Sprite ring;
+    static Sprite ring, disc;
+    /// A filled circle (the timer's dark face).
+    static Sprite Disc
+    {
+        get
+        {
+            if (disc != null) return disc;
+            const int S = 96;
+            var t = new Texture2D(S, S, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            var px = new Color32[S * S];
+            for (int y = 0; y < S; y++)
+                for (int x = 0; x < S; x++)
+                {
+                    float d = Mathf.Sqrt((x + 0.5f - S / 2f) * (x + 0.5f - S / 2f) + (y + 0.5f - S / 2f) * (y + 0.5f - S / 2f));
+                    px[y * S + x] = new Color32(255, 255, 255, (byte)(Mathf.Clamp01(S / 2f - 0.5f - d + 0.5f) * 255));
+                }
+            t.SetPixels32(px); t.Apply();
+            return disc = Sprite.Create(t, new Rect(0, 0, S, S), new Vector2(0.5f, 0.5f));
+        }
+    }
+    int lastBeep = -1;
+    RawImage viewIcon;
+    /// The button shows the view you'd switch to.
+    public void ShowViewIcon() { if (viewIcon != null) viewIcon.texture = Menus.Icon(Cafe.BoardView ? "scene" : "view"); }
     /// A thin circle, for the turn timer.
     static Sprite Ring
     {
@@ -347,23 +370,25 @@ public class GameUi : MonoBehaviour
 
         // whose turn and the time left: a small card in the bottom corner, off the board — a ring that runs down
         // around the seconds, and a line saying whose turn it is (or what to do on yours)
-        var chip = Ui.Box(hud, "Turn", new Color(0.1f, 0.06f, 0.04f, 0.88f));
-        turnChip = chip.rectTransform.Place(new Vector2(0, 0), new Vector2(0, 0), new Vector2(190, 50), new Vector2(12, 100));
-        turnChipBg = chip;
-        chip.gameObject.AddComponent<Outline>().effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.35f);
-        var track = Ui.Picture(turnChip, "Track", Ring.texture); track.color = new Color(1, 1, 1, 0.14f);
-        track.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(40, 40), new Vector2(5, 0));
+        // a round timer on the left edge, clear of the board and the tiles, with whose turn it is under it
+        turnChip = Ui.Rect("Turn", hud).Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(64, 64), new Vector2(14, 34));
+        var discGo = new GameObject("Disc", typeof(RectTransform), typeof(Image));
+        discGo.transform.SetParent(turnChip, false);
+        turnChipBg = discGo.GetComponent<Image>(); turnChipBg.sprite = Disc; turnChipBg.raycastTarget = false;
+        turnChipBg.rectTransform.Fill();
+        var track = Ui.Picture(turnChip, "Track", Ring.texture); track.color = new Color(1, 1, 1, 0.16f);
+        track.rectTransform.Fill(4);
         var ringGo = new GameObject("Ring", typeof(RectTransform), typeof(Image));
         ringGo.transform.SetParent(turnChip, false);
         timerFill = ringGo.GetComponent<Image>();
         timerFill.sprite = Ring; timerFill.type = Image.Type.Filled; timerFill.fillMethod = Image.FillMethod.Radial360;
         timerFill.fillOrigin = (int)Image.Origin360.Top; timerFill.fillClockwise = false; timerFill.raycastTarget = false;
-        timerFill.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(40, 40), new Vector2(5, 0));
-        timerSecs = Ui.Label(turnChip, "", 14, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
-        timerSecs.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(40, 40), new Vector2(5, 0));
-        turnText = Ui.Label(turnChip, "", 13, Ui.Gold, TextAnchor.MiddleLeft, Ui.Bold);
-        turnText.rectTransform.anchorMin = Vector2.zero; turnText.rectTransform.anchorMax = Vector2.one;
-        turnText.rectTransform.offsetMin = new Vector2(52, 3); turnText.rectTransform.offsetMax = new Vector2(-8, -3);
+        timerFill.rectTransform.Fill(4);
+        timerSecs = Ui.Label(turnChip, "", 20, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
+        timerSecs.rectTransform.Fill();
+        turnText = Ui.Label(turnChip, "", 12, Ui.Gold, TextAnchor.UpperLeft, Ui.Bold);
+        turnText.rectTransform.Place(new Vector2(0, 0), new Vector2(0, 1), new Vector2(130, 34), new Vector2(-4, -4));
+        turnText.gameObject.AddComponent<Shadow>().effectColor = new Color(0, 0, 0, 0.9f);
         turnText.horizontalOverflow = HorizontalWrapMode.Wrap; turnText.resizeTextMaxSize = 13; turnText.resizeTextMinSize = 9; turnText.resizeTextForBestFit = true;
         handBar = Ui.Rect("Hand", hud).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(760, 86), new Vector2(0, 6));
 
@@ -372,6 +397,17 @@ public class GameUi : MonoBehaviour
         ((RectTransform)mic.transform).Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(46, 46), new Vector2(-12, -44));
         micIcon = Ui.Picture(mic.transform, "Mic", Menus.Icon("micoff")); micIcon.rectTransform.Fill(9); micIcon.color = Ui.GoldLight;
         micButton = mic.GetComponent<Image>();
+
+        // the view: the whole scene, or just the board from above
+        var vb = Ui.Button(hud, "", new Color(0.1f, 0.06f, 0.04f, 0.85f), Color.white, 10, () =>
+        {
+            Sfx.Tap();
+            app.cafe.SetView(!Cafe.BoardView); app.dominoTable.ApplyView(); ShowViewIcon();
+            app.Toast(Loc.T(Cafe.BoardView ? "عرض اللوح بس" : "عرض كامل"));
+        });
+        ((RectTransform)vb.transform).Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(46, 46), new Vector2(-12, -96));
+        viewIcon = Ui.Picture(vb.transform, "View", Menus.Icon("view")); viewIcon.rectTransform.Fill(10); viewIcon.color = Ui.GoldLight;
+        ShowViewIcon();
 
         // tawla and ludo: throw the dice
         var roll = Ui.Button(hud, "ارمي الزهر", Ui.Gold, Ui.Ink, 20, () => { app.boardGame.Roll(); });
@@ -629,13 +665,16 @@ public class GameUi : MonoBehaviour
         float ms = (float)(v.turnEndsAt - app.ServerNow());
         bool timed = v.phase == "play" && v.turnMs > 0 && v.turnEndsAt > 0;
         turnChip.gameObject.SetActive(v.phase == "play" && !string.IsNullOrEmpty(turnText.text));
-        turnChip.anchoredPosition = new Vector2(12, v.Board ? 18 : 100);   // above your dominoes; at the bottom by a board
         timerFill.fillAmount = timed ? Mathf.Clamp01(ms / (float)v.turnMs) : 1;
         bool hurry = timed && ms < 5000;
         timerFill.color = hurry ? new Color(1f, 0.42f, 0.32f) : v.MyTurn ? Ui.Gold : new Color(1, 1, 1, 0.75f);
-        timerSecs.text = timed ? Mathf.Max(0, Mathf.CeilToInt(ms / 1000f)).ToString() : "";
+        int secs = timed ? Mathf.Max(0, Mathf.CeilToInt(ms / 1000f)) : -1;
+        timerSecs.text = secs >= 0 ? secs.ToString() : "";
+        // the last five seconds of your turn: a beep at five, a tick each second after
+        if (v.MyTurn && secs >= 1 && secs <= 5 && secs != lastBeep) { if (secs == 5) { Sfx.Alert(); Sfx.Buzz(); } else Sfx.Tick(); }
+        lastBeep = v.MyTurn ? secs : -1;
         timerSecs.color = hurry ? new Color(1f, 0.55f, 0.45f) : Color.white;
-        turnChipBg.color = v.MyTurn ? new Color(0.24f, 0.16f, 0.05f, 0.94f) : new Color(0.1f, 0.06f, 0.04f, 0.88f);
+        turnChipBg.color = v.MyTurn ? new Color(0.26f, 0.17f, 0.05f, 0.95f) : new Color(0.08f, 0.05f, 0.03f, 0.88f);
         if (hurry && v.MyTurn) turnChip.localScale = Vector3.one * (1 + 0.04f * Mathf.Sin(Time.time * 12));
         else turnChip.localScale = Vector3.one;
         // chess: your own clock, ticking

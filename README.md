@@ -147,6 +147,19 @@ a "come and play" notification, in the player's language.
    that opens `https://YOUR-SERVER/api/cron/push?key=ADMIN_KEY` every 15 minutes. Each reminder still goes out once.
    Add `&now=1` once to send a reminder right away (a test).
 
+## Ads (Google AdMob)
+
+The Unity app shows an **interstitial** when a player taps "Play again" after a game, and a **rewarded video** for
+the "+5K" coins button (players on the ad-free plan see no interstitials). Until you set your own units it shows
+Google's **test ads**.
+
+1. In [AdMob](https://admob.google.com) add an Android app (package `com.ahwa.boardbattles`) and create two ad units:
+   an *Interstitial* and a *Rewarded* one.
+2. GitHub → Settings → Secrets and variables → Actions: add `ADMOB_APP_ID` (ca-app-pub-…~…),
+   `ADMOB_INTERSTITIAL_ID` and `ADMOB_REWARDED_ID` (ca-app-pub-…/…). The next build uses them.
+3. Optional, recommended: in the rewarded unit turn on **server-side verification** with the callback
+   `https://YOUR-SERVER/ads/ssv`, then set `ADS_SSV=1` on the server, so coins are only paid for ads Google confirms.
+
 ## Contact support
 
 Settings → Contact support sends a message to the server, which keeps it (read them at

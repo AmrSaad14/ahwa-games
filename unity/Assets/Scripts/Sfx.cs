@@ -70,6 +70,21 @@ public static class Sfx
 
     public static void Tap() => Play(tap ??= Make("tap", 0.05f, t => Mathf.Sin(t * 2 * Mathf.PI * 1400f) * 0.2f * Mathf.Exp(-t * 120f)), 0.6f);
 
+    /// The last seconds of your turn: a short, bright double beep.
+    static AudioClip alert;
+    public static void Alert() => Play(alert ??= Make("alert", 0.32f, t =>
+    {
+        float on = (t < 0.09f || (t > 0.16f && t < 0.25f)) ? 1 : 0;
+        return Mathf.Sin(t * 2 * Mathf.PI * 1760f) * 0.32f * on * Mathf.Clamp01(1 - (t % 0.16f) * 4);
+    }), 1f);
+
+    /// A quieter tick for each of the last seconds.
+    static AudioClip tick;
+    public static void Tick() => Play(tick ??= Make("tick", 0.06f, t => Mathf.Sin(t * 2 * Mathf.PI * 1250f) * 0.3f * Mathf.Exp(-t * 70f)), 0.7f);
+
+    /// All game sound off while a full-screen ad plays.
+    public static void Pause(bool on) { AudioListener.pause = on; }
+
     static void Play(AudioClip c, float vol) { if (SoundOn && !App.Recording) Src.PlayOneShot(c, vol); }
 
     public static void Buzz()

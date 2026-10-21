@@ -189,6 +189,15 @@ public class Cafe : MonoBehaviour
     }
 
     /// The café while a game is on: the four small tables and their regulars step aside for the big table.
+    /// How the game table is seen: the whole scene with the players (false), or just the board from above (true).
+    public static bool BoardView { get => PlayerPrefs.GetInt("view.board", 0) == 1; set { PlayerPrefs.SetInt("view.board", value ? 1 : 0); PlayerPrefs.Save(); } }
+
+    public void SetView(bool board)
+    {
+        BoardView = board;
+        if (inGame) camPosTo = GameShot(out camLookTo);
+    }
+
     public void SetGame(bool on)
     {
         inGame = on;
@@ -203,6 +212,13 @@ public class Cafe : MonoBehaviour
         float aspect = Mathf.Max(0.5f, (float)Screen.width / Mathf.Max(1, Screen.height));
         float vf = cam.fieldOfView * Mathf.Deg2Rad;
         float hf = 2 * Mathf.Atan(Mathf.Tan(vf / 2) * aspect);
+        if (BoardView)
+        {
+            // straight down onto the table top, filling the screen between the top bar and your hand
+            float db = Mathf.Max(6.9f / Mathf.Tan(hf / 2), 7.4f / Mathf.Tan(vf / 2));
+            look = Vector3.zero + front * 0.9f;
+            return look + front * db * Mathf.Cos(1.45f) + Vector3.up * db * Mathf.Sin(1.45f);
+        }
         float el = aspect < 0.9f ? 1.08f : 0.98f;
         // framed so the player across the table shows head to chest, below the top bar
         float d = Mathf.Max(9.6f / Mathf.Tan(hf / 2), 8.5f / Mathf.Tan(vf / 2)) * 1.02f;

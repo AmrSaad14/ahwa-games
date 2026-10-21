@@ -20,12 +20,22 @@ public class PushGradle : IPostGenerateGradleAndroidProject
         var gradle = Path.Combine(path, "build.gradle");
         var g = File.ReadAllText(gradle);
         if (!g.Contains("firebase-messaging"))
-            File.AppendAllText(gradle, "\n// push reminders (Editor/PushGradle.cs)\ndependencies {\n    implementation platform('com.google.firebase:firebase-bom:33.7.0')\n    implementation 'com.google.firebase:firebase-messaging'\n}\n");
+            File.AppendAllText(gradle, "\n// push reminders and ads (Editor/PushGradle.cs)\ndependencies {\n    implementation platform('com.google.firebase:firebase-bom:33.7.0')\n    implementation 'com.google.firebase:firebase-messaging'\n    implementation 'com.google.android.gms:play-services-ads:23.6.0'\n}\n");
         var props = Path.Combine(Path.GetDirectoryName(path), "gradle.properties");
         if (File.Exists(props))
         {
             var p = File.ReadAllText(props);
             if (!p.Contains("android.useAndroidX")) File.AppendAllText(props, "\nandroid.useAndroidX=true\n");
+        }
+
+        // AdMob's app id in the manifest (Google's test app until ADMOB_APP_ID is set)
+        var manifest = Path.Combine(path, "src", "main", "AndroidManifest.xml");
+        if (File.Exists(manifest))
+        {
+            var appId = System.Environment.GetEnvironmentVariable("ADMOB_APP_ID");
+            if (string.IsNullOrEmpty(appId)) appId = "ca-app-pub-3940256099942544~3347511713";
+            File.WriteAllText(manifest, File.ReadAllText(manifest).Replace("ADMOB_APP_ID_PLACEHOLDER", appId.Trim()));
+            Debug.Log("[ads] AdMob app " + (appId.StartsWith("ca-app-pub-3940256099942544") ? "(Google's test app)" : "set"));
         }
 
         // 2. the icon and colour

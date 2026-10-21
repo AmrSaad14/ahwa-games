@@ -132,6 +132,7 @@ public static class Loc
         ["معاك حجر ينفع، العبه"] = "You have a tile that fits — play it", ["اسحب من الكوم الأول"] = "Draw from the pile first",
         ["انت رميت الزهر خلاص"] = "You already rolled", ["لسه عندك لعب، حرّك"] = "You still have a move to make",
         ["الحركة دي مش هينفع دلوقتي"] = "That move isn't possible right now",
+        ["طريقة العرض"] = "View", ["كامل"] = "Full", ["اللوح بس"] = "Board only", ["عرض اللوح بس"] = "Board only view", ["عرض كامل"] = "Full view",
         ["الدعم الفني"] = "Contact support", ["كلّمنا"] = "Message us", ["اكتب مشكلتك أو اقتراحك وهنرد عليك في أقرب وقت"] = "Tell us about a problem or an idea — we'll get back to you soon",
         ["رسالتك…"] = "Your message…", ["إيميلك أو رقمك (اختياري)"] = "Your e-mail or phone (optional)", ["ابعت"] = "Send",
         ["اكتب رسالتك الأول"] = "Write your message first", ["وصلتنا رسالتك، شكراً! هنرد عليك قريب"] = "Thanks! We got your message and will reply soon",
