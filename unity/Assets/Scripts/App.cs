@@ -631,6 +631,37 @@ public class App : MonoBehaviour
                     yield return null;
                 }
             }
+            // every other way to play, each for a few seconds (not filmed): the log says whether it plays
+            foreach (var mode in new[] { "ffa2", "ffa3", "ffa4", "tawla31", "gulbahar", "chess1", "chess3", "chess10", "ludo2", "ludo3", "ludoq2", "ludoq4", "ludom2", "ludom4" })
+            {
+                recordOn = false;
+                if (view != null) Leave();
+                yield return new WaitForSeconds(0.3f);
+                Practice(mode);
+                float tm = Time.realtimeSinceStartup;
+                while ((view == null || view.mode != mode) && Time.realtimeSinceStartup - tm < 10) yield return null;
+                if (view == null || view.mode != mode) { Debug.Log("[test] " + mode + ": NO GAME"); continue; }
+                int v0 = view.v, mine = 0;
+                bool sawOther = false;
+                for (float t = 0; t < 7f && view != null; t += Time.deltaTime)
+                {
+                    if (view.turn >= 0 && view.turn != view.you) sawOther = true;
+                    if (view.MyTurn)
+                    {
+                        if (view.Board) boardGame.AutoMove();
+                        else foreach (var id in view.hand)
+                        {
+                            var ends = Domino.EndsFor(view.line, id);
+                            if ((view.open >= 0 && view.line.Empty && id != view.open) || ends.Count == 0) continue;
+                            Play(id, ends[0]); break;
+                        }
+                        mine++;
+                        yield return new WaitForSeconds(0.4f);
+                    }
+                    yield return null;
+                }
+                Debug.Log($"[test] {mode}: ok, {view?.seats.Count} seats, phase {view?.phase}, {(view != null ? view.v - v0 : 0)} updates, my moves {mine}, computer played {sawOther}");
+            }
             // a room for friends: the lobby with its code
             recordOn = false;
             if (view != null) Leave();

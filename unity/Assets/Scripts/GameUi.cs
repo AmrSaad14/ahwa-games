@@ -73,12 +73,12 @@ public class GameUi : MonoBehaviour
     public static readonly Dictionary<string, (string mode, string name)[]> GameModes = new Dictionary<string, (string, string)[]>
     {
         ["domino"] = new[] { ("ffa2", "فردي"), ("ffa3", "٣ لاعبين"), ("ffa4", "٤ لاعبين"), ("team", "زوجي ٢ ضد ٢") },
-        ["tawla"] = new[] { ("tawla", "عادة"), ("mahbousa", "محبوسة"), ("tawla31", "٣١") },
-        ["chess"] = new[] { ("chess", "٥ دقايق") },
-        ["ludo"] = new[] { ("ludo2", "٢ لاعبين"), ("ludo3", "٣ لاعبين"), ("ludo4", "٤ لاعبين") },
+        ["tawla"] = new[] { ("tawla", "عادة"), ("mahbousa", "محبوسة"), ("tawla31", "٣١"), ("gulbahar", "جلبهار") },
+        ["chess"] = new[] { ("chess1", "دقيقة"), ("chess3", "٣ دقايق"), ("chess", "٥ دقايق"), ("chess10", "١٠ دقايق") },
+        ["ludo"] = new[] { ("ludo2", "٢ لاعبين"), ("ludo3", "٣ لاعبين"), ("ludo4", "٤ لاعبين"), ("ludoq2", "سريع ٢"), ("ludoq4", "سريع ٤"), ("ludom2", "ماستر ٢"), ("ludom4", "ماستر ٤") },
     };
     public static int Players(string mode) =>
-        mode == "ffa3" || mode == "ludo3" ? 3 : mode == "ffa4" || mode == "team" || mode == "ludo4" ? 4 : 2;
+        mode == "ffa3" || mode == "ludo3" ? 3 : mode == "ffa4" || mode == "team" || mode.EndsWith("4") ? 4 : 2;
 
     void BuildPicker()
     {
@@ -157,13 +157,20 @@ public class GameUi : MonoBehaviour
         mode = PlayerPrefs.GetString("mode." + g, modes[0].mode);
         if (Array.FindIndex(modes, m => m.mode == mode) < 0) mode = modes[0].mode;
         for (int i = modeRow.childCount - 1; i >= 0; i--) Destroy(modeRow.GetChild(i).gameObject);
-        float w = Mathf.Min(120, 372f / modes.Length - 6);
+        // up to four in a row; a second row when there are more (ludo's classic, quick and master)
+        const int PerRow = 4;
+        int rows = (modes.Length + PerRow - 1) / PerRow;
+        picker.sizeDelta = new Vector2(400, 296 + (rows - 1) * 40);
+        modeRow.sizeDelta = new Vector2(380, rows * 40);
+        ((RectTransform)stakeRow.transform).anchoredPosition = new Vector2(0, -98 - (rows - 1) * 40);
         for (int i = 0; i < modes.Length; i++)
         {
             var m = modes[i].mode;
-            int k = Loc.En ? i : modes.Length - 1 - i;
+            int row = i / PerRow, inRow = Mathf.Min(PerRow, modes.Length - row * PerRow), col = i % PerRow;
+            float w = Mathf.Min(120, 372f / inRow - 6);
+            int k = Loc.En ? col : inRow - 1 - col;
             var b = Ui.Button(modeRow, modes[i].name, Ui.Panel, Ui.GoldLight, 14, () => { Sfx.Tap(); mode = m; PlayerPrefs.SetString("mode." + game, m); RefreshPicker(); });
-            ((RectTransform)b.transform).Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(w, 36), new Vector2((k - (modes.Length - 1) / 2f) * (w + 6), 0));
+            ((RectTransform)b.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(w, 34), new Vector2((k - (inRow - 1) / 2f) * (w + 6), -2 - row * 40));
             b.name = "Mode " + m;
         }
         pickerNote.Set(Loc.T("الرهان: كل لاعب يدفع، والفايز ياخد") + "  ·  " + Loc.T("التدريب ببلاش"));
@@ -491,6 +498,7 @@ public class GameUi : MonoBehaviour
         ["tawla"] = "طاولة عادة", ["mahbousa"] = "محبوسة", ["tawla31"] = "٣١", ["gulbahar"] = "جلبهار",
         ["chess"] = "شطرنج", ["chess1"] = "شطرنج", ["chess3"] = "شطرنج", ["chess10"] = "شطرنج",
         ["ludo2"] = "لودو", ["ludo3"] = "لودو", ["ludo4"] = "لودو",
+        ["ludoq2"] = "لودو سريع", ["ludoq4"] = "لودو سريع", ["ludom2"] = "لودو ماستر", ["ludom4"] = "لودو ماستر",
     };
 
     /// Chess, tawla and ludo: names and scores, whose turn, the dice button, and the results.

@@ -39,9 +39,10 @@ public static class BuildScript
         PlayerSettings.productName = "Board Battles";
         PlayerSettings.bundleVersion = "0.1.0";
         PlayerSettings.colorSpace = ColorSpace.Linear;
-        // the app's own logo on the brand red from the very first moment (instead of a black screen while the
-        // engine loads); the animated splash (Scripts/Splash.cs) takes over once the game starts
-        const string splashLogo = "Assets/Splash/SplashLogo.png";
+        // the studio's logo from the very first moment (instead of a black screen while the engine loads);
+        // the game's own animated splash (Scripts/Splash.cs) follows once the game starts.
+        // The logo is drawn from design/studio/studio.html (render.mjs).
+        const string splashLogo = "Assets/Splash/StudioLogo.png";
         AssetDatabase.ImportAsset(splashLogo, ImportAssetOptions.ForceSynchronousImport);
         if (AssetImporter.GetAtPath(splashLogo) is TextureImporter imp && (imp.textureType != TextureImporterType.Sprite || imp.spriteImportMode != SpriteImportMode.Single))
         {
@@ -55,11 +56,11 @@ public static class BuildScript
         if (logoSprite == null) Debug.Log("[build] splash logo: importer " + (AssetImporter.GetAtPath(splashLogo)?.GetType().Name ?? "none"));
         PlayerSettings.SplashScreen.show = logoSprite != null;
         PlayerSettings.SplashScreen.showUnityLogo = false;
-        PlayerSettings.SplashScreen.backgroundColor = new Color32(0x4a, 0x0b, 0x16, 0xff);
+        PlayerSettings.SplashScreen.backgroundColor = new Color32(0x0b, 0x0f, 0x17, 0xff);
         PlayerSettings.SplashScreen.overlayOpacity = 0;
         PlayerSettings.SplashScreen.animationMode = PlayerSettings.SplashScreen.AnimationMode.Static;
         PlayerSettings.SplashScreen.drawMode = PlayerSettings.SplashScreen.DrawMode.AllSequential;
-        if (logoSprite != null) PlayerSettings.SplashScreen.logos = new[] { PlayerSettings.SplashScreenLogo.Create(1.5f, logoSprite) };
+        if (logoSprite != null) PlayerSettings.SplashScreen.logos = new[] { PlayerSettings.SplashScreenLogo.Create(2.2f, logoSprite) };
         Debug.Log("[build] splash logo " + (logoSprite != null ? "on" : "missing"));
         PlayerSettings.runInBackground = true;
         PlayerSettings.defaultInterfaceOrientation = UIOrientation.AutoRotation;

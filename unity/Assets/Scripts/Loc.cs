@@ -132,6 +132,8 @@ public static class Loc
         ["معاك حجر ينفع، العبه"] = "You have a tile that fits — play it", ["اسحب من الكوم الأول"] = "Draw from the pile first",
         ["انت رميت الزهر خلاص"] = "You already rolled", ["لسه عندك لعب، حرّك"] = "You still have a move to make",
         ["الحركة دي مش هينفع دلوقتي"] = "That move isn't possible right now",
+        ["دقيقة"] = "1 minute", ["٣ دقايق"] = "3 minutes", ["١٠ دقايق"] = "10 minutes", ["سريع ٢"] = "Quick 2", ["سريع ٤"] = "Quick 4",
+        ["ماستر ٢"] = "Master 2", ["ماستر ٤"] = "Master 4", ["لودو سريع"] = "Quick Ludo", ["لودو ماستر"] = "Master Ludo",
         ["الكمبيوتر هيدخل يلعب بعد"] = "Computer players join in", ["بندوّر على لاعبين…"] = "Finding players…",
         ["الحجر ينفع في الناحيتين، دوس على ناحية أو اسحبه لها"] = "The tile fits both ends — tap one or drag it there",
         ["العب تاني"] = "Play again", ["اتفرج على إعلان"] = "Watch an ad", ["اختار العسكري اللي هيتحرك"] = "Pick a pawn to move",

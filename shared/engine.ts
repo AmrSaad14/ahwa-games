@@ -13,7 +13,7 @@ export const TILES: ReadonlyArray<readonly [number, number]> = (() => {
  * Tawla: tawla (عادة, regular backgammon), mahbousa (محبوسة), tawla31 (٣١).
  * Chess: one standard game, 5 minutes each plus 2 seconds a move.
  * Ludo: classic rules for 2, 3 or 4 players.
- * (The rules engines still know gulbahar, the other chess clocks and quick/master ludo, but they are not offered.)
+ * Plus جلبهار, chess at 1/3/10 minutes, and quick and master ludo.
  */
 export type Mode = 'ffa2' | 'ffa3' | 'ffa4' | 'team'
   | 'tawla' | 'mahbousa' | 'tawla31' | 'gulbahar'
@@ -24,9 +24,9 @@ export const GAMES: GameId[] = ['domino', 'tawla', 'chess', 'ludo'];
 /** The ways to play that the app offers, per game. */
 export const GAME_MODES: Record<GameId, Mode[]> = {
   domino: ['ffa2', 'ffa3', 'ffa4', 'team'],
-  tawla: ['tawla', 'mahbousa', 'tawla31'],
-  chess: ['chess'],
-  ludo: ['ludo2', 'ludo3', 'ludo4'],
+  tawla: ['tawla', 'mahbousa', 'tawla31', 'gulbahar'],
+  chess: ['chess1', 'chess3', 'chess', 'chess10'],
+  ludo: ['ludo2', 'ludo3', 'ludo4', 'ludoq2', 'ludoq4', 'ludom2', 'ludom4'],
 };
 /** Every mode the rules engines understand (including ones no longer offered). */
 const ALL_MODES: Record<GameId, Mode[]> = {
