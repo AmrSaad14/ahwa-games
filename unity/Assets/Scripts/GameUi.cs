@@ -364,7 +364,7 @@ public class GameUi : MonoBehaviour
         turnText = Ui.Label(turnChip, "", 13, Ui.Gold, TextAnchor.MiddleLeft, Ui.Bold);
         turnText.rectTransform.anchorMin = Vector2.zero; turnText.rectTransform.anchorMax = Vector2.one;
         turnText.rectTransform.offsetMin = new Vector2(52, 3); turnText.rectTransform.offsetMax = new Vector2(-8, -3);
-        turnText.horizontalOverflow = HorizontalWrapMode.Wrap; turnText.resizeTextForMaxSize = 13; turnText.resizeTextMinSize = 9; turnText.resizeTextForBestFit = true;
+        turnText.horizontalOverflow = HorizontalWrapMode.Wrap; turnText.resizeTextMaxSize = 13; turnText.resizeTextMinSize = 9; turnText.resizeTextForBestFit = true;
         handBar = Ui.Rect("Hand", hud).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(760, 86), new Vector2(0, 6));
 
         // voice chat: turn the mic on (then tap to mute and unmute)
