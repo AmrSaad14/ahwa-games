@@ -9,7 +9,7 @@ using UnityEngine.UI;
 
 public static class Loc
 {
-    public static bool En { get; private set; } = PlayerPrefs.GetString("lang", "ar") == "en";
+    public static bool En { get; private set; } = PlayerPrefs.GetString("lang", "en") == "en";   // English until the player picks Arabic
     public static event Action Changed;
 
     public static void Set(bool en)

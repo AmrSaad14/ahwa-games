@@ -45,7 +45,7 @@ public class Splash : MonoBehaviour
         crown = Layer("Crown", new Vector2(0.5f, 1 - 100f / 700));
         ribbon = Layer("Ribbon", new Vector2(0.5f, 1 - 590f / 700));
 
-        sub = Ui.Label(root, "بورد باتلز  ·  دومينو · طاولة · شطرنج · لودو", 16, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Body);
+        sub = Ui.Label(root, "Dominoes  ·  Backgammon  ·  Chess  ·  Ludo", 16, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Body);
         sub.rectTransform.Place(new Vector2(0.5f, 0.54f), new Vector2(0.5f, 1), new Vector2(520, 30), new Vector2(0, -Frame.y / 2 - 4));
         sub.color = new Color(1, 0.91f, 0.69f, 0);
 
