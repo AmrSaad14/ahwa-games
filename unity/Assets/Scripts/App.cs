@@ -613,7 +613,8 @@ public class App : MonoBehaviour
                     yield return null;
                 }
                 Still("7-later.png");
-                cafe.SetView(true); dominoTable.ApplyView(); yield return new WaitForSeconds(1.6f); Still("v-board-view.png");
+                cafe.SetView(true); dominoTable.ApplyView(); yield return new WaitForSeconds(2.5f); Still("v-board-view.png");
+                Debug.Log("[test] board view: players shown " + (dominoTable.CharAtSeat(1) != null && dominoTable.CharAtSeat(1).gameObject.activeSelf));
                 cafe.SetView(false); dominoTable.ApplyView(); yield return new WaitForSeconds(0.6f);
                 yield return new WaitForSeconds(0.5f);
             }

@@ -214,10 +214,11 @@ public class Cafe : MonoBehaviour
         float hf = 2 * Mathf.Atan(Mathf.Tan(vf / 2) * aspect);
         if (BoardView)
         {
-            // straight down onto the table top, filling the screen between the top bar and your hand
-            float db = Mathf.Max(6.9f / Mathf.Tan(hf / 2), 7.4f / Mathf.Tan(vf / 2));
-            look = Vector3.zero + front * 0.9f;
-            return look + front * db * Mathf.Cos(1.45f) + Vector3.up * db * Mathf.Sin(1.45f);
+            // the same angle as you sit, zoomed in on the board and the tiles (the players step out of the picture)
+            float eb = aspect < 0.9f ? 1.12f : 1.02f;
+            float db = Mathf.Max(6.4f / Mathf.Tan(hf / 2), 5.2f / Mathf.Tan(vf / 2));
+            look = Vector3.zero - front * 0.5f + Vector3.up * 0.4f;
+            return look + front * db * Mathf.Cos(eb) + Vector3.up * db * Mathf.Sin(eb);
         }
         float el = aspect < 0.9f ? 1.08f : 0.98f;
         // framed so the player across the table shows head to chest, below the top bar
