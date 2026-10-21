@@ -32,7 +32,28 @@ public class GameUi : MonoBehaviour
     // at the table
     RectTransform hud, handBar, endButtons, resultPanel, matchPanel;
     Text scoreText, roundText, turnText, resultTitle, resultSub, matchTitle, matchSub, payoutText;
-    Image timerFill;
+    Image timerFill, turnChipBg; Text timerSecs; RectTransform turnChip;
+    static Sprite ring;
+    /// A thin circle, for the turn timer.
+    static Sprite Ring
+    {
+        get
+        {
+            if (ring != null) return ring;
+            const int S = 96; const float R = 44, W = 5.5f;
+            var t = new Texture2D(S, S, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            var px = new Color32[S * S];
+            for (int y = 0; y < S; y++)
+                for (int x = 0; x < S; x++)
+                {
+                    float d = Mathf.Sqrt((x + 0.5f - S / 2f) * (x + 0.5f - S / 2f) + (y + 0.5f - S / 2f) * (y + 0.5f - S / 2f));
+                    float a = Mathf.Clamp01(W / 2 - Mathf.Abs(d - (R - W / 2)) + 0.5f);
+                    px[y * S + x] = new Color32(255, 255, 255, (byte)(a * 255));
+                }
+            t.SetPixels32(px); t.Apply();
+            return ring = Sprite.Create(t, new Rect(0, 0, S, S), new Vector2(0.5f, 0.5f));
+        }
+    }
     readonly Text[] seatTags = new Text[4];
     readonly Image[] seatTagBg = new Image[4];
     Text endL, endR;
@@ -324,14 +345,26 @@ public class GameUi : MonoBehaviour
             bg.gameObject.SetActive(false);
         }
 
-        // your turn / whose turn, the timer, your hand
-        turnText = Ui.Label(hud, "", 17, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold);
-        turnText.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(500, 26), new Vector2(0, 104));
-        turnText.gameObject.AddComponent<Shadow>().effectColor = new Color(0, 0, 0, 0.8f);
-        var tb = Ui.Box(hud, "Timer", new Color(1, 1, 1, 0.15f));
-        tb.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(300, 5), new Vector2(0, 96));
-        timerFill = Ui.Box(tb.transform, "Fill", Ui.Gold);
-        var tf = timerFill.rectTransform; tf.anchorMin = Vector2.zero; tf.anchorMax = Vector2.one; tf.offsetMin = tf.offsetMax = Vector2.zero; tf.pivot = new Vector2(0, 0.5f);
+        // whose turn and the time left: a small card in the bottom corner, off the board — a ring that runs down
+        // around the seconds, and a line saying whose turn it is (or what to do on yours)
+        var chip = Ui.Box(hud, "Turn", new Color(0.1f, 0.06f, 0.04f, 0.88f));
+        turnChip = chip.rectTransform.Place(new Vector2(0, 0), new Vector2(0, 0), new Vector2(190, 50), new Vector2(12, 100));
+        turnChipBg = chip;
+        chip.gameObject.AddComponent<Outline>().effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.35f);
+        var track = Ui.Picture(turnChip, "Track", Ring.texture); track.color = new Color(1, 1, 1, 0.14f);
+        track.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(40, 40), new Vector2(5, 0));
+        var ringGo = new GameObject("Ring", typeof(RectTransform), typeof(Image));
+        ringGo.transform.SetParent(turnChip, false);
+        timerFill = ringGo.GetComponent<Image>();
+        timerFill.sprite = Ring; timerFill.type = Image.Type.Filled; timerFill.fillMethod = Image.FillMethod.Radial360;
+        timerFill.fillOrigin = (int)Image.Origin360.Top; timerFill.fillClockwise = false; timerFill.raycastTarget = false;
+        timerFill.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(40, 40), new Vector2(5, 0));
+        timerSecs = Ui.Label(turnChip, "", 14, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
+        timerSecs.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(40, 40), new Vector2(5, 0));
+        turnText = Ui.Label(turnChip, "", 13, Ui.Gold, TextAnchor.MiddleLeft, Ui.Bold);
+        turnText.rectTransform.anchorMin = Vector2.zero; turnText.rectTransform.anchorMax = Vector2.one;
+        turnText.rectTransform.offsetMin = new Vector2(52, 3); turnText.rectTransform.offsetMax = new Vector2(-8, -3);
+        turnText.horizontalOverflow = HorizontalWrapMode.Wrap; turnText.resizeTextForMaxSize = 13; turnText.resizeTextMinSize = 9; turnText.resizeTextForBestFit = true;
         handBar = Ui.Rect("Hand", hud).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(760, 86), new Vector2(0, 6));
 
         // voice chat: turn the mic on (then tap to mute and unmute)
@@ -460,7 +493,7 @@ public class GameUi : MonoBehaviour
         string msg = "";
         if (v.phase == "play")
         {
-            if (v.MyTurn) msg = choose != null && choose.Count > 1 ? Loc.T("الحجر ينفع في الناحيتين، دوس على ناحية أو اسحبه لها") : v.open >= 0 && v.line.Empty ? Loc.T("افتح بالـ ") + Domino.Tiles[v.open][0] + "|" + Domino.Tiles[v.open][1] : Loc.T("دورك");
+            if (v.MyTurn) msg = choose != null && choose.Count > 1 ? Loc.T("دوس على المكان اللي بينوّر أو اسحب الحجر له") : v.open >= 0 && v.line.Empty ? Loc.T("افتح بالـ ") + Domino.Tiles[v.open][0] + "|" + Domino.Tiles[v.open][1] : Loc.T("دورك");
             else if (v.turn >= 0) msg = Say(v, v.turn, "turn");
             if (v.last != null && v.last.t == "pass" && v.last.s != v.you && v.last.s >= 0) msg = Say(v, v.last.s, "pass");
         }
@@ -468,7 +501,7 @@ public class GameUi : MonoBehaviour
 
         // the two ends, when the chosen tile fits both
         bool two = sel >= 0 && choose != null && choose.Count > 1;
-        endButtons.gameObject.SetActive(two);
+        endButtons.gameObject.SetActive(false);   // no buttons: tap the glowing spot on the table, or drag the tile there
         if (two) { endL.Set(Loc.T("شمال · ") + Domino.LeftVal(v.line)); endR.Set(Loc.T("يمين · ") + Domino.RightVal(v.line)); }
 
         Hand(v, sel);
@@ -592,11 +625,19 @@ public class GameUi : MonoBehaviour
         }
         var v = app.view;
         if (!hud.gameObject.activeSelf || v == null) return;
-        // the turn timer
+        // whose turn, and the time left
         float ms = (float)(v.turnEndsAt - app.ServerNow());
-        timerFill.transform.parent.gameObject.SetActive(v.phase == "play" && v.turnMs > 0);
-        timerFill.rectTransform.localScale = new Vector3(Mathf.Clamp01(ms / (float)v.turnMs), 1, 1);
-        timerFill.color = ms < 5000 ? new Color(1f, 0.45f, 0.35f) : Ui.Gold;
+        bool timed = v.phase == "play" && v.turnMs > 0 && v.turnEndsAt > 0;
+        turnChip.gameObject.SetActive(v.phase == "play" && !string.IsNullOrEmpty(turnText.text));
+        turnChip.anchoredPosition = new Vector2(12, v.Board ? 18 : 100);   // above your dominoes; at the bottom by a board
+        timerFill.fillAmount = timed ? Mathf.Clamp01(ms / (float)v.turnMs) : 1;
+        bool hurry = timed && ms < 5000;
+        timerFill.color = hurry ? new Color(1f, 0.42f, 0.32f) : v.MyTurn ? Ui.Gold : new Color(1, 1, 1, 0.75f);
+        timerSecs.text = timed ? Mathf.Max(0, Mathf.CeilToInt(ms / 1000f)).ToString() : "";
+        timerSecs.color = hurry ? new Color(1f, 0.55f, 0.45f) : Color.white;
+        turnChipBg.color = v.MyTurn ? new Color(0.24f, 0.16f, 0.05f, 0.94f) : new Color(0.1f, 0.06f, 0.04f, 0.88f);
+        if (hurry && v.MyTurn) turnChip.localScale = Vector3.one * (1 + 0.04f * Mathf.Sin(Time.time * 12));
+        else turnChip.localScale = Vector3.one;
         // chess: your own clock, ticking
         if (v.Board && v.clocks != null && v.you >= 0) roundText.Set(Loc.T("وقتك") + "  " + Clock(v, v.you));
         // names over the players
