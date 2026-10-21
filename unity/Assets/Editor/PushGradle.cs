@@ -33,9 +33,9 @@ public class PushGradle : IPostGenerateGradleAndroidProject
         if (File.Exists(manifest))
         {
             var appId = System.Environment.GetEnvironmentVariable("ADMOB_APP_ID");
-            if (string.IsNullOrEmpty(appId)) appId = "ca-app-pub-3940256099942544~3347511713";
+            if (string.IsNullOrEmpty(appId)) appId = "ca-app-pub-3492998296780013~6952389253";   // the Board Battles app in AdMob
             File.WriteAllText(manifest, File.ReadAllText(manifest).Replace("ADMOB_APP_ID_PLACEHOLDER", appId.Trim()));
-            Debug.Log("[ads] AdMob app " + (appId.StartsWith("ca-app-pub-3940256099942544") ? "(Google's test app)" : "set"));
+            Debug.Log("[ads] AdMob app " + appId);
         }
 
         // 2. the icon and colour
