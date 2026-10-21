@@ -309,13 +309,14 @@ public class OfflineBoard : OfflineGame
         Bump();
     }
 
-    /// Starts a computer player thinking (chess runs on a worker thread so the café keeps moving).
+    /// The computer player works out its move (played once its short pause is over).
     void Think(int seat)
     {
         thinkingFor = seat;
         var r = new Random(rng.Next());
-        if (game == "chess") thinking = Task.Run(() => def.Auto(seat, r));
-        else thinking = Task.FromResult(def.Auto(seat, r));
+        // on this thread: a worker thread could hang the desktop test player, and the search is quick enough
+        try { thinking = Task.FromResult(def.Auto(seat, r)); }
+        catch (Exception e) { UnityEngine.Debug.LogWarning("[practice] bot: " + e.Message); thinking = Task.FromResult<Dictionary<string, object>>(null); }
     }
 
     void Schedule()

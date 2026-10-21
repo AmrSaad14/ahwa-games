@@ -226,9 +226,9 @@ public static class Chess
     }
     static int Search(ChessPos s, int depth, int alpha, int beta, int ply)
     {
+        if (depth == 0) return Evaluate(s);   // (mate at the last ply is found one ply up, much faster)
         var ms = Legal(s);
         if (ms.Count == 0) return InCheck(s) ? -100000 + ply : 0;
-        if (depth == 0) return Evaluate(s);
         foreach (var m in Order(s, ms))
         {
             int v = -Search(Make(s, m, false), depth - 1, -beta, -alpha, ply + 1);
