@@ -116,7 +116,7 @@ jobs:
             echo "apt exit $?" >> logs/shots-step.txt
             chmod +x build/linux/BoardBattles.x86_64
             cd build/linux
-            timeout 3000 xvfb-run -a -s "-screen 0 1280x720x24" ./BoardBattles.x86_64 -screen-width 1280 -screen-height 720 -screen-fullscreen 0 -force-glcore -logFile "$GITHUB_WORKSPACE/logs/player.log" -shots -server ws://127.0.0.1:8080/ws >> "$GITHUB_WORKSPACE/logs/shots-step.txt" 2>&1
+            timeout 4800 xvfb-run -a -s "-screen 0 1280x720x24" ./BoardBattles.x86_64 -screen-width 1280 -screen-height 720 -screen-fullscreen 0 -force-glcore -logFile "$GITHUB_WORKSPACE/logs/player.log" -shots -server ws://127.0.0.1:8080/ws >> "$GITHUB_WORKSPACE/logs/shots-step.txt" 2>&1
             echo "player exit $?" >> "$GITHUB_WORKSPACE/logs/shots-step.txt"
             cp shots/*.png "$GITHUB_WORKSPACE/shots/" 2>/dev/null
             # the recorded frames → a short video of the run

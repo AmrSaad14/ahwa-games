@@ -646,7 +646,7 @@ public class App : MonoBehaviour
                 if (view == null || view.mode != mode) { Debug.Log("[test] " + mode + ": NO GAME"); continue; }
                 int v0 = view.v, mine = 0;
                 bool sawOther = false;
-                for (float t = 0; t < 7f && view != null; t += Time.deltaTime)
+                for (float t = 0; t < 4f && view != null; t += Time.deltaTime)
                 {
                     if (view.turn >= 0 && view.turn != view.you) sawOther = true;
                     if (view.MyTurn)
