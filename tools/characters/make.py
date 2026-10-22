@@ -215,7 +215,7 @@ def felt_material(name, rgb, rough, sheen=0.4):
         except Exception: pass
     return m
 
-def make_tarboosh(basemesh, rig):
+def make_tarboosh(basemesh, rig, hair=None):
     """An Egyptian tarboosh: crimson felt, snug on the head down to the forehead, narrowing a little to a flat
     top with softly rounded edges, and a black silk tassel from the centre of the top falling over the back."""
     top, _, _ = head_frame(basemesh)
@@ -230,13 +230,25 @@ def make_tarboosh(basemesh, rig):
     rings += [(ax * s * 0.995, ay * s * 0.995, H - 0.004), (ax * s * 0.97, ay * s * 0.97, H + 0.001), (ax * s * 0.88, ay * s * 0.88, H + 0.004),
               (ax * s * 0.5, ay * s * 0.5, H + 0.006)]
     t = lathe("Tarboosh", rings)
-    t.data.materials.append(felt_material("Tarboosh", (0.2, 0.008, 0.014), 0.82))
+    t.data.materials.append(felt_material("Tarboosh", (0.15, 0.006, 0.012), 0.82))
+    # the hair under it goes (it would poke through the felt): everything above the rim, which sits 6° lower at the back
+    if hair is not None:
+        tilt = math.sin(math.radians(6))
+        bm = bmesh.new(); bm.from_mesh(hair.data); mw = hair.matrix_world
+        gone = []
+        for v in bm.verts:
+            w = mw @ v.co
+            if abs(w.x - c.x) < ax + 0.03 and abs(w.y - c.y) < ay + 0.03 and w.z > c.z - (w.y - c.y) * tilt + 0.008: gone.append(v)
+        bmesh.ops.delete(bm, geom=gone, context="VERTS"); bm.to_mesh(hair.data); bm.free(); hair.data.update()
+        p("  hair under the tarboosh: removed", len(gone), "vertices")
     # the tassel: a cord from the button at the top to the back edge, then a bunch of black silk threads
     tm = flat_material("Tassel", (0.012, 0.011, 0.012), 0.45, 0.6)
     tops = ay * k
     cu = bpy.data.curves.new("TasselCord", "CURVE"); cu.dimensions = "3D"; cu.bevel_depth = 0.0026; cu.bevel_resolution = 3; cu.use_fill_caps = True
     sp = cu.splines.new("POLY")
-    pts = [(0.0, 0.0, H + 0.009), (0.006, tops * 0.45, H + 0.009), (0.012, tops * 0.92, H + 0.004), (0.016, tops + 0.006, H - 0.012)]
+    dx, dy = math.sin(math.radians(55)), math.cos(math.radians(55))   # toward the back, round to the right
+    rr = lambda f: (ax * k * f * dx, ay * k * f * dy)
+    pts = [(0.0, 0.0, H + 0.009), (*rr(0.45), H + 0.009), (*rr(0.93), H + 0.004), (*rr(1.06), H - 0.012)]
     sp.points.add(len(pts) - 1)
     for p_, (x, y, z) in zip(sp.points, pts): p_.co = (x, y, z, 1)
     cord = bpy.data.objects.new("TasselCord", cu); bpy.context.collection.objects.link(cord)
@@ -246,7 +258,8 @@ def make_tarboosh(basemesh, rig):
     def side(z): return ay * (1 - (1 - k) * z / H)
     bell = [(0.004, 0.004, 0), (0.007, 0.006, -0.012), (0.011, 0.008, -0.04), (0.015, 0.009, -drop + 0.006), (0.012, 0.007, -drop)]
     tas = lathe("Tassel", bell, n=24)
-    tas.location = (0.017, side(zb) + 0.009, zb); tas.rotation_euler = (math.radians(-4), 0, 0)
+    f = side(zb) / ay + 0.06
+    tas.location = (ax * f * dx, ay * f * dy, zb)
     # threads at the edge of the bell
     bpy.ops.object.select_all(action="DESELECT")
     tas.data.materials.append(tm); cord.data.materials.append(tm)
@@ -558,7 +571,7 @@ def build(spec, x):
         stripes(objs["mindfront_kimono"], r, tuple(c * 0.85 for c in r), n=90)
     hat = spec.get("hat")
     extra = []
-    if hat == "tarboosh": extra = make_tarboosh(basemesh, rig)
+    if hat == "tarboosh": extra = make_tarboosh(basemesh, rig, objs.get(spec.get("hair")))
     elif hat == "emma": extra = make_emma(basemesh, rig)
     elif hat == "hijab": extra = make_hijab(basemesh, rig, spec["scarf"])
     elif hat == "khimar":
