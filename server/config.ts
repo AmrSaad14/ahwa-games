@@ -9,7 +9,7 @@ export const config = {
   staticDir: process.env.STATIC_DIR || path.resolve('client/dist'),
   secret: process.env.SECRET || '',                       // generated and stored in the database when empty
   turnMs: num(process.env.TURN_SECONDS, 10) * 1000,
-  botFillMs: num(process.env.BOT_FILL_SECONDS, 12) * 1000,
+  botFillMs: num(process.env.BOT_FILL_SECONDS, 8) * 1000,
   nextRoundMs: num(process.env.NEXT_ROUND_SECONDS, 7) * 1000,
   botDelay: [900, 1700] as [number, number],
   // chess: each mode has its own clock (1, 3, 5 or 10 minutes); CHESS_MINUTES forces one length for all of them

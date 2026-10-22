@@ -4,7 +4,13 @@ import { GAMES, GameId, MODES, MODE_PLAYERS, Mode, defaultTarget, gameOf, target
 import type { C2S, Emote, FriendRow, IceServer, S2C } from '../shared/protocol';
 import { ECONOMY, STAKES, giftByKind, isStake, winnings, NO_ADS, XP, WEEKLY_PRIZES, weekKey } from '../shared/gifts';
 import { EMOTES } from '../shared/protocol';
-import { Table, publicId } from '../shared/table';
+import { Table, publicId, Player, BotMaker } from '../shared/table';
+import { botIdentity } from '../shared/botnames';
+import { missionById } from '../shared/missions';
+import { SP, SEASON_PASS } from '../shared/season';
+import { skinFor } from '../shared/skins';
+import { Tourney, Entrant } from './tourney';
+import { parseEquip } from './db';
 import { BoardTable } from '../shared/boardtable';
 import type { BoardAction } from '../shared/games/defs';
 
@@ -22,7 +28,7 @@ export interface Conn {
 }
 
 interface Session { conn: Conn; uid: string | null; msgs: Limiter; v?: number }
-interface QEntry { uid: string; since: number }
+interface QEntry { uid: string; since: number; rating: number; coins: number }
 /** Coins on a table for the match being played: who paid in, from which seat, and who has walked away. */
 interface Escrow { stake: number; mode: Mode; paid: Map<string, { seat: number; left: boolean }> }
 
@@ -35,6 +41,10 @@ export interface HubOptions {
   billing?: PlayBilling;
   /** A player won a weekly prize (the server sends them a push). */
   onWeeklyPrize?: (uid: string, rank: number, coins: number) => void;
+  /** A push to players' phones (the tournament's reminders, a referral bonus). */
+  push?: (uids: string[], ar: [string, string], en: [string, string]) => void;
+  /** How long a player who dropped out has to come back before the computer plays for them (default 30 s). */
+  graceMs?: number;
   /** Files a support message (and e-mails it); the server sets it up (server/support.ts). */
   support?: (m: { uid: string | null; name: string; contact: string; text: string; app: string }) => number;
 }
@@ -66,10 +76,35 @@ export class Hub {
   private cashLimiter = new Limiter(6, 60 * 60_000);
   private supportLimiter = new Limiter(5, 60 * 60_000);
   private practiceLimiter = new Limiter(20, 60 * 60_000);
+  private referLimiter = new Limiter(10, 60 * 60_000);
   private ticker: ReturnType<typeof setInterval>;
+  /** Rematch votes after a matchmade game, per table. */
+  private rematch = new Map<string, Set<string>>();
+  /** Tables of the weekly tournament: who sits in seat 0 and 1. */
+  private tourneyTables = new Map<string, (string | null)[]>();
+  readonly tourney: Tourney;
 
   constructor(private store: Store, private tokens: Tokens, private opts: HubOptions) {
-    this.ticker = setInterval(() => { this.matchmake(); this.sweep(); if (++this.ticks % 60 === 0) this.weeklyPrizes(); }, 1000);
+    this.tourney = new Tourney({
+      regs: ev => this.store.tourneyRegs(ev),
+      entrant: uid => { const u = this.store.get(uid); return u ? { uid, name: u.name, ch: u.ch, bot: false, rating: this.store.ratingOf(uid, 'domino') } : null; },
+      table: (ev, a, b, mode, target) => this.tourneyTable(a, b, mode, target),
+      send: (uid, msg) => this.byUser.get(uid)?.conn.send(msg),
+      online: uid => this.byUser.has(uid),
+      pay: (uid, coins, place) => {
+        this.store.addCoins(uid, coins); this.store.logCoins(uid, 'tourney', coins);
+        this.sendUser(uid);
+        if (place) this.opts.push?.([uid], ['مبروك! 🏆', `جيت المركز ${place} في البطولة وكسبت ${coins.toLocaleString('en')} كوين`], ['Congratulations! 🏆', `You came #${place} in the tournament and won ${coins.toLocaleString('en')} coins`]);
+      },
+      push: (uids, ar, en) => this.opts.push?.(uids, ar, en),
+      metaGet: k => this.store.metaGet(k),
+      metaSet: (k, v) => this.store.metaSet(k, v),
+    });
+    this.ticker = setInterval(() => {
+      this.matchmake(); this.sweep();
+      try { this.tourney.tick(); } catch (e) { console.error('[tourney]', (e as Error).message); }
+      if (++this.ticks % 60 === 0) this.weeklyPrizes();
+    }, 1000);
   }
 
   private ticks = 0;
@@ -124,12 +159,57 @@ export class Hub {
         if (d.coins) s.conn.send({ t: 'bonus', coins: d.coins, streak: d.streak });
         return this.sendUser(uid);
       }
+      case 'rematch': return this.voteRematch(uid);
+      case 'mission': {
+        const r = this.store.missionClaim(uid, String(m.id || ''));
+        if (typeof r === 'string') return err(r);
+        s.conn.send({ t: 'missionClaimed', id: String(m.id), coins: r.coins, xp: r.xp });
+        const x = this.store.addXp(uid, r.xp); s.conn.send({ t: 'xp', ...x });
+        return this.sendUser(uid);
+      }
+      case 'seasonBuy': {
+        const e = this.store.seasonPremium(uid, false);
+        if (e) return err(e);
+        return this.sendUser(uid);
+      }
+      case 'seasonClaim': {
+        const track = m.track === 'prem' ? 'prem' : 'free';
+        const r = this.store.seasonClaim(uid, Number(m.tier), track);
+        if (typeof r === 'string') return err(r);
+        s.conn.send({ t: 'seasonClaimed', tier: Number(m.tier), track, ...r });
+        return this.sendUser(uid);
+      }
+      case 'tourney': return s.conn.send({ t: 'tourney', view: this.tourney.view(uid) });
+      case 'tourneyJoin': case 'tourneyLeave': {
+        if (this.tourney.state !== 'open') return err('tourney_started');
+        if (m.t === 'tourneyJoin') this.store.tourneyJoin(this.tourney.event, uid); else this.store.tourneyLeave(this.tourney.event, uid);
+        return s.conn.send({ t: 'tourney', view: this.tourney.view(uid) });
+      }
+      case 'tourneyGo': {
+        // go to your tournament match (leaving whatever table you're at)
+        const id = this.tourney.tableOf(uid), t = id ? this.tables.get(id) : undefined;
+        if (!t || t.closed) return err('no_match');
+        this.dequeue(uid);
+        if (table && table !== t) this.leaveTable(uid);
+        this.userTable.set(uid, t);
+        t.setOnline(uid, true);
+        return this.pushView(t, uid);
+      }
+      case 'referral': {
+        if (!this.referLimiter.allow(uid)) return err('slow_down');
+        const e = this.store.setReferrer(uid, String(m.code || ''));
+        if (e) return err(e);
+        // already played? the bonus is paid now
+        const u = this.store.get(uid);
+        if (u && u.games > 0) this.payReferral(uid);
+        return this.sendUser(uid);
+      }
       case 'profile': {
         const u = this.store.get(uid)!;
         const name = m.name !== undefined ? cleanName(m.name) || u.name : u.name;
         const ch = m.ch !== undefined && Number.isInteger(m.ch) && m.ch >= 0 && m.ch <= 5 ? m.ch : u.ch;
         this.store.setProfile(uid, name, ch);
-        if (table && table.phase === 'lobby') table.join({ uid, name, ch, bot: false, rating: this.store.ratingOf(uid, gameOf(table.mode)) });
+        if (table && table.phase === 'lobby') table.join(this.player(uid, gameOf(table.mode)));
         return this.sendUser(uid);
       }
       case 'register': {
@@ -216,11 +296,21 @@ export class Hub {
         const id = String(m.id);
         if (!this.inviteLimiter.allow(uid)) return err('slow_down');
         if (this.store.friendStatus(uid, id) !== 'friend') return err('not_friends');
-        if (!table || !table.code || table.phase !== 'lobby') return err('no_room');
         const to = this.byUser.get(id);
         if (!to) return err('friend_offline');
+        let room = table;
+        if (!room || !room.code || room.phase !== 'lobby') {
+          // one tap from the friends list: open a room for the two of you first (just for fun, no stake)
+          const mode = m.mode && MODES.includes(m.mode) ? m.mode : 'ffa2';
+          this.dequeue(uid);
+          if (room) this.leaveTable(uid);
+          room = this.newTable(mode, defaultTarget(mode), true, 0);
+          room.join(this.player(uid, gameOf(mode)));
+          this.userTable.set(uid, room);
+          this.pushView(room, uid);
+        }
         const me = this.store.get(uid)!;
-        to.conn.send({ t: 'invited', from: { id: uid, name: me.name, ch: me.ch }, code: table.code, mode: table.mode, stake: table.stake });
+        to.conn.send({ t: 'invited', from: { id: uid, name: me.name, ch: me.ch }, code: room.code!, mode: room.mode, stake: room.stake });
         return;
       }
       case 'logout': {
@@ -240,7 +330,7 @@ export class Hub {
         this.dequeue(uid);
         const key = m.mode + '|' + stake;
         if (!this.queues.has(key)) this.queues.set(key, []);
-        this.queues.get(key)!.push({ uid, since: Date.now() });
+        this.queues.get(key)!.push({ uid, since: Date.now(), rating: this.store.ratingOf(uid, gameOf(m.mode)), coins: this.store.coinsOf(uid) });
         this.sendQueue(key);
         return this.matchmake();
       }
@@ -284,6 +374,7 @@ export class Hub {
           if (!r.ok) return fail(r.code);
           let coins = 0;
           if (product === NO_ADS.id) this.store.setAdFree(uid, token, product, r.orderId, r.until);
+          else if (product === SEASON_PASS.id) { if (this.store.creditPack(uid, token, product, r.orderId, 0)) this.store.seasonPremium(uid, true); }
           else if (this.store.creditPack(uid, token, product, r.orderId, r.coins)) coins = r.coins;
           const now = this.byUser.get(uid);
           now?.conn.send({ t: 'bought', product, token, coins, adFreeUntil: this.store.get(uid)?.ad_free_until ?? 0 });
@@ -297,8 +388,7 @@ export class Hub {
         this.dequeue(uid);
         if (table) this.leaveTable(uid);
         const t = this.newTable(m.mode, defaultTarget(m.mode), true, 0);
-        const u = this.store.get(uid)!;
-        t.join({ uid, name: u.name, ch: u.ch, bot: false, rating: this.store.ratingOf(uid, gameOf(m.mode)) });
+        t.join(this.player(uid, gameOf(m.mode)));
         this.userTable.set(uid, t);
         t.fillBots();
         t.start(null);
@@ -313,8 +403,7 @@ export class Hub {
         this.dequeue(uid);
         if (table) this.leaveTable(uid);
         const t = this.newTable(m.mode, target, true, stake);
-        const u = this.store.get(uid)!;
-        t.join({ uid, name: u.name, ch: u.ch, bot: false, rating: this.store.ratingOf(uid, gameOf(m.mode)) });
+        t.join(this.player(uid, gameOf(m.mode)));
         this.userTable.set(uid, t);
         return this.pushView(t, uid);
       }
@@ -325,8 +414,7 @@ export class Hub {
         if (t.seatOf(uid) < 0 && this.store.coinsOf(uid) < t.stake) return err('not_enough_coins');
         if (table && table !== t) this.leaveTable(uid);
         this.dequeue(uid);
-        const u = this.store.get(uid)!;
-        const r = t.join({ uid, name: u.name, ch: u.ch, bot: false, rating: this.store.ratingOf(uid, gameOf(t.mode)) });
+        const r = t.join(this.player(uid, gameOf(t.mode)));
         if (typeof r === 'string') return err(r);
         this.userTable.set(uid, t);
         return this.pushView(t, uid);
@@ -383,7 +471,11 @@ export class Hub {
         if (e) { err(e); this.pushView(table, uid); }
         return;
       }
-      case 'emote': { if (table && EMOTES.includes(m.k)) table.emote(uid, m.k); return; }
+      case 'emote': {
+        if (!table || !EMOTES.includes(m.k)) return;
+        if (this.store.mutedUntil(uid) > Date.now()) return err('chat_muted');
+        table.emote(uid, m.k); return;
+      }
       case 'lb': {
         if (m.game === 'week') {
           const lb = this.store.weeklyBoard(uid);
@@ -428,6 +520,8 @@ export class Hub {
         if (!this.practiceLimiter.allow(uid)) return;
         const r = this.store.addXp(uid, m.won ? XP.practiceWin : XP.practiceLoss);
         s.conn.send({ t: 'xp', ...r });
+        const game: GameId = (GAMES as string[]).includes(m.game) ? m.game as GameId : 'domino';
+        this.afterGame(uid, game, !!m.won, false, m.won ? SP.practiceWin : SP.practiceLoss);
         return this.sendUser(uid);
       }
       case 'support': {
@@ -465,6 +559,13 @@ export class Hub {
         if (!about || about.bot || about.uid === uid) return err('bad_report');
         if (!this.reportLimiter.allow(uid)) return err('slow_down');
         this.store.report(uid, about.uid, String(m.reason || '').slice(0, 40), table.id);
+        // three different players reporting someone in a day switch their chat off for a day
+        if (this.store.reporters(about.uid, Date.now() - 86_400_000) >= 3 && this.store.mutedUntil(about.uid) < Date.now()) {
+          this.store.mute(about.uid, Date.now() + 86_400_000);
+          console.log('[report] chat muted for a day:', publicId(about.uid));
+          for (const t of this.tables.values()) if (t.seatOf(about.uid) >= 0) { const st = t.seats[t.seatOf(about.uid)]; if (st) st.muted = true; t.refresh(); }
+          this.sendUser(about.uid);
+        }
         return;
       }
     }
@@ -581,14 +682,25 @@ export class Hub {
 
   /* ---------------- tables ---------------- */
 
-  private newTable(mode: Mode, target: number, isPrivate: boolean, stake: number): Room {
+  /** A person as they sit at a table: name, character, rating in this game and their look (hat, drink). */
+  private player(uid: string, game: GameId): Player {
+    const u = this.store.get(uid)!;
+    const eq = parseEquip(u.equip), owned = this.store.skinsOf(uid);
+    return { uid, name: u.name, ch: u.ch, bot: false, rating: this.store.ratingOf(uid, game),
+      hat: skinFor('hat', eq, owned), drink: skinFor('drink', eq, owned), muted: (u.muted_until ?? 0) > Date.now() };
+  }
+
+  /** Computer players in matchmade games and the tournament get people's names and a rating near the table's. */
+  private botMaker(rating: number): BotMaker { return (_seat, used) => botIdentity(used, rating); }
+
+  private newTable(mode: Mode, target: number, isPrivate: boolean, stake: number, humanBots = false): Room {
     let code: string | null = null;
     if (isPrivate) {
       do { code = Array.from({ length: 5 }, () => CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)]).join(''); } while (this.byCode.has(code));
     }
     const opts = {
       id: crypto.randomUUID(), code, mode, target, private: isPrivate, stake,
-      turnMs: this.opts.turnMs, nextRoundMs: this.opts.nextRoundMs, botDelay: this.opts.botDelay, offlineGraceMs: 8000, lobbyAfterMatchMs: this.opts.lobbyAfterMatchMs,
+      turnMs: this.opts.turnMs, nextRoundMs: this.opts.nextRoundMs, botDelay: this.opts.botDelay, offlineGraceMs: this.opts.graceMs ?? 30_000, lobbyAfterMatchMs: this.opts.lobbyAfterMatchMs, humanBots,
       autoMoveMs: this.opts.autoMoveMs, chessClockMs: this.opts.chessClockMs,
     };
     const hooks = {
@@ -608,6 +720,65 @@ export class Hub {
     this.userTable.delete(uid);
     if (t) this.forfeit(t, uid);
     t?.leave(uid);
+    if (t && this.rematch.has(t.id)) this.sendRematch(t, true);
+  }
+
+  /* ---------------- rematch: the same people again ---------------- */
+
+  private voteRematch(uid: string) {
+    const t = this.userTable.get(uid);
+    if (!t || t.closed || t.isPrivate || t.phase !== 'mend' || this.tourneyTables.has(t.id)) return;
+    const votes = this.rematch.get(t.id) ?? new Set<string>();
+    votes.add(uid); this.rematch.set(t.id, votes);
+    const here = t.humans().filter(h => h.online && this.userTable.get(h.uid) === t);
+    if (here.every(h => votes.has(h.uid))) return this.startRematch(t, here.map(h => h.uid));
+    this.sendRematch(t, here.length < t.humans().length);
+  }
+
+  private sendRematch(t: Room, gone: boolean) {
+    const votes = this.rematch.get(t.id) ?? new Set<string>();
+    const seats = t.seats.map((s, i) => (s && !s.bot && votes.has(s.uid) ? i : -1)).filter(i => i >= 0);
+    const here = t.humans().filter(h => h.online && this.userTable.get(h.uid) === t);
+    for (const h of here) this.byUser.get(h.uid)?.conn.send({ t: 'rematch', seats, need: here.length, gone: gone || here.length < t.humans().length });
+  }
+
+  private startRematch(old: Room, people: string[]) {
+    this.rematch.delete(old.id);
+    if (people.some(uid => this.store.coinsOf(uid) < old.stake)) {
+      for (const uid of people) this.byUser.get(uid)?.conn.send({ t: 'err', code: 'rematch_coins' });
+      return;
+    }
+    const t = this.newTable(old.mode, old.target, false, old.stake, true);
+    const game = gameOf(old.mode);
+    // the same seats: people where they sat, the same computer players in theirs
+    old.seats.forEach((s, i) => {
+      if (s && !s.bot && people.includes(s.uid)) { t.join(this.player(s.uid, game)); this.userTable.set(s.uid, t); }
+      else if (s?.bot) { t.join({ uid: 'bot' + i, name: s.name, ch: s.ch, bot: true, rating: s.rating }); }
+      else t.join({ uid: 'bot' + i, ...botIdentity(t.seats.filter(Boolean).map(x => x!.ch), 1000), bot: true });
+    });
+    if (!this.takeStakes(t)) { people.forEach(uid => { this.userTable.delete(uid); this.byUser.get(uid)?.conn.send({ t: 'err', code: 'rematch_coins' }); }); t.close(); return; }
+    t.start(null);
+    old.close();
+    this.botHello(t);
+  }
+
+  /* ---------------- the weekly tournament's tables ---------------- */
+
+  /** A match of the tournament: both entrants seated (people as away until they come), started at once. */
+  private tourneyTable(a: Entrant, b: Entrant, mode: Mode, target: number): string {
+    const t = this.newTable(mode, target, false, 0, true);
+    const game = gameOf(mode);
+    for (const e of [a, b]) {
+      if (e.uid) t.join(this.player(e.uid, game));
+      else t.join({ uid: 'bot' + t.seats.filter(Boolean).length, name: e.name, ch: e.ch, bot: true, rating: e.rating });
+    }
+    this.tourneyTables.set(t.id, [a.uid, b.uid]);
+    t.start(null);
+    // people who aren't at this table yet: away until they open their match (the computer covers after the grace time)
+    for (const e of [a, b]) if (e.uid && this.userTable.get(e.uid) !== t) t.setOnline(e.uid, false);
+    // anyone sitting idle in the menus is taken there straight away
+    for (const e of [a, b]) if (e.uid && this.byUser.has(e.uid) && !this.userTable.has(e.uid)) { this.userTable.set(e.uid, t); t.setOnline(e.uid, true); this.pushView(t, e.uid); }
+    return t.id;
   }
 
   /* ---------------- rewarded ads ---------------- */
@@ -694,10 +865,16 @@ export class Hub {
     const players = t.seats.map(s => s && { uid: s.bot ? null : s.uid, bot: s.bot, rating: s.rating });
     // the weekly leaderboard counts matchmade games and rooms with at least two people (not a room full of bots)
     const weekly = !t.isPrivate || t.seats.filter(s => s && !s.bot).length >= 2;
+    const vsPeople = t.seats.filter(s => s && !s.bot).length >= 2 || !t.isPrivate;
     const xpFor = (uid: string, won: boolean) => {
       const r = this.store.addXp(uid, won ? XP.win : XP.loss);
       this.byUser.get(uid)?.conn.send({ t: 'xp', ...r });
+      this.afterGame(uid, game, won, vsPeople, won ? SP.win : SP.loss);
     };
+    // the tournament: who goes on
+    if (this.tourneyTables.has(t.id)) setTimeout(() => this.tourney.onResult(t.id, res.team), 0);
+    // computer players with people's names say "good game" sometimes
+    if (!t.isPrivate) t.seats.forEach((s, i) => { if (s?.bot && Math.random() < 0.45) setTimeout(() => { if (!t.closed) this.emote(t, i, Math.random() < 0.7 ? 'gg' : 'clap'); }, 1200 + Math.random() * 2500); });
     if (!t.isPrivate) {
       // Elo against the average rating of the other side(s). Computer players count as 1000.
       t.seats.forEach((s, i) => {
@@ -721,7 +898,34 @@ export class Hub {
     this.store.saveMatch({ id: t.id + ':' + Date.now(), mode: t.mode, private: t.isPrivate, players, scores: res.scores, team: res.team });
   }
 
+  /** After any finished game (online or practice on the phone): missions, season points, the referral bonus. */
+  private afterGame(uid: string, game: GameId, won: boolean, online: boolean, sp: number) {
+    const conn = this.byUser.get(uid)?.conn;
+    for (const id of this.store.missionProgress(uid, game, won, online)) conn?.send({ t: 'missionDone', id });
+    const tier = this.store.addSeasonSp(uid, sp);
+    if (tier.to > tier.from) conn?.send({ t: 'seasonTier', tier: tier.to });
+    this.payReferral(uid);
+  }
+
+  private payReferral(uid: string) {
+    const r = this.store.referralFirstGame(uid);
+    if (!r) return;
+    const name = this.store.get(r.referrer)?.name ?? '';
+    this.byUser.get(uid)?.conn.send({ t: 'referral', coins: r.coins, name, you: 'invited' });
+    this.byUser.get(r.referrer)?.conn.send({ t: 'referral', coins: r.coins, name: r.name, you: 'inviter' });
+    this.sendUser(uid); this.sendUser(r.referrer);
+    this.opts.push?.([r.referrer], ['صاحبك وصل! 🎁', `${r.name} لعب أول ماتش، وخدتوا انتو الاتنين ${r.coins.toLocaleString('en')} كوين`], ['Your friend joined! 🎁', `${r.name} played their first game: you both got ${r.coins.toLocaleString('en')} coins`]);
+  }
+
   private onClosed(t: Room) {
+    this.rematch.delete(t.id);
+    const tt = this.tourneyTables.get(t.id);
+    if (tt) {
+      this.tourneyTables.delete(t.id);
+      // closed before the end (everyone left): whoever is still seated and online goes on
+      const stayed = t.match ? null : tt.findIndex(uid => uid && t.seatOf(uid) >= 0 && t.seats[t.seatOf(uid)]?.online);
+      if (!t.match) this.tourney.onClosed(t.id, stayed !== null && stayed >= 0 ? stayed : (tt[0] === null ? 0 : tt[1] === null ? 1 : null));
+    }
     // a match nobody finished: on a server restart everyone gets their stake back, otherwise those who walked away lose it
     if (this.escrow.has(t.id)) {
       if (this.stopping) this.refundAll(t, true);
@@ -742,6 +946,7 @@ export class Hub {
   private sweep() {
     const now = Date.now();
     for (const t of this.tables.values()) {
+      if (this.tourneyTables.has(t.id)) continue;   // tournament matches play on (the computer covers people who aren't there)
       const online = t.seats.some(s => s && !s.bot && this.byUser.has(s.uid) && this.userTable.get(s.uid) === t);
       if (online) { this.emptySince.delete(t.id); continue; }
       const since = this.emptySince.get(t.id) ?? now;
@@ -767,6 +972,11 @@ export class Hub {
     for (const e of q) this.byUser.get(e.uid)?.conn.send({ t: 'queue', mode, count: q.length, need, botsAt, now: Date.now(), stake: Number(st) });
   }
 
+  /**
+   * Matchmaking. People wait in a queue per game mode and stake. A table is formed from players of a similar
+   * level (rating) and wealth (coins): at first only close matches, the range widening the longer the first
+   * person has waited. After botFillMs (8 s) the table is filled with computer players instead.
+   */
   private matchmake() {
     const now = Date.now();
     for (const [key, q] of this.queues) {
@@ -778,23 +988,40 @@ export class Hub {
         else if (this.store.coinsOf(q[i].uid) < stake) { this.byUser.get(q[i].uid)?.conn.send({ t: 'err', code: 'not_enough_coins' }); q.splice(i, 1); }
       }
       let formed = false;
-      while (q.length >= need || (q.length > 0 && now - q[0].since >= this.opts.botFillMs)) {
-        const group = q.splice(0, need);
-        const t = this.newTable(mode, defaultTarget(mode), false, stake);
-        // spread people around the table; in team games keep strangers on opposite teams when possible
-        group.forEach(e => {
-          const u = this.store.get(e.uid)!;
-          t.join({ uid: e.uid, name: u.name, ch: u.ch, bot: false, rating: this.store.ratingOf(e.uid, gameOf(mode)) });
-          this.userTable.set(e.uid, t);
-        });
-        t.fillBots();
+      while (q.length) {
+        const first = q[0];
+        const waited = (now - first.since) / 1000;
+        const close = (e: QEntry) => {
+          const w = Math.max(waited, (now - e.since) / 1000);
+          const ratingOk = Math.abs(e.rating - first.rating) <= 120 + 30 * w;
+          const lo = Math.max(1, Math.min(e.coins, first.coins)), hi = Math.max(e.coins, first.coins);
+          const coinsOk = hi / lo <= 6 * Math.pow(2, w / 3);
+          return ratingOk && coinsOk;
+        };
+        const group = [first, ...q.slice(1).filter(close)].slice(0, need);
+        const timeUp = now - first.since >= this.opts.botFillMs;
+        if (group.length < need && !timeUp) break;
+        for (const e of group) q.splice(q.indexOf(e), 1);
+        const t = this.newTable(mode, defaultTarget(mode), false, stake, true);
+        const game = gameOf(mode);
+        group.forEach(e => { t.join(this.player(e.uid, game)); this.userTable.set(e.uid, t); });
+        const avg = group.reduce((a, e) => a + e.rating, 0) / group.length;
+        t.fillBots(this.botMaker(avg));
         if (!this.takeStakes(t)) { group.forEach(e => { this.userTable.delete(e.uid); this.byUser.get(e.uid)?.conn.send({ t: 'err', code: 'not_enough_coins' }); }); t.close(); continue; }
         t.start(null);
+        this.botHello(t);
         formed = true;
       }
       if (formed || q.length) this.sendQueue(key);
       if (!q.length) this.queues.delete(key);
     }
+  }
+
+  /** Computer players with people's names greet the table now and then, like people do. */
+  private botHello(t: Room) {
+    t.seats.forEach((s, i) => {
+      if (s?.bot && s.name && Math.random() < 0.35) setTimeout(() => { if (!t.closed) this.emote(t, i, Math.random() < 0.75 ? 'hi' : 'think'); }, 1500 + Math.random() * 4000);
+    });
   }
 }
 

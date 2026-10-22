@@ -1,10 +1,10 @@
 import { CHESS_TIME, MODE_PLAYERS, Mode, defaultTarget, gameOf, targetOptions } from './engine';
-import { BOT_NAMES, Player, publicId } from './table';
+import { BOT_NAMES, BotMaker, Player, publicId } from './table';
 import type { BoardView, Emote, MatchResult } from './protocol';
 import { EMOTES } from './protocol';
 import { BoardAction, BoardEvent, BoardGameId, GameDef, GameEnd, defFor } from './games/defs';
 
-interface Seat extends Player { online: boolean; away: boolean; timeouts: number; lastEmote: number; mic?: boolean }
+interface Seat extends Player { online: boolean; away: boolean; timeouts: number; lastEmote: number; mic?: boolean; offAt?: number }
 
 export interface BoardTableOptions {
   id: string;
@@ -16,7 +16,8 @@ export interface BoardTableOptions {
   turnMs: number;            // per-move time for tawla and ludo
   nextRoundMs: number;       // pause between games of a tawla match
   botDelay: [number, number];
-  offlineGraceMs: number;
+  offlineGraceMs: number;    // a disconnected player has this long to come back before the computer plays for them
+  humanBots?: boolean;       // computer players take their time like people (matchmade games)
   lobbyAfterMatchMs: number;
   autoMoveMs?: number;       // pause before a move the game makes by itself
   chessClockMs?: number;     // chess: time per player (default 5 minutes)
@@ -79,7 +80,7 @@ export class BoardTable {
 
   join(p: Player): number | string {
     const cur = this.seatOf(p.uid);
-    if (cur >= 0) { const s = this.seats[cur]!; s.online = true; s.name = p.name; s.ch = p.ch; this.bump(); return cur; }
+    if (cur >= 0) { const s = this.seats[cur]!; s.online = true; s.offAt = undefined; s.name = p.name; s.ch = p.ch; s.hat = p.hat; s.drink = p.drink; s.muted = p.muted; this.bump(); return cur; }
     if (this.phase !== 'lobby') return 'in_progress';
     const i = this.seats.findIndex(s => !s);
     if (i < 0) return 'room_full';
@@ -100,9 +101,15 @@ export class BoardTable {
 
   setOnline(uid: string, online: boolean) {
     const i = this.seatOf(uid); if (i < 0) return;
-    const s = this.seats[i]!; s.online = online;
-    if (!online) s.mic = false;
-    if (online && this.phase !== 'lobby') { s.away = false; s.timeouts = 0; }
+    const s = this.seats[i]!;
+    if (s.online === online) return;
+    s.online = online;
+    if (!online) { s.mic = false; s.offAt = Date.now(); }
+    else s.offAt = undefined;
+    if (online && this.phase !== 'lobby') {
+      s.away = false; s.timeouts = 0;
+      if (this.phase === 'play' && this.state && this.def.toMove(this.state) === i && !this.turnEndsAt) this.turnEndsAt = Date.now() + this.opts.turnMs;
+    }
     if (!online && this.hostUid === uid) { const o = this.humans().find(h => h.online); if (o) this.hostUid = o.uid; }
     if (online && !this.hostUid) this.hostUid = uid;
     this.bump();
@@ -125,11 +132,12 @@ export class BoardTable {
     return null;
   }
 
-  fillBots() {
+  fillBots(make?: BotMaker) {
     const used = this.seats.filter(Boolean).map(s => s!.ch);
     for (let i = 0; i < this.n; i++) if (!this.seats[i]) {
-      const ch = [5, 0, 1, 2, 3, 4].find(c => !used.includes(c)) ?? 5; used.push(ch);
-      this.seats[i] = { uid: BOT_NAMES[i], name: '', ch, bot: true, rating: 1000, online: true, away: false, timeouts: 0, lastEmote: 0 };
+      const b = make?.(i, used);
+      const ch = b?.ch ?? [5, 0, 1, 2, 3, 4].find(c => !used.includes(c)) ?? 5; used.push(ch);
+      this.seats[i] = { uid: BOT_NAMES[i], name: b?.name ?? '', ch, bot: true, rating: b?.rating ?? 1000, online: true, away: false, timeouts: 0, lastEmote: 0 };
     }
   }
 
@@ -217,7 +225,14 @@ export class BoardTable {
     const seat = this.def.toMove(this.state), s = this.seats[seat]!;
     this.clockFrom = Date.now();
     if (this.clocks) this.turnEndsAt = this.clockFrom + this.clocks[seat];
-    else this.turnEndsAt = !s.bot && !s.away && s.online ? Date.now() + this.opts.turnMs : 0;
+    else this.turnEndsAt = !s.bot && !s.away && (s.online || this.inGrace(s)) ? Date.now() + this.opts.turnMs : 0;
+  }
+
+  /** A player who dropped out still has time to come back (the computer hasn't taken over yet). */
+  private inGrace(s: Seat) { return !s.online && !s.away && !s.bot && s.offAt !== undefined && Date.now() < s.offAt + this.opts.offlineGraceMs; }
+  private botWait(lo: number, hi: number) {
+    if (!this.opts.humanBots) return lo + Math.random() * (hi - lo);
+    return lo * 1.3 + Math.random() * (hi - lo) * 1.6 + (Math.random() < 0.12 ? hi * (0.8 + Math.random()) : 0);   // now and then a long think
   }
 
   private apply(seat: number, a: BoardAction, flags: { auto?: boolean; forced?: boolean } = {}): string | null {
@@ -282,8 +297,14 @@ export class BoardTable {
       if (forced) {
         at(this.opts.autoMoveMs ?? 900, () => { this.apply(seat, forced, { forced: true }); this.bump(); });
       } else if (s.bot || s.away) {
-        at(lo + Math.random() * (hi - lo), () => this.botMove(seat));
+        at(this.botWait(lo, hi), () => this.botMove(seat));
+      } else if (!s.online && now >= (s.offAt ?? now) + this.opts.offlineGraceMs) {
+        // dropped out and didn't come back in time: the computer plays for them from now on
+        s.away = true;
+        at(lo, () => this.botMove(seat));
       } else if (this.clocks) {
+        const graceEnd = !s.online ? (s.offAt ?? now) + this.opts.offlineGraceMs : Infinity;
+        if (graceEnd < this.clockFrom + this.clocks[seat]) { at(graceEnd - now, () => { s.away = true; this.bump(); }); return; }
         // chess: the clock decides; a player who runs out of time loses
         at(this.clockFrom + this.clocks[seat] - now, () => {
           this.clocks![seat] = 0;
@@ -291,7 +312,12 @@ export class BoardTable {
           this.bump();
         });
       } else if (!s.online) {
-        at(Math.min(this.opts.offlineGraceMs, this.turnEndsAt ? this.turnEndsAt - now : this.opts.offlineGraceMs), () => this.botMove(seat));
+        const graceEnd = (s.offAt ?? now) + this.opts.offlineGraceMs;
+        at(Math.min(graceEnd, this.turnEndsAt || graceEnd) - now, () => {
+          if (Date.now() >= graceEnd - 5) s.away = true;
+          if (!s.away) s.timeouts++;
+          this.botMove(seat, s.away ? {} : { auto: true });
+        });
       } else {
         at(this.turnEndsAt - now, () => { s.timeouts++; this.botMove(seat, { auto: true }); });
       }
@@ -327,6 +353,8 @@ export class BoardTable {
       seats: this.seats.map((s, i) => s && {
         name: s.name, ch: s.ch, bot: s.bot, away: s.away, online: s.online, count: 0, team: i, host: s.uid === this.hostUid,
         rating: s.rating, mic: !!s.mic && s.online, pid: s.bot ? '' : publicId(s.uid),
+        back: this.inGrace(s) && this.phase !== 'lobby' ? s.offAt! + this.opts.offlineGraceMs : undefined,
+        hat: s.hat, drink: s.drink, muted: s.muted || undefined,
       }),
       turn, turnEndsAt: this.turnEndsAt, turnMs: this.clocks ? this.clockMs() : this.opts.turnMs, clocks,
       round: this.round, scores: this.scores.slice(), last: this.last, result: this.result, match: this.match,

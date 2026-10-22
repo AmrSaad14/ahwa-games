@@ -10,6 +10,7 @@
 //   PURCHASES_TEST=1              development only: accept tokens starting with "test:" without asking Google
 import crypto from 'node:crypto';
 import { NO_ADS, packById } from '../shared/gifts';
+import { SEASON_PASS } from '../shared/season';
 
 export interface Verified { ok: true; coins: number; until: number; orderId: string | null }
 export interface Refused { ok: false; code: string }
@@ -59,7 +60,7 @@ export class PlayBilling {
 
   /** Is this a real, paid purchase of `product` by player `uid`? */
   async verify(uid: string, product: string, token: string): Promise<Verified | Refused> {
-    const pack = packById(product), sub = product === NO_ADS.id;
+    const pack = packById(product) ?? (product === SEASON_PASS.id ? { id: product, coins: 0, egp: SEASON_PASS.egp } : undefined), sub = product === NO_ADS.id;
     if (!pack && !sub) return { ok: false, code: 'bad_product' };
     if (!token || token.length > 4096) return { ok: false, code: 'bad_purchase' };
     if (this.cfg.testMode && token.startsWith('test:')) {

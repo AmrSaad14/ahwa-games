@@ -15,6 +15,10 @@ export interface SeatView {
   rating: number;
   mic: boolean;        // in the table's voice chat
   pid: string;         // public id for blocking a player across games ('' for computer players)
+  back?: number;       // dropped out: the time (ms) the computer takes over unless they come back first
+  hat?: string;        // their look: the hat on their character and the drink by their place
+  drink?: string;
+  muted?: boolean;     // their chat is switched off for a while (reported by several players)
 }
 
 export interface LastAction {
@@ -147,6 +151,28 @@ export interface PublicUser {
   level?: number;
   streak?: number;       // days in a row the player came back
   daily?: { day: number; ready: boolean; nextAt: number; coins: number };   // the daily reward: today's day on the track, whether it's waiting
+  missions?: MissionRow[];   // today's three missions, and when they change
+  missionsAt?: number;
+  season?: SeasonState;
+  canRefer?: boolean;        // a new player who can still enter the friend code of who invited them
+  referred?: boolean;
+  muted?: number;            // chat switched off until (ms), after reports from several players
+}
+
+export interface MissionRow { id: string; game: string; kind: 'play' | 'win'; need: number; have: number; coins: number; xp: number; online: boolean; claimed: boolean }
+export interface SeasonState { id: string; endsAt: number; sp: number; tier: number; premium: boolean; free: number[]; prem: number[]; price: number }
+
+/** The weekly tournament as one player sees it. */
+export interface TourneyEntrant { name: string; ch: number; bot: boolean; me: boolean }
+export interface TourneyMatch { a: TourneyEntrant | null; b: TourneyEntrant | null; winner: 0 | 1 | null; live: boolean }
+export interface TourneyView {
+  event: string; game: string; mode: string; startsAt: number;
+  state: 'open' | 'running' | 'done';
+  registered: boolean; count: number; prizes: number[];
+  rounds: TourneyMatch[][];
+  you: { alive: boolean; table: string | null; place: number | null } | null;
+  results: { place: number; name: string; coins: number; me: boolean }[];
+  now: number;
 }
 
 export interface LeaderRow { rank: number; name: string; ch: number; rating: number; games: number; wins: number; me: boolean; level?: number }
@@ -156,6 +182,20 @@ export type C2S =
   | { t: 'hello'; token?: string; v?: number }
   /** Collect today's daily reward (clients from v2 on; older ones get it as soon as they connect). */
   | { t: 'daily' }
+  /** After a matchmade game: play again with the same people. */
+  | { t: 'rematch' }
+  /** Collect a finished daily mission. */
+  | { t: 'mission'; id: string }
+  /** The season pass: open the premium track with coins; collect a tier on a track. */
+  | { t: 'seasonBuy' }
+  | { t: 'seasonClaim'; tier: number; track: 'free' | 'prem' }
+  /** The weekly tournament: see it, sign up or drop out, go to your match. */
+  | { t: 'tourney' }
+  | { t: 'tourneyJoin' }
+  | { t: 'tourneyLeave' }
+  | { t: 'tourneyGo' }
+  /** A new player enters the friend code of who invited them. */
+  | { t: 'referral'; code: string }
   | { t: 'profile'; name?: string; ch?: number }
   | { t: 'register'; email: string; pw: string }
   | { t: 'login'; email: string; pw: string }
@@ -168,7 +208,7 @@ export type C2S =
   | { t: 'friendAdd'; code?: string; seat?: number }
   | { t: 'friendAnswer'; id: string; yes: boolean }
   | { t: 'friendRemove'; id: string }
-  | { t: 'invite'; id: string }
+  | { t: 'invite'; id: string; mode?: Mode }
   | { t: 'delete' }
   | { t: 'quick'; mode: Mode; stake?: number }
   | { t: 'cancel' }
@@ -237,6 +277,14 @@ export type S2C =
   | { t: 'cashouts'; rows: CashoutRow[]; rate: { coins: number; egp: number }; maxMillions: number }
   | { t: 'cashoutDone'; id: number; egp: number; coins: number; phone: string }
   | { t: 'supportSent'; id: number }
+  | { t: 'rematch'; seats: number[]; need: number; gone: boolean }
+  | { t: 'missionDone'; id: string }
+  | { t: 'missionClaimed'; id: string; coins: number; xp: number }
+  | { t: 'seasonTier'; tier: number }
+  | { t: 'seasonClaimed'; tier: number; track: 'free' | 'prem'; coins?: number; skin?: string }
+  | { t: 'tourney'; view: TourneyView }
+  | { t: 'tourneyMatch'; table: string; round: number }
+  | { t: 'referral'; coins: number; name: string; you: 'inviter' | 'invited' }
   | { t: 'pong'; c: number; now: number };
 
 export interface CashoutRow { id: number; coins: number; egp: number; phone: string; status: 'pending' | 'paid' | 'rejected'; ts: number; doneTs: number | null }

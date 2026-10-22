@@ -170,9 +170,11 @@ test('team game (2 vs 2) runs to the end', async () => {
 
 test('daily bonus, gifts between players, and coins', async () => {
   const a = await new Client().open(), b = await new Client().open();
-  assert.equal(a.last('bonus')?.coins, 10_000, 'daily bonus on first visit');
+  // older apps get the daily reward as they connect; newer ones (v2) collect it themselves
+  assert.equal(a.last('bonus')?.coins, 5_000, 'daily bonus on first visit');
   const start = a.last('welcome')!.user.coins;
-  assert.equal(start, 110_000);
+  assert.equal(start, 105_000);
+  assert.equal(a.last('welcome')!.user.daily?.ready, false);
   // a second visit the same day gives no bonus
   const a2 = await new Client().open(a.token);
   assert.equal(a2.last('bonus'), undefined);

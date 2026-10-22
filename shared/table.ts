@@ -7,8 +7,10 @@ import {
 import type { Action, Emote, LastAction, MatchResult, RoundResult, TableView } from './protocol';
 import { EMOTES } from './protocol';
 
-export interface Player { uid: string; name: string; ch: number; bot: boolean; rating: number }
-interface Seat extends Player { online: boolean; away: boolean; timeouts: number; lastEmote: number; mic?: boolean }
+export interface Player { uid: string; name: string; ch: number; bot: boolean; rating: number; hat?: string; drink?: string; muted?: boolean }
+interface Seat extends Player { online: boolean; away: boolean; timeouts: number; lastEmote: number; mic?: boolean; offAt?: number }
+/** A computer player's name and looks when it fills a seat (matchmaking gives them people's names). */
+export type BotMaker = (seat: number, usedCh: number[]) => { name: string; ch: number; rating: number };
 
 export interface TableOptions {
   id: string;
@@ -20,7 +22,8 @@ export interface TableOptions {
   turnMs: number;          // time a person has for a move
   nextRoundMs: number;     // pause between rounds
   botDelay: [number, number];
-  offlineGraceMs: number;  // how long to wait for a disconnected player before a bot moves for them
+  offlineGraceMs: number;  // a disconnected player has this long to come back before the computer plays for them
+  humanBots?: boolean;     // computer players take their time like people (matchmade games)
   lobbyAfterMatchMs: number;
   autoMoveMs?: number;     // pause before the game draws or passes for a player with no tile that fits (default 900)
 }
@@ -90,7 +93,7 @@ export class Table {
 
   join(p: Player): number | string {
     const cur = this.seatOf(p.uid);
-    if (cur >= 0) { const s = this.seats[cur]!; s.online = true; s.name = p.name; s.ch = p.ch; this.bump(); return cur; }
+    if (cur >= 0) { const s = this.seats[cur]!; s.online = true; s.offAt = undefined; s.name = p.name; s.ch = p.ch; s.hat = p.hat; s.drink = p.drink; s.muted = p.muted; this.bump(); return cur; }
     if (this.phase !== 'lobby') return 'in_progress';
     const i = this.seats.findIndex(s => !s);
     if (i < 0) return 'room_full';
@@ -112,9 +115,12 @@ export class Table {
 
   setOnline(uid: string, online: boolean) {
     const i = this.seatOf(uid); if (i < 0) return;
-    const s = this.seats[i]!; s.online = online;
-    if (!online) s.mic = false;
-    if (online && this.phase !== 'lobby') { s.away = false; s.timeouts = 0; }
+    const s = this.seats[i]!;
+    if (s.online === online) return;
+    s.online = online;
+    if (!online) { s.mic = false; s.offAt = Date.now(); }
+    else s.offAt = undefined;
+    if (online && this.phase !== 'lobby') { s.away = false; s.timeouts = 0; if (this.phase === 'play' && this.turn === i && !this.turnEndsAt) this.turnEndsAt = Date.now() + this.opts.turnMs; }
     if (!online && this.hostUid === uid) {
       const other = this.humans().find(h => h.online);
       if (other) this.hostUid = other.uid;
@@ -142,12 +148,13 @@ export class Table {
     return null;
   }
 
-  /** Fill every empty seat with a computer player (used by matchmaking). */
-  fillBots() {
+  /** Fill every empty seat with a computer player (used by matchmaking, with people's names from `make`). */
+  fillBots(make?: BotMaker) {
     const used = this.seats.filter(Boolean).map(s => s!.ch);
     for (let i = 0; i < this.n; i++) if (!this.seats[i]) {
-      const ch = [5, 0, 1, 2, 3, 4].find(c => !used.includes(c)) ?? 5; used.push(ch);
-      this.seats[i] = { uid: BOT_NAMES[i], name: '', ch, bot: true, rating: 1000, online: true, away: false, timeouts: 0, lastEmote: 0 };
+      const b = make?.(i, used);
+      const ch = b?.ch ?? [5, 0, 1, 2, 3, 4].find(c => !used.includes(c)) ?? 5; used.push(ch);
+      this.seats[i] = { uid: BOT_NAMES[i], name: b?.name ?? '', ch, bot: true, rating: b?.rating ?? 1000, online: true, away: false, timeouts: 0, lastEmote: 0 };
     }
   }
 
@@ -249,7 +256,15 @@ export class Table {
   private beginTurn(seat: number) {
     this.turn = seat;
     const s = this.seats[seat]!;
-    this.turnEndsAt = !s.bot && !s.away && s.online ? Date.now() + this.opts.turnMs : 0;
+    this.turnEndsAt = !s.bot && !s.away && (s.online || this.inGrace(s)) ? Date.now() + this.opts.turnMs : 0;
+  }
+
+  /** A player who dropped out still has time to come back (the computer hasn't taken over yet). */
+  private inGrace(s: Seat) { return !s.online && !s.away && !s.bot && s.offAt !== undefined && Date.now() < s.offAt + this.opts.offlineGraceMs; }
+  /** How long a computer player waits: people's names think like people (sometimes a while). */
+  private botWait(lo: number, hi: number) {
+    if (!this.opts.humanBots) return lo + Math.random() * (hi - lo);
+    return lo * 1.3 + Math.random() * (hi - lo) * 1.6 + (Math.random() < 0.12 ? hi * (0.8 + Math.random()) : 0);   // now and then a long think
   }
 
   private doMove(seat: number, a: Action): string | null {
@@ -365,9 +380,16 @@ export class Table {
       const [lo, hi] = this.opts.botDelay;
       const drawing = this.last?.t === 'draw' && this.last.s === seat;
       if (s.bot || s.away) {
-        at(drawing ? lo * 0.5 : lo + Math.random() * (hi - lo), () => this.botPlay(seat));
+        at(drawing ? lo * 0.5 : this.botWait(lo, hi), () => this.botPlay(seat));
       } else if (!s.online) {
-        at(Math.min(this.opts.offlineGraceMs, this.turnEndsAt ? this.turnEndsAt - now : this.opts.offlineGraceMs), () => this.botPlay(seat));
+        // dropped out: their turn runs as usual while they have time to come back; after that the computer plays for them
+        const graceEnd = (s.offAt ?? now) + this.opts.offlineGraceMs;
+        if (now >= graceEnd) { s.away = true; at(lo, () => this.botPlay(seat)); }
+        else at(Math.min(graceEnd, this.turnEndsAt || graceEnd) - now, () => {
+          if (Date.now() >= graceEnd - 5) s.away = true;
+          if (!s.away) s.timeouts++;
+          this.botPlay(seat, !s.away);
+        });
       } else if (!canPlay(this.line, this.hands[seat])) {
         // nothing fits: draw for them (one tile at a time, so they can see it) or pass when the boneyard is empty
         const pause = this.opts.autoMoveMs ?? 900;
@@ -422,6 +444,8 @@ export class Table {
       seats: this.seats.map((s, i) => s && {
         name: s.name, ch: s.ch, bot: s.bot, away: s.away, online: s.online, count: this.hands[i]?.length ?? 0,
         team: teamOf(this.mode, i), host: s.uid === this.hostUid, rating: s.rating, mic: !!s.mic && s.online, pid: s.bot ? '' : publicId(s.uid),
+        back: this.inGrace(s) && this.phase !== 'lobby' ? s.offAt! + this.opts.offlineGraceMs : undefined,
+        hat: s.hat, drink: s.drink, muted: s.muted || undefined,
       }),
       hand: you >= 0 && this.hands[you] ? this.hands[you].slice() : [],
       line: this.line, yard: this.yard.length, open: this.line.f === null ? this.opening : null, turn: this.turn, turnEndsAt: this.turnEndsAt, turnMs: this.opts.turnMs,

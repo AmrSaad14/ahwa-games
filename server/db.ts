@@ -6,7 +6,10 @@ import crypto from 'node:crypto';
 import type { CashoutRow, CoinRow, LeaderRow, PublicUser } from '../shared/protocol';
 import type { GameId } from '../shared/engine';
 import { ECONOMY, WEEKLY_PRIZES, cairoDay, levelOf, nextCairoDay, streakBonus, weekKey } from '../shared/gifts';
-import { Equipped, skinById } from '../shared/skins';
+import { Equipped, isFree, skinById } from '../shared/skins';
+import { MISSION_SP, counts, missionById, missionsFor } from '../shared/missions';
+import { SEASON_PASS, SEASON_TIERS, SP, TIERS, seasonEndsAt, seasonOf, tierOf } from '../shared/season';
+import type { GameId as Game } from '../shared/engine';
 import { maskPhone } from './login';
 
 export interface UserRow {
@@ -15,6 +18,7 @@ export interface UserRow {
   coins: number; gifts: number; bonus_day: string | null; ad_free_until: number; equip: string | null;
   phone: string | null; google_sub: string | null; google_email: string | null;
   pg_id: string | null; friend_code: string | null; streak?: number; xp?: number;
+  ref_by?: string | null; ref_paid?: number; muted_until?: number;
 }
 
 export class Store {
@@ -70,6 +74,15 @@ export class Store {
     if (!cols.has('friend_code')) this.db.exec('ALTER TABLE users ADD COLUMN friend_code TEXT');
     if (!cols.has('streak')) this.db.exec('ALTER TABLE users ADD COLUMN streak INTEGER NOT NULL DEFAULT 0');
     if (!cols.has('xp')) this.db.exec('ALTER TABLE users ADD COLUMN xp INTEGER NOT NULL DEFAULT 0');
+    if (!cols.has('ref_by')) this.db.exec('ALTER TABLE users ADD COLUMN ref_by TEXT; ALTER TABLE users ADD COLUMN ref_paid INTEGER NOT NULL DEFAULT 0');
+    if (!cols.has('muted_until')) this.db.exec('ALTER TABLE users ADD COLUMN muted_until INTEGER NOT NULL DEFAULT 0');
+    // daily missions (progress per player per Cairo day), the season pass, the weekly tournament's sign-ups
+    this.db.exec(`CREATE TABLE IF NOT EXISTS missions (user_id TEXT NOT NULL, day TEXT NOT NULL, id TEXT NOT NULL, have INTEGER NOT NULL DEFAULT 0,
+        claimed INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day, id));
+      CREATE TABLE IF NOT EXISTS season (user_id TEXT NOT NULL, season TEXT NOT NULL, sp INTEGER NOT NULL DEFAULT 0, premium INTEGER NOT NULL DEFAULT 0,
+        free TEXT NOT NULL DEFAULT '[]', prem TEXT NOT NULL DEFAULT '[]', PRIMARY KEY (user_id, season));
+      CREATE TABLE IF NOT EXISTS tourney_reg (event TEXT NOT NULL, user_id TEXT NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (event, user_id));
+      CREATE INDEX IF NOT EXISTS reports_about ON reports(about_id, ts)`);
     // the week's points for the weekly leaderboard
     this.db.exec(`CREATE TABLE IF NOT EXISTS weekly (week TEXT NOT NULL, user_id TEXT NOT NULL, points INTEGER NOT NULL DEFAULT 0,
       games INTEGER NOT NULL DEFAULT 0, wins INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (week, user_id));
@@ -180,6 +193,10 @@ export class Store {
     this.db.prepare('DELETE FROM coin_log WHERE user_id = ?').run(id);
     this.db.prepare('DELETE FROM friends WHERE a = ? OR b = ?').run(id, id);
     this.db.prepare('DELETE FROM push_tokens WHERE user_id = ?').run(id);
+    this.db.prepare('DELETE FROM missions WHERE user_id = ?').run(id);
+    this.db.prepare('DELETE FROM season WHERE user_id = ?').run(id);
+    this.db.prepare('DELETE FROM tourney_reg WHERE user_id = ?').run(id);
+    this.db.prepare('DELETE FROM user_skins WHERE user_id = ?').run(id);
   }
 
   /** The daily bonus, once per (UTC) day; it grows for each day in a row (STREAK). Returns the coins and the day. */
@@ -194,6 +211,7 @@ export class Store {
       .run(coins, day, streak, id, day);
     if (!Number(r.changes)) return { coins: 0, streak: u.streak ?? 0 };
     this.logCoins(id, 'daily', coins);
+    this.addSeasonSp(id, SP.daily, now);
     return { coins, streak };
   }
 
@@ -299,6 +317,13 @@ export class Store {
     this.db.prepare('INSERT INTO reports (from_id, about_id, reason, table_id, ts) VALUES (?, ?, ?, ?, ?)').run(from, about, reason, tableId, Date.now());
   }
 
+  /** Different players who reported this one since `since` (three in a day mute their chat for a day). */
+  reporters(about: string, since: number): number {
+    return Number((this.db.prepare('SELECT COUNT(DISTINCT from_id) AS n FROM reports WHERE about_id = ? AND ts >= ?').get(about, since) as { n: number }).n);
+  }
+  mute(id: string, until: number) { this.db.prepare('UPDATE users SET muted_until = MAX(muted_until, ?) WHERE id = ?').run(until, id); }
+  mutedUntil(id: string): number { return (this.db.prepare('SELECT muted_until FROM users WHERE id = ?').get(id) as { muted_until: number } | undefined)?.muted_until ?? 0; }
+
   reports(limit = 100) { return this.db.prepare('SELECT * FROM reports ORDER BY ts DESC LIMIT ?').all(limit); }
 
   /** A player's rating in one game (1000 until they have played it). */
@@ -344,14 +369,146 @@ export class Store {
     return { rows: out, me };
   }
 
-  publicUser(u: UserRow): PublicUser { return { ...toPublic(u), xp: u.xp ?? 0, level: levelOf(u.xp ?? 0), streak: u.streak ?? 0, daily: this.dailyState(u), code: this.friendCode(u.id), ratings: this.ratingsOf(u.id), adsLeft: Math.max(0, ECONOMY.adsPerDay - this.adsToday(u.id)), skins: this.skinsOf(u.id) }; }
+  publicUser(u: UserRow): PublicUser {
+    const now = Date.now();
+    return { ...toPublic(u), xp: u.xp ?? 0, level: levelOf(u.xp ?? 0), streak: u.streak ?? 0, daily: this.dailyState(u), code: this.friendCode(u.id), ratings: this.ratingsOf(u.id),
+      adsLeft: Math.max(0, ECONOMY.adsPerDay - this.adsToday(u.id)), skins: this.skinsOf(u.id),
+      missions: this.missions(u.id), missionsAt: nextCairoDay(now), season: this.seasonState(u.id),
+      canRefer: !u.ref_by && now - u.created < REFER_DAYS * 86_400_000, referred: !!u.ref_by, muted: (u.muted_until ?? 0) > now ? u.muted_until : 0 };
+  }
+
+  /* ---------- daily missions ---------- */
+
+  /** Today's three missions with how far along they are. */
+  missions(uid: string, now = Date.now()) {
+    const day = cairoDay(now);
+    const rows = this.db.prepare('SELECT id, have, claimed FROM missions WHERE user_id = ? AND day = ?').all(uid, day) as { id: string; have: number; claimed: number }[];
+    return missionsFor(uid, day).map(m => {
+      const r = rows.find(x => x.id === m.id);
+      return { id: m.id, game: m.game, kind: m.kind, need: m.need, have: Math.min(m.need, r?.have ?? 0), coins: m.coins, xp: m.xp, online: !!m.online, claimed: !!r?.claimed };
+    });
+  }
+  /** A finished game moves today's missions on. Returns the missions it just completed. */
+  missionProgress(uid: string, game: Game, won: boolean, online: boolean, now = Date.now()): string[] {
+    const day = cairoDay(now), done: string[] = [];
+    for (const m of missionsFor(uid, day)) {
+      if (!counts(m, game, won, online)) continue;
+      const r = this.db.prepare('SELECT have FROM missions WHERE user_id = ? AND day = ? AND id = ?').get(uid, day, m.id) as { have: number } | undefined;
+      const before = r?.have ?? 0;
+      if (before >= m.need) continue;
+      this.db.prepare('INSERT INTO missions (user_id, day, id, have) VALUES (?, ?, ?, 1) ON CONFLICT(user_id, day, id) DO UPDATE SET have = have + 1').run(uid, day, m.id);
+      if (before + 1 >= m.need) done.push(m.id);
+    }
+    return done;
+  }
+  /** Collect a finished mission's reward (once). */
+  missionClaim(uid: string, id: string, now = Date.now()): { coins: number; xp: number } | string {
+    const day = cairoDay(now);
+    const m = missionsFor(uid, day).find(x => x.id === id);
+    if (!m) return 'bad_mission';
+    const r = this.db.prepare('SELECT have, claimed FROM missions WHERE user_id = ? AND day = ? AND id = ?').get(uid, day, id) as { have: number; claimed: number } | undefined;
+    if (!r || r.have < m.need) return 'mission_not_done';
+    if (r.claimed) return 'already_claimed';
+    const ch = this.db.prepare('UPDATE missions SET claimed = 1 WHERE user_id = ? AND day = ? AND id = ? AND claimed = 0').run(uid, day, id);
+    if (!Number(ch.changes)) return 'already_claimed';
+    this.addCoins(uid, m.coins); this.logCoins(uid, 'mission', m.coins);
+    this.addSeasonSp(uid, MISSION_SP, now);
+    return { coins: m.coins, xp: m.xp };
+  }
+
+  /* ---------- the season pass ---------- */
+
+  private seasonRow(uid: string, season: string) {
+    return this.db.prepare('SELECT sp, premium, free, prem FROM season WHERE user_id = ? AND season = ?').get(uid, season) as { sp: number; premium: number; free: string; prem: string } | undefined;
+  }
+  seasonState(uid: string, now = Date.now()) {
+    const id = seasonOf(now), r = this.seasonRow(uid, id);
+    const list = (j: string | undefined) => { try { return (JSON.parse(j || '[]') as number[]).filter(n => Number.isInteger(n)); } catch { return []; } };
+    const sp = r?.sp ?? 0;
+    return { id, endsAt: seasonEndsAt(now), sp, tier: tierOf(sp), premium: !!r?.premium, free: list(r?.free), prem: list(r?.prem), price: SEASON_PASS.coins };
+  }
+  /** Season points; returns the tier before and after. */
+  addSeasonSp(uid: string, n: number, now = Date.now()): { from: number; to: number } {
+    const id = seasonOf(now), before = this.seasonRow(uid, id)?.sp ?? 0;
+    this.db.prepare('INSERT INTO season (user_id, season, sp) VALUES (?, ?, ?) ON CONFLICT(user_id, season) DO UPDATE SET sp = sp + excluded.sp').run(uid, id, n);
+    return { from: tierOf(before), to: tierOf(before + n) };
+  }
+  /** Open the premium track for this season (paid with coins, or a store purchase when `paid`). */
+  seasonPremium(uid: string, paid: boolean, now = Date.now()): string | null {
+    const id = seasonOf(now);
+    if (this.seasonRow(uid, id)?.premium) return 'already_premium';
+    this.db.exec('BEGIN');
+    try {
+      if (!paid) {
+        const r = this.db.prepare('UPDATE users SET coins = coins - ? WHERE id = ? AND coins >= ?').run(SEASON_PASS.coins, uid, SEASON_PASS.coins);
+        if (!Number(r.changes)) { this.db.exec('ROLLBACK'); return 'not_enough_coins'; }
+      }
+      this.db.prepare('INSERT INTO season (user_id, season, premium) VALUES (?, ?, 1) ON CONFLICT(user_id, season) DO UPDATE SET premium = 1').run(uid, id);
+      this.db.exec('COMMIT');
+    } catch (e) { this.db.exec('ROLLBACK'); throw e; }
+    if (!paid) this.logCoins(uid, 'season', -SEASON_PASS.coins);
+    return null;
+  }
+  /** Collect a tier's reward on one track. */
+  seasonClaim(uid: string, tier: number, track: 'free' | 'prem', now = Date.now()): { coins?: number; skin?: string } | string {
+    const st = this.seasonState(uid, now);
+    if (!Number.isInteger(tier) || tier < 1 || tier > SEASON_TIERS) return 'bad_tier';
+    if (tier > st.tier) return 'tier_locked';
+    if (track === 'prem' && !st.premium) return 'not_premium';
+    const got = track === 'free' ? st.free : st.prem;
+    if (got.includes(tier)) return 'already_claimed';
+    const reward = TIERS[tier - 1][track];
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare(`INSERT INTO season (user_id, season, ${track}) VALUES (?, ?, ?) ON CONFLICT(user_id, season) DO UPDATE SET ${track} = excluded.${track}`)
+        .run(uid, st.id, JSON.stringify([...got, tier]));
+      if ('coins' in reward) this.addCoins(uid, reward.coins);
+      else this.db.prepare('INSERT OR IGNORE INTO user_skins (user_id, skin, ts) VALUES (?, ?, ?)').run(uid, reward.skin, now);
+      this.db.exec('COMMIT');
+    } catch (e) { this.db.exec('ROLLBACK'); throw e; }
+    if ('coins' in reward) { this.logCoins(uid, 'season', reward.coins); return { coins: reward.coins }; }
+    return { skin: reward.skin };
+  }
+
+  /* ---------- referrals: both get 50K when the invited friend finishes a first game ---------- */
+
+  /** A new player says who invited them (their friend code). */
+  setReferrer(uid: string, code: string): string | null {
+    const u = this.get(uid); if (!u) return 'bad_code';
+    if (u.ref_by) return 'already_referred';
+    if (Date.now() - u.created > REFER_DAYS * 86_400_000) return 'too_late';
+    const by = this.byFriendCode(code.trim().replace(/[^a-z0-9]/gi, ''));
+    if (!by) return 'bad_code';
+    if (by.id === uid) return 'friend_self';
+    if (by.ref_by === uid) return 'bad_code';   // two accounts can't refer each other
+    this.db.prepare('UPDATE users SET ref_by = ? WHERE id = ? AND ref_by IS NULL').run(by.id, uid);
+    return null;
+  }
+  /** After the invited player's first finished game: both get the bonus (once; at most REFER_MAX per inviter). */
+  referralFirstGame(uid: string): { referrer: string; coins: number; name: string } | null {
+    const u = this.get(uid);
+    if (!u?.ref_by || u.ref_paid) return null;
+    const r = this.db.prepare('UPDATE users SET ref_paid = 1 WHERE id = ? AND ref_paid = 0').run(uid);
+    if (!Number(r.changes)) return null;
+    const paidBefore = Number((this.db.prepare('SELECT COUNT(*) AS n FROM users WHERE ref_by = ? AND ref_paid = 1').get(u.ref_by) as { n: number }).n) - 1;
+    this.addCoins(uid, REFER_BONUS); this.logCoins(uid, 'referral', REFER_BONUS);
+    if (paidBefore < REFER_MAX && this.get(u.ref_by)) { this.addCoins(u.ref_by, REFER_BONUS); this.logCoins(u.ref_by, 'referral', REFER_BONUS); }
+    return { referrer: u.ref_by, coins: REFER_BONUS, name: u.name };
+  }
+
+  /* ---------- the weekly tournament's sign-ups ---------- */
+
+  tourneyJoin(event: string, uid: string) { this.db.prepare('INSERT OR IGNORE INTO tourney_reg (event, user_id, ts) VALUES (?, ?, ?)').run(event, uid, Date.now()); }
+  tourneyLeave(event: string, uid: string) { this.db.prepare('DELETE FROM tourney_reg WHERE event = ? AND user_id = ?').run(event, uid); }
+  tourneyRegs(event: string): string[] { return (this.db.prepare('SELECT user_id FROM tourney_reg WHERE event = ? ORDER BY ts').all(event) as { user_id: string }[]).map(r => r.user_id); }
+  tourneyIn(event: string, uid: string): boolean { return !!this.db.prepare('SELECT 1 FROM tourney_reg WHERE event = ? AND user_id = ?').get(event, uid); }
 
   /** Skins this player bought in the shop. */
   skinsOf(id: string): string[] { return (this.db.prepare('SELECT skin FROM user_skins WHERE user_id = ? ORDER BY ts').all(id) as { skin: string }[]).map(r => r.skin); }
   /** Buy a skin with coins. Returns an error code, or null when bought. */
   buySkin(id: string, skin: string): string | null {
     const s = skinById(skin);
-    if (!s || s.price === 0) return 'bad_skin';
+    if (!s || s.price === 0 || s.pass) return 'bad_skin';
     if (this.skinsOf(id).includes(skin)) return null;
     if (this.coinsOf(id) < s.price) return 'not_enough_coins';
     this.db.exec('BEGIN');
@@ -367,7 +524,7 @@ export class Store {
   equipSkin(id: string, skin: string): string | null {
     const s = skinById(skin);
     if (!s) return 'bad_skin';
-    if (s.price > 0 && !this.skinsOf(id).includes(skin)) return 'not_owned';
+    if (!isFree(s) && !this.skinsOf(id).includes(skin)) return 'not_owned';
     const u = this.get(id); if (!u) return 'bad_skin';
     const equip = { ...parseEquip(u.equip), [s.cat]: skin };
     this.db.prepare('UPDATE users SET equip = ? WHERE id = ?').run(JSON.stringify(equip), id);
@@ -461,6 +618,9 @@ export function parseEquip(raw: string | null | undefined): Equipped {
 }
 export const toPublic = (u: UserRow): PublicUser => ({ id: u.id, name: u.name, ch: u.ch, email: u.email, rating: u.rating, games: u.games, wins: u.wins, coins: u.coins, gifts: u.gifts, ratings: {}, adsLeft: 0, adFreeUntil: u.ad_free_until ?? 0, skins: [], equip: parseEquip(u.equip),
   phone: u.phone ? maskPhone(u.phone) : null, google: u.google_sub ? (u.google_email || 'Google') : null, playGames: !!u.pg_id, code: u.friend_code ?? '' });
+
+/** Referrals: the bonus each side gets, how long a new player has to enter a code, and the most one inviter is paid for. */
+export const REFER_BONUS = 50_000, REFER_DAYS = 7, REFER_MAX = 20;
 
 export interface CashoutDb { id: number; user_id: string; coins: number; egp: number; phone: string; status: 'pending' | 'paid' | 'rejected'; ts: number; done_ts: number | null; note: string | null }
 const toCashout = (c: CashoutDb): CashoutRow => ({ id: c.id, coins: c.coins, egp: c.egp, phone: c.phone, status: c.status, ts: c.ts, doneTs: c.done_ts });
