@@ -19,7 +19,7 @@ public class GameUi : MonoBehaviour
     RectTransform root;
 
     // picking a game: its ways to play, the stake, and quick match / with a friend / practice
-    RectTransform picker, modeRow, friendPanel; Text pickerTitle, stakeText, pickerNote; GameObject stakeRow;
+    RectTransform picker, modeRow, friendPanel, diffRow; Text pickerTitle, stakeText, pickerNote; GameObject stakeRow;
     InputField codeInput;
     public string game = "domino", mode = "ffa2"; public int stakeIndex;
     // a room for friends, before the game starts
@@ -54,6 +54,42 @@ public class GameUi : MonoBehaviour
         }
     }
     int lastBeep = -1;
+    public QuickChat chat;
+
+    /// A chat bubble by the player who sent it: over their name, or above your timer for you.
+    public void ShowEmote(TableView v, int seat, string k)
+    {
+        var tex = QuickChat.Emoji(k);
+        if (tex == null) return;
+        Vector2 at;
+        if (seat == v.you) at = new Vector2(-root.rect.width / 2 + 120, -root.rect.height / 2 + (v.Board ? 150 : 200));
+        else
+        {
+            int pos = System.Array.IndexOf(app.dominoTable.posToSeat, seat);
+            if (pos <= 0 || !seatTagBg[pos].gameObject.activeSelf) at = new Vector2(0, root.rect.height / 2 - 110);
+            else at = seatTagBg[pos].rectTransform.anchoredPosition + new Vector2(0, 40);
+        }
+        bool words = QuickChat.Phrases.TryGetValue(k, out var ph);
+        var bub = Ui.Box(root, "Bubble", new Color(1, 1, 1, 0.96f)).rectTransform;
+        bub.anchorMin = bub.anchorMax = new Vector2(0.5f, 0.5f);
+        bub.sizeDelta = new Vector2(words ? 160 : 56, 46); bub.anchoredPosition = at;
+        var e = Ui.Picture(bub, "E", tex); e.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(36, 36), new Vector2(words ? 6 : 10, 0));
+        if (words) Ui.Label(bub, Loc.En ? ph.en : ph.ar, 14, Ui.Ink, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Place(new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(112, 40), new Vector2(-6, 0));
+        StartCoroutine(Pop(bub));
+    }
+
+    System.Collections.IEnumerator Pop(RectTransform r)
+    {
+        var g = r.gameObject.AddComponent<CanvasGroup>(); g.blocksRaycasts = false;
+        for (float t = 0; t < 2.8f; t += Time.deltaTime)
+        {
+            if (r == null) yield break;
+            r.localScale = Vector3.one * (t < 0.2f ? Ui.Back(t / 0.2f) : 1);
+            g.alpha = t > 2.3f ? 1 - (t - 2.3f) / 0.5f : 1;
+            yield return null;
+        }
+        if (r != null) Destroy(r.gameObject);
+    }
     RawImage viewIcon;
     /// The button shows the view you'd switch to.
     public void ShowViewIcon() { if (viewIcon != null) viewIcon.texture = Menus.Icon(Cafe.BoardView ? "scene" : "view"); }
@@ -80,7 +116,7 @@ public class GameUi : MonoBehaviour
     readonly Text[] seatTags = new Text[4];
     readonly Image[] seatTagBg = new Image[4];
     Text endL, endR;
-    GameObject rollButton;
+    GameObject rollButton, undoButton;
     RawImage micIcon; Image micButton;
 
     void ToggleMic()
@@ -145,6 +181,18 @@ public class GameUi : MonoBehaviour
         ((RectTransform)plus.transform).Place(new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(44, 38), new Vector2(-10, 0));
         stakeText = Ui.Label(stakeRow.transform, "", 18, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
         stakeText.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(170, 38), Vector2.zero);
+        // how well the computer plays in practice
+        diffRow = Ui.Rect("Level", picker).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(380, 28), new Vector2(0, -144));
+        var dl = Ui.Label(diffRow, "مستوى الكمبيوتر", 12, new Color(1, 1, 1, 0.75f), TextAnchor.MiddleCenter, Ui.Bold);
+        dl.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(110, 26), new Vector2(Loc.En ? -128 : 128, 0));
+        string[] levels = { "سهل", "عادي", "صعب" };
+        for (int i = 0; i < 3; i++)
+        {
+            int lv = i;
+            var lb = Ui.Button(diffRow, levels[i], Ui.Panel, Ui.GoldLight, 13, () => { Sfx.Tap(); OfflineGame.Level = lv; RefreshPicker(); });
+            ((RectTransform)lb.transform).Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(72, 26), new Vector2((Loc.En ? i - 0.6f : 0.6f - i) * 78 + (Loc.En ? 40 : -40), 0));
+            lb.name = "Level " + i;
+        }
         // three ways to play
         var q = Ui.Button(picker, "لعب سريع", Ui.Gold, Ui.Ink, 20, () => { Sfx.Tap(); app.Quick(mode, Stakes[stakeIndex]); });
         ((RectTransform)q.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(360, 46), new Vector2(0, 82));
@@ -204,7 +252,9 @@ public class GameUi : MonoBehaviour
         // up to four in a row; a second row when there are more (ludo's classic, quick and master)
         const int PerRow = 4;
         int rows = (modes.Length + PerRow - 1) / PerRow;
-        picker.sizeDelta = new Vector2(400, 296 + (rows - 1) * 40);
+        picker.sizeDelta = new Vector2(400, 326 + (rows - 1) * 40);
+        picker.anchoredPosition = new Vector2(-40, rows > 1 ? 2 : -12);
+        diffRow.anchoredPosition = new Vector2(0, -144 - (rows - 1) * 40);
         modeRow.sizeDelta = new Vector2(380, rows * 40);
         ((RectTransform)stakeRow.transform).anchoredPosition = new Vector2(0, -98 - (rows - 1) * 40);
         for (int i = 0; i < modes.Length; i++)
@@ -233,6 +283,13 @@ public class GameUi : MonoBehaviour
             t.GetComponentInChildren<Text>().color = on ? Ui.Ink : Ui.GoldLight;
         }
         stakeText.Set(Loc.T("رهان ") + Short(Stakes[stakeIndex]));
+        foreach (Transform t in diffRow)
+        {
+            if (!t.name.StartsWith("Level ")) continue;
+            bool on = t.name == "Level " + OfflineGame.Level;
+            t.GetComponent<Image>().color = on ? Ui.Gold : Ui.Panel;
+            t.GetComponentInChildren<Text>().color = on ? Ui.Ink : Ui.GoldLight;
+        }
     }
 
     /* ---------- a room for friends ---------- */
@@ -294,7 +351,9 @@ public class GameUi : MonoBehaviour
     void Share(TableView v)
     {
         if (v == null || string.IsNullOrEmpty(v.code)) return;
-        string text = (Loc.En ? "Join my table in Board Battles! Room code: " : "تعالى العب معايا في بورد باتلز! كود الغرفة: ") + v.code.ToUpperInvariant();
+        string link = app.net != null ? app.net.HttpBase + "/join/" + v.code.ToUpperInvariant() : "";
+        string text = (Loc.En ? "Play Board Battles with me! Tap to join my table: " : "تعالى العب معايا بورد باتلز! دوس هنا وادخل ترابيزتي: ") + link
+            + (Loc.En ? "\nRoom code: " : "\nكود الغرفة: ") + v.code.ToUpperInvariant();
         GUIUtility.systemCopyBuffer = v.code;
 #if UNITY_ANDROID && !UNITY_EDITOR
         try
@@ -398,6 +457,10 @@ public class GameUi : MonoBehaviour
         micIcon = Ui.Picture(mic.transform, "Mic", Menus.Icon("micoff")); micIcon.rectTransform.Fill(9); micIcon.color = Ui.GoldLight;
         micButton = mic.GetComponent<Image>();
 
+        // quick chat: phrases and emojis
+        chat = gameObject.AddComponent<QuickChat>();
+        chat.Build(app, hud);
+
         // the view: the whole scene, or just the board from above
         var vb = Ui.Button(hud, "", new Color(0.1f, 0.06f, 0.04f, 0.85f), Color.white, 10, () =>
         {
@@ -414,6 +477,11 @@ public class GameUi : MonoBehaviour
         ((RectTransform)roll.transform).Place(new Vector2(1, 0), new Vector2(1, 0), new Vector2(170, 56), new Vector2(-18, 22));   // at the side, clear of the board
         roll.gameObject.AddComponent<Outline>().effectColor = new Color(0, 0, 0, 0.4f);
         rollButton = roll.gameObject; rollButton.SetActive(false);
+        // tawla: take back this turn's moves
+        var undo = Ui.Button(hud, "رجّع", Ui.Panel, Ui.GoldLight, 17, () => app.boardGame.Undo());
+        ((RectTransform)undo.transform).Place(new Vector2(1, 0), new Vector2(1, 0), new Vector2(120, 46), new Vector2(-18, 22));
+        undo.gameObject.AddComponent<Outline>().effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.5f);
+        undoButton = undo.gameObject; undoButton.SetActive(false);
 
         endButtons = Ui.Rect("Ends", hud).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(300, 40), new Vector2(0, 136));
         var bl = Ui.Button(endButtons, "شمال", Ui.Gold, Ui.Ink, 16, () => app.PlayEnd('L'));
@@ -510,9 +578,9 @@ public class GameUi : MonoBehaviour
     public void Render(TableView v, int sel, List<char> choose)
     {
         lobby.gameObject.SetActive(v.phase == "lobby");
-        if (v.phase == "lobby") { RenderLobby(v); turnText.Set(""); rollButton.SetActive(false); }
+        if (v.phase == "lobby") { RenderLobby(v); turnText.Set(""); rollButton.SetActive(false); undoButton.SetActive(false); }
         if (v.Board) { RenderBoard(v); return; }
-        rollButton.SetActive(false);
+        rollButton.SetActive(false); undoButton.SetActive(false);
         // scores: each player, or the two teams
         var parts = new List<string>();
         if (v.mode == "team")
@@ -588,6 +656,7 @@ public class GameUi : MonoBehaviour
         }
         turnText.Set(msg);
         rollButton.SetActive(app.boardGame.NeedsRoll());
+        undoButton.SetActive(!app.boardGame.NeedsRoll() && app.boardGame.CanUndo);
         endButtons.gameObject.SetActive(false);
         if (handKey != "board") { handKey = "board"; for (int i = handBar.childCount - 1; i >= 0; i--) Destroy(handBar.GetChild(i).gameObject); }
         // a game ended (tawla plays several to a target; chess and ludo are one game)

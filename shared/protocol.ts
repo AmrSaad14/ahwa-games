@@ -143,9 +143,12 @@ export interface PublicUser {
   ratings: Partial<Record<GameId, { rating: number; games: number; wins: number }>>;
   playGames?: boolean;   // signed in with Google Play Games
   code?: string;         // friend code others add this player with
+  xp?: number;           // experience, and the level it makes
+  level?: number;
+  streak?: number;       // days in a row the player came back
 }
 
-export interface LeaderRow { rank: number; name: string; ch: number; rating: number; games: number; wins: number; me: boolean }
+export interface LeaderRow { rank: number; name: string; ch: number; rating: number; games: number; wins: number; me: boolean; level?: number }
 
 /** Client → server */
 export type C2S =
@@ -177,7 +180,7 @@ export type C2S =
   | { t: 'start' }
   | { t: 'act'; a: Action | BoardAction }
   | { t: 'emote'; k: Emote }
-  | { t: 'lb'; game?: GameId }
+  | { t: 'lb'; game?: GameId | 'week' }
   | { t: 'coins' }
   | { t: 'adStart' }
   | { t: 'adWatched'; ticket: string }
@@ -195,6 +198,8 @@ export type C2S =
   /** Cash out: every 1,000,000 coins pays 10 EGP to a Vodafone Cash number, paid by hand within one working day. */
   | { t: 'cashout'; phone: string; millions: number }
   | { t: 'cashouts' }
+  /** A practice game (played on the phone) finished: a little experience. */
+  | { t: 'practiceDone'; game: GameId; won: boolean }
   /** A message to the team from "Contact support". */
   | { t: 'support'; text: string; contact?: string; app?: string }
   | { t: 'ping'; c: number };
@@ -207,7 +212,9 @@ export type S2C =
   | { t: 'invited'; from: { id: string; name: string; ch: number }; code: string; mode: Mode; stake: number }
   | { t: 'otp'; phone: string }
   | { t: 'signedIn'; via: 'phone' | 'google' | 'playgames'; fresh: boolean }
-  | { t: 'bonus'; coins: number }
+  | { t: 'bonus'; coins: number; streak?: number }
+  | { t: 'xp'; gained: number; xp: number; level: number; levelUp: boolean }
+  | { t: 'weeklyPrize'; rank: number; coins: number; week: string }
   | { t: 'gift'; from: number; to: number; k: GiftKind }
   | { t: 'rtc'; from: number; data: RtcSignal }
   | { t: 'user'; user: PublicUser }
@@ -223,7 +230,7 @@ export type S2C =
   | { t: 'table'; view: AnyView }
   | { t: 'left' }
   | { t: 'emote'; seat: number; k: Emote }
-  | { t: 'lb'; game: GameId; rows: LeaderRow[]; me: LeaderRow | null }
+  | { t: 'lb'; game: GameId | 'week'; rows: LeaderRow[]; me: LeaderRow | null; week?: string; endsAt?: number; prizes?: number[] }
   | { t: 'cashouts'; rows: CashoutRow[]; rate: { coins: number; egp: number }; maxMillions: number }
   | { t: 'cashoutDone'; id: number; egp: number; coins: number; phone: string }
   | { t: 'supportSent'; id: number }

@@ -18,6 +18,27 @@ export const ECONOMY = {
   adsPerDay: 10,
 };
 
+/** The daily bonus grows for each day in a row you come back: day 1 … day 7 (and every day after). */
+export const STREAK = [5_000, 8_000, 12_000, 18_000, 25_000, 35_000, 50_000] as const;
+export const streakBonus = (day: number) => STREAK[Math.min(STREAK.length, Math.max(1, day)) - 1];
+
+/** Experience: level n needs 50·n·(n−1) XP (100 for level 2, 300 for 3, 600 for 4 …). */
+export const XP = { win: 40, loss: 15, practiceWin: 10, practiceLoss: 4 };
+export const levelOf = (xp: number) => Math.max(1, Math.floor((1 + Math.sqrt(1 + 0.08 * Math.max(0, xp))) / 2));
+export const xpForLevel = (level: number) => 50 * level * (level - 1);
+
+/** The week's top ten (most points: 3 a win, 1 a game, online only) share these prizes every Monday. */
+export const WEEKLY_PRIZES = [1_000_000, 500_000, 300_000, 200_000, 150_000, 100_000, 75_000, 50_000, 40_000, 30_000] as const;
+/** The week a moment belongs to, as "2026-W43" (ISO weeks, Monday to Sunday, UTC). */
+export function weekKey(ms = Date.now()): string {
+  const d = new Date(ms); d.setUTCHours(0, 0, 0, 0);
+  const day = (d.getUTCDay() + 6) % 7;            // Monday 0
+  d.setUTCDate(d.getUTCDate() - day + 3);         // the Thursday of this week decides the year
+  const jan4 = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+  const week = 1 + Math.round(((d.getTime() - jan4.getTime()) / 86_400_000 - 3 + ((jan4.getUTCDay() + 6) % 7)) / 7);
+  return `${d.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
 /** Coins each player puts on the table for one match (online games). */
 export const STAKES = [5_000, 20_000, 50_000, 100_000, 250_000, 500_000, 1_000_000] as const;
 /** The game keeps this share of what the winners take from the losers. */

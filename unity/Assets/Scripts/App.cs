@@ -25,11 +25,14 @@ public class App : MonoBehaviour
     int tilesOnTable;
     string leftTableId = "";
     OfflineGame offline;
+    string reportedPractice = "";
     bool boardDragging; Vector2 boardDragFrom;            // a practice game played on the phone, with no server
 
     // the home menu
     Canvas ui, toastCanvas;
-    Text nameText, coinsText, statusText, toastText;
+    Text nameText, coinsText, statusText, toastText, levelText;
+    GameObject levelBox;
+    RectTransform playNow;
     CanvasGroup homeGroup, toastGroup;
     float toastUntil;
     readonly Dictionary<string, Image> gameButtons = new Dictionary<string, Image>();
@@ -95,6 +98,8 @@ public class App : MonoBehaviour
         yield return cafe.BuildSteps();
         splash.Progress(0.95f);
         Debug.Log($"[app] café built in {Time.realtimeSinceStartup - tBuild:0.0} s");
+        Perf.Apply();
+        Music.Begin();
         yield return null;
         dominoTable = new GameObject("Domino").AddComponent<DominoTable>();
         dominoTable.Init(cafe);
@@ -134,6 +139,7 @@ public class App : MonoBehaviour
     {
         net?.Pump();
         PumpOffline();
+        if (playNow != null && view == null) playNow.localScale = Vector3.one * (1 + 0.035f * Mathf.Sin(Time.time * 3.2f));
         if (Input.GetKeyDown(KeyCode.Escape) && menus != null && menus.IsOpen) { menus.Close(); return; }   // Android's back button
         if (menus != null && menus.IsOpen) return;
         if (toastGroup != null) toastGroup.alpha = Mathf.MoveTowards(toastGroup.alpha, Time.time < toastUntil ? 1 : 0, Time.deltaTime * 4);
@@ -177,6 +183,9 @@ public class App : MonoBehaviour
 
     void OnApplicationQuit() { net?.Stop(); }
 
+    /// Back in the app (after a call, the home screen…): reconnect right away; the server puts you back in your game.
+    void OnApplicationPause(bool paused) { if (!paused) net?.Resume(); }
+
     /* ---------- push reminders (Push.cs) ---------- */
 
     // called from Java (BBPush / BBMessagingService) on this object, "Board Battles"
@@ -210,6 +219,7 @@ public class App : MonoBehaviour
                 {
                     nameText.Set(user.Str("name"));
                     coinsText.text = ((long)user.Num("coins")).ToString("N0");
+                    if (user.Num("level") > 0) { levelBox.SetActive(true); levelText.Set(Loc.T("مستوى") + " " + (int)user.Num("level")); }
                     menus?.OnUser(user);
                     Debug.Log($"[app] signed in as {user.Str("name")} with {user.Num("coins")} coins");
                 }
@@ -243,6 +253,9 @@ public class App : MonoBehaviour
                 Debug.Log("[app] left the table" + (view != null ? " (" + view.game + " " + view.phase + ")" : ""));
                 if (view != null && view.phase == "mend") { view = null; break; }   // the result stays up until you choose
                 ExitGame();
+                break;
+            case "emote":
+                ShowEmote((int)m.Num("seat", -1), m.Str("k"));
                 break;
             case "payout":
                 game.ShowPayout(m.Str("kind"), m.Num("delta"));
@@ -284,6 +297,7 @@ public class App : MonoBehaviour
         game.HidePicker();
         homeGroup.alpha = 0; homeGroup.blocksRaycasts = false;
         cafe.SetGame(true);
+        Music.Home(false);
         dominoTable.Show(true);
         game.ShowHud(true);
     }
@@ -297,6 +311,7 @@ public class App : MonoBehaviour
         boardGame.Show(false);
         voice.Leave(); voice.Sync(null);
         cafe.SetGame(false);
+        Music.Home(true);
         homeGroup.alpha = 1; homeGroup.blocksRaycasts = true;
     }
 
@@ -322,6 +337,7 @@ public class App : MonoBehaviour
     string picked;
     void Pick(string g)
     {
+        PlayerPrefs.SetString("lastGame", g);
         if (g == picked && game.PickerOpen) return;   // already showing this game's choices
         picked = g;
         cafe.Focus(g);
@@ -345,6 +361,9 @@ public class App : MonoBehaviour
     /// so it works without the server (Offline/*.cs).
     public void Practice(string mode)
     {
+        // the first practice game of each game starts with a short guide
+        string g = Modes.GameOf(mode);
+        if (!Tutorial.Seen(g) && !Recording) { game.HidePicker(); Tutorial.Show(g, Loc.T(GameNames[g]), () => Practice(mode)); return; }
         lastMode = mode; lastStake = 0;
         if (view != null) Leave();
         if (searching) CancelQueue();
@@ -368,6 +387,13 @@ public class App : MonoBehaviour
             // through JSON, so the view has exactly the shape (and number types) of a server message
             var vm = Json.Parse(Json.Write(offline.View())) as Dictionary<string, object>;
             OnMessage(new Dictionary<string, object> { ["t"] = "table", ["view"] = vm });
+            // a finished practice game earns a little experience (when connected)
+            if (view != null && view.phase == "mend" && view.match != null && view.id != reportedPractice)
+            {
+                reportedPractice = view.id;
+                bool won = view.you >= 0 && view.match.team == view.TeamOf(view.you);
+                if (net != null && net.Online) net.Send(new Dictionary<string, object> { ["t"] = "practiceDone", ["game"] = view.game, ["won"] = won });
+            }
         }
         catch (System.Exception e) { Debug.LogException(e); }
     }
@@ -387,7 +413,7 @@ public class App : MonoBehaviour
             case "leave":
                 offline = null;
                 return true;
-            case "voice": case "rtc": case "emote": case "start": case "bot": case "kick": case "setup": case "cancel":
+            case "voice": case "rtc": case "start": case "bot": case "kick": case "setup": case "cancel":
                 return true;
         }
         return false;
@@ -478,6 +504,22 @@ public class App : MonoBehaviour
 
     /* ---------- the home menu ---------- */
 
+    /// Quick chat: your emote goes to the table (in practice it stays here, and the computer may answer).
+    public void SendEmote(string k)
+    {
+        if (view == null) return;
+        if (offline != null) { ShowEmote(view.you, k); StartCoroutine(game.chat.BotReply(view, k)); return; }
+        Send(new Dictionary<string, object> { ["t"] = "emote", ["k"] = k });
+    }
+
+    public void ShowEmote(int seat, string k)
+    {
+        if (view == null || seat < 0) return;
+        game.ShowEmote(view, seat, k);
+        var who = dominoTable.CharAtSeat(seat);
+        if (who != null && who.gameObject.activeInHierarchy) { if (k == "gg" || k == "clap" || k == "love" || k == "fire") who.Win(); else who.Gesture(who.transform.position + who.Forward * 2f + Vector3.up * 3f); }
+    }
+
     public void Toast(string s)
     {
         toastText.Set(s);
@@ -505,9 +547,15 @@ public class App : MonoBehaviour
         coinsText = Ui.Label(me.transform, "—", 15, Ui.GoldLight, TextAnchor.MiddleLeft, Ui.Bold);
         coinsText.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(80, 30), new Vector2(36, 0));
 
+        // your level, under your name
+        var lv = Ui.Box(root, "Level", Ui.Gold);
+        lv.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(64, 20), new Vector2(-14, -54));
+        levelText = Ui.Label(lv.transform, "", 11, Ui.Ink, TextAnchor.MiddleCenter, Ui.Bold); levelText.rectTransform.Fill();
+        levelBox = lv.gameObject; levelBox.SetActive(false);
+
         // connection
         statusText = Ui.Label(root, "جاري الاتصال…", 12, Ui.GoldLight, TextAnchor.MiddleRight);
-        statusText.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(200, 20), new Vector2(-16, -54));
+        statusText.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(200, 20), new Vector2(-86, -54));
 
         // the four games, down the right side
         var list = Ui.Rect("Games", root).Place(new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(170, 232), new Vector2(-14, -18));
@@ -525,6 +573,17 @@ public class App : MonoBehaviour
         // a hint at the bottom
         var hint = Ui.Label(root, "اضغط على أي ترابيزة في القهوة", 13, new Color(1, 1, 1, 0.75f));
         hint.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(400, 24), new Vector2(0, 12));
+        // straight into a free game against the computer (the first thing a new player sees)
+        var now = Ui.Button(root, "العب دلوقتي", Ui.Gold, Ui.Ink, 20, () =>
+        {
+            Sfx.Tap();
+            string g = PlayerPrefs.GetString("lastGame", "domino");
+            var modes = GameUi.GameModes[g];
+            Practice(PlayerPrefs.GetString("mode." + g, modes[0].mode));
+        });
+        ((RectTransform)now.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(230, 50), new Vector2(-30, 42));
+        now.gameObject.AddComponent<Outline>().effectColor = new Color(0, 0, 0, 0.45f);
+        playNow = (RectTransform)now.transform;
 
         // toasts, over everything
         toastCanvas = Ui.MakeCanvas("Toast", 50);
@@ -635,12 +694,14 @@ public class App : MonoBehaviour
                     played += Time.deltaTime;
                     yield return null;
                 }
+                SendEmote("nice"); yield return new WaitForSeconds(2.2f); Still("q-chat.png");
                 Still("7-later.png");
                 cafe.SetView(true); dominoTable.ApplyView(); yield return new WaitForSeconds(2.5f); Still("v-board-view.png");
                 Debug.Log("[test] board view: players shown " + (dominoTable.CharAtSeat(1) != null && dominoTable.CharAtSeat(1).gameObject.activeSelf));
                 cafe.SetView(false); dominoTable.ApplyView(); yield return new WaitForSeconds(0.6f);
                 yield return new WaitForSeconds(0.5f);
             }
+            Loc.Set(true);   // the board games in English (screenshots for the store in both languages)
             // the board games, each a practice game against the computer, played by the test for a while
             foreach (var (mode, tag) in new[] { ("tawla", "tawla"), ("chess", "chess"), ("ludo4", "ludo"), ("mahbousa", "mahbousa") })
             {
@@ -665,6 +726,7 @@ public class App : MonoBehaviour
                     yield return null;
                 }
             }
+            Loc.Set(false);
             // every other way to play, each for a few seconds (not filmed): the log says whether it plays
             foreach (var mode in new[] { "ffa2", "ffa3", "ffa4", "tawla31", "gulbahar", "chess1", "chess3", "chess10", "ludo2", "ludo3", "ludoq2", "ludoq4", "ludom2", "ludom4" })
             {

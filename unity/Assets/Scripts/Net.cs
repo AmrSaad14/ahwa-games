@@ -55,6 +55,16 @@ public class Net
     public void Start() { _ = Run(); }
     public void Stop() { stop.Cancel(); try { ws?.Abort(); } catch { } }
 
+    /// Back from the background: phones often drop the connection silently, so start a fresh one at once
+    /// (the server puts you back at your table).
+    CancellationTokenSource wake = new CancellationTokenSource();
+    public void Resume()
+    {
+        try { if (ws == null || ws.State != WebSocketState.Open) { wake.Cancel(); wake = new CancellationTokenSource(); } else ws.Abort(); } catch { }
+        quickRetry = true;
+    }
+    volatile bool quickRetry;
+
     async Task Run()
     {
         int backoff = 1000;
@@ -84,7 +94,8 @@ public class Net
                 if (!stop.IsCancellationRequested) inbox.Enqueue("\u0001log " + e.GetType().Name + ": " + e.Message + (e.InnerException != null ? " / " + e.InnerException.Message : ""));
             }
             inbox.Enqueue("\u0001closed");
-            try { await Task.Delay(backoff, stop.Token); } catch { }
+            if (quickRetry) { quickRetry = false; backoff = 300; }
+            try { using (var both = CancellationTokenSource.CreateLinkedTokenSource(stop.Token, wake.Token)) await Task.Delay(backoff, both.Token); } catch { }
             backoff = Math.Min(backoff * 2, 15000);
         }
     }

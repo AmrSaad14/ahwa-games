@@ -2,7 +2,7 @@ import { PlayBilling } from './billing';
 import crypto from 'node:crypto';
 import { GAMES, GameId, MODES, MODE_PLAYERS, Mode, defaultTarget, gameOf, targetOptions, teamOf } from '../shared/engine';
 import type { C2S, Emote, FriendRow, IceServer, S2C } from '../shared/protocol';
-import { ECONOMY, STAKES, giftByKind, isStake, winnings, NO_ADS } from '../shared/gifts';
+import { ECONOMY, STAKES, giftByKind, isStake, winnings, NO_ADS, XP, WEEKLY_PRIZES, weekKey } from '../shared/gifts';
 import { EMOTES } from '../shared/protocol';
 import { Table, publicId } from '../shared/table';
 import { BoardTable } from '../shared/boardtable';
@@ -33,6 +33,8 @@ export interface HubOptions {
   phones?: PhoneCodes; google?: GoogleSignIn; defaultCountry?: string;
   adsSsv?: boolean;
   billing?: PlayBilling;
+  /** A player won a weekly prize (the server sends them a push). */
+  onWeeklyPrize?: (uid: string, rank: number, coins: number) => void;
   /** Files a support message (and e-mails it); the server sets it up (server/support.ts). */
   support?: (m: { uid: string | null; name: string; contact: string; text: string; app: string }) => number;
 }
@@ -63,10 +65,25 @@ export class Hub {
   private inviteLimiter = new Limiter(20, 60_000);
   private cashLimiter = new Limiter(6, 60 * 60_000);
   private supportLimiter = new Limiter(5, 60 * 60_000);
+  private practiceLimiter = new Limiter(20, 60 * 60_000);
   private ticker: ReturnType<typeof setInterval>;
 
   constructor(private store: Store, private tokens: Tokens, private opts: HubOptions) {
-    this.ticker = setInterval(() => { this.matchmake(); this.sweep(); }, 1000);
+    this.ticker = setInterval(() => { this.matchmake(); this.sweep(); if (++this.ticks % 60 === 0) this.weeklyPrizes(); }, 1000);
+  }
+
+  private ticks = 0;
+  /** After a week ends, its top ten get their prizes (once). */
+  weeklyPrizes(): { uid: string; rank: number; coins: number }[] {
+    const last = weekKey(Date.now() - 7 * 86_400_000);
+    const paid = this.store.payWeekly(last);
+    for (const p of paid) {
+      console.log(`[weekly] ${last}: #${p.rank} +${p.coins}`);
+      this.byUser.get(p.uid)?.conn.send({ t: 'weeklyPrize', rank: p.rank, coins: p.coins, week: last });
+      this.sendUser(p.uid);
+      this.opts.onWeeklyPrize?.(p.uid, p.rank, p.coins);
+    }
+    return paid;
   }
 
   stop() { this.stopping = true; clearInterval(this.ticker); this.tables.forEach(t => t.close()); }
@@ -363,7 +380,11 @@ export class Hub {
       }
       case 'emote': { if (table && EMOTES.includes(m.k)) table.emote(uid, m.k); return; }
       case 'lb': {
-        const game: GameId = m.game && GAMES.includes(m.game) ? m.game : 'domino';
+        if (m.game === 'week') {
+          const lb = this.store.weeklyBoard(uid);
+          return s.conn.send({ t: 'lb', game: 'week', rows: lb.rows, me: lb.me, week: weekKey(), endsAt: weekEndsAt(), prizes: [...WEEKLY_PRIZES] });
+        }
+        const game: GameId = m.game && (GAMES as string[]).includes(m.game) ? m.game as GameId : 'domino';
         const lb = this.store.leaderboard(uid, game);
         return s.conn.send({ t: 'lb', game, rows: lb.rows, me: lb.me });
       }
@@ -397,6 +418,13 @@ export class Hub {
         return;
       }
       case 'cashouts': return this.sendCashouts(uid);
+      case 'practiceDone': {
+        // a game against the computer on the phone: a little experience (limited, so it can't be farmed)
+        if (!this.practiceLimiter.allow(uid)) return;
+        const r = this.store.addXp(uid, m.won ? XP.practiceWin : XP.practiceLoss);
+        s.conn.send({ t: 'xp', ...r });
+        return this.sendUser(uid);
+      }
       case 'support': {
         const text = String(m.text || '').trim().slice(0, 4000);
         if (text.length < 3) return err('support_empty');
@@ -502,12 +530,12 @@ export class Hub {
     s.uid = u.id;
     this.byUser.set(u.id, s);
     this.store.touch(u.id);
-    const bonus = this.store.claimDaily(u.id);
+    const daily = this.store.claimDaily(u.id);
     const fresh = this.store.get(u.id) ?? u;
     s.conn.send({ t: 'welcome', user: this.store.publicUser(fresh), token: this.tokens.issue(u.id), now: Date.now(), ice: this.iceFor(u.id),
       login: { google: !!this.opts.google?.enabled, phone: !!this.opts.phones?.enabled, playGames: this.opts.google?.playGamesEnabled ? this.opts.google.clientId : undefined } });
     this.friendsChanged(u.id);
-    if (bonus) s.conn.send({ t: 'bonus', coins: bonus });
+    if (daily.coins) s.conn.send({ t: 'bonus', coins: daily.coins, streak: daily.streak });
     const t = this.userTable.get(u.id);
     if (t && !t.closed) { t.setOnline(u.id, true); this.pushView(t, u.id); }
   }
@@ -658,6 +686,12 @@ export class Hub {
   private onMatchEnd(t: Room, res: { team: number; scores: number[]; deltas: (number | null)[] }) {
     const game = gameOf(t.mode);
     const players = t.seats.map(s => s && { uid: s.bot ? null : s.uid, bot: s.bot, rating: s.rating });
+    // the weekly leaderboard counts matchmade games and rooms with at least two people (not a room full of bots)
+    const weekly = !t.isPrivate || t.seats.filter(s => s && !s.bot).length >= 2;
+    const xpFor = (uid: string, won: boolean) => {
+      const r = this.store.addXp(uid, won ? XP.win : XP.loss);
+      this.byUser.get(uid)?.conn.send({ t: 'xp', ...r });
+    };
     if (!t.isPrivate) {
       // Elo against the average rating of the other side(s). Computer players count as 1000.
       t.seats.forEach((s, i) => {
@@ -670,11 +704,12 @@ export class Hub {
         const played = this.store.ratingsOf(s.uid)?.[game]?.games ?? 0;
         const k = played < 20 ? 40 : 28;
         res.deltas[i] = Math.round(k * ((draw ? 0.5 : won ? 1 : 0) - expected));
-        this.store.recordResult(s.uid, res.deltas[i], won, game);
+        this.store.recordResult(s.uid, res.deltas[i], won, game, weekly);
+        xpFor(s.uid, won);
         this.sendUser(s.uid);
       });
     } else {
-      t.seats.forEach((s, i) => { if (s && !s.bot) { this.store.recordResult(s.uid, null, teamOf(t.mode, i) === res.team, game); this.sendUser(s.uid); } });
+      t.seats.forEach((s, i) => { if (s && !s.bot) { const won = teamOf(t.mode, i) === res.team; this.store.recordResult(s.uid, null, won, game, weekly); xpFor(s.uid, won); this.sendUser(s.uid); } });
     }
     this.settle(t, res.team);
     this.store.saveMatch({ id: t.id + ':' + Date.now(), mode: t.mode, private: t.isPrivate, players, scores: res.scores, team: res.team });
@@ -767,4 +802,11 @@ export function walletNumber(raw: string): string | null {
   else if (d.startsWith('20') && d.length === 12) d = '0' + d.slice(2);
   else if (d.length === 10 && d.startsWith('10')) d = '0' + d;
   return /^010\d{8}$/.test(d) ? d : null;
+}
+
+/** When this week's leaderboard closes (next Monday 00:00 UTC). */
+export function weekEndsAt(ms = Date.now()): number {
+  const d = new Date(ms); d.setUTCHours(0, 0, 0, 0);
+  const day = (d.getUTCDay() + 6) % 7;
+  return d.getTime() + (7 - day) * 86_400_000;
 }

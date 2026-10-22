@@ -64,3 +64,21 @@ export function supportPage(rows: { id: number; user_id: string | null; name: st
 .t{white-space:pre-wrap;font-size:15px;line-height:1.5;color:#fff}.sub{opacity:.5;font-size:11px}</style></head><body>
 <h1>Support messages</h1><div class="muted">${rows.length} messages · e-mail to ${esc(to)}: ${mailOn ? 'on' : 'off (set SMTP_HOST, SMTP_USER, SMTP_PASS)'}</div>${body || '<div class="muted">No messages yet</div>'}</body></html>`;
 }
+
+/** The page a "Play with me" link opens: straight into the app's room, or the store if it isn't installed. */
+export function invitePage(code: string, scheme: string, pkg: string): string {
+  const app = `${scheme}://join?code=${encodeURIComponent(code)}`;
+  const store = `https://play.google.com/store/apps/details?id=${encodeURIComponent(pkg)}`;
+  const intent = `intent://join?code=${encodeURIComponent(code)}#Intent;scheme=${scheme};package=${pkg};S.browser_fallback_url=${encodeURIComponent(store)};end`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Play Board Battles with me</title><meta property="og:title" content="Play Board Battles with me!"><meta property="og:description" content="Room code ${esc(code)} · Dominoes, Backgammon, Chess and Ludo">
+<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 40%,#7a1424,#2a070c);font-family:system-ui,sans-serif;color:#ffe9b0;text-align:center}
+.c{padding:24px;max-width:420px}h1{color:#f3cd62;font-size:26px;margin:0 0 8px}.code{font-size:40px;letter-spacing:8px;font-weight:800;color:#fff;margin:16px 0}
+a.b{display:block;margin:12px auto;padding:14px 18px;border-radius:12px;background:#f3cd62;color:#1b120c;font-weight:800;text-decoration:none;font-size:18px}
+a.s{background:transparent;border:1px solid #f3cd62;color:#f3cd62}.m{opacity:.75;font-size:14px}</style></head><body><div class="c">
+<h1>Play Board Battles with me!</h1><div class="m">العب معايا بورد باتلز</div><div class="code">${esc(code)}</div>
+<a class="b" id="open" href="${esc(intent)}">Open the game · افتح اللعبة</a>
+<a class="b s" href="${esc(store)}">Get it on Google Play</a>
+<div class="m">Already in the game? Tap "Play with a friend" and enter the code.</div></div>
+<script>if(!/Android/i.test(navigator.userAgent)){document.getElementById('open').href=${JSON.stringify(app)}}setTimeout(function(){location.href=document.getElementById('open').href},400)</script></body></html>`;
+}

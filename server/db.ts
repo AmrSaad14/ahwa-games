@@ -5,7 +5,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import type { CashoutRow, CoinRow, LeaderRow, PublicUser } from '../shared/protocol';
 import type { GameId } from '../shared/engine';
-import { ECONOMY } from '../shared/gifts';
+import { ECONOMY, WEEKLY_PRIZES, levelOf, streakBonus, weekKey } from '../shared/gifts';
 import { Equipped, skinById } from '../shared/skins';
 import { maskPhone } from './login';
 
@@ -14,7 +14,7 @@ export interface UserRow {
   rating: number; games: number; wins: number; created: number; seen: number;
   coins: number; gifts: number; bonus_day: string | null; ad_free_until: number; equip: string | null;
   phone: string | null; google_sub: string | null; google_email: string | null;
-  pg_id: string | null; friend_code: string | null;
+  pg_id: string | null; friend_code: string | null; streak?: number; xp?: number;
 }
 
 export class Store {
@@ -68,6 +68,12 @@ export class Store {
     if (!cols.has('equip')) this.db.exec('ALTER TABLE users ADD COLUMN equip TEXT');
     if (!cols.has('pg_id')) this.db.exec('ALTER TABLE users ADD COLUMN pg_id TEXT');
     if (!cols.has('friend_code')) this.db.exec('ALTER TABLE users ADD COLUMN friend_code TEXT');
+    if (!cols.has('streak')) this.db.exec('ALTER TABLE users ADD COLUMN streak INTEGER NOT NULL DEFAULT 0');
+    if (!cols.has('xp')) this.db.exec('ALTER TABLE users ADD COLUMN xp INTEGER NOT NULL DEFAULT 0');
+    // the week's points for the weekly leaderboard
+    this.db.exec(`CREATE TABLE IF NOT EXISTS weekly (week TEXT NOT NULL, user_id TEXT NOT NULL, points INTEGER NOT NULL DEFAULT 0,
+      games INTEGER NOT NULL DEFAULT 0, wins INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (week, user_id));
+      CREATE INDEX IF NOT EXISTS weekly_rank ON weekly(week, points DESC)`);
     this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_pg ON users(pg_id) WHERE pg_id IS NOT NULL; CREATE UNIQUE INDEX IF NOT EXISTS users_fcode ON users(friend_code) WHERE friend_code IS NOT NULL');
     // friends: a row a→b is a request from a to b until b accepts it
     this.db.exec(`CREATE TABLE IF NOT EXISTS friends (a TEXT NOT NULL, b TEXT NOT NULL, status TEXT NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (a, b));
@@ -176,14 +182,59 @@ export class Store {
     this.db.prepare('DELETE FROM push_tokens WHERE user_id = ?').run(id);
   }
 
-  /** Gives the daily coin bonus once per (UTC) day. Returns the coins added, or 0. */
-  claimDaily(id: string): number {
-    const day = new Date().toISOString().slice(0, 10);
-    const r = this.db.prepare('UPDATE users SET coins = coins + ?, bonus_day = ? WHERE id = ? AND (bonus_day IS NULL OR bonus_day <> ?)')
-      .run(ECONOMY.dailyBonus, day, id, day);
-    if (!Number(r.changes)) return 0;
-    this.logCoins(id, 'daily', ECONOMY.dailyBonus);
-    return ECONOMY.dailyBonus;
+  /** The daily bonus, once per (UTC) day; it grows for each day in a row (STREAK). Returns the coins and the day. */
+  claimDaily(id: string): { coins: number; streak: number } {
+    const now = Date.now();
+    const day = new Date(now).toISOString().slice(0, 10), yesterday = new Date(now - 86_400_000).toISOString().slice(0, 10);
+    const u = this.get(id);
+    if (!u || u.bonus_day === day) return { coins: 0, streak: u?.streak ?? 0 };
+    const streak = u.bonus_day === yesterday ? (u.streak ?? 0) + 1 : 1;
+    const coins = streakBonus(streak);
+    const r = this.db.prepare('UPDATE users SET coins = coins + ?, bonus_day = ?, streak = ? WHERE id = ? AND (bonus_day IS NULL OR bonus_day <> ?)')
+      .run(coins, day, streak, id, day);
+    if (!Number(r.changes)) return { coins: 0, streak: u.streak ?? 0 };
+    this.logCoins(id, 'daily', coins);
+    return { coins, streak };
+  }
+
+  /** Experience for a finished game. Returns what was gained and whether a new level was reached. */
+  addXp(id: string, gained: number): { gained: number; xp: number; level: number; levelUp: boolean } {
+    const before = (this.db.prepare('SELECT xp FROM users WHERE id = ?').get(id) as { xp: number } | undefined)?.xp ?? 0;
+    const xp = before + gained;
+    this.db.prepare('UPDATE users SET xp = ? WHERE id = ?').run(xp, id);
+    return { gained, xp, level: levelOf(xp), levelUp: levelOf(xp) > levelOf(before) };
+  }
+
+  /** A finished online game counts for this week's leaderboard: 3 points a win, 1 for playing. */
+  addWeekly(id: string, won: boolean, week = weekKey()) {
+    this.db.prepare(`INSERT INTO weekly (week, user_id, points, games, wins) VALUES (?, ?, ?, 1, ?)
+      ON CONFLICT(week, user_id) DO UPDATE SET points = points + excluded.points, games = games + 1, wins = wins + excluded.wins`)
+      .run(week, id, won ? 3 : 1, won ? 1 : 0);
+  }
+
+  weeklyBoard(meId: string | null, week = weekKey(), limit = 50): { rows: LeaderRow[]; me: LeaderRow | null } {
+    const rows = this.db.prepare(`SELECT u.id, u.name, u.ch, u.xp, w.points, w.games, w.wins FROM weekly w JOIN users u ON u.id = w.user_id
+      WHERE w.week = ? ORDER BY w.points DESC, w.wins DESC, w.games ASC LIMIT ?`).all(week, limit) as { id: string; name: string; ch: number; xp: number; points: number; games: number; wins: number }[];
+    const out = rows.map((r, i) => ({ rank: i + 1, name: r.name, ch: r.ch, rating: r.points, games: r.games, wins: r.wins, me: r.id === meId, level: levelOf(r.xp) }));
+    let me: LeaderRow | null = null;
+    const mine = meId ? this.db.prepare('SELECT points, games, wins FROM weekly WHERE week = ? AND user_id = ?').get(week, meId) as { points: number; games: number; wins: number } | undefined : undefined;
+    const u = meId ? this.get(meId) : undefined;
+    if (u && mine) {
+      const above = this.db.prepare('SELECT COUNT(*) AS c FROM weekly WHERE week = ? AND points > ?').get(week, mine.points) as { c: number };
+      me = { rank: Number(above.c) + 1, name: u.name, ch: u.ch, rating: mine.points, games: mine.games, wins: mine.wins, me: true, level: levelOf(u.xp ?? 0) };
+    }
+    return { rows: out, me };
+  }
+
+  /** Pays last week's top ten once (WEEKLY_PRIZES). Returns who got what. */
+  payWeekly(week: string): { uid: string; rank: number; coins: number }[] {
+    if (this.db.prepare("SELECT v FROM meta WHERE k = 'weekly_paid_' || ?").get(week)) return [];
+    const top = this.db.prepare('SELECT user_id FROM weekly WHERE week = ? ORDER BY points DESC, wins DESC, games ASC LIMIT ?').all(week, WEEKLY_PRIZES.length) as { user_id: string }[];
+    this.db.prepare("INSERT INTO meta (k, v) VALUES ('weekly_paid_' || ?, ?)").run(week, String(Date.now()));
+    return top.map((r, i) => {
+      this.addCoins(r.user_id, WEEKLY_PRIZES[i]); this.logCoins(r.user_id, 'weekly', WEEKLY_PRIZES[i]);
+      return { uid: r.user_id, rank: i + 1, coins: WEEKLY_PRIZES[i] };
+    });
   }
 
   coinsOf(id: string) { return (this.db.prepare('SELECT coins FROM users WHERE id = ?').get(id) as { coins: number } | undefined)?.coins ?? 0; }
@@ -255,12 +306,13 @@ export class Store {
   }
 
   /** Records a finished match: the per-game rating and counts, plus the player's overall totals. */
-  recordResult(id: string, delta: number | null, won: boolean, game: GameId = 'domino') {
+  recordResult(id: string, delta: number | null, won: boolean, game: GameId = 'domino', weekly = true) {
     this.db.prepare(`INSERT INTO ratings (user_id, game, rating, games, wins) VALUES (?, ?, MAX(100, 1000 + ?), 1, ?)
       ON CONFLICT(user_id, game) DO UPDATE SET rating = MAX(100, rating + excluded.rating - 1000), games = games + 1, wins = wins + excluded.wins`)
       .run(id, game, delta ?? 0, won ? 1 : 0);
     this.db.prepare('UPDATE users SET games = games + 1, wins = wins + ? WHERE id = ?').run(won ? 1 : 0, id);
     if (game === 'domino') this.db.prepare('UPDATE users SET rating = MAX(100, rating + ?) WHERE id = ?').run(delta ?? 0, id);
+    if (weekly) this.addWeekly(id, won);
   }
 
   saveMatch(m: { id: string; mode: string; private: boolean; players: unknown; scores: number[]; team: number }) {
@@ -272,7 +324,7 @@ export class Store {
     const rows = this.db.prepare(`SELECT u.id, u.name, u.ch, r.rating, r.games, r.wins FROM ratings r JOIN users u ON u.id = r.user_id
       WHERE r.game = ? AND r.games >= 3 ORDER BY r.rating DESC, r.wins DESC LIMIT ?`)
       .all(game, limit) as unknown as Pick<UserRow, 'id' | 'name' | 'ch' | 'rating' | 'games' | 'wins'>[];
-    const out = rows.map((r, i) => ({ rank: i + 1, name: r.name, ch: r.ch, rating: r.rating, games: r.games, wins: r.wins, me: r.id === meId }));
+    const out = rows.map((r, i) => ({ rank: i + 1, name: r.name, ch: r.ch, rating: r.rating, games: r.games, wins: r.wins, me: r.id === meId, level: levelOf((this.get(r.id)?.xp) ?? 0) }));
     let me: LeaderRow | null = null;
     const u = meId ? this.get(meId) : undefined;
     const mine = meId ? this.db.prepare('SELECT rating, games, wins FROM ratings WHERE user_id = ? AND game = ?').get(meId, game) as { rating: number; games: number; wins: number } | undefined : undefined;
@@ -283,7 +335,7 @@ export class Store {
     return { rows: out, me };
   }
 
-  publicUser(u: UserRow): PublicUser { return { ...toPublic(u), code: this.friendCode(u.id), ratings: this.ratingsOf(u.id), adsLeft: Math.max(0, ECONOMY.adsPerDay - this.adsToday(u.id)), skins: this.skinsOf(u.id) }; }
+  publicUser(u: UserRow): PublicUser { return { ...toPublic(u), xp: u.xp ?? 0, level: levelOf(u.xp ?? 0), streak: u.streak ?? 0, code: this.friendCode(u.id), ratings: this.ratingsOf(u.id), adsLeft: Math.max(0, ECONOMY.adsPerDay - this.adsToday(u.id)), skins: this.skinsOf(u.id) }; }
 
   /** Skins this player bought in the shop. */
   skinsOf(id: string): string[] { return (this.db.prepare('SELECT skin FROM user_skins WHERE user_id = ? ORDER BY ts').all(id) as { skin: string }[]).map(r => r.skin); }

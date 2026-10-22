@@ -61,7 +61,17 @@ class ChessDef : BoardRules
 
     public override Dictionary<string, object> Auto(int seat, Random rnd)
     {
-        var m = Chess.BestMove(c, 3, rnd);
+        int level = OfflineGame.Level;
+        if (level == 0 && rnd.NextDouble() < 0.35)
+        {
+            // easy: now and then just a legal move
+            var all = Chess.Legal(c);
+            var any = all[rnd.Next(all.Count)];
+            var ra = new Dictionary<string, object> { ["t"] = "move", ["from"] = any.from, ["to"] = any.to };
+            if (any.promo != '\0') ra["promo"] = any.promo.ToString();
+            return ra;
+        }
+        var m = Chess.BestMove(c, level == 0 ? 1 : level == 1 ? 2 : 3, rnd);
         var a = new Dictionary<string, object> { ["t"] = "move", ["from"] = m.from, ["to"] = m.to };
         if (m.promo != '\0') a["promo"] = m.promo.ToString();
         return a;
@@ -97,8 +107,10 @@ class ChessDef : BoardRules
 class TawlaDef : BoardRules
 {
     readonly string variant; ITawla s;
+    ITawla start;   // right after this turn's roll: what "undo" goes back to
     public TawlaDef(string variant) { this.variant = variant; }
-    public override void NewGame(int players, int first, Random rnd) { s = variant == "aada" ? (ITawla)Aada.Start(first) : Tables.Start(variant, first); }
+    bool CanUndo(int seat) => start != null && seat == s.Turn && start.Turn == s.Turn && s.Rolled != null && !ReferenceEquals(start, s);
+    public override void NewGame(int players, int first, Random rnd) { s = variant == "aada" ? (ITawla)Aada.Start(first) : Tables.Start(variant, first); start = null; }
     public override int ToMove() => s.Turn;
 
     public override string Act(int seat, Dictionary<string, object> a, Random rnd, out Dictionary<string, object> ev)
@@ -108,8 +120,15 @@ class TawlaDef : BoardRules
         if (t == "roll")
         {
             if (s.Rolled != null) return "already_rolled";
-            s = s.Roll(rnd);
+            s = s.Roll(rnd); start = s;
             ev = Ev("roll", seat); ev["dice"] = s.Rolled.ToList();
+            return null;
+        }
+        if (t == "undo")
+        {
+            if (!CanUndo(seat)) return "nothing_to_undo";
+            s = start;
+            ev = Ev("undo", seat);
             return null;
         }
         if (t == "step")
@@ -130,7 +149,7 @@ class TawlaDef : BoardRules
                 // trapped a lone checker of the opponent's on the way
                 for (int i = 1; i < path.Count; i++) { int p = path[i]; if (p != Tables.OFF && tn.pinned[p] == 1 - seat && pinnedBefore[p] != 1 - seat) hit = true; }
             }
-            s = n.TurnDone() && n.Winner() == null ? n.EndTurn() : n;
+            if (n.TurnDone() && n.Winner() == null) { s = n.EndTurn(); start = null; } else s = n;
             ev = Ev("step", seat); ev["from"] = from; ev["to"] = to; ev["hit"] = hit;
             return null;
         }
@@ -138,7 +157,7 @@ class TawlaDef : BoardRules
         {
             if (s.Rolled == null || !s.TurnDone()) return "must_move";
             var dice = s.Rolled.ToList();
-            s = s.EndTurn();
+            s = s.EndTurn(); start = null;
             ev = Ev("pass", seat); ev["dice"] = dice;
             return null;
         }
@@ -148,13 +167,19 @@ class TawlaDef : BoardRules
     public override Dictionary<string, object> Auto(int seat, Random rnd)
     {
         if (s.Rolled == null) return OfflineGame.Do("roll");
+        if (OfflineGame.Level == 0 && rnd.NextDouble() < 0.6)
+        {
+            // easy: any move that is allowed
+            var ns = s.NextSteps();
+            if (ns.Count > 0) { var x = ns[rnd.Next(ns.Count)]; return new Dictionary<string, object> { ["t"] = "step", ["from"] = x.from, ["to"] = x.to }; }
+        }
         var st = s.BotStep(rnd);
         if (st == null) return OfflineGame.Do("pass");
         return new Dictionary<string, object> { ["t"] = "step", ["from"] = st.Value.from, ["to"] = st.Value.to };
     }
     public override Dictionary<string, object> Forced(int seat) => s.Rolled != null && s.TurnDone() ? OfflineGame.Do("pass") : null;
     public override (int winner, int points, string kind)? Over() => s.Winner();
-    public override Dictionary<string, object> View(int seat) => s.View(seat);
+    public override Dictionary<string, object> View(int seat) { var d = s.View(seat); if (CanUndo(seat)) d["canUndo"] = true; return d; }
 }
 
 class LudoDef : BoardRules
@@ -201,6 +226,7 @@ class LudoDef : BoardRules
     {
         if (s.die < 0) return OfflineGame.Do("roll");
         int p = s.sixes >= 3 ? -1 : s.BotPawn(rnd);
+        if (p >= 0 && OfflineGame.Level == 0 && rnd.NextDouble() < 0.6) { var mv = s.Movable(); p = mv[rnd.Next(mv.Count)]; }   // easy
         return p < 0 ? OfflineGame.Do("pass") : new Dictionary<string, object> { ["t"] = "pawn", ["i"] = p };
     }
     public override Dictionary<string, object> Forced(int seat)

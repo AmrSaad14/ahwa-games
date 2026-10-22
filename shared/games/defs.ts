@@ -12,10 +12,11 @@ export type BoardAction =
   | { t: 'roll' }                                              // tawla, ludo
   | { t: 'step'; from: number; to: number; via?: number[] }    // tawla: one die, or one checker on with both dice (via the points in between)
   | { t: 'pawn'; i: number }                                   // ludo
-  | { t: 'pass' };                                             // forced pass with nothing to play
+  | { t: 'pass' }                                               // forced pass with nothing to play
+  | { t: 'undo' };                                             // tawla: take back this turn's moves (before the turn ends)
 
 export interface BoardEvent {
-  t: 'start' | 'move' | 'roll' | 'step' | 'pawn' | 'pass' | 'end';
+  t: 'start' | 'move' | 'roll' | 'step' | 'pawn' | 'pass' | 'end' | 'undo';
   s: number;                 // seat
   from?: number; to?: number; promo?: string; capture?: boolean; check?: boolean;
   dice?: number[]; hit?: boolean; i?: number; captured?: { seat: number; pawn: number }[]; home?: boolean;
@@ -78,6 +79,10 @@ export const chessDef: GameDef<ChessGame> = {
 };
 
 /* ---------------- tawla ---------------- */
+/** Tawla's undo: the state right after this turn's roll travels with the state until the turn ends. */
+const START = Symbol('turnStart');
+function withStart<S extends object>(s: S, start: S | null): S { const n = { ...s } as S & { [START]?: S | null }; n[START] = start; return n; }
+function startOf<S extends object>(s: S): S | null { return (s as S & { [START]?: S | null })[START] ?? null; }
 type Hop = { from: number; to: number };
 /**
  * Moves that carry one checker on with two or more dice in a row (a 5 and a 2 straight to the point 7 away),
@@ -120,6 +125,8 @@ export interface TawlaView {
   later?: number[];
   /** جلبهار: this player is finishing the opponent's run */
   carry?: boolean;
+  /** the player to move may take back the moves made since rolling */
+  canUndo?: boolean;
 }
 export const tawlaDef: GameDef<T.TawlaState> = {
   game: 'tawla',
@@ -129,7 +136,12 @@ export const tawlaDef: GameDef<T.TawlaState> = {
     if (a.t === 'roll') {
       if (s.rolled) return 'already_rolled';
       const n = T.roll(s, rnd);
-      return { s: n, e: { t: 'roll', s: seat, dice: n.rolled! } };
+      return { s: withStart(n, n), e: { t: 'roll', s: seat, dice: n.rolled! } };
+    }
+    if (a.t === 'undo') {
+      const st = startOf(s);
+      if (!st || st.dice.length === s.dice.length) return 'nothing_to_undo';
+      return { s: withStart(st, st), e: { t: 'undo', s: seat } };
     }
     if (a.t === 'step') {
       const path = hops(a); if (!path) return 'illegal_move';
@@ -137,7 +149,7 @@ export const tawlaDef: GameDef<T.TawlaState> = {
       for (let i = 1; i < path.length && n; i++) n = n.turn === s.turn ? T.playStep(n, path[i - 1], path[i]) : null;
       if (!n) return 'illegal_move';
       const hit = n.bar[1 - seat] > s.bar[1 - seat];
-      return { s: T.turnDone(n) && !T.winner(n) ? T.endTurn(n) : n, e: { t: 'step', s: seat, from: a.from, to: a.to, hit } };
+      return { s: T.turnDone(n) && !T.winner(n) ? withStart(T.endTurn(n), null) : withStart(n, startOf(s)), e: { t: 'step', s: seat, from: a.from, to: a.to, hit } };
     }
     if (a.t === 'pass') {
       if (!s.rolled || !T.turnDone(s)) return 'must_move';
@@ -157,6 +169,7 @@ export const tawlaDef: GameDef<T.TawlaState> = {
     steps: seat === s.turn ? T.nextSteps(s).map(x => [x.from, x.to] as [number, number]) : [],
     combos: seat === s.turn && s.rolled ? combosOf(s, T.nextSteps, T.playStep, T.OFF) : undefined,
     pips: [T.pipCount(s, 0), T.pipCount(s, 1)], variant: 'aada',
+    canUndo: seat === s.turn && !!startOf(s) && startOf(s)!.dice.length > s.dice.length,
   }),
 };
 
@@ -170,7 +183,12 @@ function tablesDef(variant: V.TablesVariant): GameDef<V.TablesState> {
       if (a.t === 'roll') {
         if (s.rolled) return 'already_rolled';
         const n = V.roll(s, rnd);
-        return { s: n, e: { t: 'roll', s: seat, dice: n.rolled! } };
+        return { s: withStart(n, n), e: { t: 'roll', s: seat, dice: n.rolled! } };
+      }
+      if (a.t === 'undo') {
+        const st = startOf(s);
+        if (!st || st.dice.length === s.dice.length || st.turn !== s.turn) return 'nothing_to_undo';
+        return { s: withStart(st, st), e: { t: 'undo', s: seat } };
       }
       if (a.t === 'step') {
         if (!s.rolled) return 'must_roll';
@@ -182,7 +200,7 @@ function tablesDef(variant: V.TablesVariant): GameDef<V.TablesState> {
           if (n && variant === 'mahbousa' && to !== V.OFF && n.pinned[to] === 1 - seat && before.pinned[to] !== 1 - seat) trapped = true;
         }
         if (!n) return 'illegal_move';
-        return { s: V.turnDone(n) && !V.winner(n) ? V.endTurn(n) : n, e: { t: 'step', s: seat, from: a.from, to: a.to, hit: trapped } };
+        return { s: V.turnDone(n) && !V.winner(n) ? withStart(V.endTurn(n), null) : withStart(n, startOf(s)), e: { t: 'step', s: seat, from: a.from, to: a.to, hit: trapped } };
       }
       if (a.t === 'pass') {
         if (!s.rolled || !V.turnDone(s)) return 'must_move';
@@ -210,6 +228,7 @@ function tablesDef(variant: V.TablesVariant): GameDef<V.TablesState> {
         pips: [V.pipCount(s, 0), V.pipCount(s, 1)], variant,
         pinned: variant === 'mahbousa' ? s.pinned : undefined,
         later: s.later.length ? s.later : undefined, carry: s.carry !== null ? true : undefined,
+        canUndo: seat === s.turn && !!startOf(s) && startOf(s)!.dice.length > s.dice.length && startOf(s)!.turn === s.turn,
       };
     },
   };

@@ -137,6 +137,10 @@ public class BoardGame : MonoBehaviour
 
     void Act(Dictionary<string, object> a) => app.Send(new Dictionary<string, object> { ["t"] = "act", ["a"] = a });
 
+    /// Tawla: take back this turn's moves (before the turn ends).
+    public bool CanUndo => view != null && view.MyTurn && view.game == "tawla" && view.tawla != null && view.tawla.Bool("canUndo");
+    public void Undo() { if (!CanUndo) return; sel = -1000; targets.Clear(); Sfx.Tap(); Act(new Dictionary<string, object> { ["t"] = "undo" }); }
+
     bool PickAtScreen(Vector3 screen, out Pick pick)
     {
         pick = default;

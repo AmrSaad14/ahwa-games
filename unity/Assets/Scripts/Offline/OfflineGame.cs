@@ -39,6 +39,13 @@ public abstract class OfflineGame
         }
     }
 
+    /// How well the computer plays in practice: 0 easy, 1 normal, 2 hard (picked in the game menu).
+    public static int Level
+    {
+        get => UnityEngine.PlayerPrefs.GetInt("ai.level", 1);
+        set { UnityEngine.PlayerPrefs.SetInt("ai.level", Math.Max(0, Math.Min(2, value))); UnityEngine.PlayerPrefs.Save(); }
+    }
+
     public static OfflineGame Create(string mode, string name, int ch)
     {
         if (Modes.GameOf(mode) == "domino") return new OfflineDomino(mode, name, ch);

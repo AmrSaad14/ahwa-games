@@ -12,7 +12,7 @@ import { verifySsv } from './ads';
 import { GitHubBackup } from './backup';
 import { PlayBilling } from './billing';
 import { Push } from './push';
-import { cashoutPage, supportPage } from './admin';
+import { cashoutPage, supportPage, invitePage } from './admin';
 import { supportDesk } from './support';
 import type { S2C } from '../shared/protocol';
 
@@ -28,7 +28,8 @@ export function createServer(opts = config) {
   const phones = new PhoneCodes(opts.login), google = new GoogleSignIn(opts.login);
   const billing = new PlayBilling(opts.billing);
   const desk = supportDesk(store, opts.support);
-  const hub = new Hub(store, tokens, { phones, google, billing, support: m => desk.file(m), defaultCountry: opts.login.defaultCountry, adsSsv: opts.adsSsv, turnMs: opts.turnMs, botFillMs: opts.botFillMs, nextRoundMs: opts.nextRoundMs, botDelay: opts.botDelay, lobbyAfterMatchMs: opts.lobbyAfterMatchMs, msgsPer5s: (opts as { msgsPer5s?: number }).msgsPer5s,
+  const hub = new Hub(store, tokens, { phones, google, billing, support: m => desk.file(m),
+    onWeeklyPrize: (uid, rank, coins) => { push.toUser(uid, ['مبروك! 🏆', `جيت المركز ${rank} الأسبوع ده وكسبت ${coins.toLocaleString('en')} كوين`], ['Congratulations! 🏆', `You finished #${rank} this week and won ${coins.toLocaleString('en')} coins`]).catch(() => {}); }, defaultCountry: opts.login.defaultCountry, adsSsv: opts.adsSsv, turnMs: opts.turnMs, botFillMs: opts.botFillMs, nextRoundMs: opts.nextRoundMs, botDelay: opts.botDelay, lobbyAfterMatchMs: opts.lobbyAfterMatchMs, msgsPer5s: (opts as { msgsPer5s?: number }).msgsPer5s,
     stunUrls: opts.stunUrls, turnUrls: opts.turnUrls, turnSecret: opts.turnSecret, autoMoveMs: opts.autoMoveMs, chessClockMs: opts.chessClockMs });
   const push = new Push(store, opts.push);
   const pushTimer = setInterval(() => { push.tick().catch(e => console.error('[push]', (e as Error).message)); }, 60_000);
@@ -69,6 +70,12 @@ export function createServer(opts = config) {
         .then(r => { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify({ enabled: push.enabled, ...r })); })
         .catch(e => { res.writeHead(500, { 'Content-Type': 'text/plain' }); res.end((e as Error).message); });
       return;
+    }
+    // "Play with me" links: open the app straight into a friend's room (or get it from Google Play)
+    const join = url.pathname.match(/^\/join\/([A-Za-z0-9]{4,8})$/);
+    if (join) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      return res.end(invitePage(join[1].toUpperCase(), opts.login.appScheme, opts.billing.packageName));
     }
     // support: the web app (and anything else) can send a message here too; the team reads them at /admin/support
     if (url.pathname === '/api/support' && req.method === 'POST') {

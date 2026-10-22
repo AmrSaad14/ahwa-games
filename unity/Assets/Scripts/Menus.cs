@@ -107,17 +107,26 @@ public class Menus : MonoBehaviour
                 var login = m.Obj("login");
                 if (login != null) googleOn = login.Bool("google");
                 if (pendingTicket != null) { app.Send(new Dictionary<string, object> { ["t"] = "ticket", ["ticket"] = pendingTicket }); pendingTicket = null; }
+                if (pendingJoin != null) { var j = pendingJoin; pendingJoin = null; StartCoroutine(JoinSoon(j)); }
                 break;
             case "signedIn":
                 app.Toast(Loc.T("أهلاً! اتسجلت بحساب جوجل"));
                 Sfx.Coins();
                 break;
             case "bonus":
-                app.Toast(Loc.T("مكافأة") + " +" + Loc.Short((long)m.Num("coins")));
-                Sfx.Coins();
+                ShowDaily((long)m.Num("coins"), (int)m.Num("streak", 1));
+                break;
+            case "xp":
+                if (m.Bool("levelUp")) { app.Toast(Loc.T("مستوى جديد!") + "  " + Loc.T("مستوى") + " " + (int)m.Num("level")); Sfx.Coins(); }
+                else app.Toast("+" + (int)m.Num("gained") + " XP");
+                break;
+            case "weeklyPrize":
+                app.Toast(Loc.T("مبروك! جيت المركز") + " " + (int)m.Num("rank") + "  +" + Loc.Short((long)m.Num("coins")));
+                Sfx.Coins(); Sfx.Buzz();
                 break;
             case "lb":
                 lbRows = m.Arr("rows") ?? new List<object>(); lbMe = m.Obj("me");
+                if (m.Str("game") == "week") lbEndsAt = m.Num("endsAt");
                 Debug.Log($"[menus] leaderboard {m.Str("game")}: {lbRows.Count} rows (showing {lbGame})");
                 if (m.Str("game") == lbGame) refreshOpen?.Invoke();
                 break;
@@ -276,7 +285,9 @@ public class Menus : MonoBehaviour
             foreach (Transform c in area) Destroy(c.gameObject);
             var list = Scroll(area, 8);
             Toggle(list, "الصوت", Sfx.SoundOn, v => { Sfx.SoundOn = v; if (v) Sfx.Tap(); });
+            Toggle(list, "الموسيقى", Music.On, v => { Music.On = v; });
             Toggle(list, "الاهتزاز", Sfx.VibrateOn, v => { Sfx.VibrateOn = v; if (v) Sfx.Buzz(); });
+            Toggle(list, "توفير البطارية", Perf.Saver, v => { Perf.Saver = v; });
             // how the game table is seen
             var vr = Row(list, 44, Card);
             At(Ui.Label(vr, "طريقة العرض", 16, Color.white, StartAlign, Ui.Bold).rectTransform, 14, 160, 40);
@@ -321,6 +332,32 @@ public class Menus : MonoBehaviour
             Ui.Label(by, "Powered by Qimma Labs  ·  2027", 11, new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.7f), TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Fill();
         };
         refreshOpen();
+    }
+
+    /* ---------- the daily reward ---------- */
+
+    static readonly long[] Streak = { 5_000, 8_000, 12_000, 18_000, 25_000, 35_000, 50_000 };
+
+    /// Today's bonus, on a track of seven days: it grows for each day in a row you come back.
+    void ShowDaily(long coins, int streak)
+    {
+        Panel(Loc.T("مكافأة النهارده"), out var body, new Vector2(640, 300));
+        refreshOpen = null;
+        int today = Mathf.Clamp(streak, 1, 7);
+        Ui.Label(body, Loc.T("ارجع كل يوم والمكافأة تكبر") + "  ·  " + Loc.T("يوم") + " " + streak, 14, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Bold).rectTransform
+            .Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(600, 24), new Vector2(0, 0));
+        for (int i = 0; i < 7; i++)
+        {
+            int k = Loc.En ? i : 6 - i;
+            bool done = i + 1 < today, now = i + 1 == today;
+            var c = Ui.Box(body, "Day", now ? new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.95f) : done ? new Color(0.18f, 0.42f, 0.23f, 0.9f) : Card).rectTransform;
+            c.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(78, now ? 120 : 108), new Vector2((k - 3) * 84, now ? -36 : -42));
+            Ui.Label(c, Loc.T("يوم") + " " + (i + 1), 12, now ? Ui.Ink : Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(76, 20), new Vector2(0, -6));
+            var ci = Ui.Picture(c, "Coin", Icon("coin")); ci.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(now ? 40 : 30, now ? 40 : 30), new Vector2(0, 2));
+            Ui.Label(c, Loc.Short(Streak[i]), now ? 17 : 14, now ? Ui.Ink : Color.white, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(76, 22), new Vector2(0, 8));
+        }
+        var b = Ui.Button(body, Loc.T("خد") + " +" + Loc.Short(coins), Ui.Gold, Ui.Ink, 18, () => { Sfx.Coins(); Close(); });
+        ((RectTransform)b.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(220, 44), new Vector2(0, 2));
     }
 
     /* ---------- contact support ---------- */
@@ -616,7 +653,9 @@ public class Menus : MonoBehaviour
 
     /* ---------- the leaderboard ---------- */
 
-    static readonly string[] GameIds = { "domino", "tawla", "chess", "ludo" };
+    static readonly string[] GameIds = { "domino", "tawla", "chess", "ludo", "week" };
+    static readonly long[] WeeklyPrizes = { 1_000_000, 500_000, 300_000, 200_000, 150_000, 100_000, 75_000, 50_000, 40_000, 30_000 };
+    double lbEndsAt;
 
     public void OpenLeaders(int tab)
     {
@@ -627,11 +666,23 @@ public class Menus : MonoBehaviour
         refreshOpen = () =>
         {
             foreach (Transform c in body) Destroy(c.gameObject);
-            var area = Tabs(body, new[] { "دومينو", "طاولة", "شطرنج", "لودو" }, lbTab, i => { Close(); OpenLeaders(i); });
+            var area = Tabs(body, new[] { "دومينو", "طاولة", "شطرنج", "لودو", "الأسبوع" }, lbTab, i => { Close(); OpenLeaders(i); });
+            bool week = lbGame == "week";
+            float top = 0;
+            if (week)
+            {
+                // the weekly prizes, and how long is left
+                double left = lbEndsAt > 0 ? lbEndsAt - App.LocalMs() : 0;
+                int d = (int)(left / 86_400_000), h = (int)(left % 86_400_000 / 3_600_000);
+                var info = Ui.Label(area, Loc.T("أول ١٠ بيكسبوا كوينز كل يوم اتنين") + "  ·  " + Loc.T("الأول") + " " + Loc.Short(WeeklyPrizes[0])
+                    + (left > 0 ? "  ·  " + Loc.T("فاضل") + " " + d + Loc.T("ي") + " " + h + Loc.T("س") : ""), 12, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold);
+                info.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(560, 20), Vector2.zero);
+                top = 22;
+            }
             // the column heads
-            var head = Ui.Rect("Head", area).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(560, 22), Vector2.zero);
-            LbCells(head, Loc.T("الترتيب"), "", Loc.T("التقييم"), Loc.T("مكسب"), new Color(1, 1, 1, 0.5f), 12);
-            var listArea = Ui.Rect("List", area); listArea.anchorMin = Vector2.zero; listArea.anchorMax = Vector2.one; listArea.offsetMin = new Vector2(0, lbMe != null ? 40 : 0); listArea.offsetMax = new Vector2(0, -24);
+            var head = Ui.Rect("Head", area).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(560, 22), new Vector2(0, -top));
+            LbCells(head, Loc.T("الترتيب"), "", Loc.T(week ? "نقط" : "التقييم"), Loc.T(week ? "الجايزة" : "مكسب"), new Color(1, 1, 1, 0.5f), 12);
+            var listArea = Ui.Rect("List", area); listArea.anchorMin = Vector2.zero; listArea.anchorMax = Vector2.one; listArea.offsetMin = new Vector2(0, lbMe != null ? 40 : 0); listArea.offsetMax = new Vector2(0, -24 - top);
             if (lbRows == null || lbRows.Count == 0)
             {
                 Ui.Label(listArea, lbRows == null ? Loc.T("جاري التحميل…") : Loc.T("مفيش نتايج لسه"), 15, Ui.GoldLight).rectTransform.Fill();
@@ -644,13 +695,16 @@ public class Menus : MonoBehaviour
                 bool me = r.Bool("me");
                 int rank = (int)r.Num("rank");
                 var row = Row(list, 32, me ? new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.22f) : Card);
-                LbCells(row, rank.ToString(), r.Str("name"), ((int)r.Num("rating")).ToString(), ((int)r.Num("wins")).ToString(),
-                    rank == 1 ? Ui.Gold : Color.white, 14);
+                string lvl = r.Num("level") > 0 ? "  ·  " + Loc.T("مستوى") + " " + (int)r.Num("level") : "";
+                string last = week ? (rank <= WeeklyPrizes.Length ? Loc.Short(WeeklyPrizes[rank - 1]) : "—") : ((int)r.Num("wins")).ToString();
+                LbCells(row, rank.ToString(), r.Str("name") + lvl, ((int)r.Num("rating")).ToString(), last, rank == 1 ? Ui.Gold : Color.white, 14);
             }
             if (lbMe != null)
             {
                 var mine = Ui.Box(area, "Me", new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.25f)).rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(560, 34), Vector2.zero);
-                LbCells(mine, ((int)lbMe.Num("rank")).ToString(), Loc.T("مركزك") + " · " + lbMe.Str("name"), ((int)lbMe.Num("rating")).ToString(), ((int)lbMe.Num("wins")).ToString(), Ui.Gold, 14);
+                int myRank = (int)lbMe.Num("rank");
+                string myLast = week ? (myRank <= WeeklyPrizes.Length ? Loc.Short(WeeklyPrizes[myRank - 1]) : "—") : ((int)lbMe.Num("wins")).ToString();
+                LbCells(mine, myRank.ToString(), Loc.T("مركزك") + " · " + lbMe.Str("name"), ((int)lbMe.Num("rating")).ToString(), myLast, Ui.Gold, 14);
             }
         };
         refreshOpen();
@@ -820,9 +874,23 @@ public class Menus : MonoBehaviour
         Application.OpenURL(app.net.HttpBase + "/auth/google/start?to=app");
     }
 
+    string pendingJoin;
+    IEnumerator JoinSoon(string code) { yield return new WaitForSeconds(0.5f); app.JoinRoom(code); }
     void OnLink(string url)
     {
-        if (string.IsNullOrEmpty(url) || !url.StartsWith("ahwagames://auth")) return;
+        if (string.IsNullOrEmpty(url)) return;
+        // a "Play with me" link: into the friend's room as soon as we're connected
+        if (url.StartsWith("ahwagames://join"))
+        {
+            int c = url.IndexOf("code=", StringComparison.Ordinal);
+            if (c < 0) return;
+            var code = Uri.UnescapeDataString(url.Substring(c + 5).Split('&')[0]).Trim();
+            if (code.Length < 4) return;
+            Debug.Log("[menus] invite link");
+            if (app.net != null && app.net.Online && user != null) app.JoinRoom(code); else pendingJoin = code;
+            return;
+        }
+        if (!url.StartsWith("ahwagames://auth")) return;
         int q = url.IndexOf("ticket=", StringComparison.Ordinal);
         if (q < 0) return;
         var ticket = Uri.UnescapeDataString(url.Substring(q + 7).Split('&')[0]);

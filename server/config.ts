@@ -28,7 +28,7 @@ export const config = {
   // Shop: Google Play purchases are checked with Google (server/billing.ts)
   billing: {
     serviceAccount: process.env.GOOGLE_PLAY_SERVICE_ACCOUNT || '',
-    packageName: process.env.ANDROID_PACKAGE || 'com.ahwa.domino',
+    packageName: process.env.ANDROID_PACKAGE || 'com.ahwa.boardbattles',
     testMode: process.env.PURCHASES_TEST === '1',
   },
   // Push reminders with Firebase Cloud Messaging (server/push.ts)

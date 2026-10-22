@@ -144,6 +144,13 @@ public class OfflineDomino : OfflineGame
         var options = new List<(int id, char e)>();
         foreach (var id in hand) foreach (var e in Domino.EndsFor(line, id)) options.Add((id, e));
         if (options.Count == 0) return Do(yard.Count > 0 ? "draw" : "pass");
+        int level = Level;
+        if (level == 0 && Rand() < 0.7)
+        {
+            // easy: mostly any tile that fits
+            var pick = options[rng.Next(options.Count)];
+            return new Dictionary<string, object> { ["t"] = "play", ["id"] = pick.id, ["e"] = pick.e.ToString() };
+        }
         var seen = new int[7];
         var visible = new List<int>(hand);
         if (!line.Empty) { visible.Add(line.f); foreach (var x in line.L) visible.Add(x.id); foreach (var x in line.R) visible.Add(x.id); }
@@ -170,7 +177,8 @@ public class OfflineDomino : OfflineGame
                 int val = o.e == 'L' ? Domino.LeftVal(line) : Domino.RightVal(line);
                 if (val == partnerLast) s -= 2;
             }
-            s += Rand() * 1.5;
+            s += Rand() * (level == 2 ? 0.2 : 1.5);
+            if (level == 2 && o.e != 'C') s += seen[openNew] * 0.8;   // hard: leaves ends the others can't match
             if (s > bestScore) { bestScore = s; best = o; }
         }
         return new Dictionary<string, object> { ["t"] = "play", ["id"] = best.id, ["e"] = best.e.ToString() };
