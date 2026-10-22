@@ -22,6 +22,17 @@ export const ECONOMY = {
 export const STREAK = [5_000, 8_000, 12_000, 18_000, 25_000, 35_000, 50_000] as const;
 export const streakBonus = (day: number) => STREAK[Math.min(STREAK.length, Math.max(1, day)) - 1];
 
+/** Days for the daily reward run on Cairo time (midnight in Egypt): the date as YYYY-MM-DD. */
+const cairoFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit' });
+export const cairoDay = (ts: number) => cairoFmt.format(new Date(ts));
+/** When the next Cairo day starts (ms since 1970). */
+export function nextCairoDay(ts: number): number {
+  const today = cairoDay(ts);
+  let lo = ts, hi = ts + 26 * 3_600_000;   // the first moment that's a later date
+  while (hi - lo > 1000) { const mid = Math.floor((lo + hi) / 2); if (cairoDay(mid) === today) lo = mid; else hi = mid; }
+  return Math.floor(hi / 1000) * 1000;   // midnight falls on a whole second
+}
+
 /** Experience: level n needs 50·n·(n−1) XP (100 for level 2, 300 for 3, 600 for 4 …). */
 export const XP = { win: 40, loss: 15, practiceWin: 10, practiceLoss: 4 };
 export const levelOf = (xp: number) => Math.max(1, Math.floor((1 + Math.sqrt(1 + 0.08 * Math.max(0, xp))) / 2));

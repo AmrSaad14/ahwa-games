@@ -21,7 +21,7 @@ export interface Conn {
   ip: string;
 }
 
-interface Session { conn: Conn; uid: string | null; msgs: Limiter }
+interface Session { conn: Conn; uid: string | null; msgs: Limiter; v?: number }
 interface QEntry { uid: string; since: number }
 /** Coins on a table for the match being played: who paid in, from which seat, and who has walked away. */
 interface Escrow { stake: number; mode: Mode; paid: Map<string, { seat: number; left: boolean }> }
@@ -113,12 +113,17 @@ export class Hub {
     try { m = JSON.parse(raw); } catch { return; }
     if (!m || typeof m !== 'object' || typeof (m as { t?: unknown }).t !== 'string') return;
     if (m.t === 'ping') return s.conn.send({ t: 'pong', c: Number(m.c) || 0, now: Date.now() });
-    if (m.t === 'hello') return this.hello(s, m.token);
+    if (m.t === 'hello') { s.v = typeof m.v === 'number' ? m.v : 1; return this.hello(s, m.token); }
     if (!s.uid) return s.conn.send({ t: 'err', code: 'not_ready' });
     const uid = s.uid;
     const err = (code: string) => s.conn.send({ t: 'err', code });
     const table = this.userTable.get(uid);
     switch (m.t) {
+      case 'daily': {
+        const d = this.store.claimDaily(uid);
+        if (d.coins) s.conn.send({ t: 'bonus', coins: d.coins, streak: d.streak });
+        return this.sendUser(uid);
+      }
       case 'profile': {
         const u = this.store.get(uid)!;
         const name = m.name !== undefined ? cleanName(m.name) || u.name : u.name;
@@ -530,7 +535,8 @@ export class Hub {
     s.uid = u.id;
     this.byUser.set(u.id, s);
     this.store.touch(u.id);
-    const daily = this.store.claimDaily(u.id);
+    // the daily reward: newer phones show the track and the player collects it; older ones get it at once
+    const daily = (s.v ?? 1) < 2 ? this.store.claimDaily(u.id) : { coins: 0, streak: 0 };
     const fresh = this.store.get(u.id) ?? u;
     s.conn.send({ t: 'welcome', user: this.store.publicUser(fresh), token: this.tokens.issue(u.id), now: Date.now(), ice: this.iceFor(u.id),
       login: { google: !!this.opts.google?.enabled, phone: !!this.opts.phones?.enabled, playGames: this.opts.google?.playGamesEnabled ? this.opts.google.clientId : undefined } });

@@ -41,11 +41,17 @@ public class Menus : MonoBehaviour
         canvas = Ui.MakeCanvas("Menus", 40);
 
         // down the left side: shop, leaderboard, how to play, settings
-        var rail = Ui.Rect("Rail", home).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(64, 300), new Vector2(10, -88));
-        RailButton(rail, 0, "shop", "المتجر", () => OpenShop(0));
-        RailButton(rail, 1, "trophy", "المتصدرين", () => OpenLeaders(0));
-        RailButton(rail, 2, "help", "طريقة اللعب", () => OpenHowTo(0));
-        RailButton(rail, 3, "settings", "الإعدادات", OpenSettings);
+        var rail = Ui.Rect("Rail", home).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(64, 360), new Vector2(10, -88));
+        var daily = RailButton(rail, 0, "gift", "يومي", OpenDaily);
+        RailButton(rail, 1, "shop", "المتجر", () => OpenShop(0));
+        RailButton(rail, 2, "trophy", "المتصدرين", () => OpenLeaders(0));
+        RailButton(rail, 3, "help", "طريقة اللعب", () => OpenHowTo(0));
+        RailButton(rail, 4, "settings", "الإعدادات", OpenSettings);
+        // a red dot on Daily while today's reward is waiting
+        var dot = Ui.Picture(daily, "Dot", GameUi.Disc.texture);
+        dot.color = new Color32(0xe5, 0x3b, 0x3b, 0xff);
+        dot.rectTransform.Place(new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(14, 14), new Vector2(-6, -6));
+        dailyDot = dot.gameObject; dailyDot.SetActive(false);
         // (cash out to Vodafone Cash: OpenCashout, switched off for now)
 
         // along the top, left of your name and coins: watch an ad, sign in, language
@@ -61,7 +67,7 @@ public class Menus : MonoBehaviour
         if (!string.IsNullOrEmpty(Application.absoluteURL)) OnLink(Application.absoluteURL);
     }
 
-    void RailButton(RectTransform rail, int i, string icon, string label, Action onClick)
+    RectTransform RailButton(RectTransform rail, int i, string icon, string label, Action onClick)
     {
         var b = Ui.Button(rail, "", Ui.Panel, Ui.GoldLight, 10, () => { Sfx.Tap(); onClick(); });
         var r = ((RectTransform)b.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(60, 54), new Vector2(0, -i * 60));
@@ -70,6 +76,7 @@ public class Menus : MonoBehaviour
         ic.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(26, 26), new Vector2(0, -6));
         var t = Ui.Label(r, label, 9, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Bold);
         t.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(62, 16), new Vector2(0, 3));
+        return r;
     }
 
     Button Chip(RectTransform parent, string icon, string label, Vector2 pos, float w, Color bg, Color fg, Action onClick)
@@ -96,6 +103,11 @@ public class Menus : MonoBehaviour
         adText.Set(left > 0 ? "+5K" : "0");
         var eq = u.Obj("equip");
         TileArt.SetSkin(eq != null ? eq.Str("tiles") : null);
+        var d = u.Obj("daily");
+        bool ready = d != null && d.Bool("ready");
+        dailyDot.SetActive(ready);
+        // the first time today's reward is waiting, show the track by itself (on the home screen, nothing else open)
+        if (ready && !dailyShown && app.view == null && !IsOpen && !App.Recording) { dailyShown = true; OpenDaily(); return; }
         refreshOpen?.Invoke();
     }
 
@@ -114,7 +126,11 @@ public class Menus : MonoBehaviour
                 Sfx.Coins();
                 break;
             case "bonus":
-                ShowDaily((long)m.Num("coins"), (int)m.Num("streak", 1));
+                // today's reward was collected (or, on an older server, given as you connected)
+                dailyGot = (long)m.Num("coins"); dailyGotDay = (int)m.Num("streak", 1);
+                Sfx.Coins(); Sfx.Buzz();
+                app.Toast("+" + dailyGot.ToString("N0") + " " + Loc.T("عملة"));
+                if (refreshDaily != null && refreshOpen == refreshDaily) refreshOpen(); else if (!IsOpen && app.view == null) OpenDaily();
                 break;
             case "xp":
                 if (m.Bool("levelUp")) { app.Toast(Loc.T("مستوى جديد!") + "  " + Loc.T("مستوى") + " " + (int)m.Num("level")); Sfx.Coins(); }
@@ -338,26 +354,138 @@ public class Menus : MonoBehaviour
 
     static readonly long[] Streak = { 5_000, 8_000, 12_000, 18_000, 25_000, 35_000, 50_000 };
 
-    /// Today's bonus, on a track of seven days: it grows for each day in a row you come back.
-    void ShowDaily(long coins, int streak)
+    GameObject dailyDot;
+    bool dailyShown, dailyAsking;
+    long dailyGot; int dailyGotDay;
+    Action refreshDaily;
+    Text dailyCountdown; long dailyNextAt;
+
+    static long NowMs() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+    /// The daily reward: a track of seven days that grows for each day in a row you come back. Today's card
+    /// waits for you to collect it; once collected it counts down to tomorrow's.
+    public void OpenDaily()
     {
-        Panel(Loc.T("مكافأة النهارده"), out var body, new Vector2(640, 300));
-        refreshOpen = null;
-        int today = Mathf.Clamp(streak, 1, 7);
-        Ui.Label(body, Loc.T("ارجع كل يوم والمكافأة تكبر") + "  ·  " + Loc.T("يوم") + " " + streak, 14, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Bold).rectTransform
-            .Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(600, 24), new Vector2(0, 0));
-        for (int i = 0; i < 7; i++)
+        Panel(Loc.T("مكافأة النهارده"), out var body, new Vector2(660, 312));
+        var area = Ui.Rect("Area", body); area.Fill();
+        refreshDaily = refreshOpen = () =>
         {
-            int k = Loc.En ? i : 6 - i;
-            bool done = i + 1 < today, now = i + 1 == today;
-            var c = Ui.Box(body, "Day", now ? new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.95f) : done ? new Color(0.18f, 0.42f, 0.23f, 0.9f) : Card).rectTransform;
-            c.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(78, now ? 120 : 108), new Vector2((k - 3) * 84, now ? -36 : -42));
-            Ui.Label(c, Loc.T("يوم") + " " + (i + 1), 12, now ? Ui.Ink : Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(76, 20), new Vector2(0, -6));
-            var ci = Ui.Picture(c, "Coin", Icon("coin")); ci.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(now ? 40 : 30, now ? 40 : 30), new Vector2(0, 2));
-            Ui.Label(c, Loc.Short(Streak[i]), now ? 17 : 14, now ? Ui.Ink : Color.white, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(76, 22), new Vector2(0, 8));
+            foreach (Transform c in area) Destroy(c.gameObject);
+            dailyCountdown = null;
+            var d = user?.Obj("daily");
+            bool online = app.net != null && app.net.Online && user != null;
+            int day = d != null ? Mathf.Max(1, (int)d.Num("day", 1)) : Mathf.Max(1, dailyGotDay);
+            bool ready = d != null ? d.Bool("ready") : false;
+            bool collected = d != null ? !ready : dailyGot > 0;
+            long coins = d != null ? (long)d.Num("coins") : Streak[Mathf.Clamp(day, 1, 7) - 1];
+            dailyNextAt = d != null ? (long)d.Num("nextAt") : 0;
+            if (!collected && !ready) dailyAsking = false;
+            int today = Mathf.Clamp(day, 1, 7);
+
+            Ui.Label(area, Loc.T("ارجع كل يوم والمكافأة تكبر") + "  ·  " + Loc.T("يوم") + " " + day, 14, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Bold).rectTransform
+                .Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(620, 24), new Vector2(0, 0));
+            RectTransform nowCard = null;
+            for (int i = 0; i < 7; i++)
+            {
+                int k = Loc.En ? i : 6 - i;
+                bool past = i + 1 < today, now = i + 1 == today;
+                bool got = past || (now && collected);
+                var bg = now && !collected ? new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.95f) : got ? new Color(0.18f, 0.42f, 0.23f, 0.92f) : Card;
+                var c = Ui.Box(area, "Day", bg).rectTransform;
+                c.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(80, now ? 126 : 110), new Vector2((k - 3) * 87, now ? -34 : -42));
+                if (now) { nowCard = c; c.gameObject.AddComponent<Outline>().effectColor = new Color(1, 0.95f, 0.7f, 0.9f); }
+                var ink = now && !collected ? Ui.Ink : Ui.GoldLight;
+                Ui.Label(c, Loc.T("يوم") + " " + (i + 1), 12, ink, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(78, 20), new Vector2(0, -6));
+                // the reward grows: one coin, then a little pile, then a big one
+                int pile = i < 2 ? 1 : i < 5 ? 2 : 3;
+                for (int p = 0; p < pile; p++)
+                {
+                    float sz = now ? 34 : 28;
+                    var ci = Ui.Picture(c, "Coin", Icon("coin"));
+                    ci.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(sz, sz), new Vector2((p - (pile - 1) / 2f) * 12, 4 + p % 2 * 5));
+                    if (got && !now) ci.color = new Color(1, 1, 1, 0.55f);
+                }
+                if (got)
+                {
+                    var tick = Ui.Label(c, Loc.T("اتاخدت"), 11, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
+                    tick.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(78, 18), new Vector2(0, -20));
+                }
+                Ui.Label(c, Loc.Short(Streak[i]), now ? 17 : 14, now && !collected ? Ui.Ink : Color.white, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(78, 22), new Vector2(0, 7));
+            }
+            if (day > 7)
+                Ui.Label(area, Loc.T("من يوم ٧ وطالع: 50K كل يوم"), 12, new Color(1, 1, 1, 0.6f), TextAnchor.MiddleCenter).rectTransform
+                    .Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(600, 18), new Vector2(0, 52));
+
+            Button b;
+            if (!online)
+            {
+                b = Ui.Button(area, Loc.T("جاري الاتصال…"), new Color(1, 1, 1, 0.1f), Ui.GoldLight, 16, () => Sfx.Tap());
+            }
+            else if (ready)
+            {
+                b = Ui.Button(area, dailyAsking ? "…" : Loc.T("خد") + " +" + Loc.Short(coins), Ui.Gold, Ui.Ink, 18, () =>
+                {
+                    if (dailyAsking) return;
+                    Sfx.Tap(); dailyAsking = true;
+                    app.Send(new Dictionary<string, object> { ["t"] = "daily" });
+                    refreshOpen?.Invoke();
+                });
+                if (nowCard != null) StartCoroutine(Pulse(nowCard));
+            }
+            else
+            {
+                b = Ui.Button(area, "", new Color(1, 1, 1, 0.1f), Ui.GoldLight, 15, () => { Sfx.Tap(); Close(); });
+                dailyCountdown = b.GetComponentInChildren<Text>();
+                TickDaily();
+            }
+            ((RectTransform)b.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(300, 44), new Vector2(0, 2));
+            if (dailyGot > 0 && nowCard != null)
+            {
+                // just collected: the card pops and the coins rise from it
+                StartCoroutine(Pop(nowCard));
+                var plus = Ui.Label(area, "+" + Loc.Short(dailyGot), 26, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold);
+                plus.gameObject.AddComponent<Outline>().effectColor = new Color(0, 0, 0, 0.6f);
+                plus.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), new Vector2(160, 36), nowCard.anchoredPosition + new Vector2(0, -20));
+                StartCoroutine(Rise(plus));
+                dailyGot = 0; dailyAsking = false;
+            }
+        };
+        refreshOpen();
+    }
+
+    void TickDaily()
+    {
+        if (dailyCountdown == null) return;
+        long left = Math.Max(0, dailyNextAt - NowMs()) / 1000;
+        if (left <= 0) { dailyCountdown.Set(Loc.T("المكافأة جاهزة!")); return; }
+        dailyCountdown.Set(Loc.T("المكافأة الجاية بعد") + "  " + (left / 3600).ToString("0") + ":" + (left / 60 % 60).ToString("00") + ":" + (left % 60).ToString("00"));
+    }
+
+    float dailyTick;
+    void Update()
+    {
+        if (dailyCountdown == null) return;
+        dailyTick += Time.unscaledDeltaTime;
+        if (dailyTick < 0.5f) return;
+        dailyTick = 0; TickDaily();
+    }
+
+    static IEnumerator Pulse(RectTransform r)
+    {
+        for (float t = 0; r != null; t += Time.unscaledDeltaTime) { r.localScale = Vector3.one * (1 + 0.04f * Mathf.Sin(t * 5)); yield return null; }
+    }
+
+    static IEnumerator Rise(Text t)
+    {
+        var r = t.rectTransform; var from = r.anchoredPosition;
+        for (float k = 0; k < 1.4f; k += Time.unscaledDeltaTime)
+        {
+            if (t == null) yield break;
+            r.anchoredPosition = from + new Vector2(0, 60 * Ui.Ease(k / 1.4f));
+            var c = t.color; c.a = k < 1 ? 1 : 1 - (k - 1) / 0.4f; t.color = c;
+            yield return null;
         }
-        var b = Ui.Button(body, Loc.T("خد") + " +" + Loc.Short(coins), Ui.Gold, Ui.Ink, 18, () => { Sfx.Coins(); Close(); });
-        ((RectTransform)b.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(220, 44), new Vector2(0, 2));
+        if (t != null) Destroy(t.gameObject);
     }
 
     /* ---------- contact support ---------- */

@@ -125,7 +125,7 @@ public class Net
             {
                 if (s == "\u0001open")
                 {
-                    var hello = new Dictionary<string, object> { ["t"] = "hello", ["v"] = 1 };
+                    var hello = new Dictionary<string, object> { ["t"] = "hello", ["v"] = 2 };
                     if (!string.IsNullOrEmpty(Token)) hello["token"] = Token;
                     Send(hello);
                     Debug.Log("[net] connected to " + url);

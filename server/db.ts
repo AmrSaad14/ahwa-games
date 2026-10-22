@@ -5,7 +5,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import type { CashoutRow, CoinRow, LeaderRow, PublicUser } from '../shared/protocol';
 import type { GameId } from '../shared/engine';
-import { ECONOMY, WEEKLY_PRIZES, levelOf, streakBonus, weekKey } from '../shared/gifts';
+import { ECONOMY, WEEKLY_PRIZES, cairoDay, levelOf, nextCairoDay, streakBonus, weekKey } from '../shared/gifts';
 import { Equipped, skinById } from '../shared/skins';
 import { maskPhone } from './login';
 
@@ -185,7 +185,7 @@ export class Store {
   /** The daily bonus, once per (UTC) day; it grows for each day in a row (STREAK). Returns the coins and the day. */
   claimDaily(id: string): { coins: number; streak: number } {
     const now = Date.now();
-    const day = new Date(now).toISOString().slice(0, 10), yesterday = new Date(now - 86_400_000).toISOString().slice(0, 10);
+    const day = cairoDay(now), yesterday = cairoDay(now - 86_400_000);
     const u = this.get(id);
     if (!u || u.bonus_day === day) return { coins: 0, streak: u?.streak ?? 0 };
     const streak = u.bonus_day === yesterday ? (u.streak ?? 0) + 1 : 1;
@@ -195,6 +195,15 @@ export class Store {
     if (!Number(r.changes)) return { coins: 0, streak: u.streak ?? 0 };
     this.logCoins(id, 'daily', coins);
     return { coins, streak };
+  }
+
+  /** Where the player is on the daily reward track: the day today's reward is (or was) for, whether it can be
+   *  collected now, and when the next one can. */
+  dailyState(u: UserRow, now = Date.now()): { day: number; ready: boolean; nextAt: number; coins: number } {
+    const today = cairoDay(now), yesterday = cairoDay(now - 86_400_000);
+    if (u.bonus_day === today) { const day = Math.max(1, u.streak ?? 1); return { day, ready: false, nextAt: nextCairoDay(now), coins: streakBonus(day) }; }
+    const day = u.bonus_day === yesterday ? (u.streak ?? 0) + 1 : 1;
+    return { day, ready: true, nextAt: now, coins: streakBonus(day) };
   }
 
   /** Experience for a finished game. Returns what was gained and whether a new level was reached. */
@@ -335,7 +344,7 @@ export class Store {
     return { rows: out, me };
   }
 
-  publicUser(u: UserRow): PublicUser { return { ...toPublic(u), xp: u.xp ?? 0, level: levelOf(u.xp ?? 0), streak: u.streak ?? 0, code: this.friendCode(u.id), ratings: this.ratingsOf(u.id), adsLeft: Math.max(0, ECONOMY.adsPerDay - this.adsToday(u.id)), skins: this.skinsOf(u.id) }; }
+  publicUser(u: UserRow): PublicUser { return { ...toPublic(u), xp: u.xp ?? 0, level: levelOf(u.xp ?? 0), streak: u.streak ?? 0, daily: this.dailyState(u), code: this.friendCode(u.id), ratings: this.ratingsOf(u.id), adsLeft: Math.max(0, ECONOMY.adsPerDay - this.adsToday(u.id)), skins: this.skinsOf(u.id) }; }
 
   /** Skins this player bought in the shop. */
   skinsOf(id: string): string[] { return (this.db.prepare('SELECT skin FROM user_skins WHERE user_id = ? ORDER BY ts').all(id) as { skin: string }[]).map(r => r.skin); }

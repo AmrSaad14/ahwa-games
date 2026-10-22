@@ -146,6 +146,7 @@ export interface PublicUser {
   xp?: number;           // experience, and the level it makes
   level?: number;
   streak?: number;       // days in a row the player came back
+  daily?: { day: number; ready: boolean; nextAt: number; coins: number };   // the daily reward: today's day on the track, whether it's waiting
 }
 
 export interface LeaderRow { rank: number; name: string; ch: number; rating: number; games: number; wins: number; me: boolean; level?: number }
@@ -153,6 +154,8 @@ export interface LeaderRow { rank: number; name: string; ch: number; rating: num
 /** Client → server */
 export type C2S =
   | { t: 'hello'; token?: string; v?: number }
+  /** Collect today's daily reward (clients from v2 on; older ones get it as soon as they connect). */
+  | { t: 'daily' }
   | { t: 'profile'; name?: string; ch?: number }
   | { t: 'register'; email: string; pw: string }
   | { t: 'login'; email: string; pw: string }

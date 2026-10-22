@@ -35,7 +35,7 @@ public class GameUi : MonoBehaviour
     Image timerFill, turnChipBg; Text timerSecs; RectTransform turnChip;
     static Sprite ring, disc;
     /// A filled circle (the timer's dark face).
-    static Sprite Disc
+    public static Sprite Disc
     {
         get
         {

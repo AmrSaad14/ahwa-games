@@ -1,7 +1,114 @@
 <!doctype html><html><head><meta charset="utf-8">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=block" rel="stylesheet">
-<style>html,body{margin:0;background:transparent}div{width:128px;height:128px;font:100px/128px 'Noto Color Emoji';text-align:center;display:none}</style></head><body>
-<!-- the quick-chat emojis (Noto Color Emoji, SIL Open Font License) -->
-<div id="hi">👋</div><div id="gg">🤝</div><div id="nice">👍</div><div id="lol">😂</div><div id="wow">😮</div><div id="clap">👏</div>
-<div id="fire">🔥</div><div id="hurry">⏳</div><div id="oops">😅</div><div id="think">🤔</div><div id="angry">😤</div><div id="love">❤️</div>
+<style>html,body{margin:0;background:transparent} svg{position:absolute;left:0;top:0;display:none}</style></head><body>
+<!-- The quick-chat emojis: Board Battles' own mascot, a domino tile in a tarboosh (pips for eyes, the gold pin
+     of the centre bar for a nose), in twelve moods. Drawn here, rendered by render.mjs. -->
+<script>
+const INK = '#2e1a10', IVORY1 = '#fffaf0', IVORY2 = '#ecdcb8', GOLD = '#f3cd62', GOLD2 = '#b9852a', RED = '#b3162a';
+const defs = `<defs>
+  <linearGradient id="iv" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${IVORY1}"/><stop offset="1" stop-color="${IVORY2}"/></linearGradient>
+  <linearGradient id="hot" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe1d6"/><stop offset="1" stop-color="#f29a86"/></linearGradient>
+  <linearGradient id="fez" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#d42a3c"/><stop offset=".55" stop-color="${RED}"/><stop offset="1" stop-color="#7e0c1c"/></linearGradient>
+  <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff0b8"/><stop offset=".5" stop-color="${GOLD}"/><stop offset="1" stop-color="${GOLD2}"/></linearGradient>
+  <linearGradient id="flame" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ff5a1f"/><stop offset=".6" stop-color="#ffb21f"/><stop offset="1" stop-color="#ffe46b"/></linearGradient>
+  <linearGradient id="tea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e0751c"/><stop offset="1" stop-color="#8c2f0a"/></linearGradient>
+</defs>`;
+const S = 'stroke="' + INK + '" stroke-width="4.5" stroke-linejoin="round" stroke-linecap="round"';
+
+// the tile: x 36‥92, y 30‥116; the centre bar at y 73
+function tile(fill = 'url(#iv)') {
+  return `<rect x="36" y="30" width="56" height="86" rx="13" fill="${fill}" ${S}/>
+  <path d="M41 33 h46" stroke="#fff" stroke-width="3" opacity=".7" stroke-linecap="round"/>
+  <path d="M44 73 H84" stroke="${GOLD2}" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="64" cy="73" r="4.6" fill="url(#gold)" stroke="${INK}" stroke-width="2.2"/>`;
+}
+// the tarboosh: lift (px up) and tilt (degrees) for tipping it or having it fly off
+function fez(lift = 0, tilt = -7, tassel = 'right') {
+  const t = tassel === 'up'
+    ? `<path d="M64 13 C70 4 80 2 86 6" fill="none" stroke="#111" stroke-width="3"/><path d="M84 4 l7 -3 M85 7 l8 0 M84 9 l7 3" stroke="#111" stroke-width="2.6" stroke-linecap="round"/>`
+    : `<path d="M64 13 C72 11 80 13 82 18" fill="none" stroke="#111" stroke-width="3"/><path d="M82 17 l-3 13 M82 17 l0 14 M82 17 l3 13" stroke="#111" stroke-width="2.6" stroke-linecap="round"/>`;
+  return `<g transform="translate(0 ${-lift}) rotate(${tilt} 64 34)">
+    <path d="M43 35 L48 13.5 Q48.6 11 51 11 H77 Q79.4 11 80 13.5 L85 35 Q64 39 43 35 Z" fill="url(#fez)" ${S}/>
+    <path d="M51 15 L48 32" stroke="#fff" stroke-width="2.4" opacity=".28" stroke-linecap="round"/>
+    <circle cx="64" cy="12" r="2.4" fill="#111"/>${t}</g>`;
+}
+const pip = (x, y, r = 6.6) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${INK}"/><circle cx="${x - r * .32}" cy="${y - r * .35}" r="${r * .3}" fill="#fff"/>`;
+const eyes = {
+  open: pip(52, 51) + pip(76, 51),
+  happy: `<path d="M45 53 Q52 44 59 53 M69 53 Q76 44 83 53" fill="none" ${S}/>`,
+  squeeze: `<path d="M46 45 L57 51 L46 57 M82 45 L71 51 L82 57" fill="none" ${S}/>`,
+  wink: pip(52, 51) + `<path d="M69 52 Q76 46 83 52" fill="none" ${S}/>`,
+  big: `<circle cx="51" cy="50" r="10" fill="#fff" ${S}/><circle cx="77" cy="50" r="10" fill="#fff" ${S}/>` + pip(51, 51, 5) + pip(77, 51, 5),
+  side: pip(56, 52) + pip(80, 52),
+  up: pip(50, 48) + pip(74, 48),
+  angry: pip(52, 54) + pip(76, 54) + `<path d="M43 42 L59 48 M85 42 L69 48" fill="none" stroke="${INK}" stroke-width="5" stroke-linecap="round"/>`,
+  hearts: `<path d="M52 61 C40 52 42 41 52 47 C62 41 64 52 52 61 Z" fill="#e5304a" ${S} stroke-width="3"/><path d="M76 61 C64 52 66 41 76 47 C86 41 88 52 76 61 Z" fill="#e5304a" ${S} stroke-width="3"/>`,
+  worried: pip(52, 52) + pip(76, 52) + `<path d="M44 42 L58 39 M84 42 L70 39" fill="none" stroke="${INK}" stroke-width="4" stroke-linecap="round"/>`,
+};
+const mouth = {
+  smile: `<path d="M50 87 Q64 101 78 87" fill="none" ${S}/>`,
+  grin: `<path d="M48 85 H80 Q78 104 64 104 Q50 104 48 85 Z" fill="#5a1414" ${S}/><path d="M55 97 Q64 92 73 97 Q70 103 64 103 Q58 103 55 97 Z" fill="#ef6b6b"/>`,
+  laugh: `<path d="M45 83 H83 Q80 108 64 108 Q48 108 45 83 Z" fill="#5a1414" ${S}/><path d="M53 99 Q64 92 75 99 Q72 106 64 106 Q56 106 53 99 Z" fill="#ef6b6b"/><path d="M49 85 H79" stroke="#fff" stroke-width="4"/>`,
+  o: `<ellipse cx="64" cy="94" rx="7" ry="9" fill="#5a1414" ${S}/>`,
+  flat: `<path d="M53 93 Q58 89 64 93 Q70 97 75 93" fill="none" ${S}/>`,
+  side: `<path d="M58 95 L74 91" fill="none" ${S}/>`,
+  frown: `<path d="M51 98 Q64 86 77 98" fill="none" ${S}/>`,
+  grimace: `<rect x="49" y="86" width="30" height="13" rx="5" fill="#fff" ${S}/><path d="M56.5 87 v11 M64 87 v11 M71.5 87 v11 M50 92.5 h28" stroke="${INK}" stroke-width="2"/>`,
+};
+const blush = `<ellipse cx="45" cy="80" rx="5" ry="3.2" fill="#f28c8c" opacity=".7"/><ellipse cx="83" cy="80" rx="5" ry="3.2" fill="#f28c8c" opacity=".7"/>`;
+// a little white glove (the mascot's hand)
+function hand(x, y, rot = 0, s = 1, kind = 'open') {
+  const shape = {
+    open: `<path d="M-9 8 Q-12 -2 -9 -8 Q-8 -12 -5 -10 L-4 -3 L-4 -14 Q-3 -18 0 -17 Q2 -17 2 -13 L2 -4 L3 -15 Q4 -18 7 -17 Q9 -16 9 -13 L8 -2 L11 -9 Q13 -12 15 -10 Q16 -8 15 -6 L11 8 Q8 15 0 15 Q-7 15 -9 8 Z"/>`,
+    thumb: `<path d="M-12 -2 Q-12 -6 -8 -6 L-2 -6 L-3 -16 Q-3 -22 2 -21 Q5 -20 5 -15 L6 -6 L12 -6 Q16 -5 15 -1 Q16 3 13 4 Q16 6 13 9 Q15 12 11 13 L-8 13 Q-12 13 -12 9 Z"/>`,
+    fist: `<path d="M-11 -6 Q-11 -11 -6 -11 L9 -11 Q13 -11 13 -6 L13 7 Q13 12 8 12 L-6 12 Q-11 12 -11 7 Z"/><path d="M-6 -11 V-4 M0 -11 V-4 M6 -11 V-4" stroke="${INK}" stroke-width="2"/>`,
+  }[kind];
+  return `<g transform="translate(${x} ${y}) rotate(${rot}) scale(${s})" fill="#fff" ${S} stroke-width="${4 / s}">${shape}</g>`;
+}
+const lines = (pts) => pts.map(([x1, y1, x2, y2]) => `<path d="M${x1} ${y1} L${x2} ${y2}" stroke="${GOLD2}" stroke-width="3.5" stroke-linecap="round"/>`).join('');
+const spark = (x, y, r = 6, c = GOLD) => `<path d="M${x} ${y - r} L${x + r * .28} ${y - r * .28} L${x + r} ${y} L${x + r * .28} ${y + r * .28} L${x} ${y + r} L${x - r * .28} ${y + r * .28} L${x - r} ${y} L${x - r * .28} ${y - r * .28} Z" fill="${c}" stroke="${INK}" stroke-width="1.6" stroke-linejoin="round"/>`;
+const heart = (x, y, s, c = '#e5304a') => `<path transform="translate(${x} ${y}) scale(${s})" d="M0 9 C-14 -1 -11 -12 0 -5 C11 -12 14 -1 0 9 Z" fill="${c}" stroke="${INK}" stroke-width="${2.6 / s}" stroke-linejoin="round"/>`;
+const face = (e, m, extra = '') => tile() + eyes[e] + mouth[m] + extra;
+
+const E = {
+  // hi: tips the tarboosh and waves
+  hi: face('open', 'grin', blush) + fez(9, -18) + hand(108, 56, 18, 1.05) + lines([[110, 30, 116, 24], [119, 40, 126, 38]]),
+  // gg: raises a glass of tea to a good game
+  gg: face('happy', 'grin', blush) + fez() +
+      `<g transform="translate(103 66) rotate(10)"><path d="M-10 -22 H10 L7 18 Q6 22 2 22 H-2 Q-6 22 -7 18 Z" fill="#fff" fill-opacity=".55" ${S} stroke-width="3.5"/>
+       <path d="M-8.4 -8 H8.4 L6.4 17 Q6 20 2 20 H-2 Q-6 20 -6.4 17 Z" fill="url(#tea)"/><path d="M-5 -16 V10" stroke="#fff" stroke-width="2.4" opacity=".8" stroke-linecap="round"/></g>`
+      + hand(103, 84, 0, .95, 'fist') + spark(116, 34, 6) + spark(98, 28, 4),
+  // nice: thumbs up and a wink
+  nice: face('wink', 'smile', blush) + fez() + hand(106, 82, -6, 1.1, 'thumb') + spark(114, 52, 6),
+  // lol: tears of laughter, tipping over
+  lol: `<g transform="rotate(12 64 74)">` + face('squeeze', 'laugh', blush) + fez(2, -4, 'up') + `</g>`
+      + `<path d="M28 52 Q18 56 16 66 Q15 72 21 72 Q27 71 27 63 Z" fill="#7cc8f2" ${S} stroke-width="3"/><path d="M102 64 Q112 66 116 75 Q118 81 112 82 Q106 82 106 74 Z" fill="#7cc8f2" ${S} stroke-width="3"/>`,
+  // wow: eyes wide, the tarboosh pops off
+  wow: face('big', 'o') + fez(9, 10, 'up') + lines([[36, 16, 30, 10], [94, 14, 100, 8]]) + spark(22, 48, 5) + spark(108, 44, 5),
+  // clap: two gloves clapping in front
+  clap: face('happy', 'grin', blush) + fez() + hand(97, 100, 38, .9) + hand(113, 92, -22, .9) + lines([[108, 70, 112, 62], [118, 74, 125, 70], [100, 72, 98, 64]]),
+  // fire: on a winning streak, flames behind
+  fire: `<path d="M28 116 Q14 92 26 70 Q30 84 38 86 Q30 60 46 40 Q50 58 56 60 Q56 34 72 16 Q74 40 82 46 Q88 32 96 28 Q94 50 100 62 Q108 54 110 46 Q122 70 110 98 Q104 112 100 116 Z" fill="url(#flame)" ${S}/>`
+      + face('angry', 'grin') + fez(),
+  // hurry: watching the hourglass, a drop of sweat
+  hurry: face('side', 'flat') + fez() +
+      `<g transform="translate(110 70) rotate(14)"><rect x="-13" y="-25" width="26" height="6" rx="2" fill="url(#gold)" ${S} stroke-width="3"/><rect x="-13" y="19" width="26" height="6" rx="2" fill="url(#gold)" ${S} stroke-width="3"/>
+       <path d="M-9 -19 Q-9 -6 0 0 Q-9 6 -9 19 H9 Q9 6 0 0 Q9 -6 9 -19 Z" fill="#fff" fill-opacity=".7" ${S} stroke-width="3"/><path d="M-6 -12 H6 Q4 -6 0 -2 Q-4 -6 -6 -12 Z M0 2 V8 M-6 18 Q0 10 6 18 Z" fill="#e8b04a" stroke="#e8b04a" stroke-width="1.5"/></g>`
+      + `<path d="M34 40 Q28 48 30 53 Q33 57 37 54 Q40 50 34 40 Z" fill="#7cc8f2" ${S} stroke-width="2.6"/>`,
+  // oops: grimace and a big drop of sweat
+  oops: face('worried', 'grimace') + fez(0, 5) + hand(30, 52, -30, .95) +
+      `<path d="M100 26 Q92 38 94 45 Q97 51 103 48 Q108 44 100 26 Z" fill="#7cc8f2" ${S} stroke-width="3"/>`,
+  // think: a glove on the chin, a question mark above
+  think: face('up', 'side') + fez(0, -12) + `<path d="M43 40 Q51 35 59 39" fill="none" stroke="${INK}" stroke-width="4" stroke-linecap="round"/>` + hand(74, 114, -8, .9, 'fist')
+      + `<text x="110" y="42" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="34" fill="url(#gold)" stroke="${INK}" stroke-width="2.4" text-anchor="middle">?</text>`
+      + `<circle cx="102" cy="58" r="3.4" fill="${GOLD}" stroke="${INK}" stroke-width="1.8"/><circle cx="96" cy="66" r="2.4" fill="${GOLD}" stroke="${INK}" stroke-width="1.6"/>`,
+  // angry: red in the face, steam out from under the tarboosh
+  angry: tile('url(#hot)') + eyes.angry + mouth.frown + fez(0, 0, 'up') +
+      `<g fill="#fff" ${S} stroke-width="3"><path d="M18 26 q-8 -2 -6 -9 q2 -6 9 -4 q3 -7 10 -4 q6 3 3 10 q4 6 -3 9 q-5 2 -8 -2 q-3 3 -5 0 Z"/><path d="M104 22 q-6 -4 -2 -10 q4 -5 10 -1 q5 -5 10 0 q4 5 -1 10 q2 7 -6 7 q-5 0 -6 -3 q-4 1 -5 -3 Z"/></g>`,
+  // love: heart eyes and floating hearts
+  love: face('hearts', 'smile', blush) + fez() + heart(108, 34, 1.1) + heart(20, 50, .8) + heart(112, 90, .7, '#ff6f86'),
+};
+for (const [id, body] of Object.entries(E))
+  // each picture gets its own gradient ids (a hidden svg's gradients can't be borrowed by another)
+  document.body.insertAdjacentHTML('beforeend', `<svg id="${id}" width="128" height="128" viewBox="0 0 128 128">${(defs + body).replace(/id="(\w+)"/g, `id="$1-${id}"`).replace(/url\(#(\w+)\)/g, `url(#$1-${id})`)}</svg>`);
+</script>
 </body></html>

@@ -650,6 +650,9 @@ public class App : MonoBehaviour
             Pick("domino"); game.HidePicker();
             yield return new WaitForSeconds(0.6f);
             Still("m0-home.png");
+            menus.OpenDaily(); yield return new WaitForSeconds(0.8f); Still("d1-daily.png");
+            Send(new Dictionary<string, object> { ["t"] = "daily" }); yield return new WaitForSeconds(1.2f); Still("d2-daily-got.png");
+            menus.Close();
             menus.OpenSettings(); yield return new WaitForSeconds(0.8f); Still("m1-settings.png");
             menus.OpenShop(0); yield return new WaitForSeconds(0.8f); Still("m2-shop-coins.png");
             menus.OpenShop(1); yield return new WaitForSeconds(0.8f); Still("m3-shop-tiles.png");

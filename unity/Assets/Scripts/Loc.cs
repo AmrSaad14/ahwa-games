@@ -136,7 +136,7 @@ public static class Loc
         ["توفير البطارية"] = "Battery saver", ["إزاي تلعب"] = "How to play", ["يلا نلعب"] = "Let's play", ["التالي"] = "Next", ["تخطي"] = "Skip",
         ["العب دلوقتي"] = "Play now", ["الأسبوع"] = "This week", ["أول ١٠ بيكسبوا كوينز كل يوم اتنين"] = "Top 10 win coins every Monday",
         ["الأول"] = "1st", ["فاضل"] = "ends in", ["ي"] = "d", ["س"] = "h", ["نقط"] = "Points", ["الجايزة"] = "Prize", ["مستوى"] = "Lv",
-        ["مستوى جديد!"] = "Level up!", ["مبروك! جيت المركز"] = "Congratulations! You finished", ["مكافأة النهارده"] = "Today's reward",
+        ["مستوى جديد!"] = "Level up!", ["مبروك! جيت المركز"] = "Congratulations! You finished", ["مكافأة النهارده"] = "Today's reward", ["يومي"] = "Daily", ["اتاخدت"] = "Collected", ["المكافأة الجاية بعد"] = "Next reward in", ["المكافأة جاهزة!"] = "Your reward is ready!", ["من يوم ٧ وطالع: 50K كل يوم"] = "From day 7 on: 50K every day",
         ["ارجع كل يوم والمكافأة تكبر"] = "Come back every day and it grows", ["يوم"] = "Day", ["خد"] = "Collect", ["مستوى الكمبيوتر"] = "Computer level", ["سهل"] = "Easy", ["عادي"] = "Normal", ["صعب"] = "Hard", ["رجّع"] = "Undo",
         ["الدعم الفني"] = "Contact support", ["كلّمنا"] = "Message us", ["اكتب مشكلتك أو اقتراحك وهنرد عليك في أقرب وقت"] = "Tell us about a problem or an idea — we'll get back to you soon",
         ["رسالتك…"] = "Your message…", ["إيميلك أو رقمك (اختياري)"] = "Your e-mail or phone (optional)", ["ابعت"] = "Send",
