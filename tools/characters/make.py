@@ -176,39 +176,139 @@ def smooth(obj, levels=1):
     if levels:
         m = obj.modifiers.new("Subdiv", "SUBSURF"); m.levels = levels; m.render_levels = levels
 
+def head_band(basemesh, top, dz, tol=0.008):
+    """Half-widths (x, y) and centre of the head at `dz` below its top: where a hat's rim sits."""
+    dg = bpy.context.evaluated_depsgraph_get()
+    ev = basemesh.evaluated_get(dg); me = ev.to_mesh()
+    mw = basemesh.matrix_world
+    z = top.z - dz
+    pts = [mw @ v.co for v in me.vertices]
+    ev.to_mesh_clear()
+    band = [pt for pt in pts if abs(pt.z - z) < tol and abs(pt.x - top.x) < 0.14 and abs(pt.y - top.y) < 0.16]
+    xs = [pt.x for pt in band]; ys = [pt.y for pt in band]
+    return (max(xs) - min(xs)) / 2, (max(ys) - min(ys)) / 2, Vector(((max(xs) + min(xs)) / 2, (max(ys) + min(ys)) / 2, z))
+
+def lathe(name, rings, n=64, cap=True):
+    """A smooth closed shape from rings (half-width x, half-width y, height), bottom to top; the top is closed."""
+    bm = bmesh.new()
+    loops = []
+    for ax, ay, z in rings:
+        loops.append([bm.verts.new((ax * math.cos(2 * math.pi * k / n), ay * math.sin(2 * math.pi * k / n), z)) for k in range(n)])
+    for a, b in zip(loops, loops[1:]):
+        for k in range(n):
+            bm.faces.new((a[k], a[(k + 1) % n], b[(k + 1) % n], b[k]))
+    if cap:
+        c = bm.verts.new((0, 0, rings[-1][2] + 0.002))
+        last = loops[-1]
+        for k in range(n): bm.faces.new((last[k], last[(k + 1) % n], c))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free()
+    o = bpy.data.objects.new(name, me); bpy.context.collection.objects.link(o)
+    for poly in me.polygons: poly.use_smooth = True
+    return o
+
+def felt_material(name, rgb, rough, sheen=0.4):
+    m = flat_material(name, rgb, rough, sheen)
+    b = m.node_tree.nodes["Principled BSDF"]
+    if "Sheen Tint" in b.inputs:
+        try: b.inputs["Sheen Tint"].default_value = (1, 0.6, 0.6, 1)
+        except Exception: pass
+    return m
+
 def make_tarboosh(basemesh, rig):
-    top, rx, ry = head_frame(basemesh)
-    r = max(rx, ry) * 1.02
-    bpy.ops.mesh.primitive_cone_add(vertices=64, radius1=r, radius2=r * 0.8, depth=0.135, end_fill_type="NGON")
-    t = bpy.context.active_object; t.name = "Tarboosh"
-    t.location = (top.x, top.y + 0.01, top.z + 0.012); t.rotation_euler = (math.radians(-7), 0, 0)
-    t.data.materials.append(flat_material("Tarboosh", (0.32, 0.015, 0.02), 0.75))
-    for poly in t.data.polygons: poly.use_smooth = abs(poly.normal.z) < 0.5
-    bev = t.modifiers.new("Bevel", "BEVEL"); bev.width = 0.004; bev.segments = 3; bev.limit_method = "ANGLE"
-    # the black tassel from the centre of the top, falling down the back
-    bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius=0.006, depth=0.09)
-    s = bpy.context.active_object; s.name = "Tassel"
-    s.location = (top.x, top.y + r * 0.6, top.z + 0.04); s.rotation_euler = (math.radians(-35), 0, 0)
-    s.data.materials.append(flat_material("Tassel", (0.015, 0.015, 0.015), 0.6))
-    for poly in s.data.polygons: poly.use_smooth = True
-    for o in (t, s): bone_parent(o, rig, "mixamorig:Head")
-    return [t, s]
+    """An Egyptian tarboosh: crimson felt, snug on the head down to the forehead, narrowing a little to a flat
+    top with softly rounded edges, and a black silk tassel from the centre of the top falling over the back."""
+    top, _, _ = head_frame(basemesh)
+    bx, by, c = head_band(basemesh, top, 0.075)
+    ax, ay = bx + 0.017, by + 0.017       # over the hair
+    H, k = 0.125, 0.8                      # height, top width against the rim
+    rings = [(ax * 0.95, ay * 0.95, 0.012), (ax * 0.95, ay * 0.95, 0.0), (ax, ay, 0.0), (ax * 1.004, ay * 1.004, 0.006)]
+    for i in range(1, 9):
+        t = i / 9; s = 1 - (1 - k) * t
+        rings.append((ax * s, ay * s, H * t))
+    s = k
+    rings += [(ax * s * 0.995, ay * s * 0.995, H - 0.004), (ax * s * 0.97, ay * s * 0.97, H + 0.001), (ax * s * 0.88, ay * s * 0.88, H + 0.004),
+              (ax * s * 0.5, ay * s * 0.5, H + 0.006)]
+    t = lathe("Tarboosh", rings)
+    t.data.materials.append(felt_material("Tarboosh", (0.2, 0.008, 0.014), 0.82))
+    # the tassel: a cord from the button at the top to the back edge, then a bunch of black silk threads
+    tm = flat_material("Tassel", (0.012, 0.011, 0.012), 0.45, 0.6)
+    tops = ay * k
+    cu = bpy.data.curves.new("TasselCord", "CURVE"); cu.dimensions = "3D"; cu.bevel_depth = 0.0026; cu.bevel_resolution = 3; cu.use_fill_caps = True
+    sp = cu.splines.new("POLY")
+    pts = [(0.0, 0.0, H + 0.009), (0.006, tops * 0.45, H + 0.009), (0.012, tops * 0.92, H + 0.004), (0.016, tops + 0.006, H - 0.012)]
+    sp.points.add(len(pts) - 1)
+    for p_, (x, y, z) in zip(sp.points, pts): p_.co = (x, y, z, 1)
+    cord = bpy.data.objects.new("TasselCord", cu); bpy.context.collection.objects.link(cord)
+    parts = [t, cord]
+    # the threads: a slim bell that flares toward the bottom, lying against the back of the tarboosh
+    zb = H - 0.012; drop = 0.075
+    def side(z): return ay * (1 - (1 - k) * z / H)
+    bell = [(0.004, 0.004, 0), (0.007, 0.006, -0.012), (0.011, 0.008, -0.04), (0.015, 0.009, -drop + 0.006), (0.012, 0.007, -drop)]
+    tas = lathe("Tassel", bell, n=24)
+    tas.location = (0.017, side(zb) + 0.009, zb); tas.rotation_euler = (math.radians(-4), 0, 0)
+    # threads at the edge of the bell
+    bpy.ops.object.select_all(action="DESELECT")
+    tas.data.materials.append(tm); cord.data.materials.append(tm)
+    bpy.context.view_layer.objects.active = cord; cord.select_set(True)
+    bpy.ops.object.convert(target="MESH")
+    cord = bpy.context.active_object; parts[1] = cord
+    parts.append(tas)
+    # the whole tarboosh sits level, the back a touch lower over the crown of the head
+    root = bpy.data.objects.new("TarbooshRoot", None); bpy.context.collection.objects.link(root)
+    for o in parts: o.parent = root
+    root.location = (c.x, c.y + 0.004, c.z); root.rotation_euler = (math.radians(-6), 0, 0)
+    bpy.context.view_layer.update()
+    for o in parts:
+        mw = o.matrix_world.copy(); o.parent = None; o.matrix_world = mw
+    bpy.data.objects.remove(root, do_unlink=True)
+    bpy.context.view_layer.update()
+    for o in parts: bone_parent(o, rig, "mixamorig:Head")
+    return parts
 
 def make_emma(basemesh, rig):
-    top, rx, ry = head_frame(basemesh)
-    parts = []
-    mat = flat_material("Emma", (0.8, 0.79, 0.75), 0.9)
-    for i in range(8):
-        k = i / 7
-        bpy.ops.mesh.primitive_torus_add(major_radius=max(rx, ry) * (1.02 - 0.2 * k * k), minor_radius=0.0115 - 0.002 * k, major_segments=64, minor_segments=10)
+    """An Egyptian emma: a long white cloth wound round a cap, in flat bands that cross a little at the front,
+    making a rounded, slightly flattened crown; the cap shows on top."""
+    top, _, _ = head_frame(basemesh)
+    bx, by, c = head_band(basemesh, top, 0.068)
+    ax, ay = bx + 0.03, by + 0.03
+    H = 0.112
+    def r(z, p=2.6):   # the crown's width at height z (a rounded square profile)
+        t = min(max(z / H, 0), 1)
+        return (1 - t ** p) ** (1 / p)
+    cloth = felt_material("Emma", (0.82, 0.8, 0.74), 0.92, 0.25)
+    capm = felt_material("EmmaCap", (0.72, 0.7, 0.63), 0.9, 0.2)
+    dome = lathe("EmmaCap", [(ax * 0.96, ay * 0.96, 0.0)] + [(ax * 0.97 * r(H * i / 14), ay * 0.97 * r(H * i / 14), H * i / 14) for i in range(1, 14)])
+    dome.data.materials.append(capm)
+    parts = [dome]
+    # the bands: wide and flat (a torus squashed sideways and stretched up), each round the crown at its height
+    n_b = 6
+    for i in range(n_b):
+        z = 0.012 + i * 0.0145
+        w = r(z + 0.006)
+        bpy.ops.mesh.primitive_torus_add(major_radius=1.0, minor_radius=0.0075, major_segments=72, minor_segments=12)
         o = bpy.context.active_object; o.name = f"EmmaWrap{i}"
-        o.scale = (rx / max(rx, ry), ry / max(rx, ry) * 1.04, 1)
-        o.location = (top.x, top.y + 0.004, top.z - 0.075 + i * 0.0125)
-        o.rotation_euler = (math.radians(-14 + (i % 2) * 12), math.radians((i % 3 - 1) * 6), math.radians(i * 37))
-        o.data.materials.append(mat); smooth(o, 0); parts.append(o)
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=16, radius=1)
-    cap = bpy.context.active_object; cap.name = "EmmaCap"; cap.scale = (rx * 0.92, ry * 0.95, 0.07)
-    cap.location = (top.x, top.y + 0.004, top.z - 0.005); cap.data.materials.append(flat_material("EmmaCap", (0.72, 0.7, 0.64), 0.9)); smooth(cap, 0); parts.append(cap)
+        # bake the ellipse into the mesh so the band hugs the crown, then thin and raise its section
+        me = o.data
+        for v in me.vertices:
+            d = Vector((v.co.x, v.co.y, 0)); L = d.length
+            rad = (L - 1.0)                       # the section's own offset from the ring
+            u = d / L if L > 0 else d
+            sec_out = rad * 0.75; sec_up = v.co.z * 1.9
+            v.co = Vector((u.x * (ax * w + 0.002 + sec_out), u.y * (ay * w + 0.002 + sec_out), z + sec_up))
+        tilt = (1 if i % 2 else -1) * (7 - i)
+        o.rotation_euler = (math.radians(tilt), math.radians((1 if i % 2 else -1) * 2.5), 0)
+        o.data.materials.append(cloth)
+        for poly in me.polygons: poly.use_smooth = True
+        parts.append(o)
+    root = bpy.data.objects.new("EmmaRoot", None); bpy.context.collection.objects.link(root)
+    for o in parts: o.parent = root
+    root.location = (c.x, c.y + 0.004, c.z); root.rotation_euler = (math.radians(-5), 0, 0)
+    bpy.context.view_layer.update()
+    for o in parts:
+        mw = o.matrix_world.copy(); o.parent = None; o.matrix_world = mw
+    bpy.data.objects.remove(root, do_unlink=True)
+    bpy.context.view_layer.update()
     for o in parts: bone_parent(o, rig, "mixamorig:Head")
     return parts
 
@@ -517,7 +617,7 @@ def export(spec, basemesh, rig):
         if o is copy_body: continue   # the face needs every polygon
         elif any(k in low for k in ("hair", "short", "long", "afro", "brow", "lash", "beard", "moustache", "high-poly", "glasses")): continue
         elif any(k in low for k in ("shoe", "flats")): target = 1500
-        elif any(k in low for k in ("earring", "tarboosh", "tassel", "emma")): target = 1200
+        elif any(k in low for k in ("earring", "tarboosh", "tassel", "emma")): continue   # hats: few faces already, keep them smooth
         else: target = 5000
         if n > target * 1.15:
             d = o.modifiers.new("Lighter", "DECIMATE"); d.ratio = max(0.08, target / n)
