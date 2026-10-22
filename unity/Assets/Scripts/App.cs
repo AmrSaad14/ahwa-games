@@ -83,8 +83,17 @@ public class App : MonoBehaviour
         yield return null;   // let the splash draw its first frame before the heavy loading
 
         float tBuild = Time.realtimeSinceStartup;
+        // load the big pieces (the room, the table, the six regulars) in the background while the splash plays;
+        // once loaded, the building below finds them at once instead of freezing the screen
+        var loads = new List<ResourceRequest> { Resources.LoadAsync<GameObject>("Art/cafe"), Resources.LoadAsync<GameObject>("Art/MainTable") };
+        foreach (var n in DominoTable.CharNames) loads.Add(Resources.LoadAsync<GameObject>("People/" + n));
+        var kept = new List<Object>();
+        foreach (var r in loads) { while (!r.isDone) { splash.Progress(0.75f * Loaded(loads)); yield return null; } kept.Add(r.asset); }
+        Debug.Log($"[app] assets loaded in {Time.realtimeSinceStartup - tBuild:0.0} s");
         cafe = new GameObject("Cafe").AddComponent<Cafe>();
+        splash.Progress(0.8f);
         yield return cafe.BuildSteps();
+        splash.Progress(0.95f);
         Debug.Log($"[app] café built in {Time.realtimeSinceStartup - tBuild:0.0} s");
         yield return null;
         dominoTable = new GameObject("Domino").AddComponent<DominoTable>();
@@ -155,6 +164,8 @@ public class App : MonoBehaviour
 
     /// Is the finger (or mouse) on a button or panel? On a phone each touch has its own pointer id, so the plain
     /// check (the mouse's) is never true there and taps on menus went through to the café behind them.
+    static float Loaded(List<ResourceRequest> l) { float p = 0; foreach (var r in l) p += r.progress; return p / Mathf.Max(1, l.Count); }
+
     static bool OverUi()
     {
         var es = UnityEngine.EventSystems.EventSystem.current;

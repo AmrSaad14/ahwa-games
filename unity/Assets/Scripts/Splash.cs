@@ -23,6 +23,9 @@ public class Splash : MonoBehaviour
 
     public bool Opened => openAt >= 0;
     public void Ready() { if (readyAt < 0) readyAt = Time.time; }
+    /// How much of the loading is done (0..1): the bar follows it.
+    float progress = -1;
+    public void Progress(float p) { progress = Mathf.Max(progress, Mathf.Clamp01(p)); }
 
     public void Show()
     {
@@ -86,7 +89,7 @@ public class Splash : MonoBehaviour
     void Update()
     {
         if (canvas == null) return;
-        float t = Time.time - t0;
+        float t = (Time.time - t0) * 2.2f;   // the logo builds up quickly; the bar then runs until the café is ready
 
         // rays turn slowly; the glow swells behind the crest
         raysImg.color = new Color(1, 1, 1, Ui.Ease(Seg(t, 0.2f, 1.4f)));
@@ -129,8 +132,9 @@ public class Splash : MonoBehaviour
         sub.color = new Color(1, 0.91f, 0.69f, ar * 0.9f);
 
         // loading bar: creeps to 90% while the café loads, fills when it's ready
-        barGroup.alpha = Seg(t, 0.9f, 1.4f);
-        float p = readyAt < 0 ? 0.9f * (1 - Mathf.Exp(-t * 0.6f)) : Mathf.Lerp(barFill.anchorMax.x, 1f, 0.2f);
+        barGroup.alpha = Seg(t, 0.2f, 0.6f);
+        float creep = 0.9f * (1 - Mathf.Exp(-t * 0.6f));
+        float p = readyAt < 0 ? Mathf.Lerp(barFill.anchorMax.x, Mathf.Max(creep * 0.5f, progress), 0.15f) : Mathf.Lerp(barFill.anchorMax.x, 1f, 0.2f);
         barFill.anchorMax = new Vector2(p, 1);
 
         if (shots && shot == 0 && t > 0.84f) { shot++; App.Still("1-splash-clash.png"); }
@@ -146,7 +150,7 @@ public class Splash : MonoBehaviour
             group.blocksRaycasts = false;
             if (o >= 1) { Destroy(canvas.gameObject); canvas = null; if (splashCam != null) Destroy(splashCam.gameObject); }
         }
-        if (t > 40f && openAt < 0) openAt = Time.time;   // never stuck on the splash
+        if (t > 90f && openAt < 0) openAt = Time.time;   // never stuck on the splash
     }
 
     static void Fly(RawImage img, int dir, float p, float a, float spin)
