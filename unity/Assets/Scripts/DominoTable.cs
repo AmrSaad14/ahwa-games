@@ -9,7 +9,7 @@ public class DominoTable : MonoBehaviour
     public const float TS = 0.62f;            // one layout unit in the world (a tile is 2 long)
     public const float T = 6f;                // half the side of the table
     const float SEAT_R = T + 1.5f;
-    static readonly float XMax = (T - 1.9f) / TS;
+    static readonly float XMax = (T - 3.1f) / TS;   // turns before it reaches the tiles the players hold up at the sides
     public static readonly string[] CharNames = { "AmFathi", "CaptainSami", "Ziko", "Mona", "Nada", "HajjMahmoud" };
 
     Cafe cafe;

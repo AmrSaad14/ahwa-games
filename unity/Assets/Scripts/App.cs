@@ -153,7 +153,16 @@ public class App : MonoBehaviour
         if (t != null) Pick(t);
     }
 
-    static bool OverUi() => UnityEngine.EventSystems.EventSystem.current != null && UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject();
+    /// Is the finger (or mouse) on a button or panel? On a phone each touch has its own pointer id, so the plain
+    /// check (the mouse's) is never true there and taps on menus went through to the café behind them.
+    static bool OverUi()
+    {
+        var es = UnityEngine.EventSystems.EventSystem.current;
+        if (es == null) return false;
+        if (es.IsPointerOverGameObject()) return true;
+        for (int i = 0; i < Input.touchCount; i++) if (es.IsPointerOverGameObject(Input.GetTouch(i).fingerId)) return true;
+        return false;
+    }
 
     void OnApplicationQuit() { net?.Stop(); }
 
@@ -299,8 +308,11 @@ public class App : MonoBehaviour
 
     /* ---------- actions ---------- */
 
+    string picked;
     void Pick(string g)
     {
+        if (g == picked && game.PickerOpen) return;   // already showing this game's choices
+        picked = g;
         cafe.Focus(g);
         foreach (var kv in gameButtons) kv.Value.color = kv.Key == g ? Ui.Gold : Ui.Panel;
         foreach (var kv in gameButtons) kv.Value.GetComponentInChildren<Text>().color = kv.Key == g ? Ui.Ink : Ui.GoldLight;

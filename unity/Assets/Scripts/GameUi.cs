@@ -387,7 +387,7 @@ public class GameUi : MonoBehaviour
         timerSecs = Ui.Label(turnChip, "", 20, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
         timerSecs.rectTransform.Fill();
         turnText = Ui.Label(turnChip, "", 12, Ui.Gold, TextAnchor.UpperLeft, Ui.Bold);
-        turnText.rectTransform.Place(new Vector2(0, 0), new Vector2(0, 1), new Vector2(130, 34), new Vector2(-4, -4));
+        turnText.rectTransform.Place(new Vector2(0, 0), new Vector2(0, 1), new Vector2(130, 34), new Vector2(2, -4));
         turnText.gameObject.AddComponent<Shadow>().effectColor = new Color(0, 0, 0, 0.9f);
         turnText.horizontalOverflow = HorizontalWrapMode.Wrap; turnText.resizeTextMaxSize = 13; turnText.resizeTextMinSize = 9; turnText.resizeTextForBestFit = true;
         handBar = Ui.Rect("Hand", hud).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(760, 86), new Vector2(0, 6));

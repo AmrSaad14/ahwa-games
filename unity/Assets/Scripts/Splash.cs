@@ -38,7 +38,7 @@ public class Splash : MonoBehaviour
         group = root.gameObject.AddComponent<CanvasGroup>();
         Ui.Picture(root, "Background", Ui.Radial(new Color32(0x7a, 0x14, 0x24, 0xff), new Color32(0x4a, 0x0b, 0x16, 0xff), new Color32(0x1c, 0x06, 0x09, 0xff))).rectTransform.Fill();
 
-        raysImg = Ui.Picture(root, "Rays", Ui.Rays());
+        raysImg = Ui.Picture(root, "Rays", Ui.Rays(256));   // small: the splash must be up at once
         rays = raysImg.rectTransform.Place(new Vector2(0.5f, 0.56f), new Vector2(0.5f, 0.5f), new Vector2(1400, 1400), Vector2.zero);
         glowImg = Ui.Picture(root, "Glow", Ui.Glow());
         glowImg.color = new Color(1f, 0.81f, 0.43f, 0f);
@@ -146,7 +146,7 @@ public class Splash : MonoBehaviour
             group.blocksRaycasts = false;
             if (o >= 1) { Destroy(canvas.gameObject); canvas = null; if (splashCam != null) Destroy(splashCam.gameObject); }
         }
-        if (t > 15f && openAt < 0) openAt = Time.time;   // never stuck on the splash
+        if (t > 40f && openAt < 0) openAt = Time.time;   // never stuck on the splash
     }
 
     static void Fly(RawImage img, int dir, float p, float a, float spin)
