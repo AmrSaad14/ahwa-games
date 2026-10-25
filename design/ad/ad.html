@@ -52,7 +52,21 @@ function put(e, x, y, w, h, s = 1, r = 0, o = 1) {
   e.style.transform = `translate(${x - w / 2}px,${y - h / 2}px) rotate(${r}deg) scale(${s})`;
   e.style.opacity = o; e.style.display = o <= 0.001 ? 'none' : 'block';
 }
-function text(str, size, cls = '') { const e = el('', `txt ${font} ${cls}`); e.textContent = str; e.style.fontSize = size + 'px'; e.style.lineHeight = '1.15'; return e; }
+/** A line of text, made smaller if it would be wider than the screen (English lines run longer). */
+function text(str, size, cls = '') {
+  const e = el('', `txt ${font} ${cls}`); e.textContent = str; e.style.fontSize = size + 'px'; e.style.lineHeight = '1.15';
+  e.dataset.size = size;
+  return e;
+}
+function refit() {
+  for (const e of stage.querySelectorAll('.txt')) {
+    if (!e.textContent) continue;
+    const d = e.style.display, w = e.style.width, tf = e.style.transform;
+    e.style.display = 'inline-block'; e.style.width = 'auto'; e.style.transform = 'none';
+    for (let s = +e.dataset.size; s > 12 && e.scrollWidth > W * 0.92; s *= 0.95) e.style.fontSize = s + 'px';
+    e.style.display = d; e.style.width = w; e.style.transform = tf;
+  }
+}
 const CX = W / 2, CY = H / 2;
 const lerp = (a, b, k) => a + (b - a) * k;
 // a deterministic "random" (the same every frame)
@@ -187,7 +201,7 @@ window.render = function (t) {
     const k2 = ease(seg(t, 5.0, 5.8));
     put(t2, CX, V ? H * 0.62 : H * 0.78, W * 0.94, S * 0.1, 1, 0, k2 * fade);
     const h = back(seg(t, 6.8, 7.3));
-    put(bigHi, CX, V ? H * 0.78 : H * 0.62, S * 0.3, S * 0.3, h, Math.sin(t * 6) * 8, fade * clamp(h * 2) * (1 - seg(t, 8.0, 8.3)));
+    put(bigHi, V ? CX : CX + W * 0.36, V ? H * 0.78 : H * 0.7, S * 0.3, S * 0.3, h, Math.sin(t * 6) * 8, fade * clamp(h * 2) * (1 - seg(t, 8.0, 8.3)));
     return;
   }
   /* 3. the battle beats (8.5 – 14.5): four, each with its colour, its piece and its word */
@@ -264,9 +278,10 @@ window.render = function (t) {
     const k = ease(seg(t, 19.5, 20.4));
     const pw = V ? W * 0.96 : W * 0.6, ph = pw * 9 / 19.5 * 1.08;
     const f = frameAt(t); if (f && screen.getAttribute('src') !== f) screen.setAttribute('src', f);
-    put(phone, CX, (V ? H * 0.45 : H * 0.56) + (1 - k) * H * 0.7, pw, ph, 1 + 0.03 * Math.sin(t * 0.8), (1 - k) * 12 + Math.sin(t * 0.7) * 1.2, fade);
+    const px = V ? CX : CX + W * 0.07;
+    put(phone, px, (V ? H * 0.45 : H * 0.56) + (1 - k) * H * 0.7, pw, ph, 1 + 0.03 * Math.sin(t * 0.8), (1 - k) * 12 + Math.sin(t * 0.7) * 1.2, fade);
     chips.forEach((c, i) => { const b = back(seg(t, 21 + i * 0.9, 21.4 + i * 0.9)); const side = i % 2 ? 1 : -1;
-      put(c, CX + side * pw * 0.44, (V ? H * 0.45 : H * 0.56) + (i < 2 ? -1 : 1) * ph * 0.42, S * 0.17, S * 0.17, b, side * 10, fade * clamp(b * 2) * (1 - seg(t, 23 + i * 0.9, 23.3 + i * 0.9) * 0.0)); });
+      put(c, px + side * pw * 0.44, (V ? H * 0.45 : H * 0.56) + (i < 2 ? -1 : 1) * ph * 0.42, S * 0.17, S * 0.17, b, side * 10, fade * clamp(b * 2) * (1 - seg(t, 23 + i * 0.9, 23.3 + i * 0.9) * 0.0)); });
     cards.forEach((c, i) => {
       const src = window.CARDS[i]; if (!src) return;
       const im = c.querySelector('img'); if (im.getAttribute('src') !== src) im.setAttribute('src', src);
@@ -304,5 +319,5 @@ window.render = function (t) {
   put(t6c, CX, V ? H * 0.9 : H * 0.92, W, S * 0.05, 1, 0, ease(seg(t, 27.6, 28.2)));
 };
 window.DURATION = D;
-document.fonts.ready.then(() => { window.READY = true; });
+document.fonts.ready.then(() => { refit(); window.READY = true; });
 </script></body></html>
