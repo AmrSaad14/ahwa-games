@@ -14,7 +14,7 @@
     "build:client": "node scripts/build-client.mjs",
     "build:server": "node scripts/build-server.mjs",
     "start": "node --no-warnings=ExperimentalWarning dist/server.cjs",
-    "test": "tsx --test --test-concurrency=1 tests/engine.test.ts tests/games.test.ts tests/server.test.ts tests/features.test.ts tests/i18n.test.ts tests/backup.test.ts tests/billing.test.ts",
+    "test": "tsx --test --test-concurrency=1 tests/engine.test.ts tests/games.test.ts tests/server.test.ts tests/features.test.ts tests/api.test.ts tests/i18n.test.ts tests/backup.test.ts tests/billing.test.ts",
     "typecheck": "tsc -p tsconfig.json",
     "cap:android": "npm run build:client && cap sync android && cap open android",
     "cap:ios": "npm run build:client && cap sync ios && cap open ios",

@@ -175,7 +175,19 @@ export interface TourneyView {
   now: number;
 }
 
-export interface LeaderRow { rank: number; name: string; ch: number; rating: number; games: number; wins: number; me: boolean; level?: number }
+export interface LeaderRow { rank: number; name: string; ch: number; rating: number; games: number; wins: number; me: boolean; level?: number; pid?: string }
+
+/** A player's card: who they are, how they play, and where you stand with them. */
+export interface PlayerCard {
+  pid: string; name: string; ch: number; level: number; xp: number; since: number;
+  games: number; wins: number; losses: number; winRate: number;
+  coinsWon: number; coinsLost: number; net: number; bestWin: number; tourneyCoins: number; weeklyCoins: number;
+  perGame: Record<string, { rating: number; games: number; wins: number; losses: number }>;
+  gifts: number; streak: number;
+  online: boolean; playing: boolean;
+  me: boolean;
+  friend: 'friend' | 'outgoing' | 'incoming' | null;
+}
 
 /** Client → server */
 export type C2S =
@@ -205,9 +217,11 @@ export type C2S =
   | { t: 'ticket'; ticket: string }
   | { t: 'playGames'; code: string }
   | { t: 'friends' }
-  | { t: 'friendAdd'; code?: string; seat?: number }
-  | { t: 'friendAnswer'; id: string; yes: boolean }
-  | { t: 'friendRemove'; id: string }
+  | { t: 'friendAdd'; code?: string; seat?: number; pid?: string }
+  | { t: 'friendAnswer'; id?: string; pid?: string; yes: boolean }
+  | { t: 'friendRemove'; id?: string; pid?: string }
+  /** A player's card (from a seat at the table, the leaderboard or the friends list). */
+  | { t: 'profileOf'; pid?: string; seat?: number }
   | { t: 'invite'; id: string; mode?: Mode }
   | { t: 'delete' }
   | { t: 'quick'; mode: Mode; stake?: number }
@@ -278,6 +292,7 @@ export type S2C =
   | { t: 'cashoutDone'; id: number; egp: number; coins: number; phone: string }
   | { t: 'supportSent'; id: number }
   | { t: 'rematch'; seats: number[]; need: number; gone: boolean }
+  | { t: 'profileCard'; card: PlayerCard }
   | { t: 'missionDone'; id: string }
   | { t: 'missionClaimed'; id: string; coins: number; xp: number }
   | { t: 'seasonTier'; tier: number }

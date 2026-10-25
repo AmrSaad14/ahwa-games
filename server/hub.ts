@@ -1,7 +1,7 @@
 import { PlayBilling } from './billing';
 import crypto from 'node:crypto';
 import { GAMES, GameId, MODES, MODE_PLAYERS, Mode, defaultTarget, gameOf, targetOptions, teamOf } from '../shared/engine';
-import type { C2S, Emote, FriendRow, IceServer, S2C } from '../shared/protocol';
+import type { C2S, Emote, FriendRow, IceServer, PlayerCard, S2C } from '../shared/protocol';
 import { ECONOMY, STAKES, giftByKind, isStake, winnings, NO_ADS, XP, WEEKLY_PRIZES, weekKey } from '../shared/gifts';
 import { EMOTES } from '../shared/protocol';
 import { Table, publicId, Player, BotMaker } from '../shared/table';
@@ -265,6 +265,7 @@ export class Hub {
         if (!this.friendLimiter.allow(uid)) return err('slow_down');
         let other: UserRow | undefined;
         if (typeof m.code === 'string') other = this.store.byFriendCode(m.code.trim().replace(/[^a-z0-9]/gi, ''));
+        else if (typeof m.pid === 'string') other = this.store.byPid(m.pid);
         else if (typeof m.seat === 'number' && table) { const p = table.seats[m.seat]; if (p && !p.bot) other = this.store.get(p.uid); }
         if (!other) return err('friend_not_found');
         if (other.id === uid) return err('friend_self');
@@ -278,7 +279,7 @@ export class Hub {
         return;
       }
       case 'friendAnswer': {
-        const other = this.store.get(String(m.id));
+        const other = typeof m.pid === 'string' ? this.store.byPid(m.pid) : this.store.get(String(m.id));
         if (!other) return err('friend_not_found');
         if (m.yes) { if (this.store.friendAccept(uid, other.id)) this.byUser.get(other.id)?.conn.send({ t: 'friendNews', kind: 'accepted', name: this.store.get(uid)!.name }); }
         else this.store.friendRemove(uid, other.id);
@@ -286,10 +287,18 @@ export class Hub {
         return;
       }
       case 'friendRemove': {
-        const id = String(m.id);
+        const id = typeof m.pid === 'string' ? this.store.byPid(m.pid)?.id ?? '' : String(m.id);
         this.store.friendRemove(uid, id);
         this.sendFriends(uid); this.sendFriends(id);
+        if (typeof m.pid === 'string') { const c = this.card(uid, m.pid); if (c) s.conn.send({ t: 'profileCard', card: c }); }
         return;
+      }
+      case 'profileOf': {
+        let pid = typeof m.pid === 'string' ? m.pid : '';
+        if (!pid && typeof m.seat === 'number' && table) { const p = table.seats[m.seat]; if (p && !p.bot) pid = publicId(p.uid); }
+        const c = pid ? this.card(uid, pid) : null;
+        if (!c) return err('player_not_found');
+        return s.conn.send({ t: 'profileCard', card: c });
       }
       case 'invite': {
         // invite a friend to the private room you are in (still gathering players)
@@ -570,6 +579,23 @@ export class Hub {
       }
     }
   }
+
+  /** A player's card as `viewer` sees it (null viewer: anyone, e.g. the public API). */
+  card(viewer: string | null, pid: string): PlayerCard | null {
+    const u = this.store.byPid(pid);
+    const st = u ? this.store.playerStats(u.id) : null;
+    if (!u || !st) return null;
+    const t = this.userTable.get(u.id);
+    return { pid, name: u.name, ch: u.ch, ...st, online: this.byUser.has(u.id), playing: !!t && !t.closed && t.phase !== 'lobby',
+      me: viewer === u.id, friend: viewer && viewer !== u.id ? this.store.friendStatus(viewer, u.id) : null };
+  }
+
+  /** Lets a player's open app know their friends list changed (after the HTTP API changed it). */
+  friendsUpdated(uid: string) { this.sendFriends(uid); }
+  /** Who is connected right now. */
+  isOnline(uid: string) { return this.byUser.has(uid); }
+  /** Sends any message to a player's open app. */
+  notify(uid: string, msg: S2C) { this.byUser.get(uid)?.conn.send(msg); }
 
   /* ---------------- identity ---------------- */
 

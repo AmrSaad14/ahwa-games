@@ -11,6 +11,7 @@ import { MISSION_SP, counts, missionById, missionsFor } from '../shared/missions
 import { SEASON_PASS, SEASON_TIERS, SP, TIERS, seasonEndsAt, seasonOf, tierOf } from '../shared/season';
 import type { GameId as Game } from '../shared/engine';
 import { maskPhone } from './login';
+import { publicId } from '../shared/table';
 
 export interface UserRow {
   id: string; name: string; ch: number; email: string | null; pw: string | null;
@@ -18,7 +19,7 @@ export interface UserRow {
   coins: number; gifts: number; bonus_day: string | null; ad_free_until: number; equip: string | null;
   phone: string | null; google_sub: string | null; google_email: string | null;
   pg_id: string | null; friend_code: string | null; streak?: number; xp?: number;
-  ref_by?: string | null; ref_paid?: number; muted_until?: number;
+  ref_by?: string | null; ref_paid?: number; muted_until?: number; pid?: string | null;
 }
 
 export class Store {
@@ -76,6 +77,14 @@ export class Store {
     if (!cols.has('xp')) this.db.exec('ALTER TABLE users ADD COLUMN xp INTEGER NOT NULL DEFAULT 0');
     if (!cols.has('ref_by')) this.db.exec('ALTER TABLE users ADD COLUMN ref_by TEXT; ALTER TABLE users ADD COLUMN ref_paid INTEGER NOT NULL DEFAULT 0');
     if (!cols.has('muted_until')) this.db.exec('ALTER TABLE users ADD COLUMN muted_until INTEGER NOT NULL DEFAULT 0');
+    // the public id other players see (player cards, friends): filled in for everyone once
+    if (!cols.has('pid')) {
+      this.db.exec('ALTER TABLE users ADD COLUMN pid TEXT');
+      const all = this.db.prepare('SELECT id FROM users').all() as { id: string }[];
+      const set = this.db.prepare('UPDATE users SET pid = ? WHERE id = ?');
+      for (const u of all) set.run(publicId(u.id), u.id);
+    }
+    this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_pid ON users(pid) WHERE pid IS NOT NULL');
     // daily missions (progress per player per Cairo day), the season pass, the weekly tournament's sign-ups
     this.db.exec(`CREATE TABLE IF NOT EXISTS missions (user_id TEXT NOT NULL, day TEXT NOT NULL, id TEXT NOT NULL, have INTEGER NOT NULL DEFAULT 0,
         claimed INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day, id));
@@ -123,7 +132,7 @@ export class Store {
   createGuest(name: string, ch: number): UserRow {
     const id = 'u' + crypto.randomBytes(9).toString('base64url');
     const now = Date.now();
-    this.db.prepare('INSERT INTO users (id, name, ch, coins, created, seen) VALUES (?, ?, ?, ?, ?, ?)').run(id, name, ch, ECONOMY.startCoins, now, now);
+    this.db.prepare('INSERT INTO users (id, name, ch, coins, created, seen, pid) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, name, ch, ECONOMY.startCoins, now, now, publicId(id));
     this.logCoins(id, 'welcome', ECONOMY.startCoins);
     return this.get(id)!;
   }
@@ -134,6 +143,32 @@ export class Store {
 
   byEmail(email: string): UserRow | undefined {
     return this.db.prepare('SELECT * FROM users WHERE email = ?').get(email) as UserRow | undefined;
+  }
+
+  /** A player by the public id on their card. */
+  byPid(pid: string): UserRow | undefined { return this.db.prepare('SELECT * FROM users WHERE pid = ?').get(String(pid)) as UserRow | undefined; }
+
+  /** What a player's card shows: matches, wins and losses (overall and per game), coins won and lost at the
+   *  tables, the biggest win, the tournament's results and the level. */
+  playerStats(id: string) {
+    const u = this.get(id); if (!u) return null;
+    const ratings = this.ratingsOf(id);
+    const money = this.db.prepare(`SELECT
+        COALESCE(SUM(CASE WHEN kind = 'win' THEN delta ELSE 0 END), 0) AS won,
+        COALESCE(SUM(CASE WHEN kind IN ('loss', 'left') THEN -delta ELSE 0 END), 0) AS lost,
+        COALESCE(MAX(CASE WHEN kind = 'win' THEN delta END), 0) AS best,
+        COALESCE(SUM(CASE WHEN kind = 'tourney' THEN delta ELSE 0 END), 0) AS tourney,
+        COALESCE(SUM(CASE WHEN kind = 'weekly' THEN delta ELSE 0 END), 0) AS weekly
+      FROM coin_log WHERE user_id = ?`).get(id) as { won: number; lost: number; best: number; tourney: number; weekly: number };
+    const games = u.games ?? 0, wins = u.wins ?? 0;
+    const perGame: Record<string, { rating: number; games: number; wins: number; losses: number }> = {};
+    for (const [g, r] of Object.entries(ratings)) if (r) perGame[g] = { rating: r.rating, games: r.games, wins: r.wins, losses: r.games - r.wins };
+    return {
+      games, wins, losses: Math.max(0, games - wins), winRate: games ? Math.round(wins / games * 100) : 0,
+      coinsWon: money.won, coinsLost: money.lost, net: money.won - money.lost, bestWin: money.best,
+      tourneyCoins: money.tourney, weeklyCoins: money.weekly, perGame,
+      level: levelOf(u.xp ?? 0), xp: u.xp ?? 0, streak: u.streak ?? 0, gifts: u.gifts ?? 0, since: u.created,
+    };
   }
 
   byPhone(phone: string): UserRow | undefined { return this.db.prepare('SELECT * FROM users WHERE phone = ?').get(phone) as UserRow | undefined; }
@@ -240,9 +275,9 @@ export class Store {
   }
 
   weeklyBoard(meId: string | null, week = weekKey(), limit = 50): { rows: LeaderRow[]; me: LeaderRow | null } {
-    const rows = this.db.prepare(`SELECT u.id, u.name, u.ch, u.xp, w.points, w.games, w.wins FROM weekly w JOIN users u ON u.id = w.user_id
-      WHERE w.week = ? ORDER BY w.points DESC, w.wins DESC, w.games ASC LIMIT ?`).all(week, limit) as { id: string; name: string; ch: number; xp: number; points: number; games: number; wins: number }[];
-    const out = rows.map((r, i) => ({ rank: i + 1, name: r.name, ch: r.ch, rating: r.points, games: r.games, wins: r.wins, me: r.id === meId, level: levelOf(r.xp) }));
+    const rows = this.db.prepare(`SELECT u.id, u.pid, u.name, u.ch, u.xp, w.points, w.games, w.wins FROM weekly w JOIN users u ON u.id = w.user_id
+      WHERE w.week = ? ORDER BY w.points DESC, w.wins DESC, w.games ASC LIMIT ?`).all(week, limit) as { id: string; pid: string; name: string; ch: number; xp: number; points: number; games: number; wins: number }[];
+    const out = rows.map((r, i) => ({ rank: i + 1, name: r.name, ch: r.ch, rating: r.points, games: r.games, wins: r.wins, me: r.id === meId, level: levelOf(r.xp), pid: r.pid }));
     let me: LeaderRow | null = null;
     const mine = meId ? this.db.prepare('SELECT points, games, wins FROM weekly WHERE week = ? AND user_id = ?').get(week, meId) as { points: number; games: number; wins: number } | undefined : undefined;
     const u = meId ? this.get(meId) : undefined;
@@ -355,10 +390,10 @@ export class Store {
   }
 
   leaderboard(meId: string | null, game: GameId = 'domino', limit = 50): { rows: LeaderRow[]; me: LeaderRow | null } {
-    const rows = this.db.prepare(`SELECT u.id, u.name, u.ch, r.rating, r.games, r.wins FROM ratings r JOIN users u ON u.id = r.user_id
+    const rows = this.db.prepare(`SELECT u.id, u.pid, u.xp, u.name, u.ch, r.rating, r.games, r.wins FROM ratings r JOIN users u ON u.id = r.user_id
       WHERE r.game = ? AND r.games >= 3 ORDER BY r.rating DESC, r.wins DESC LIMIT ?`)
-      .all(game, limit) as unknown as Pick<UserRow, 'id' | 'name' | 'ch' | 'rating' | 'games' | 'wins'>[];
-    const out = rows.map((r, i) => ({ rank: i + 1, name: r.name, ch: r.ch, rating: r.rating, games: r.games, wins: r.wins, me: r.id === meId, level: levelOf((this.get(r.id)?.xp) ?? 0) }));
+      .all(game, limit) as unknown as (Pick<UserRow, 'id' | 'name' | 'ch' | 'rating' | 'games' | 'wins' | 'xp'> & { pid: string })[];
+    const out = rows.map((r, i) => ({ rank: i + 1, name: r.name, ch: r.ch, rating: r.rating, games: r.games, wins: r.wins, me: r.id === meId, level: levelOf(r.xp ?? 0), pid: r.pid }));
     let me: LeaderRow | null = null;
     const u = meId ? this.get(meId) : undefined;
     const mine = meId ? this.db.prepare('SELECT rating, games, wins FROM ratings WHERE user_id = ? AND game = ?').get(meId, game) as { rating: number; games: number; wins: number } | undefined : undefined;

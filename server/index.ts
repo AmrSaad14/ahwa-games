@@ -14,6 +14,7 @@ import { PlayBilling } from './billing';
 import { Push } from './push';
 import { cashoutPage, supportPage, invitePage, referPage } from './admin';
 import { supportDesk } from './support';
+import { api } from './api';
 import type { S2C } from '../shared/protocol';
 
 const MIME: Record<string, string> = {
@@ -37,6 +38,7 @@ export function createServer(opts = config) {
   const staticRoot = path.resolve(opts.staticDir);
   const perIp = new Map<string, number>();
   const supportLimiter = new Limiter(10, 60 * 60_000);
+  let restApi: ReturnType<typeof api> | null = null;
 
   const clientIp = (req: http.IncomingMessage) => {
     const fwd = opts.trustProxy ? String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() : '';
@@ -47,6 +49,9 @@ export function createServer(opts = config) {
     const url = new URL(req.url || '/', 'http://x');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
+    // the HTTP API: /api/v1/… and its docs at /api/docs (server/api.ts)
+    restApi ??= api({ store, tokens, hub, support: m => desk.file(m), ip: clientIp });
+    if (restApi(req, res, url)) return;
     if (url.pathname === '/healthz') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ ok: true, ...hub.stats() }));
