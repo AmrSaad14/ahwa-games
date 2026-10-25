@@ -204,6 +204,46 @@ What to expect on the free plan:
 - Ads: the app shows Google's test ads until it is published on Google Play. AdMob only serves real ads to apps
   that are live in a store and approved.
 
+## Moving to a paid server on Render (what changes, step by step)
+
+Everything already runs on the same server; paying only keeps it awake and gives it a real disk. On the paid plan:
+the app connects instantly (no minute-long "Connecting…"), push reminders go out at 14:00 and 20:00 Cairo time by
+themselves (no cron job needed), the weekly tournament starts every Thursday at 9 pm Cairo time by itself, the weekly
+leaderboard prizes are paid every Monday, and the database lives on a disk instead of being restored from GitHub.
+
+1. Render → your service **kings-battle** → **Settings → Instance type** → **Starter** (or higher). Save.
+2. **Disks → Add disk**: name `data`, mount path `/data`, size 1 GB. Render restarts the service once.
+3. Nothing to change for the database: the server already keeps it at `/data/domino.db` (set in the Dockerfile). On the
+   first start with the new, empty disk it restores the latest backup from GitHub, so no player loses anything. After
+   that start, check the leaderboard; then you may delete `BACKUP_GITHUB_TOKEN` (the GitHub backup is only needed on the
+   free plan; keeping it as an extra copy does no harm).
+4. In `render.yaml`, change `plan: free` to `plan: starter` so the Blueprint matches (otherwise a Blueprint sync would put it back).
+5. Check: `https://YOUR-SERVER/api/v1/health` answers `{"ok":true,…}` and `https://YOUR-SERVER/api/docs` shows the API.
+
+Settings worth knowing (Render → Environment):
+
+| Variable | What it does |
+|---|---|
+| `ADMIN_KEY` | Password for the admin pages: `/admin/support`, `/admin/tourney`, `/api/admin/reports` |
+| `FIREBASE_SERVICE_ACCOUNT` | Push reminders and notifications (tournament, referrals, prizes) |
+| `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` | Support messages by e-mail |
+| `PUSH_TIMES` | Reminder times, default `14:00,20:00` (Cairo) |
+| `TOURNEY_WEEKDAY`, `TOURNEY_HOUR` | Tournament day (0 Sunday … 4 Thursday) and hour, Cairo time; default Thursday 21 |
+| `BOT_FILL_SECONDS` | How long matchmaking waits for people before computer players join (default 8) |
+
+Test the tournament without waiting for Thursday: `https://YOUR-SERVER/admin/tourney?key=ADMIN_KEY&start=1` starts this
+week's tournament now with whoever signed up.
+
+## The HTTP API
+
+Everything outside a live game is also available over HTTP at `/api/v1`, documented at **`/api/docs`** (and as an
+OpenAPI file at `/api/v1/openapi.json` for Postman or Swagger): accounts (guest, e-mail sign-in), your profile and coin
+history, **player cards** with stats (matches, wins, losses, win rate, coins won and lost, net gains, biggest win,
+per-game ratings), friends (add, accept, decline, remove), the daily reward, missions, the season pass, the weekly
+tournament, the shop, leaderboards, referral codes, reports and support. Requests carry the player's token as
+`Authorization: Bearer <token>` (the same token the app uses). Live games run over the WebSocket at `/ws`; its
+messages are listed on the same page and typed in `shared/protocol.ts`.
+
 ## Host it (recommended: any Linux server with Docker)
 
 A small server is enough to start: 1 vCPU and 1 GB RAM handles hundreds of players at once.
