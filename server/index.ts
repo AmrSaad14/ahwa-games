@@ -8,6 +8,7 @@ import { Store } from './db';
 import { Limiter, Tokens } from './auth';
 import { Hub } from './hub';
 import { GoogleSignIn, PhoneCodes, backToAppPage } from './login';
+import { AppleSignIn } from './apple';
 import { verifySsv } from './ads';
 import { GitHubBackup } from './backup';
 import { PlayBilling } from './billing';
@@ -27,9 +28,11 @@ export function createServer(opts = config) {
   const store = new Store(opts.dbPath);
   const tokens = new Tokens(store.secret(opts.secret));
   const phones = new PhoneCodes(opts.login), google = new GoogleSignIn(opts.login);
+  const l = opts.login as typeof opts.login & { appleServiceId?: string; appleTeamId?: string; appleKeyId?: string; applePrivateKey?: string };
+  const apple = new AppleSignIn({ serviceId: l.appleServiceId ?? '', teamId: l.appleTeamId ?? '', keyId: l.appleKeyId ?? '', privateKey: l.applePrivateKey ?? '', publicUrl: l.publicUrl, appScheme: l.appScheme });
   const billing = new PlayBilling(opts.billing);
   const desk = supportDesk(store, opts.support);
-  const hub = new Hub(store, tokens, { phones, google, billing, support: m => desk.file(m),
+  const hub = new Hub(store, tokens, { phones, google, apple, billing, support: m => desk.file(m),
     push: (uids, ar, en) => { for (const u of uids) push.toUser(u, ar, en).catch(() => {}); },
     onWeeklyPrize: (uid, rank, coins) => { push.toUser(uid, ['مبروك! 🏆', `جيت المركز ${rank} الأسبوع ده وكسبت ${coins.toLocaleString('en')} كوين`], ['Congratulations! 🏆', `You finished #${rank} this week and won ${coins.toLocaleString('en')} coins`]).catch(() => {}); }, defaultCountry: opts.login.defaultCountry, adsSsv: opts.adsSsv, turnMs: opts.turnMs, botFillMs: opts.botFillMs, nextRoundMs: opts.nextRoundMs, botDelay: opts.botDelay, lobbyAfterMatchMs: opts.lobbyAfterMatchMs, msgsPer5s: (opts as { msgsPer5s?: number }).msgsPer5s, graceMs: (opts as { graceMs?: number }).graceMs,
     stunUrls: opts.stunUrls, turnUrls: opts.turnUrls, turnSecret: opts.turnSecret, autoMoveMs: opts.autoMoveMs, chessClockMs: opts.chessClockMs });
@@ -177,6 +180,29 @@ export function createServer(opts = config) {
         .catch(e => { console.error('[google]', (e as Error).message); page('', false); });
       return;
     }
+    // Sign in with Apple: the same round trip; Apple comes back with a form POST
+    if (url.pathname === '/auth/apple/start') {
+      if (!apple.enabled) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('Sign in with Apple is not set up on this server.'); }
+      res.writeHead(302, { Location: apple.startUrl(url.searchParams.get('to') === 'app' ? 'app' : 'web'), 'Cache-Control': 'no-store' });
+      return res.end();
+    }
+    if (url.pathname === '/auth/apple/callback' && req.method === 'POST') {
+      let raw = '';
+      req.on('data', c => { raw += c; if (raw.length > 16_384) req.destroy(); });
+      req.on('end', () => {
+        const f = new URLSearchParams(raw);
+        const page = (link: string, ok: boolean) => { res.writeHead(ok ? 200 : 400, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(backToAppPage(link, opts.login.appName, ok)); };
+        const code = f.get('code');
+        if (!code) return page('', false);
+        apple.callback(code, f.get('state') || '', f.get('user') || '')
+          .then(({ to, ticket }) => {
+            if (to === 'web') { res.writeHead(302, { Location: apple.webLink(ticket), 'Cache-Control': 'no-store' }); return res.end(); }
+            page(apple.appLink(ticket), true);
+          })
+          .catch(e => { console.error('[apple]', (e as Error).message); page('', false); });
+      });
+      return;
+    }
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); return res.end(); }
     // static client
     let file = path.normalize(path.join(staticRoot, decodeURIComponent(url.pathname)));
@@ -230,7 +256,7 @@ export function createServer(opts = config) {
   }, 25_000);
 
   return {
-    server, hub, store, phones, google,
+    server, hub, store, phones, google, apple,
     listen: () => new Promise<number>(r => server.listen(opts.port, opts.host, () => r((server.address() as { port: number }).port))),
     /** Stop the game (stakes in play are refunded); `last` runs just before the database closes (final backup). */
     close: async (last?: () => Promise<void>) => {

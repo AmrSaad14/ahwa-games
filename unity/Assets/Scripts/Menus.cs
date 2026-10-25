@@ -17,7 +17,7 @@ public partial class Menus : MonoBehaviour
     Text adText, langText, signText, coinsText;
     GameObject signChip;
     Dictionary<string, object> user;
-    bool googleOn = true;
+    bool googleOn = true, appleOn;
     string pendingTicket;
     // cash out: your requests and the rate, from the server
     List<object> cashRows; long cashCoins = 1_000_000; int cashEgp = 10, cashMax = 10, cashMillions = 1;
@@ -120,7 +120,7 @@ public partial class Menus : MonoBehaviour
     public void OnUser(Dictionary<string, object> u)
     {
         user = u;
-        bool signed = !string.IsNullOrEmpty(u.Str("google")) || !string.IsNullOrEmpty(u.Str("phone")) || !string.IsNullOrEmpty(u.Str("email"));
+        bool signed = !string.IsNullOrEmpty(u.Str("google")) || !string.IsNullOrEmpty(u.Str("apple")) || !string.IsNullOrEmpty(u.Str("phone")) || !string.IsNullOrEmpty(u.Str("email"));
         signChip.SetActive(!signed);
         int left = (int)u.Num("adsLeft");
         adText.Set(left > 0 ? "+5K" : "0");
@@ -145,12 +145,13 @@ public partial class Menus : MonoBehaviour
         {
             case "welcome":
                 var login = m.Obj("login");
-                if (login != null) googleOn = login.Bool("google");
+                if (login != null) { googleOn = login.Bool("google"); appleOn = login.Bool("apple"); }
                 if (pendingTicket != null) { app.Send(new Dictionary<string, object> { ["t"] = "ticket", ["ticket"] = pendingTicket }); pendingTicket = null; }
                 if (pendingJoin != null) { var j = pendingJoin; pendingJoin = null; StartCoroutine(JoinSoon(j)); }
                 break;
             case "signedIn":
-                app.Toast(Loc.T("أهلاً! اتسجلت بحساب جوجل"));
+                app.Toast(Loc.T(m.Str("via") == "apple" ? "أهلاً! اتسجلت بحساب أبل" : "أهلاً! اتسجلت بحساب جوجل"));
+                if (open != null) Close();
                 Sfx.Coins();
                 break;
             case "bonus":
@@ -365,16 +366,22 @@ public partial class Menus : MonoBehaviour
             var acc = Row(list, 96, Card);
             var t = Ui.Label(acc, "الحساب", 16, Color.white, StartAlign, Ui.Bold);
             t.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(480, 26), new Vector2(0, -8));
-            string g = user?.Str("google"), ph = user?.Str("phone"), em = user?.Str("email");
-            string who = !string.IsNullOrEmpty(g) ? g : !string.IsNullOrEmpty(em) ? em : ph;
+            string g = user?.Str("google"), ap = user?.Str("apple"), ph = user?.Str("phone"), em = user?.Str("email");
+            string who = !string.IsNullOrEmpty(g) ? g : !string.IsNullOrEmpty(ap) ? ap : !string.IsNullOrEmpty(em) ? em : ph;
             var note = Ui.Label(acc, "", 13, Ui.GoldLight, StartAlign);
             note.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(480, 22), new Vector2(0, -34));
             if (string.IsNullOrEmpty(who))
             {
                 note.Set(Loc.T("بتلعب كضيف. سجّل عشان فلوسك وتقدمك يتحفظوا."));
-                var b = Ui.Button(acc, "تسجيل الدخول بجوجل", Color.white, Ui.Ink, 14, SignIn);
-                var br = ((RectTransform)b.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(230, 32), new Vector2(0, 6));
+                // Google, and Apple when the server has it
+                var b = Ui.Button(acc, "الدخول بجوجل", Color.white, Ui.Ink, 14, () => SignInWith("google"));
+                var br = ((RectTransform)b.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(200, 32), new Vector2(appleOn ? (Loc.En ? -106 : 106) : 0, 6));
                 var gi = Ui.Picture(br, "G", Icon("google")); gi.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(20, 20), new Vector2(8, 0));
+                if (appleOn)
+                {
+                    var ab = Ui.Button(acc, "الدخول بأبل", Color.black, Color.white, 14, () => SignInWith("apple"));
+                    ((RectTransform)ab.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(200, 32), new Vector2(Loc.En ? 106 : -106, 6));
+                }
             }
             else
             {
@@ -1087,13 +1094,32 @@ public partial class Menus : MonoBehaviour
 
     /* ---------- Google sign-in ---------- */
 
+    /// The "Sign in" chip: Google straight away, or a choice of Google and Apple when the server has both.
     void SignIn()
     {
         Sfx.Tap();
-        if (!googleOn) { app.Toast(Loc.T("تسجيل الدخول بجوجل مش متاح على السيرفر ده")); return; }
-        // Google's page opens in the browser; the server sends the player back with a one-time ticket
-        // (boardbattles' app link, ahwagames://auth?ticket=…), handled in OnLink
-        Application.OpenURL(app.net.HttpBase + "/auth/google/start?to=app");
+        if (!appleOn) { SignInWith("google"); return; }
+        Panel(Loc.T("سجّل دخولك"), out var body, new Vector2(420, 250));
+        refreshOpen = null;
+        Ui.Label(body, "عشان كوينزك وتقدمك يتحفظوا وتلعب من أي موبايل", 13, Ui.GoldLight).rectTransform
+            .Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(390, 22), new Vector2(0, -2));
+        var g = Ui.Button(body, "كمّل بجوجل", Color.white, Ui.Ink, 16, () => SignInWith("google"));
+        var gr = ((RectTransform)g.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 46), new Vector2(0, -40));
+        var gi = Ui.Picture(gr, "G", Icon("google")); gi.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(24, 24), new Vector2(12, 0));
+        var a = Ui.Button(body, "كمّل بأبل", Color.black, Color.white, 16, () => SignInWith("apple"));
+        ((RectTransform)a.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 46), new Vector2(0, -98));
+        a.gameObject.AddComponent<Outline>().effectColor = new Color(1, 1, 1, 0.35f);
+    }
+
+    /// The provider's page opens in the browser; the server sends the player back with a one-time ticket
+    /// (the app link ahwagames://auth?ticket=…), handled in OnLink.
+    void SignInWith(string provider)
+    {
+        Sfx.Tap();
+        if (provider == "google" && !googleOn) { app.Toast(Loc.T("تسجيل الدخول بجوجل مش متاح على السيرفر ده")); return; }
+        if (provider == "apple" && !appleOn) { app.Toast(Loc.T("تسجيل الدخول بأبل مش متاح على السيرفر ده")); return; }
+        if (app.net == null) return;
+        Application.OpenURL(app.net.HttpBase + "/auth/" + provider + "/start?to=app");
     }
 
     string pendingJoin;

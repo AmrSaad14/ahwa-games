@@ -234,6 +234,22 @@ Settings worth knowing (Render → Environment):
 Test the tournament without waiting for Thursday: `https://YOUR-SERVER/admin/tourney?key=ADMIN_KEY&start=1` starts this
 week's tournament now with whoever signed up.
 
+## Sign in with Apple
+
+Players can sign in with Google or with Apple (the Apple button shows once the server has these settings). Apple's
+sign-in runs in the browser like Google's, so it works in the Android app too. You need an Apple Developer account
+(developer.apple.com, $99 a year):
+
+1. **Certificates, Identifiers & Profiles → Identifiers → +** → **App IDs** → an App ID (e.g. `com.ahwa.boardbattles`)
+   with **Sign in with Apple** ticked.
+2. **Identifiers → + → Services IDs** → e.g. `com.ahwa.boardbattles.signin`; tick **Sign in with Apple** → **Configure**:
+   primary App ID the one above; **Domains**: your server's domain (e.g. `kings-battle.onrender.com`);
+   **Return URLs**: `https://YOUR-SERVER/auth/apple/callback`.
+3. **Keys → +** → tick **Sign in with Apple** (configure it with the App ID) → download the `.p8` file (only once).
+4. On the server (Render → Environment): `APPLE_SERVICE_ID` (the Services ID), `APPLE_TEAM_ID` (top right of the
+   developer site), `APPLE_KEY_ID` (the key's id) and `APPLE_PRIVATE_KEY` (the whole `.p8` file, pasted as it is).
+   Redeploy; the app shows **Continue with Apple** next to Google.
+
 ## The HTTP API
 
 Everything outside a live game is also available over HTTP at `/api/v1`, documented at **`/api/docs`** (and as an

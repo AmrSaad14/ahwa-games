@@ -140,6 +140,7 @@ export interface PublicUser {
   gifts: number;       // gifts received
   phone: string | null;   // signed-in mobile number, partly hidden
   google: string | null;  // signed-in Google account (its email)
+  apple?: string | null;  // signed in with Apple (its e-mail, or "Apple")
   adsLeft: number;        // rewarded ads that still pay out today
   adFreeUntil: number;    // ad-free plan paid until (ms since 1970); 0 = shows ads
   skins: string[];        // skins bought in the shop (the free classic ones aren't listed)
@@ -264,12 +265,12 @@ export type C2S =
 
 /** Server → client */
 export type S2C =
-  | { t: 'welcome'; user: PublicUser; token: string; now: number; ice: IceServer[]; login?: { google: boolean; phone: boolean; playGames?: string } }
+  | { t: 'welcome'; user: PublicUser; token: string; now: number; ice: IceServer[]; login?: { google: boolean; apple?: boolean; phone: boolean; playGames?: string } }
   | { t: 'friends'; rows: FriendRow[] }
   | { t: 'friendNews'; kind: 'request' | 'accepted' | 'added' | 'sent'; name: string }
   | { t: 'invited'; from: { id: string; name: string; ch: number }; code: string; mode: Mode; stake: number }
   | { t: 'otp'; phone: string }
-  | { t: 'signedIn'; via: 'phone' | 'google' | 'playgames'; fresh: boolean }
+  | { t: 'signedIn'; via: 'phone' | 'google' | 'playgames' | 'apple'; fresh: boolean }
   | { t: 'bonus'; coins: number; streak?: number }
   | { t: 'xp'; gained: number; xp: number; level: number; levelUp: boolean }
   | { t: 'weeklyPrize'; rank: number; coins: number; week: string }

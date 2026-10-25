@@ -17,7 +17,7 @@ export interface UserRow {
   id: string; name: string; ch: number; email: string | null; pw: string | null;
   rating: number; games: number; wins: number; created: number; seen: number;
   coins: number; gifts: number; bonus_day: string | null; ad_free_until: number; equip: string | null;
-  phone: string | null; google_sub: string | null; google_email: string | null;
+  phone: string | null; google_sub: string | null; google_email: string | null; apple_sub?: string | null; apple_email?: string | null;
   pg_id: string | null; friend_code: string | null; streak?: number; xp?: number;
   ref_by?: string | null; ref_paid?: number; muted_until?: number; pid?: string | null;
 }
@@ -76,6 +76,8 @@ export class Store {
     if (!cols.has('streak')) this.db.exec('ALTER TABLE users ADD COLUMN streak INTEGER NOT NULL DEFAULT 0');
     if (!cols.has('xp')) this.db.exec('ALTER TABLE users ADD COLUMN xp INTEGER NOT NULL DEFAULT 0');
     if (!cols.has('ref_by')) this.db.exec('ALTER TABLE users ADD COLUMN ref_by TEXT; ALTER TABLE users ADD COLUMN ref_paid INTEGER NOT NULL DEFAULT 0');
+    if (!cols.has('apple_sub')) this.db.exec('ALTER TABLE users ADD COLUMN apple_sub TEXT; ALTER TABLE users ADD COLUMN apple_email TEXT');
+    this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_apple ON users(apple_sub) WHERE apple_sub IS NOT NULL');
     if (!cols.has('muted_until')) this.db.exec('ALTER TABLE users ADD COLUMN muted_until INTEGER NOT NULL DEFAULT 0');
     // the public id other players see (player cards, friends): filled in for everyone once
     if (!cols.has('pid')) {
@@ -174,6 +176,8 @@ export class Store {
   byPhone(phone: string): UserRow | undefined { return this.db.prepare('SELECT * FROM users WHERE phone = ?').get(phone) as UserRow | undefined; }
   byGoogle(sub: string): UserRow | undefined { return this.db.prepare('SELECT * FROM users WHERE google_sub = ?').get(sub) as UserRow | undefined; }
   setPhone(id: string, phone: string) { this.db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(phone, id); }
+  byApple(sub: string): UserRow | undefined { return this.db.prepare('SELECT * FROM users WHERE apple_sub = ?').get(sub) as UserRow | undefined; }
+  setApple(id: string, sub: string, email: string | null) { this.db.prepare('UPDATE users SET apple_sub = ?, apple_email = ? WHERE id = ?').run(sub, email, id); }
   setGoogle(id: string, sub: string, email: string | null) { this.db.prepare('UPDATE users SET google_sub = ?, google_email = ? WHERE id = ?').run(sub, email, id); }
   byPlayGames(pid: string): UserRow | undefined { return this.db.prepare('SELECT * FROM users WHERE pg_id = ?').get(pid) as UserRow | undefined; }
   setPlayGames(id: string, pid: string) { this.db.prepare('UPDATE users SET pg_id = ? WHERE id = ?').run(pid, id); }
@@ -652,7 +656,7 @@ export function parseEquip(raw: string | null | undefined): Equipped {
   try { const o = JSON.parse(raw || '{}'); return o && typeof o === 'object' ? o as Equipped : {}; } catch { return {}; }
 }
 export const toPublic = (u: UserRow): PublicUser => ({ id: u.id, name: u.name, ch: u.ch, email: u.email, rating: u.rating, games: u.games, wins: u.wins, coins: u.coins, gifts: u.gifts, ratings: {}, adsLeft: 0, adFreeUntil: u.ad_free_until ?? 0, skins: [], equip: parseEquip(u.equip),
-  phone: u.phone ? maskPhone(u.phone) : null, google: u.google_sub ? (u.google_email || 'Google') : null, playGames: !!u.pg_id, code: u.friend_code ?? '', pid: u.pid ?? publicId(u.id) });
+  phone: u.phone ? maskPhone(u.phone) : null, google: u.google_sub ? (u.google_email || 'Google') : null, apple: u.apple_sub ? (u.apple_email || 'Apple') : null, playGames: !!u.pg_id, code: u.friend_code ?? '', pid: u.pid ?? publicId(u.id) });
 
 /** Referrals: the bonus each side gets, how long a new player has to enter a code, and the most one inviter is paid for. */
 export const REFER_BONUS = 50_000, REFER_DAYS = 7, REFER_MAX = 20;

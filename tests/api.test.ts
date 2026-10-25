@@ -121,3 +121,30 @@ test('cards in the game: tap a seat, add the friend from the card, the card show
   await b.until(() => b.msgs.filter(m => m.t === 'profileCard').length === 3 && b.last('profileCard')!.card.friend === null);
   a.ws.close(); b.ws.close();
 });
+
+test('sign in with Apple: a ticket links the Apple id; the same Apple id opens that account later', async () => {
+  const open = async (token?: string) => {
+    const ws = new WebSocket(base.replace('http', 'ws') + '/ws');
+    const msgs: S2C[] = [];
+    await new Promise(r => ws.once('open', r));
+    ws.on('message', d => msgs.push(JSON.parse(d.toString())));
+    ws.send(JSON.stringify({ t: 'hello', v: 2, token }));
+    const until = async (f: () => boolean) => { for (let i = 0; i < 200 && !f(); i++) await new Promise(r => setTimeout(r, 25)); assert.ok(f()); };
+    const last = <T extends S2C['t']>(t: T) => [...msgs].reverse().find(m => m.t === t) as Extract<S2C, { t: T }> | undefined;
+    await until(() => !!last('welcome'));
+    return { ws, msgs, until, last, send: (m: unknown) => ws.send(JSON.stringify(m)) };
+  };
+  const a = await open();
+  const uid = a.last('welcome')!.user.id;
+  a.send({ t: 'ticket', ticket: app.apple.testTicket({ sub: 'apple-123', email: 'x@privaterelay.appleid.com', name: 'Laila' }) });
+  await a.until(() => a.last('signedIn')?.via === 'apple');
+  await a.until(() => a.last('user')?.user.apple === 'x@privaterelay.appleid.com' && a.last('user')!.user.name === 'Laila');
+  a.ws.close();
+  const b = await open();
+  b.send({ t: 'ticket', ticket: app.apple.testTicket({ sub: 'apple-123', email: null, name: null }) });
+  await b.until(() => b.last('signedIn')?.fresh === false);
+  await b.until(() => b.msgs.filter(m => m.t === 'welcome').length === 2 && b.last('welcome')!.user.id === uid);
+  const r = await fetch(base + '/auth/apple/start');
+  assert.equal(r.status, 404);   // not set up in tests
+  b.ws.close();
+});

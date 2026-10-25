@@ -20,6 +20,7 @@ import { Limiter, Tokens, checkPassword, hashPassword } from './auth';
 import { Store, UserRow } from './db';
 import { GoogleSignIn, PhoneCodes, normalizePhone } from './login';
 import { AdTickets } from './ads';
+import { AppleSignIn } from './apple';
 
 export interface Conn {
   send(msg: S2C): void;
@@ -36,7 +37,7 @@ export interface HubOptions {
   turnMs: number; botFillMs: number; nextRoundMs: number; botDelay: [number, number]; lobbyAfterMatchMs: number; msgsPer5s?: number;
   stunUrls?: string[]; turnUrls?: string[]; turnSecret?: string;
   autoMoveMs?: number; chessClockMs?: number;
-  phones?: PhoneCodes; google?: GoogleSignIn; defaultCountry?: string;
+  phones?: PhoneCodes; google?: GoogleSignIn; apple?: AppleSignIn; defaultCountry?: string;
   adsSsv?: boolean;
   billing?: PlayBilling;
   /** A player won a weekly prize (the server sends them a push). */
@@ -249,9 +250,12 @@ export class Hub {
         return;
       }
       case 'ticket': {
+        // a one-time ticket from the Google or the Apple sign-in page
         const p = this.opts.google?.take(m.ticket);
-        if (!p) return err('ticket_expired');
-        return this.signIn(s, 'google', p.sub, p.email, p.name);
+        if (p) return this.signIn(s, 'google', p.sub, p.email, p.name);
+        const a = this.opts.apple?.take(m.ticket);
+        if (a) return this.signIn(s, 'apple', a.sub, a.email, a.name);
+        return err('ticket_expired');
       }
       case 'playGames': {
         const g = this.opts.google;
@@ -626,22 +630,22 @@ export class Hub {
    * Signing in with a phone number or Google: an account that already uses it is opened (as with email);
    * otherwise it is added to the account in use, so a guest keeps their coins, ratings and name.
    */
-  private signIn(s: Session, via: 'phone' | 'google' | 'playgames', key: string, email: string | null, name: string | null) {
+  private signIn(s: Session, via: 'phone' | 'google' | 'playgames' | 'apple', key: string, email: string | null, name: string | null) {
     const uid = s.uid; if (!uid) return;
-    const existing = via === 'phone' ? this.store.byPhone(key) : via === 'google' ? this.store.byGoogle(key) : this.store.byPlayGames(key);
+    const existing = via === 'phone' ? this.store.byPhone(key) : via === 'google' ? this.store.byGoogle(key) : via === 'apple' ? this.store.byApple(key) : this.store.byPlayGames(key);
     if (existing) {
       if (existing.id !== uid) { this.detach(s); this.attach(s, existing); }
       return s.conn.send({ t: 'signedIn', via, fresh: false });
     }
     const link = (id: string) => {
-      if (via === 'phone') this.store.setPhone(id, key); else if (via === 'google') this.store.setGoogle(id, key, email); else this.store.setPlayGames(id, key);
+      if (via === 'phone') this.store.setPhone(id, key); else if (via === 'google') this.store.setGoogle(id, key, email); else if (via === 'apple') this.store.setApple(id, key, email); else this.store.setPlayGames(id, key);
       const u = this.store.get(id)!;
       // a guest name like Player1234 becomes the Google first name
       const clean = cleanName(name);
       if (via !== 'phone' && clean && /^Player\d{4}$/.test(u.name)) this.store.setProfile(id, clean, u.ch);
     };
     const me = this.store.get(uid)!;
-    if (via === 'phone' ? me.phone : via === 'google' ? me.google_sub : me.pg_id) {
+    if (via === 'phone' ? me.phone : via === 'google' ? me.google_sub : via === 'apple' ? me.apple_sub : me.pg_id) {
       // this account already has a different number / Google account: start a new account for this one
       this.detach(s);
       const u = this.newGuest(); link(u.id);
@@ -667,7 +671,7 @@ export class Hub {
     const daily = (s.v ?? 1) < 2 ? this.store.claimDaily(u.id) : { coins: 0, streak: 0 };
     const fresh = this.store.get(u.id) ?? u;
     s.conn.send({ t: 'welcome', user: this.store.publicUser(fresh), token: this.tokens.issue(u.id), now: Date.now(), ice: this.iceFor(u.id),
-      login: { google: !!this.opts.google?.enabled, phone: !!this.opts.phones?.enabled, playGames: this.opts.google?.playGamesEnabled ? this.opts.google.clientId : undefined } });
+      login: { google: !!this.opts.google?.enabled, apple: !!this.opts.apple?.enabled, phone: !!this.opts.phones?.enabled, playGames: this.opts.google?.playGamesEnabled ? this.opts.google.clientId : undefined } });
     this.friendsChanged(u.id);
     if (daily.coins) s.conn.send({ t: 'bonus', coins: daily.coins, streak: daily.streak });
     const t = this.userTable.get(u.id);

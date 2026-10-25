@@ -334,7 +334,7 @@ test('phone numbers: Egyptian mobiles with or without +20, Arabic digits too', (
 test('sign in with a mobile number: the guest keeps their coins', async () => {
   const a = await new Client().open();
   const coins = a.last('welcome')!.user.coins;
-  assert.deepEqual(a.last('welcome')!.login, { google: false, phone: true });
+  assert.deepEqual(a.last('welcome')!.login, { google: false, apple: false, phone: true });
   a.send({ t: 'otp', phone: '01012345678' });
   await a.until(() => a.last('otp')?.phone === '+201012345678');
   a.send({ t: 'otpCheck', phone: '01012345678', code: app.phones.lastCode.get('+201012345678') === '000000' ? '111111' : '000000' });

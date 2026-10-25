@@ -59,6 +59,11 @@ export const config = {
     appName: process.env.APP_NAME || 'Board Battles',
     googleClientId: process.env.GOOGLE_CLIENT_ID || '',
     googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+    // Sign in with Apple (server/apple.ts)
+    appleServiceId: process.env.APPLE_SERVICE_ID || '',
+    appleTeamId: process.env.APPLE_TEAM_ID || '',
+    appleKeyId: process.env.APPLE_KEY_ID || '',
+    applePrivateKey: process.env.APPLE_PRIVATE_KEY || '',
     sms: (process.env.SMS_PROVIDER || '') as 'twilio' | 'http' | 'console' | '',
     twilioSid: process.env.TWILIO_ACCOUNT_SID || '',
     twilioToken: process.env.TWILIO_AUTH_TOKEN || '',

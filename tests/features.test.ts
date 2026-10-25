@@ -84,7 +84,7 @@ test('missions: three a day, games move them on, the reward is collected once', 
   // practice games on the phone count (not for "online" missions)
   const game = easy.game === 'any' ? 'domino' : easy.game;
   for (let i = 0; i < easy.need; i++) a.send({ t: 'practiceDone', game: game as 'domino', won: true });
-  await a.until(() => a.last('missionDone')?.id === easy.id);
+  await a.until(() => a.msgs.some(m => m.t === 'missionDone' && m.id === easy.id));
   const before = a.user().coins;
   a.send({ t: 'mission', id: easy.id });
   await a.until(() => a.last('missionClaimed')?.id === easy.id);
