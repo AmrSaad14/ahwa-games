@@ -114,7 +114,7 @@ public partial class Menus
         string kind = d.Str("kind"), game = d.Str("game");
         int need = (int)d.Num("need");
         bool online = d.Bool("online");
-        var w = GameWords.TryGetValue(game, out var x) ? x : (game, game);
+        (string ar, string en) w = GameWords.TryGetValue(game, out var x) ? x : (game, game);
         if (Loc.En)
             return (kind == "win" ? "Win " : "Play ") + need + (need == 1 ? " game" : " games") + (game == "any" ? "" : " of " + w.en) + (online ? " online" : "");
         string n = ArNum(need);
