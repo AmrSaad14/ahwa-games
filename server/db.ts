@@ -652,7 +652,7 @@ export function parseEquip(raw: string | null | undefined): Equipped {
   try { const o = JSON.parse(raw || '{}'); return o && typeof o === 'object' ? o as Equipped : {}; } catch { return {}; }
 }
 export const toPublic = (u: UserRow): PublicUser => ({ id: u.id, name: u.name, ch: u.ch, email: u.email, rating: u.rating, games: u.games, wins: u.wins, coins: u.coins, gifts: u.gifts, ratings: {}, adsLeft: 0, adFreeUntil: u.ad_free_until ?? 0, skins: [], equip: parseEquip(u.equip),
-  phone: u.phone ? maskPhone(u.phone) : null, google: u.google_sub ? (u.google_email || 'Google') : null, playGames: !!u.pg_id, code: u.friend_code ?? '' });
+  phone: u.phone ? maskPhone(u.phone) : null, google: u.google_sub ? (u.google_email || 'Google') : null, playGames: !!u.pg_id, code: u.friend_code ?? '', pid: u.pid ?? publicId(u.id) });
 
 /** Referrals: the bonus each side gets, how long a new player has to enter a code, and the most one inviter is paid for. */
 export const REFER_BONUS = 50_000, REFER_DAYS = 7, REFER_MAX = 20;

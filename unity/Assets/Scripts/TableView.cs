@@ -3,9 +3,10 @@ using System.Collections.Generic;
 
 public class SeatView
 {
-    public string name, pid;
+    public string name, pid, hat, drink;
     public int ch, count, team, rating;
-    public bool bot, away, online, host, mic;
+    public bool bot, away, online, host, mic, muted;
+    public double back;   // dropped out: when the computer takes over (server time, ms), 0 when here
 }
 
 public class LastAction
@@ -74,6 +75,7 @@ public class TableView
             {
                 name = d.Str("name"), pid = d.Str("pid"), ch = I(d, "ch"), count = I(d, "count"), team = I(d, "team"), rating = I(d, "rating"),
                 bot = d.Bool("bot"), away = d.Bool("away"), online = d.Bool("online"), host = d.Bool("host"), mic = d.Bool("mic"),
+                hat = d.Str("hat"), drink = d.Str("drink"), muted = d.Bool("muted"), back = d.Num("back"),
             });
         }
         v.hand = Ints(m.Arr("hand"));

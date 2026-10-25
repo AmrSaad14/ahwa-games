@@ -121,6 +121,7 @@ public class App : MonoBehaviour
         net.Start();
         Push.Begin();
         Ads.Begin();
+        Growth.CheckReferrer();
 
         splash.Ready();
         while (!splash.Opened) yield return null;
@@ -129,6 +130,27 @@ public class App : MonoBehaviour
 
         if (Recording) StartCoroutine(Shots());
     }
+
+    /// A practice game against the computer is running on the phone.
+    public bool Practicing => offline != null;
+    /// Ends a practice game (a tournament match or a friend's room is waiting).
+    public void StopPractice() { offline = null; if (view != null) ExitGame(); }
+    bool pumping;   // the table message being handled comes from the practice game, not the server
+
+    /// One tap from the friends list: a room for the two of you (in the game you play most) and an invitation.
+    public void InviteFriend(string id)
+    {
+        if (net == null || !net.Online) { Toast(Loc.T("مش متصل بالسيرفر لسه")); return; }
+        if (offline != null) StopPractice();
+        string g = PlayerPrefs.GetString("lastGame", "domino");
+        string mode = PlayerPrefs.GetString("mode." + g, GameUi.GameModes[g][0].mode);
+        Send(new Dictionary<string, object> { ["t"] = "invite", ["id"] = id, ["mode"] = mode });
+        Toast(Loc.T("الدعوة اتبعتت، استنى صاحبك في الغرفة"));
+    }
+
+    // called from Java (BBExtras): who invited this install, and the review card closing
+    public void OnReferrer(string value) => Growth.OnReferrer(value);
+    public void OnReview(string value) { Debug.Log("[review] " + value); }
 
     void SetStatus(bool on) { statusText.Set(on ? Loc.T("متصل") : Loc.T("جاري الاتصال…")); statusText.color = on ? new Color(0.55f, 0.85f, 0.5f) : Ui.GoldLight; }
 
@@ -236,6 +258,8 @@ public class App : MonoBehaviour
                 if (vm == null) break;
                 var v = TableView.Parse(vm);
                 if (v.id == leftTableId) break;   // a late message from a table you just left: it doesn't pull you back in
+                // a table from the server (a tournament match, a friend's room) ends a practice game on the phone
+                if (!pumping && offline != null) { offline = null; view = null; }
                 if (view == null || view.id != v.id) Debug.Log($"[app] table {v.game} {v.mode} {v.phase} {v.id.Substring(0, Mathf.Min(6, v.id.Length))} (was {(view == null ? "none" : view.game + " " + view.id.Substring(0, Mathf.Min(6, view.id.Length)))})");
                 serverOffset = v.now - LocalMs();
                 if (view == null) EnterGame();
@@ -243,7 +267,7 @@ public class App : MonoBehaviour
                 if (!v.MyTurn || !v.hand.Contains(sel)) { sel = -1; choose = null; }
                 // a tile going down clacks; your turn chimes (and buzzes the phone)
                 int tilesNow = v.line.Empty ? 0 : 1 + v.line.L.Count + v.line.R.Count;
-                if (view != null && tilesNow > tilesOnTable) Sfx.Clack();
+                if (view != null && tilesNow > tilesOnTable) Sfx.Slap();
                 if (v.MyTurn && v.phase == "play" && (view == null || !view.MyTurn)) { Sfx.Chime(); Sfx.Buzz(); }
                 tilesOnTable = tilesNow;
                 view = v;
@@ -386,7 +410,8 @@ public class App : MonoBehaviour
             offline.dirty = false;
             // through JSON, so the view has exactly the shape (and number types) of a server message
             var vm = Json.Parse(Json.Write(offline.View())) as Dictionary<string, object>;
-            OnMessage(new Dictionary<string, object> { ["t"] = "table", ["view"] = vm });
+            pumping = true;
+            try { OnMessage(new Dictionary<string, object> { ["t"] = "table", ["view"] = vm }); } finally { pumping = false; }
             // a finished practice game earns a little experience (when connected)
             if (view != null && view.phase == "mend" && view.match != null && view.id != reportedPractice)
             {
@@ -515,6 +540,7 @@ public class App : MonoBehaviour
     public void ShowEmote(int seat, string k)
     {
         if (view == null || seat < 0) return;
+        if (seat < view.seats.Count && view.seats[seat] != null && seat != view.you && Menus.IsMuted(view.seats[seat].pid)) return;   // you muted them
         game.ShowEmote(view, seat, k);
         var who = dominoTable.CharAtSeat(seat);
         if (who != null && who.gameObject.activeInHierarchy) { if (k == "gg" || k == "clap" || k == "love" || k == "fire") who.Win(); else who.Gesture(who.transform.position + who.Forward * 2f + Vector3.up * 3f); }
@@ -540,6 +566,8 @@ public class App : MonoBehaviour
         // you: name and coins, top right
         var me = Ui.Box(root, "Me", Ui.Panel);
         me.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(230, 40), new Vector2(-14, -10));
+        // tap yourself: your own player card
+        me.gameObject.AddComponent<Button>().onClick.AddListener(() => { Sfx.Tap(); menus?.OpenMyCard(); });
         nameText = Ui.Label(me.transform, "…", 15, Color.white, TextAnchor.MiddleRight, Ui.Bold);
         nameText.rectTransform.Place(new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(120, 30), new Vector2(-12, 0));
         var coin = Ui.Box(me.transform, "Coin", Ui.Gold);
@@ -652,6 +680,15 @@ public class App : MonoBehaviour
             Still("m0-home.png");
             menus.OpenDaily(); yield return new WaitForSeconds(0.8f); Still("d1-daily.png");
             Send(new Dictionary<string, object> { ["t"] = "daily" }); yield return new WaitForSeconds(1.2f); Still("d2-daily-got.png");
+            menus.Close();
+            menus.OpenMissions(); yield return new WaitForSeconds(0.8f); Still("x1-missions.png");
+            menus.OpenSeason(); yield return new WaitForSeconds(0.8f); Still("x2-season.png");
+            menus.OpenFriends(); yield return new WaitForSeconds(1.2f); Still("x3-friends.png");
+            menus.OpenTourney(); yield return new WaitForSeconds(1.2f); Still("x4-tourney.png");
+            menus.OpenMyCard(); yield return new WaitForSeconds(1.2f); Still("x5-card.png");
+            menus.OpenShop(3); yield return new WaitForSeconds(0.8f); Still("x6-shop-hat.png");
+            menus.OpenShop(4); yield return new WaitForSeconds(0.8f); Still("x7-shop-felt.png");
+            menus.OpenShop(5); yield return new WaitForSeconds(0.8f); Still("x8-shop-drink.png");
             menus.Close();
             menus.OpenSettings(); yield return new WaitForSeconds(0.8f); Still("m1-settings.png");
             menus.OpenShop(0); yield return new WaitForSeconds(0.8f); Still("m2-shop-coins.png");

@@ -18,6 +18,7 @@
         <category android:name="android.intent.category.BROWSABLE" />
         <data android:scheme="ahwagames" android:host="auth" />
         <data android:scheme="ahwagames" android:host="join" />
+        <data android:scheme="ahwagames" android:host="ref" />
       </intent-filter>
       <meta-data android:name="unityplayer.UnityActivity" android:value="true" />
     </activity>
@@ -29,6 +30,11 @@
     <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/ic_stat_bb" />
     <meta-data android:name="com.google.firebase.messaging.default_notification_color" android:resource="@color/bb_gold" />
     <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="reminders" />
+    <!-- the result card shared from the game (Plugins/Android/BBExtras.java) -->
+    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.bbshare"
+              android:exported="false" android:grantUriPermissions="true">
+      <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/bb_share_paths" />
+    </provider>
     <!-- AdMob: the app id is filled in at build time (Editor/PushGradle.cs: ADMOB_APP_ID, or Google's test app) -->
     <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ADMOB_APP_ID_PLACEHOLDER" />
   </application>

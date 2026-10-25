@@ -115,6 +115,11 @@ public class GameUi : MonoBehaviour
     }
     readonly Text[] seatTags = new Text[4];
     readonly Image[] seatTagBg = new Image[4];
+    readonly RawImage[] seatCpu = new RawImage[4];
+    // the end of a match: play again with new people, the same people (rematch), or the tournament
+    GameObject againButton, homeButton, rematchButton, shareButton; Text againText, rematchText;
+    string rematchFor = ""; bool rematchGone; int rematchVotes, rematchNeed; bool rematchMine;
+    string celebrated = "";
     Text endL, endR;
     GameObject rollButton, undoButton;
     RawImage micIcon; Image micButton;
@@ -424,6 +429,13 @@ public class GameUi : MonoBehaviour
             seatTagBg[p] = bg;
             seatTags[p] = Ui.Label(bg.transform, "", 13, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
             seatTags[p].rectTransform.Fill(4);
+            // a computer player is marked with a chip
+            seatCpu[p] = Ui.Picture(bg.transform, "Cpu", Menus.Icon("cpu"));
+            seatCpu[p].rectTransform.Place(new Vector2(0, 0.5f), new Vector2(1, 0.5f), new Vector2(18, 18), new Vector2(-3, 0));
+            seatCpu[p].color = new Color(1, 1, 1, 0.8f);
+            // tap a player: their card (stats, add friend, mute, report)
+            int pos = p;
+            bg.gameObject.AddComponent<Button>().onClick.AddListener(() => { int seat = app.dominoTable.posToSeat[pos]; if (seat >= 0) { Sfx.Tap(); app.menus.OpenCardSeat(seat); } });
             bg.gameObject.SetActive(false);
         }
 
@@ -511,10 +523,30 @@ public class GameUi : MonoBehaviour
         matchSub.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(380, 30), new Vector2(0, -60));
         payoutText = Ui.Label(matchPanel, "", 20, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Bold);
         payoutText.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(380, 30), new Vector2(0, -96));
-        var again = Ui.Button(matchPanel, "العب تاني", Ui.Gold, Ui.Ink, 17, () => app.PlayAgain());
+        var again = Ui.Button(matchPanel, "العب تاني", Ui.Gold, Ui.Ink, 17, () =>
+        {
+            // in the tournament: back to the bracket; otherwise a new game
+            if (app.view != null && app.menus.IsTourneyTable(app.view.id)) { app.Leave(); app.menus.OpenTourney(); }
+            else app.PlayAgain();
+        });
         ((RectTransform)again.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(170, 44), new Vector2(90, 18));
+        againButton = again.gameObject; againText = again.GetComponentInChildren<Text>();
         var home = Ui.Button(matchPanel, "خروج", Ui.Panel, Ui.GoldLight, 17, () => app.Leave());
         ((RectTransform)home.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(150, 44), new Vector2(-90, 18));
+        homeButton = home.gameObject;
+        // the same people again (matchmade games)
+        var re = Ui.Button(matchPanel, "ماتش تاني معاهم", new Color32(0x2f, 0x6b, 0x3a, 0xff), Color.white, 15, () =>
+        {
+            if (rematchMine) return;
+            Sfx.Tap(); rematchMine = true; app.Send(new Dictionary<string, object> { ["t"] = "rematch" }); ShowRematch();
+        });
+        ((RectTransform)re.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(150, 44), Vector2.zero);
+        rematchButton = re.gameObject; rematchText = re.GetComponentInChildren<Text>();
+        // share the result (a picture of it, with your invite link)
+        var sh = Ui.Button(matchPanel, "", new Color(1, 1, 1, 0.1f), Color.white, 10, ShareResult);
+        ((RectTransform)sh.transform).Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(38, 38), new Vector2(-8, -8));
+        var shi = Ui.Picture(sh.transform, "Share", Menus.Icon("share")); shi.rectTransform.Fill(8); shi.color = Ui.GoldLight;
+        shareButton = sh.gameObject;
         matchPanel.gameObject.SetActive(false);
     }
 
@@ -525,8 +557,101 @@ public class GameUi : MonoBehaviour
         else ShowMic();
     }
 
+    /* ---------- the end of a match: buttons, rematch, celebrating, sharing ---------- */
+
+    void MatchEnded(TableView v, bool won)
+    {
+        bool tourney = app.menus.IsTourneyTable(v.id);
+        bool canRematch = !app.Practicing && !v.isPrivate && !tourney;
+        if (rematchFor != v.id) { rematchFor = v.id; rematchGone = false; rematchMine = false; rematchVotes = 0; rematchNeed = 0; }
+        againText.Set(Loc.T(tourney ? "البطولة" : canRematch ? "لاعبين جداد" : "العب تاني"));
+        // three buttons when a rematch is possible: leave · the same people · new people
+        var a = (RectTransform)againButton.transform; var h = (RectTransform)homeButton.transform;
+        if (canRematch && !rematchGone) { h.anchoredPosition = new Vector2(Loc.En ? -128 : 128, 18); h.sizeDelta = new Vector2(110, 44); a.anchoredPosition = new Vector2(Loc.En ? 128 : -128, 18); a.sizeDelta = new Vector2(120, 44); }
+        else { h.anchoredPosition = new Vector2(Loc.En ? -90 : 90, 18); h.sizeDelta = new Vector2(150, 44); a.anchoredPosition = new Vector2(Loc.En ? 90 : -90, 18); a.sizeDelta = new Vector2(170, 44); }
+        ((RectTransform)rematchButton.transform).anchoredPosition = new Vector2(0, 18);
+        rematchButton.SetActive(canRematch && !rematchGone);
+        ShowRematch();
+        if (celebrated != v.id + ":match")
+        {
+            celebrated = v.id + ":match";
+            if (won) { Celebrate(40); Growth.Won(); }
+        }
+    }
+
+    void ShowRematch()
+    {
+        if (rematchText == null) return;
+        string n = rematchNeed > 0 ? "  " + rematchVotes + "/" + rematchNeed : "";
+        rematchText.Set(rematchMine ? Loc.T("مستنيهم") + n : Loc.T("ماتش تاني معاهم") + n);
+    }
+
+    /// The server: who asked for a rematch so far (and whether someone left).
+    public void OnRematch(Dictionary<string, object> m)
+    {
+        var seats = m.Arr("seats");
+        rematchVotes = seats != null ? seats.Count : 0; rematchNeed = (int)m.Num("need");
+        if (m.Bool("gone") && !rematchGone) { rematchGone = true; app.Toast(Loc.T("حد من اللاعبين مشي")); if (app.view != null) MatchEnded(app.view, false); }
+        else if (rematchVotes > 0 && !rematchMine) app.Toast(Loc.T("عايزين ماتش تاني معاك!"));
+        ShowRematch();
+    }
+
+    /// A picture of the result with a line to go with it (and your invite link).
+    void ShareResult()
+    {
+        var v = app.view; if (v == null || v.match == null) return;
+        Sfx.Tap();
+        bool won = v.you >= 0 && v.match.team == v.TeamOf(v.you);
+        string game = Loc.T(App.GameNames.TryGetValue(v.game, out var gn) ? gn : "دومينو");
+        string other = "";
+        for (int i = 0; i < v.seats.Count; i++) if (i != v.you && v.seats[i] != null) { other = NameOf(v, i); break; }
+        string score = string.Join("–", v.match.scores);
+        string code = app.menus.MyCode;
+        string link = Growth.InviteLink(code);
+        string text = Loc.En
+            ? (won ? "I beat " + other + " " + score + " at " + game + " in Board Battles! " : "What a game of " + game + " in Board Battles! ") + "Play with me (code " + code + ", 50K coins for you): " + link
+            : (won ? "كسبت " + other + " " + score + " في ال" + game + " على بورد باتلز! " : "ماتش " + game + " جامد على بورد باتلز! ") + "تعالى العب معايا (كودي " + code + " وخد ٥٠ ألف كوين): " + link;
+        app.StartCoroutine(Growth.ShareScreen(text, () => shareButton.SetActive(false), () => shareButton.SetActive(true)));
+    }
+
+    /// Coins raining down: a handful for a round, a shower for a match, more for a big win.
+    public void Celebrate(int n)
+    {
+        if (Perf.Saver) n = Mathf.Min(n, 14);
+        Sfx.Coins();
+        var layer = Ui.Rect("Coins", root).Fill();
+        layer.SetAsLastSibling();
+        StartCoroutine(Rain(layer, n));
+    }
+
+    System.Collections.IEnumerator Rain(RectTransform layer, int n)
+    {
+        float W = root.rect.width, H = root.rect.height;
+        var coins = new List<(RectTransform r, Vector2 v, float spin, float delay)>();
+        for (int i = 0; i < n; i++)
+        {
+            var c = Ui.Picture(layer, "Coin", Menus.Icon("coin"));
+            float s = UnityEngine.Random.Range(18f, 30f);
+            c.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(s, s), new Vector2(UnityEngine.Random.Range(-W / 2, W / 2), H / 2 + 30));
+            coins.Add((c.rectTransform, new Vector2(UnityEngine.Random.Range(-40f, 40f), UnityEngine.Random.Range(-60f, 20f)), UnityEngine.Random.Range(6f, 14f), UnityEngine.Random.Range(0f, 0.9f)));
+        }
+        for (float t = 0; t < 3.2f && layer != null; t += Time.deltaTime)
+        {
+            for (int i = 0; i < coins.Count; i++)
+            {
+                var (r, v0, spin, delay) = coins[i];
+                float k = t - delay; if (k < 0 || r == null) continue;
+                r.anchoredPosition = new Vector2(r.anchoredPosition.x + v0.x * Time.deltaTime, H / 2 + 30 + v0.y * k - 0.5f * 900f * k * k);
+                r.localScale = new Vector3(Mathf.Cos(k * spin), 1, 1);
+            }
+            yield return null;
+        }
+        if (layer != null) Destroy(layer.gameObject);
+    }
+
     public void ShowPayout(string kind, double delta)
     {
+        if (delta > 0) Celebrate(Mathf.Clamp(16 + (int)(delta / 2500), 16, 80));
         payoutText.Set(delta > 0 ? "+" + Short((long)delta) + Loc.T(" عملة") : delta < 0 ? "−" + Short((long)-delta) + Loc.T(" عملة") : "");
         payoutText.color = delta >= 0 ? new Color(0.6f, 0.9f, 0.5f) : new Color(1f, 0.6f, 0.5f);
     }
@@ -627,7 +752,9 @@ public class GameUi : MonoBehaviour
             bool won = v.you >= 0 && m.team == v.TeamOf(v.you);
             matchTitle.Set(m.team < 0 ? Loc.T("تعادل") : v.mode == "team" ? TeamSay(won, true) : Say(v, m.team, "match"));
             matchSub.Set(string.Join("  ·  ", m.scores));
+            MatchEnded(v, won);
         }
+        else if (rend && v.result != null && v.you >= 0 && v.result.team == v.TeamOf(v.you) && celebrated != v.id + ":" + v.round) { celebrated = v.id + ":" + v.round; Celebrate(12); }
     }
 
     static readonly Dictionary<string, string> BoardModeNames = new Dictionary<string, string>
@@ -675,6 +802,7 @@ public class GameUi : MonoBehaviour
             string kind = (v.endKind == "checkmate" || v.endKind == "mate") ? Loc.T("كش مات") : v.endKind == "stalemate" ? Loc.T("بات (تعادل)") : v.endKind == "time" ? Loc.T("الوقت خلص") : "";
             matchTitle.Set(m.team < 0 ? Loc.T("تعادل") : Say(v, m.team, "match"));
             matchSub.Set((kind != "" ? kind + "  ·  " : "") + string.Join("  ·  ", m.scores));
+            MatchEnded(v, won);
         }
     }
 
@@ -766,7 +894,11 @@ public class GameUi : MonoBehaviour
             float halfH = root.rect.height / 2, halfW = root.rect.width / 2;
             local.y = Mathf.Min(local.y, halfH - 66); local.x = Mathf.Clamp(local.x, -halfW + 70, halfW - 70);
             rt.anchoredPosition = local;
-            seatTags[pos].Set(v.Board ? NameOf(v, seat) + (v.clocks != null ? "  ·  " + Clock(v, seat) : "") : NameOf(v, seat) + "  ·  " + s.count);
+            string extra = "";
+            if (!s.bot && s.back > 0) extra = "  ·  " + Loc.T("بيرجع") + " " + Mathf.Max(0, Mathf.CeilToInt((float)((s.back - app.ServerNow()) / 1000))) + Loc.T("ث");
+            else if (!s.bot && s.away) extra = "  ·  " + Loc.T("الكمبيوتر بيلعب مكانه");
+            seatTags[pos].Set((v.Board ? NameOf(v, seat) + (v.clocks != null ? "  ·  " + Clock(v, seat) : "") : NameOf(v, seat) + "  ·  " + s.count) + extra);
+            seatCpu[pos].gameObject.SetActive(s.bot);
             bool active = v.phase == "play" && v.turn == seat;
             seatTagBg[pos].color = active ? new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.95f) : new Color(0.1f, 0.06f, 0.04f, 0.8f);
             seatTags[pos].color = active ? Ui.Ink : Color.white;

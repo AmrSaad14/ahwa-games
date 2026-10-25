@@ -147,6 +147,7 @@ export interface PublicUser {
   ratings: Partial<Record<GameId, { rating: number; games: number; wins: number }>>;
   playGames?: boolean;   // signed in with Google Play Games
   code?: string;         // friend code others add this player with
+  pid?: string;          // the public id on their player card
   xp?: number;           // experience, and the level it makes
   level?: number;
   streak?: number;       // days in a row the player came back
@@ -249,7 +250,7 @@ export type C2S =
   | { t: 'gift'; to: number; k: GiftKind }
   | { t: 'voice'; on: boolean }
   | { t: 'rtc'; to: number; data: RtcSignal }
-  | { t: 'report'; seat: number; reason: string }
+  | { t: 'report'; seat?: number; pid?: string; reason: string }
   /** The phone's Firebase Cloud Messaging token, for the daily reminders. */
   | { t: 'pushToken'; token: string; lang?: string; platform?: string }
   /** Cash out: every 1,000,000 coins pays 10 EGP to a Vodafone Cash number, paid by hand within one working day. */

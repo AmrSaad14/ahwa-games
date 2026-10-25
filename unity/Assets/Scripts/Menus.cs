@@ -8,7 +8,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class Menus : MonoBehaviour
+public partial class Menus : MonoBehaviour
 {
     App app;
     Canvas canvas;
@@ -40,18 +40,19 @@ public class Menus : MonoBehaviour
         app = a;
         canvas = Ui.MakeCanvas("Menus", 40);
 
-        // down the left side: shop, leaderboard, how to play, settings
-        var rail = Ui.Rect("Rail", home).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(64, 360), new Vector2(10, -88));
-        var daily = RailButton(rail, 0, "gift", "يومي", OpenDaily);
-        RailButton(rail, 1, "shop", "المتجر", () => OpenShop(0));
-        RailButton(rail, 2, "trophy", "المتصدرين", () => OpenLeaders(0));
-        RailButton(rail, 3, "help", "طريقة اللعب", () => OpenHowTo(0));
-        RailButton(rail, 4, "settings", "الإعدادات", OpenSettings);
-        // a red dot on Daily while today's reward is waiting
-        var dot = Ui.Picture(daily, "Dot", GameUi.Disc.texture);
-        dot.color = new Color32(0xe5, 0x3b, 0x3b, 0xff);
-        dot.rectTransform.Place(new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(14, 14), new Vector2(-6, -6));
-        dailyDot = dot.gameObject; dailyDot.SetActive(false);
+        // down the left side: what's waiting for you today, your friends and the shop
+        var rail = Ui.Rect("Rail", home).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(64, 300), new Vector2(10, -88));
+        dailyDot = Dot(RailButton(rail, 0, "gift", "يومي", OpenDaily));
+        missionsDot = Dot(RailButton(rail, 1, "target", "المهام", OpenMissions));
+        seasonDot = Dot(RailButton(rail, 2, "pass", "الموسم", () => OpenSeason()));
+        friendsDot = Dot(RailButton(rail, 3, "friends", "صحابك", OpenFriends));
+        RailButton(rail, 4, "shop", "المتجر", () => OpenShop(0));
+        // along the top, beside the logo: the tournament, the leaderboard, how to play, settings
+        var top = Ui.Rect("Top", home).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(240, 54), new Vector2(82, -8));
+        tourneyDot = Dot(TopButton(top, 0, "cup", "البطولة", () => OpenTourney()));
+        TopButton(top, 1, "trophy", "المتصدرين", () => OpenLeaders(0));
+        TopButton(top, 2, "help", "طريقة اللعب", () => OpenHowTo(0));
+        TopButton(top, 3, "settings", "الإعدادات", OpenSettings);
         // (cash out to Vodafone Cash: OpenCashout, switched off for now)
 
         // along the top, left of your name and coins: watch an ad, sign in, language
@@ -65,6 +66,28 @@ public class Menus : MonoBehaviour
         Loc.Changed += () => { langText.Set(Loc.En ? "ع" : "EN"); refreshOpen?.Invoke(); };
         Application.deepLinkActivated += OnLink;
         if (!string.IsNullOrEmpty(Application.absoluteURL)) OnLink(Application.absoluteURL);
+    }
+
+    /// A red dot in the corner of a button: something is waiting there.
+    static GameObject Dot(RectTransform b)
+    {
+        var dot = Ui.Picture(b, "Dot", GameUi.Disc.texture);
+        dot.color = new Color32(0xe5, 0x3b, 0x3b, 0xff);
+        dot.rectTransform.Place(new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(14, 14), new Vector2(-6, -6));
+        dot.gameObject.SetActive(false);
+        return dot.gameObject;
+    }
+
+    RectTransform TopButton(RectTransform row, int i, string icon, string label, Action onClick)
+    {
+        var b = Ui.Button(row, "", Ui.Panel, Ui.GoldLight, 10, () => { Sfx.Tap(); onClick(); });
+        var r = ((RectTransform)b.transform).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(56, 52), new Vector2(i * 60, 0));
+        b.gameObject.AddComponent<Outline>().effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.3f);
+        var ic = Ui.Picture(r, "Icon", Icon(icon)); ic.color = Ui.Gold;
+        ic.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(24, 24), new Vector2(0, -6));
+        var t = Ui.Label(r, label, 9, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Bold);
+        t.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(60, 16), new Vector2(0, 2));
+        return r;
     }
 
     RectTransform RailButton(RectTransform rail, int i, string icon, string label, Action onClick)
@@ -103,9 +126,13 @@ public class Menus : MonoBehaviour
         adText.Set(left > 0 ? "+5K" : "0");
         var eq = u.Obj("equip");
         TileArt.SetSkin(eq != null ? eq.Str("tiles") : null);
+        Look.MyFelt = Wearing("felt");
         var d = u.Obj("daily");
         bool ready = d != null && d.Bool("ready");
         dailyDot.SetActive(ready);
+        UpdateDots();
+        // a friend's invite code from Google Play (or a link) waiting: credit them, once the account is new
+        if (Growth.PendingCode != null && u.Bool("canRefer")) { app.Send(new Dictionary<string, object> { ["t"] = "referral", ["code"] = Growth.PendingCode }); Growth.PendingCode = null; }
         // the first time today's reward is waiting, show the track by itself (on the home screen, nothing else open)
         if (ready && !dailyShown && app.view == null && !IsOpen && !App.Recording) { dailyShown = true; OpenDaily(); return; }
         refreshOpen?.Invoke();
@@ -113,6 +140,7 @@ public class Menus : MonoBehaviour
 
     public void OnMessage(Dictionary<string, object> m)
     {
+        OnMessageMore(m);
         switch (m.Str("t"))
         {
             case "welcome":
@@ -199,6 +227,22 @@ public class Menus : MonoBehaviour
             case "bad_amount": app.Toast(Loc.T("المبلغ مش مظبوط")); return true;
             case "slow_down": app.Toast(Loc.T("استنى شوية وجرّب تاني")); return true;
             case "support_empty": app.Toast(Loc.T("اكتب رسالتك الأول")); return true;
+            case "chat_muted": app.Toast(Loc.T("الشات مقفول عندك شوية بسبب بلاغات")); return true;
+            case "mission_not_done": app.Toast(Loc.T("لسه المهمة مخلصتش")); return true;
+            case "already_claimed": app.Toast(Loc.T("خدتها خلاص")); return true;
+            case "tier_locked": app.Toast(Loc.T("لسه موصلتش للمستوى ده")); return true;
+            case "not_premium": app.Toast(Loc.T("افتح الموسم المميز الأول")); return true;
+            case "already_premium": app.Toast(Loc.T("الموسم المميز مفتوح عندك")); return true;
+            case "tourney_started": app.Toast(Loc.T("البطولة بدأت خلاص")); return true;
+            case "no_match": app.Toast(Loc.T("مفيش ماتش ليك دلوقتي")); return true;
+            case "bad_code": app.Toast(Loc.T("الكود ده مش صحيح")); return true;
+            case "already_referred": app.Toast(Loc.T("دخلت كود صاحبك قبل كده")); return true;
+            case "too_late": app.Toast(Loc.T("كود الدعوة للاعبين الجداد بس")); return true;
+            case "friend_self": app.Toast(Loc.T("ده كودك انت")); return true;
+            case "friend_not_found": app.Toast(Loc.T("مفيش لاعب بالكود ده")); return true;
+            case "friend_offline": app.Toast(Loc.T("صاحبك مش متصل دلوقتي")); return true;
+            case "rematch_coins": app.Toast(Loc.T("حد رصيده مش كفاية للماتش تاني")); return true;
+            case "not_owned": app.Toast(Loc.T("لسه مش معاك")); return true;
         }
         return false;
     }
@@ -302,6 +346,7 @@ public class Menus : MonoBehaviour
             var list = Scroll(area, 8);
             Toggle(list, "الصوت", Sfx.SoundOn, v => { Sfx.SoundOn = v; if (v) Sfx.Tap(); });
             Toggle(list, "الموسيقى", Music.On, v => { Music.On = v; });
+            Toggle(list, "أصوات القهوة", Music.CafeOn, v => { Music.CafeOn = v; });
             Toggle(list, "الاهتزاز", Sfx.VibrateOn, v => { Sfx.VibrateOn = v; if (v) Sfx.Buzz(); });
             Toggle(list, "توفير البطارية", Perf.Saver, v => { Perf.Saver = v; });
             // how the game table is seen
@@ -336,6 +381,17 @@ public class Menus : MonoBehaviour
                 note.Set(Loc.T("متسجل بـ") + " " + who);
                 var b = Ui.Button(acc, "تسجيل الخروج", new Color(1, 1, 1, 0.08f), Ui.GoldLight, 14, () => { app.Send(new Dictionary<string, object> { ["t"] = "logout" }); Close(); });
                 ((RectTransform)b.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(180, 32), new Vector2(0, 6));
+            }
+            // a new player: the friend code of who invited you (you both get 50K after your first game)
+            if (user != null && user.Bool("canRefer"))
+            {
+                var rr = Row(list, 44, Card);
+                At(Ui.Label(rr, "كود الدعوة", 16, Color.white, StartAlign, Ui.Bold).rectTransform, 14, 150, 40);
+                var f = Field(rr, Loc.T("كود صاحبك"), 14, false);
+                At((RectTransform)f.transform, 170, 140, 32);
+                f.characterLimit = 8;
+                var go = Ui.Button(rr, "تأكيد", Ui.Gold, Ui.Ink, 14, () => { Sfx.Tap(); var c = f.text.Trim(); if (c.Length >= 4) app.Send(new Dictionary<string, object> { ["t"] = "referral", ["code"] = c }); });
+                At((RectTransform)go.transform, 320, 90, 32);
             }
             // help: a message straight to the team
             var sup = Row(list, 44, Card);
@@ -688,7 +744,7 @@ public class Menus : MonoBehaviour
         refreshOpen = () =>
         {
             foreach (Transform c in body) Destroy(c.gameObject);
-            var area = Tabs(body, new[] { "عملات", "أحجار الدومينو", "زهر", "بدون إعلانات" }, shopTab, i => { shopTab = i; refreshOpen(); });
+            var area = Tabs(body, new[] { "عملات", "دومينو", "زهر", "طربوش", "مفرش", "مشروب", "بدون إعلانات" }, shopTab, i => { shopTab = i; refreshOpen(); });
             // your coins, bottom corner
             var have = Ui.Label(area, Loc.T("رصيدك") + ": " + ((long)(user?.Num("coins") ?? 0)).ToString("N0"), 13, Ui.GoldLight, StartAlign, Ui.Bold);
             have.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(620, 20), new Vector2(0, -6));
@@ -721,6 +777,32 @@ public class Menus : MonoBehaviour
                     else BuyButton(c, Loc.Short(s.price), Ui.Gold, Ui.Ink, () => { app.Send(new Dictionary<string, object> { ["t"] = "buySkin", ["id"] = s.id }); Sfx.Coins(); }, true);
                 }
             }
+            else if (shopTab >= 3 && shopTab <= 5)
+            {
+                // your look: the hat on your character, the cloth on your table, the drink by your place
+                string cat = shopTab == 3 ? "hat" : shopTab == 4 ? "felt" : "drink";
+                var items = LookItems[cat];
+                for (int i = 0; i < items.Length; i++)
+                {
+                    var (id, price, pass) = items[i];
+                    var c = ShopCard(row, i, items.Length);
+                    float w = c.sizeDelta.x;
+                    var pic = Ui.Picture(c, "Look", SkinPicture(id, out var tint)); pic.color = tint;
+                    pic.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(Mathf.Min(56, w - 16), Mathf.Min(56, w - 16)), new Vector2(0, -14));
+                    var nm = Ui.Label(c, SkinName(id), 13, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
+                    nm.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(w - 4, 36), new Vector2(0, -74));
+                    nm.horizontalOverflow = HorizontalWrapMode.Wrap;
+                    bool owned = (price == 0 && !pass) || Owns(id);
+                    string worn = Wearing(cat);
+                    bool wearing = worn == id || (string.IsNullOrEmpty(worn) && price == 0 && !pass);
+                    if (wearing) BuyButton(c, Loc.T("متلبس"), new Color(1, 1, 1, 0.1f), Ui.GoldLight, null);
+                    else if (owned) BuyButton(c, Loc.T("البس"), new Color32(0x2f, 0x6b, 0x3a, 0xff), Color.white, () => app.Send(new Dictionary<string, object> { ["t"] = "equipSkin", ["id"] = id }));
+                    else if (pass) BuyButton(c, Loc.T("الموسم"), new Color(1, 1, 1, 0.08f), Ui.Gold, () => { Close(); OpenSeason(); });
+                    else BuyButton(c, Loc.Short(price), Ui.Gold, Ui.Ink, () => { app.Send(new Dictionary<string, object> { ["t"] = "buySkin", ["id"] = id }); Sfx.Coins(); }, true);
+                }
+                var note = Ui.Label(area, Loc.T(cat == "felt" ? "المفرش بيبان ليك على ترابيزتك" : cat == "hat" ? "الطربوش بيبان لكل اللي على الترابيزة (للرجالة)" : "المشروب بيبان قدامك لكل اللي على الترابيزة"), 11, new Color(1, 1, 1, 0.55f));
+                note.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(620, 16), new Vector2(0, 12));
+            }
             else
             {
                 var c = ShopCard(row, 0, 1);
@@ -736,9 +818,18 @@ public class Menus : MonoBehaviour
     bool Owns(string id) { var l = user?.Arr("skins"); return l != null && l.Contains(id); }
     string Equipped(string cat) => user?.Obj("equip")?.Str(cat);
 
+    /// The hat, cloth and drink in the shop (prices as on the server: shared/skins.ts); pass: from the season pass only.
+    static readonly Dictionary<string, (string id, long price, bool pass)[]> LookItems = new Dictionary<string, (string, long, bool)[]>
+    {
+        ["hat"] = new[] { ("hat_classic", 0L, false), ("hat_fez_red", 120_000L, false), ("hat_fez_black", 180_000L, false), ("hat_fez_green", 220_000L, false), ("hat_fez_navy", 260_000L, false), ("hat_fez_white", 0L, true), ("hat_fez_gold", 0L, true) },
+        ["felt"] = new[] { ("felt_wood", 0L, false), ("felt_green", 150_000L, false), ("felt_red", 150_000L, false), ("felt_blue", 200_000L, false), ("felt_royal", 0L, true), ("felt_kilim", 0L, true) },
+        ["drink"] = new[] { ("drink_tea", 0L, false), ("drink_mint", 80_000L, false), ("drink_coffee", 80_000L, false), ("drink_karkade", 120_000L, false), ("drink_sahlab", 0L, true), ("drink_qasab", 0L, true) },
+    };
+
     static RectTransform ShopCard(RectTransform row, int i, int n)
     {
-        const float W = 122, Gap = 10;
+        const float Gap = 10;
+        float W = Mathf.Min(122, (640f - (n - 1) * Gap) / Mathf.Max(1, n));
         int k = Loc.En ? i : n - 1 - i;
         var c = Ui.Box(row, "Card", Card).rectTransform;
         c.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(W, 170), new Vector2((k - (n - 1) / 2f) * (W + Gap), 4));
@@ -826,6 +917,9 @@ public class Menus : MonoBehaviour
                 string lvl = r.Num("level") > 0 ? "  ·  " + Loc.T("مستوى") + " " + (int)r.Num("level") : "";
                 string last = week ? (rank <= WeeklyPrizes.Length ? Loc.Short(WeeklyPrizes[rank - 1]) : "—") : ((int)r.Num("wins")).ToString();
                 LbCells(row, rank.ToString(), r.Str("name") + lvl, ((int)r.Num("rating")).ToString(), last, rank == 1 ? Ui.Gold : Color.white, 14);
+                // tap a row: the player's card
+                string rpid = r.Str("pid"), rname = r.Str("name"); int rch = (int)r.Num("ch");
+                if (!string.IsNullOrEmpty(rpid)) { var hit = row.gameObject.AddComponent<Button>(); hit.transition = Selectable.Transition.None; hit.onClick.AddListener(() => { Sfx.Tap(); OpenCard(rpid, rname, rch); }); }
             }
             if (lbMe != null)
             {

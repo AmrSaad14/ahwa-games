@@ -37,7 +37,7 @@ public class Person : MonoBehaviour
     float wSit = 1, wWalk, wWin, wLose, ik = 1;
     float winAt = -100, loseAt = -100;
     bool walking;
-    Vector3 gesture; float gestureAt = -10f;
+    Vector3 gesture; float gestureAt = -10f; bool slam;
     float seed, nextLook, lookYaw, lookYawTo, lookPitch, lookPitchTo, nextSaccade; Vector2 saccade;
 
     static Transform Find(Transform t, string name)
@@ -144,7 +144,11 @@ public class Person : MonoBehaviour
     }
 
     /// Reach out to a point on the table (playing a tile there) and come back.
-    public void Gesture(Vector3 point) { gesture = point; gestureAt = Time.time; }
+    public void Gesture(Vector3 point) { gesture = point; gestureAt = Time.time; slam = false; }
+    /// The last tile, slammed down: the hand goes up high, then comes down hard on the table at `point`.
+    public void Slam(Vector3 point) { gesture = point; gestureAt = Time.time; slam = true; }
+    /// A quick cheer (a big double in tawla): arms up for a moment.
+    public void Cheer() { winAt = Time.time - 1.3f; if (anim != null) anim.SetTrigger("win"); }
     public void Win() { winAt = Time.time; if (anim != null) anim.SetTrigger("win"); }
     public void Lose() { loseAt = Time.time; if (anim != null) anim.SetTrigger("lose"); }
     public void Sit(bool on) { seated = on; if (anim != null) anim.SetBool("sit", on); }
@@ -246,7 +250,16 @@ public class Person : MonoBehaviour
                 float wob = Mathf.Sin(t * 0.5f + i * 2.1f) * 0.08f;
                 var target = root + fwdW * (reach + wob) + rightW * side[i] * spread + upW * 0.12f;
                 float gt = now - gestureAt;
-                if (gt < 1f && (Vector3.Dot(gesture - root, rightW) >= 0 ? 1 : -1) == side[i])
+                if (slam && gt < 1.5f && (Vector3.Dot(gesture - root, rightW) >= 0 ? 1 : -1) == side[i])
+                {
+                    // up high above the spot (0–0.5 s), down hard (0.5–0.6 s), resting there, then back
+                    var high = gesture + upW * 2.2f - fwdW * 0.4f;
+                    if (gt < 0.5f) target = Vector3.Lerp(target, high, Ui.Ease(gt / 0.5f));
+                    else if (gt < 0.6f) target = Vector3.Lerp(high, gesture + upW * 0.15f, (gt - 0.5f) / 0.1f);
+                    else if (gt < 1.0f) target = gesture + upW * 0.15f;
+                    else target = Vector3.Lerp(gesture + upW * 0.15f, target, Ui.Ease((gt - 1.0f) / 0.5f));
+                }
+                else if (!slam && gt < 1f && (Vector3.Dot(gesture - root, rightW) >= 0 ? 1 : -1) == side[i])
                 {
                     float k = gt < 0.35f ? Ui.Ease(gt / 0.35f) : gt < 0.6f ? 1f : 1f - Ui.Ease((gt - 0.6f) / 0.4f);
                     var lift = upW * Mathf.Sin(Mathf.Clamp01(gt / 0.35f) * Mathf.PI) * 0.6f;

@@ -46,7 +46,14 @@ public class BoardGame : MonoBehaviour
         {
             lastK = v.last.k;
             var t = v.last.t;
-            if (t == "roll") Sfx.Dice();
+            if (t == "roll")
+            {
+                // someone else's throw: the dice rattle in their hand first (yours rattled when you tapped)
+                if (v.last.s != v.you) { Sfx.Rattle(); app.StartCoroutine(Later(0.32f, Sfx.Dice)); } else Sfx.Dice();
+                // a big double in tawla: a little cheer from whoever threw it
+                var d = v.last.dice;
+                if (v.game == "tawla" && d.Count == 2 && d[0] == d[1] && d[0] >= 5) { var c = app.dominoTable.CharAtSeat(v.last.s); if (c != null) app.StartCoroutine(Later(0.6f, c.Cheer)); }
+            }
             else if (t == "move" || t == "step" || t == "pawn") Sfx.Clack();
             var who = app.dominoTable.CharAtSeat(v.last.s);
             if (who != null && (t == "move" || t == "step" || t == "roll" || t == "pawn"))
@@ -132,8 +139,11 @@ public class BoardGame : MonoBehaviour
     public void Roll()
     {
         if (!NeedsRoll()) return;
+        Sfx.Rattle();
         Act(new Dictionary<string, object> { ["t"] = "roll" });
     }
+
+    static System.Collections.IEnumerator Later(float s, System.Action a) { yield return new WaitForSeconds(s); a(); }
 
     void Act(Dictionary<string, object> a) => app.Send(new Dictionary<string, object> { ["t"] = "act", ["a"] = a });
 

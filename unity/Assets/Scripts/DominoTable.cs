@@ -19,6 +19,11 @@ public class DominoTable : MonoBehaviour
     GameObject ring;
     readonly Person[] chars = new Person[4];
     readonly int[] charCh = { -1, -1, -1, -1 };
+    readonly string[] charHat = new string[4];
+    readonly GameObject[] drinks = new GameObject[4];
+    readonly string[] drinkId = new string[4];
+    GameObject felt; string feltId;
+    Vector3 lastNewAt;   // where the newest tile on the table lies (the one a winner slams down)
     readonly GameObject[] chairs = new GameObject[4];
     public readonly int[] posToSeat = { -1, -1, -1, -1 };
     readonly HashSet<int> known = new HashSet<int>();
@@ -85,7 +90,8 @@ public class DominoTable : MonoBehaviour
         if (!on)
         {
             ring.SetActive(false);
-            for (int p = 0; p < 4; p++) SetChar(p, -1);
+            for (int p = 0; p < 4; p++) { SetChar(p, -1, null); SetDrink(p, null); }
+            if (felt != null) { Destroy(felt); felt = null; feltId = null; }
             view = null; viewKey = ""; known.Clear(); dropAt.Clear(); yard.Clear();
         }
     }
@@ -96,6 +102,13 @@ public class DominoTable : MonoBehaviour
         if (newRound) { known.Clear(); dropAt.Clear(); yard.Clear(); }
         view = v; this.sel = sel; this.choose = choose;
         Seat();
+        // the cloth on your table (your own choice, from the shop or the season pass)
+        if (feltId != Look.MyFelt && table != null)
+        {
+            if (felt != null) Destroy(felt);
+            feltId = Look.MyFelt;
+            felt = Look.Felt(feltId, table.transform, C, T - 0.35f, Quaternion.LookRotation(F, U));
+        }
         Rebuild();
     }
 
@@ -103,6 +116,7 @@ public class DominoTable : MonoBehaviour
     {
         var v = view;
         var chs = new[] { -1, -1, -1, -1 };
+        var hats = new string[4]; var drinkIds = new string[4];
         for (int i = 0; i < 4; i++) posToSeat[i] = -1;
         int n = v.seats.Count, bas = v.you >= 0 ? v.you : 0;
         var list = PositionsFor(n);
@@ -112,17 +126,30 @@ public class DominoTable : MonoBehaviour
             posToSeat[pos] = seat;
             var s = v.seats[seat];
             // you are the camera: your own chair stays empty so nothing blocks your view
-            if (s != null && !(pos == 0 && v.you >= 0)) chs[pos] = s.ch;
+            if (s != null && !(pos == 0 && v.you >= 0)) { chs[pos] = s.ch; hats[pos] = s.hat; }
+            if (s != null && v.phase != "lobby") drinkIds[pos] = string.IsNullOrEmpty(s.drink) ? "drink_tea" : s.drink;
         }
-        for (int p = 0; p < 4; p++) SetChar(p, chs[p]);
+        for (int p = 0; p < 4; p++) { SetChar(p, chs[p], hats[p]); SetDrink(p, drinkIds[p]); }
     }
 
-    void SetChar(int pos, int ch)
+    /// The drink by a place at the table: on the player's right, clear of their tiles.
+    void SetDrink(int pos, string id)
     {
-        if (charCh[pos] == ch) return;
+        if (drinkId[pos] == id) return;
+        drinkId[pos] = id;
+        if (drinks[pos] != null) { Destroy(drinks[pos]); drinks[pos] = null; }
+        if (id == null || table == null) return;
+        var toP = (SeatPoint(pos) - C).normalized;
+        var right = Vector3.Cross(toP, U);   // the player's right, looking in at the table
+        drinks[pos] = Look.Drink(id, table.transform, C + toP * (T - 1.15f) + right * 3.7f, 1.25f);
+    }
+
+    void SetChar(int pos, int ch, string hat)
+    {
+        if (charCh[pos] == ch && charHat[pos] == hat) return;
         if (chars[pos] != null) { Destroy(chars[pos].gameObject); chars[pos] = null; }
         if (chairs[pos] != null) { Destroy(chairs[pos]); chairs[pos] = null; }
-        charCh[pos] = ch;
+        charCh[pos] = ch; charHat[pos] = hat;
         if (ch < 0 || ch >= CharNames.Length) return;
         var at = SeatPoint(pos);
         chairs[pos] = cafe.MakeChair(at, C);
@@ -130,6 +157,7 @@ public class DominoTable : MonoBehaviour
         if (p == null) return;
         p.reach = SEAT_R - T + 0.55f;
         p.Face(C);
+        Look.Hat(p, ch, hat);
         chars[pos] = p;
         ApplyView();
     }
@@ -171,7 +199,11 @@ public class DominoTable : MonoBehaviour
             m.transform.SetParent(lineG, false);
             m.transform.localScale = Vector3.one * TS;
             m.transform.SetPositionAndRotation(At(pl.x, pl.y), Along(pl.ang));
-            if (!known.Contains(pl.id)) { known.Add(pl.id); if (v.last != null && v.last.t == "play" && v.last.id == pl.id) dropAt[pl.id] = now; }
+            if (!known.Contains(pl.id))
+            {
+                known.Add(pl.id); lastNewAt = At(pl.x, pl.y);
+                if ((v.last != null && v.last.t == "play" && v.last.id == pl.id) || v.phase == "rend" || v.phase == "mend") dropAt[pl.id] = now;
+            }
             if (dropAt.TryGetValue(pl.id, out var d) && now - d < 0.6f) m.AddComponent<Drop>().from = U * 1.2f;
         }
         if (sel >= 0 && choose != null)
@@ -250,12 +282,35 @@ public class DominoTable : MonoBehaviour
         {
             resultKey = rk;
             int wt = v.phase == "mend" && v.match != null ? v.match.team : v.Board ? v.endWinner : v.result != null ? v.result.team : -1;
-            for (int seat = 0; seat < v.seats.Count; seat++)
+            // dominoes: whoever went out slams the last tile down (and the table shakes), then everyone reacts
+            int slammer = !v.Board && v.result != null && !v.result.blocked ? v.result.winner : -1;
+            if (slammer >= 0 && v.last != null)
             {
-                var who = CharAtSeat(seat);
-                if (who == null || wt < 0) continue;
-                if (v.TeamOf(seat) == wt) who.Win(); else who.Lose();
+                var spot = lastNewAt;
+                var who = CharAtSeat(slammer);
+                if (who != null) who.Slam(spot);
+                StartCoroutine(SlamThen(v, wt, slammer, who != null ? 0.55f : 0.05f));
             }
+            else React(v, wt, -1);
+        }
+    }
+
+    System.Collections.IEnumerator SlamThen(TableView v, int wt, int slammer, float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        Sfx.Slam(); Sfx.Buzz();
+        cafe.Shake(0.22f);
+        yield return new WaitForSeconds(0.5f);
+        React(v, wt, slammer);
+    }
+
+    void React(TableView v, int wt, int skip)
+    {
+        for (int seat = 0; seat < v.seats.Count; seat++)
+        {
+            var who = CharAtSeat(seat);
+            if (who == null || wt < 0) continue;
+            if (v.TeamOf(seat) == wt) who.Win(); else who.Lose();
         }
     }
 

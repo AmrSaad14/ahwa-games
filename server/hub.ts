@@ -563,11 +563,12 @@ export class Hub {
         return;
       }
       case 'report': {
-        if (!table) return err('no_table');
-        const about = table.seats[Number(m.seat)];
+        // someone at your table (by seat), or anyone by the pid on their card
+        const byPid = typeof m.pid === 'string' ? this.store.byPid(m.pid) : undefined;
+        const about = byPid ? { uid: byPid.id, bot: false } : table ? table.seats[Number(m.seat)] : null;
         if (!about || about.bot || about.uid === uid) return err('bad_report');
         if (!this.reportLimiter.allow(uid)) return err('slow_down');
-        this.store.report(uid, about.uid, String(m.reason || '').slice(0, 40), table.id);
+        this.store.report(uid, about.uid, String(m.reason || '').slice(0, 40), table?.id ?? 'card');
         // three different players reporting someone in a day switch their chat off for a day
         if (this.store.reporters(about.uid, Date.now() - 86_400_000) >= 3 && this.store.mutedUntil(about.uid) < Date.now()) {
           this.store.mute(about.uid, Date.now() + 86_400_000);

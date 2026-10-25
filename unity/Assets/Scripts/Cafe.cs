@@ -262,9 +262,16 @@ public class Cafe : MonoBehaviour
         // a slow sway, so the café never looks like a still picture
         float sw = inGame ? 0.25f : 1f;
         var sway = sw * Vector3.Cross(Vector3.up, front) * Mathf.Sin(drift * 0.18f) * 0.6f + Vector3.up * Mathf.Sin(drift * 0.23f) * 0.25f * sw;
-        cam.transform.position = camPos + sway;
-        cam.transform.LookAt(camLook);
+        // a short jolt (a tile slammed down): fades quickly
+        float sh = shakeUntil - Time.time;
+        var jolt = sh > 0 ? new Vector3(Mathf.Sin(Time.time * 61f), Mathf.Sin(Time.time * 47f + 1f), 0) * sh * 0.5f : Vector3.zero;
+        cam.transform.position = camPos + sway + jolt;
+        cam.transform.LookAt(camLook + jolt * 0.5f);
     }
+
+    float shakeUntil;
+    /// The table shakes for a moment.
+    public void Shake(float seconds) { if (!Perf.Saver) shakeUntil = Time.time + seconds; }
 
     /// A fixed shot (test portraits); null goes back to the normal camera.
     public void Shot(Vector3? pos, Vector3 look = default)

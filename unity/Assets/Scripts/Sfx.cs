@@ -35,6 +35,28 @@ public static class Sfx
 
     static float Noise(float t) { var x = Mathf.Sin(t * 12.9898f * 1000f) * 43758.5453f; return (x - Mathf.Floor(x)) * 2 - 1; }
 
+    /// A tile put down at the table: a sharp slap of bone on wood with a little body, a touch different each time.
+    static AudioClip slap;
+    public static void Slap() => Play(slap ??= Make("slap", 0.18f, t =>
+        Noise(t) * 0.75f * Mathf.Exp(-t * 140f) + Mathf.Sin(t * 2 * Mathf.PI * 340f) * 0.45f * Mathf.Exp(-t * 38f)
+        + Mathf.Sin(t * 2 * Mathf.PI * 1180f) * 0.22f * Mathf.Exp(-t * 70f) + Mathf.Sin(t * 2 * Mathf.PI * 2650f) * 0.08f * Mathf.Exp(-t * 110f)), 0.95f, Random.Range(0.9f, 1.1f));
+
+    /// The winning tile slammed down: a heavy knock on the table, and the other tiles rattling.
+    static AudioClip slamClip;
+    public static void Slam() => Play(slamClip ??= Make("slam", 0.7f, t =>
+        Noise(t) * 0.9f * Mathf.Exp(-t * 60f) + Mathf.Sin(t * 2 * Mathf.PI * (120f - 40f * t)) * 0.9f * Mathf.Exp(-t * 9f)
+        + Mathf.Sin(t * 2 * Mathf.PI * 260f) * 0.4f * Mathf.Exp(-t * 18f)
+        + (t > 0.05f ? Noise(t * 3.1f) * 0.25f * Mathf.Exp(-(t - 0.05f) * 9f) * (0.5f + 0.5f * Mathf.Sin(t * 2 * Mathf.PI * 31f)) : 0)), 1f);
+
+    /// Dice shaken in the hand before the throw: quick little knocks of bone on bone.
+    static AudioClip rattle;
+    public static void Rattle() => Play(rattle ??= Make("rattle", 0.45f, t =>
+    {
+        float k = 0;
+        for (int i = 0; i < 9; i++) { float at = i * 0.047f + (i % 3) * 0.006f; if (t > at) k += Mathf.Sin((t - at) * 2 * Mathf.PI * (2300f + i * 170f)) * Mathf.Exp(-(t - at) * 260f) * 0.5f + Noise(t + i) * Mathf.Exp(-(t - at) * 400f) * 0.25f; }
+        return k * (0.6f + 0.4f * Mathf.Sin(t * 14f));
+    }), 0.8f);
+
     public static void Clack() => Play(clack ??= Make("clack", 0.12f, t =>
         (Noise(t) * 0.5f * Mathf.Exp(-t * 90f)) + Mathf.Sin(t * 2 * Mathf.PI * 820f) * 0.35f * Mathf.Exp(-t * 55f) + Mathf.Sin(t * 2 * Mathf.PI * 1960f) * 0.15f * Mathf.Exp(-t * 80f)), 0.9f);
 
@@ -86,6 +108,13 @@ public static class Sfx
     public static void Pause(bool on) { AudioListener.pause = on; }
 
     static void Play(AudioClip c, float vol) { if (SoundOn && !App.Recording) Src.PlayOneShot(c, vol); }
+    static AudioSource pitched;
+    static void Play(AudioClip c, float vol, float pitch)
+    {
+        if (!SoundOn || App.Recording) return;
+        if (pitched == null) { pitched = Src.gameObject.AddComponent<AudioSource>(); pitched.playOnAwake = false; pitched.spatialBlend = 0; }
+        pitched.pitch = pitch; pitched.PlayOneShot(c, vol);
+    }
 
     public static void Buzz()
     {
