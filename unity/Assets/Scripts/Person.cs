@@ -41,7 +41,7 @@ public class Person : MonoBehaviour
     float seed, nextLook, lookYaw, lookYawTo, lookPitch, lookPitchTo, nextSaccade; Vector2 saccade;
     Vector3? lookPoint;       // set: the head turns to this point (the camera, filming the advert)
     float mouthOpen;          // 0 shut … 1 wide open (talking, from the voice)
-    SkinnedMeshRenderer mouthMesh; int mouthShape = -2;
+    SkinnedMeshRenderer mouthMesh; int mouthShape = -2; float mouthFull = 100f;
 
     /// Look at a point (null: back to looking around the table on their own).
     public void LookAt(Vector3? point) => lookPoint = point;
@@ -63,9 +63,11 @@ public class Person : MonoBehaviour
             if (mouthShape < 0)   // the importer may not keep the name: the one mesh with a single shape is the body's
                 foreach (var r in GetComponentsInChildren<SkinnedMeshRenderer>(true))
                     if (r.sharedMesh != null && r.sharedMesh.blendShapeCount == 1) { mouthMesh = r; mouthShape = 0; break; }
-            Debug.Log($"[person] {name}: mouth shape {(mouthShape >= 0 ? mouthMesh.sharedMesh.GetBlendShapeName(mouthShape) + " on " + mouthMesh.name : "not found")}");
+            if (mouthMesh != null) { var mm = mouthMesh.sharedMesh; mouthFull = mm.GetBlendShapeFrameWeight(mouthShape, mm.GetBlendShapeFrameCount(mouthShape) - 1); }
+            Debug.Log($"[person] {name}: full weight {mouthFull}, mouth shape {(mouthShape >= 0 ? mouthMesh.sharedMesh.GetBlendShapeName(mouthShape) + " on " + mouthMesh.name : "not found")}");
         }
-        if (mouthMesh != null) mouthMesh.SetBlendShapeWeight(mouthShape, mouthOpen * 100f);
+        // the shape's full weight is its last frame's (100 from some importers, 1 from others)
+        if (mouthMesh != null) mouthMesh.SetBlendShapeWeight(mouthShape, mouthOpen * mouthFull);
     }
 
     static Transform Find(Transform t, string name)

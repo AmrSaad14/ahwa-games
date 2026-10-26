@@ -138,7 +138,10 @@ public class AdFilm : MonoBehaviour
                 if (hajj != null)
                 {
                     float k = Mathf.Clamp01((t - Start("l3")) / 4f);
-                    var (p3, l3) = Close(hajj, Mathf.Lerp(3.6f, 2.9f, k), -0.7f);
+                    // he throws his arms up on his line: the camera steps back to keep them in the picture
+                    float cheer = Ui.Ease(Mathf.Clamp01((t - Start("l4", 13.7f) + 0.2f) / 0.6f));
+                    var (p3, l3) = Close(hajj, Mathf.Lerp(Mathf.Lerp(3.6f, 2.9f, k), 6.5f, cheer), -0.7f);
+                    p3 += Vector3.up * cheer * 0.8f;
                     cam.Shot(p3, l3);
                     if (!hajjCheered && t >= Start("l4", 13.7f)) { hajjCheered = true; hajj.Win(); }
                 }
