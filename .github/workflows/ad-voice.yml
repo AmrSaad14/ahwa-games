@@ -1,0 +1,30 @@
+# The advert's Egyptian voice-over (tools/ad): Azure's licensed voice when AZURE_SPEECH_KEY and AZURE_SPEECH_REGION
+# are set as repository secrets, otherwise a draft for review. Results go to the "ad-voice" release.
+name: Ad voice
+on:
+  push:
+    branches: [main]
+    paths: ['tools/ad/**', '.github/workflows/ad-voice.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  voice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      AZURE_SPEECH_KEY: ${{ secrets.AZURE_SPEECH_KEY }}
+      AZURE_SPEECH_REGION: ${{ secrets.AZURE_SPEECH_REGION }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Make the voice
+        run: |
+          sudo apt-get install -y -qq ffmpeg > /dev/null
+          pip install -q edge-tts numpy
+          python3 tools/ad/voice.py out | tee out-log.txt
+      - name: Publish
+        run: |
+          gh release delete ad-voice --yes --cleanup-tag 2>/dev/null || true
+          gh release create ad-voice out/voice.wav out/timeline.json out/mouth.json out/l*.wav --title "Ad voice" --prerelease --notes "$(cat out-log.txt)"
