@@ -164,6 +164,9 @@ jobs:
           set +e
           if [ -f build/linux/BoardBattles.x86_64 ]; then
             mkdir -p salonfilm svoice
+            sudo apt-get update -qq > /dev/null 2>&1
+            sudo apt-get install -y -qq xvfb mesa-utils libgl1 libegl1 libglx-mesa0 mesa-vulkan-drivers ffmpeg libx11-dev libxrandr2 libxi6 libxcursor1 libxinerama1 libpulse0 libasound2t64 >> logs/salon-step.txt 2>&1
+            chmod +x build/linux/BoardBattles.x86_64
             gh release download ad-voice-salon -D svoice --clobber || echo "no voice yet: plain timing"
             cd build/linux
             for shape in "1920 1080 landscape -adinserts" "1080 1920 vertical"; do
