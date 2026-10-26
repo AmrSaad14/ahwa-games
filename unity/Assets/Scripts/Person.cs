@@ -43,6 +43,17 @@ public class Person : MonoBehaviour
     float mouthOpen;          // 0 shut … 1 wide open (talking, from the voice)
     SkinnedMeshRenderer mouthMesh; int mouthShape = -2; float mouthFull = 100f;
 
+    /// Nodding off (filming the advert): the head drops forward, the back slumps.
+    public bool dozing;
+    float wDoze;
+
+    /// Where a hand is now (+1 the right hand, -1 the left), for things held in it.
+    public Vector3 HandPos(int sd)
+    {
+        for (int i = 0; i < 2; i++) if (side[i] == sd && hand[i] != null) return hand[i].position;
+        return Head != null ? Head.position - Vector3.up * transform.lossyScale.y * 0.4f : transform.position;
+    }
+
     /// Look at a point (null: back to looking around the table on their own).
     public void LookAt(Vector3? point) => lookPoint = point;
 
@@ -217,6 +228,7 @@ public class Person : MonoBehaviour
         wWalk = Smooth(wWalk, walking ? 1 : 0, 3f);
         wWin = Smooth(wWin, cheering ? 1 : 0, cheering ? 4f : 2f);
         wLose = Smooth(wLose, sulking ? 1 : 0, sulking ? 3f : 1.5f);
+        wDoze = Smooth(wDoze, dozing ? 1 : 0, dozing ? 1.2f : 4f);
         ik = Smooth(ik, seated && !walking && !cheering ? 1 : 0, 4f);
 
         foreach (var kv in rest) kv.Key.localRotation = kv.Value;
@@ -249,6 +261,7 @@ public class Person : MonoBehaviour
         Bend(spine1, 3 * wSit + 8 * wLose - 3 * wWin + breath * 0.8f);
         Bend(spine2, 2 * wSit + 6 * wLose - 4 * wWin - breath * 1.2f);
         Turn(spine1, Mathf.Sin(walkPhase) * 5 * wWalk);
+        if (wDoze > 0.001f) { Bend(spine1, 7 * wDoze); Bend(spine2, 6 * wDoze); }
         for (int i = 0; i < 2; i++) if (shoulder[i] != null) Bend(shoulder[i], breath * 0.6f + 4 * wLose);
 
         // ---- arms: by the sides (standing), swinging (walking), on the table (sitting), up in the air (cheering)
@@ -319,7 +332,8 @@ public class Person : MonoBehaviour
         float ease = 1 - Mathf.Exp(-Time.deltaTime * 4f);
         lookYaw = Mathf.Lerp(lookYaw, lookYawTo * (1 - wWin) * (1 - wLose * 0.7f), ease);
         lookPitch = Mathf.Lerp(lookPitch, lookPitchTo, ease);
-        float pitch = lookPitch * (1 - wWin) + 24 * wLose - 14 * wWin + Mathf.Sin(t * 0.7f) * 1.5f;
+        float pitch = lookPitch * (1 - wWin) * (1 - wDoze) + 24 * wLose - 14 * wWin + 38 * wDoze + Mathf.Sin(t * 0.7f) * 1.5f;
+        lookYaw *= 1 - wDoze * 0.9f;
         Turn(neck, lookYaw * 0.35f); Bend(neck, pitch * 0.35f);
         Turn(head, lookYaw * 0.65f); Bend(head, pitch * 0.65f);
         if (wLose > 0.01f && head != null) head.rotation = Quaternion.AngleAxis(Mathf.Sin((now - loseAt) * 5f) * 9f * wLose, upW) * head.rotation;   // shaking the head

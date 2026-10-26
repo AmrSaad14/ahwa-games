@@ -10,6 +10,7 @@ public class Cafe : MonoBehaviour
     public Camera cam;
     public string focus;            // the table the camera has moved in on (null: the whole floor)
     public bool ready;
+    public Light keyLight;          // the warm directional light (switched off while the advert films in the living room)
 
     Vector3 center, front;          // the middle of the four tables; the way toward the camera side of the room
     public Vector3 Front => front;
@@ -122,6 +123,7 @@ public class Cafe : MonoBehaviour
         RenderSettings.ambientGroundColor = new Color(0.16f, 0.11f, 0.08f);
         // the warm light from the lamps above, casting the shadows
         var sun = new GameObject("Key light").AddComponent<Light>();
+        keyLight = sun;
         sun.type = LightType.Directional;
         sun.color = new Color(1f, 0.86f, 0.66f);
         sun.intensity = 1.25f;
@@ -281,6 +283,8 @@ public class Cafe : MonoBehaviour
         camPos = camPosTo = pos.Value; camLook = camLookTo = look; drift = 0;
         if (ready) Apply();
     }
+    /// The camera straight to where it is heading (no glide), e.g. after filming elsewhere.
+    public void Snap() { camPos = camPosTo; camLook = camLookTo; drift = 0; if (ready) Apply(); }
     public IEnumerable<Person> Regulars() { foreach (var r in regulars) if (r != null) { var p = r.GetComponent<Person>(); if (p != null) yield return p; } }
 
     /// Flies in from close to the floor when the splash opens.

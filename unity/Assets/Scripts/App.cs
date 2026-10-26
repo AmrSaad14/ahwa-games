@@ -118,7 +118,7 @@ public class App : MonoBehaviour
         net = new Net();
         net.OnMessage += OnMessage;
         net.OnOnline += SetStatus;
-        if (!AdFilm.On)   // filming the advert: no server, no ads, nothing popping up over the café
+        if (!AdFilm.Any)   // filming the advert: no server, no ads, nothing popping up over the café
         {
             net.Start();
             Push.Begin();
@@ -130,6 +130,7 @@ public class App : MonoBehaviour
         while (!splash.Opened) yield return null;
         cafe.Entrance();
         if (AdFilm.On) { gameObject.AddComponent<AdFilm>().Begin(this); yield break; }
+        if (AdFilm.Salon) { gameObject.AddComponent<AdSalon>().Begin(this); yield break; }
         StartCoroutine(FadeIn(homeGroup, 0.6f));
 
         if (Recording) StartCoroutine(Shots());
@@ -330,6 +331,12 @@ public class App : MonoBehaviour
         game.ShowHud(true);
     }
 
+    /// Your move in a practice board game, made by the computer (filming the advert's game footage).
+    public void AutoMove()
+    {
+        if (offline is OfflineBoard b) { var a = b.AutoMine(); if (a != null) Send(new Dictionary<string, object> { ["t"] = "act", ["a"] = a }); }
+    }
+
     /// The home menu out of sight (filming the advert).
     public void HideHome() { homeGroup.alpha = 0; homeGroup.blocksRaycasts = false; }
 
@@ -394,7 +401,7 @@ public class App : MonoBehaviour
     {
         // the first practice game of each game starts with a short guide
         string g = Modes.GameOf(mode);
-        if (!Tutorial.Seen(g) && !Recording && !AdFilm.On) { game.HidePicker(); Tutorial.Show(g, Loc.T(GameNames[g]), () => Practice(mode)); return; }
+        if (!Tutorial.Seen(g) && !Recording && !AdFilm.Any) { game.HidePicker(); Tutorial.Show(g, Loc.T(GameNames[g]), () => Practice(mode)); return; }
         lastMode = mode; lastStake = 0;
         if (view != null) Leave();
         if (searching) CancelQueue();

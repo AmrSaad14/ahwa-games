@@ -10,7 +10,10 @@ using UnityEngine;
 public class AdFilm : MonoBehaviour
 {
     public static readonly bool On = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-ad") >= 0;
-    static string Arg(string name, string def)
+    /// The "engagement visit" advert, filmed in the living room (AdSalon.cs).
+    public static readonly bool Salon = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-adsalon") >= 0;
+    public static bool Any => On || Salon;
+    public static string Arg(string name, string def)
     {
         var a = System.Environment.GetCommandLineArgs();
         int i = System.Array.IndexOf(a, name);

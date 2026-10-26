@@ -287,6 +287,9 @@ public class OfflineBoard : OfflineGame
         else turnEndsAt = seats[seat].bot ? 0 : Now + TurnMs;
     }
 
+    /// The move the computer would make in your seat (filming the advert's game footage), or null when it isn't your turn.
+    public Dictionary<string, object> AutoMine() => phase == "play" && def.ToMove() == 0 ? (def.Forced(0) ?? def.Auto(0, rng)) : null;
+
     public override string Act(Dictionary<string, object> a)
     {
         if (phase != "play") return "not_playing";

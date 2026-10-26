@@ -134,7 +134,7 @@ jobs:
           true
 
       - name: Film the advert (commits marked [ad], or run by hand)
-        if: always() && (contains(github.event.head_commit.message, '[ad]') || github.event_name == 'workflow_dispatch')
+        if: always() && contains(github.event.head_commit.message, '[ad]')
         run: |
           set +e
           if [ -f build/linux/BoardBattles.x86_64 ]; then
@@ -158,6 +158,34 @@ jobs:
           fi
           true
 
+      - name: Film the engagement-visit advert (commits marked [salon], or run by hand)
+        if: always() && (contains(github.event.head_commit.message, '[salon]') || github.event_name == 'workflow_dispatch')
+        run: |
+          set +e
+          if [ -f build/linux/BoardBattles.x86_64 ]; then
+            mkdir -p salonfilm svoice
+            gh release download ad-voice-salon -D svoice --clobber || echo "no voice yet: plain timing"
+            cd build/linux
+            for shape in "1920 1080 landscape -adinserts" "1080 1920 vertical"; do
+              set -- $shape
+              rm -rf "$GITHUB_WORKSPACE/sraw"
+              timeout 3600 xvfb-run -a -s "-screen 0 ${1}x${2}x24" ./BoardBattles.x86_64 -screen-width $1 -screen-height $2 -screen-fullscreen 0 -force-glcore -logFile "$GITHUB_WORKSPACE/logs/salon-$3.log" -adsalon -advoice "$GITHUB_WORKSPACE/svoice" -adout "$GITHUB_WORKSPACE/sraw" $4 >> "$GITHUB_WORKSPACE/logs/salon-step.txt" 2>&1
+              echo "$3: player exit $?, frames $(ls $GITHUB_WORKSPACE/sraw/frames 2>/dev/null | wc -l)" >> "$GITHUB_WORKSPACE/logs/salon-step.txt"
+              ffmpeg -loglevel error -y -framerate 30 -i "$GITHUB_WORKSPACE/sraw/frames/f%05d.png" -c:v libx264 -preset slow -crf 14 -pix_fmt yuv420p -movflags +faststart "$GITHUB_WORKSPACE/salonfilm/film-$3.mp4" >> "$GITHUB_WORKSPACE/logs/salon-step.txt" 2>&1
+              for d in "$GITHUB_WORKSPACE"/sraw/ins-*; do
+                [ -d "$d" ] && ffmpeg -loglevel error -y -framerate 30 -i "$d/f%05d.png" -c:v libx264 -preset slow -crf 14 -pix_fmt yuv420p -movflags +faststart "$GITHUB_WORKSPACE/salonfilm/$(basename $d).mp4" >> "$GITHUB_WORKSPACE/logs/salon-step.txt" 2>&1
+              done
+            done
+            cd "$GITHUB_WORKSPACE"
+            cp svoice/* salonfilm/ 2>/dev/null
+            ls -la salonfilm | tee -a logs/salon-step.txt
+            if ls salonfilm/film-*.mp4 > /dev/null 2>&1; then
+              gh release delete ad-salon --yes --cleanup-tag
+              gh release create ad-salon salonfilm/* --title "Advert film: the engagement visit" --target "$GITHUB_SHA" --prerelease --notes "Engagement-visit film ${GITHUB_SHA::7}"
+            fi
+          fi
+          true
+
       - name: Publish logs and screenshots
         if: always()
         run: |
@@ -174,7 +202,7 @@ jobs:
           if [ -f logs/editor.log ]; then tail -c 4000000 logs/editor.log > logs/editor-tail.log; fi
           # the logs are public: blank out the Unity account's email wherever a tool printed it
           for f in logs/*.txt logs/*.log; do [ -f "$f" ] && sudo sed -i "s/${UNITY_EMAIL//\//\\/}/***/g; s/[A-Za-z0-9._%+-]*@[A-Za-z0-9.-]*\.[A-Za-z]\{2,\}/***@***/g" "$f"; done
-          files=$(ls logs/*.txt logs/activate.log logs/return.log logs/editor-tail.log logs/player.log logs/film-*.log logs/server.log shots/*.png shots/*.mp4 2>/dev/null)
+          files=$(ls logs/*.txt logs/activate.log logs/return.log logs/editor-tail.log logs/player.log logs/film-*.log logs/salon-*.log logs/server.log shots/*.png shots/*.mp4 2>/dev/null)
           echo "publishing: $files"
           gh release delete unity-logs --yes --cleanup-tag
           publish unity-logs "Unity build logs" $files
