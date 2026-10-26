@@ -3,21 +3,26 @@
 # (fine for ads). Without them it makes a DRAFT with the same voice through edge-tts, for review only.
 # Writes: voice.wav (all lines with their pauses), timeline.json (when each line starts and ends) and
 # mouth.json (how open the mouth is, 30 times a second, for the lip sync).
-#   python3 voice.py <out dir>
+#   python3 voice.py <out dir> [lines.json]
+# lines.json: a list of lines (one voice, STYLE below), or {"voices": {who: {voice, rate, pitch}}, "lines": [...]};
+# a line may wait "before" seconds and leave "after" seconds of quiet.
 import json, os, subprocess, sys, wave, asyncio, urllib.request
 import numpy as np
 
 here = os.path.dirname(os.path.abspath(__file__))
 out = sys.argv[1]; os.makedirs(out, exist_ok=True)
-lines = json.load(open(os.path.join(here, 'lines.json'), encoding='utf8'))
+spec = json.load(open(sys.argv[2] if len(sys.argv) > 2 else os.path.join(here, 'lines.json'), encoding='utf8'))
 VOICE = 'ar-EG-ShakirNeural'
 STYLE = {'fathi': {'rate': '+6%', 'pitch': '+0Hz'}, 'hajj': {'rate': '-6%', 'pitch': '-18Hz'}}
+if isinstance(spec, dict): STYLE = spec['voices']; lines = spec['lines']
+else: lines = spec
+def voice_of(who): return STYLE[who].get('voice', VOICE)
 key, region = os.environ.get('AZURE_SPEECH_KEY', ''), os.environ.get('AZURE_SPEECH_REGION', '')
 licensed = bool(key and region)
 
 def azure(text, who, path):
     s = STYLE[who]
-    ssml = f"""<speak version="1.0" xml:lang="ar-EG" xmlns="http://www.w3.org/2001/10/synthesis"><voice name="{VOICE}">
+    ssml = f"""<speak version="1.0" xml:lang="ar-EG" xmlns="http://www.w3.org/2001/10/synthesis"><voice name="{voice_of(who)}">
 <prosody rate="{s['rate']}" pitch="{s['pitch']}">{text}</prosody></voice></speak>"""
     req = urllib.request.Request(f'https://{region}.tts.speech.microsoft.com/cognitiveservices/v1', data=ssml.encode('utf8'), headers={
         'Ocp-Apim-Subscription-Key': key, 'Content-Type': 'application/ssml+xml', 'X-Microsoft-OutputFormat': 'riff-24khz-16bit-mono-pcm', 'User-Agent': 'board-battles-ad'})
@@ -26,7 +31,7 @@ def azure(text, who, path):
 async def edge(text, who, path):
     import edge_tts
     s = STYLE[who]
-    await edge_tts.Communicate(text, VOICE, rate=s['rate'], pitch=s['pitch']).save(path + '.mp3')
+    await edge_tts.Communicate(text, voice_of(who), rate=s['rate'], pitch=s['pitch']).save(path + '.mp3')
     subprocess.run(['ffmpeg', '-loglevel', 'error', '-y', '-i', path + '.mp3', '-ac', '1', '-ar', '24000', path], check=True)
 
 SR = 24000
@@ -46,13 +51,14 @@ def read(path):
 
 parts, timeline, t = [], [], 0.0
 for l in lines:
+    if l.get('before'): parts.append(np.zeros(int(l['before'] * SR), np.float32)); t += l['before']
     p = os.path.join(out, l['id'] + '.wav')
     if licensed: azure(l['text'], l['who'], p)
     else: asyncio.run(edge(l['text'], l['who'], p))
     a = read(p)
     timeline.append({'id': l['id'], 'who': l['who'], 'text': l['text'], 'start': round(t, 3), 'end': round(t + len(a) / SR, 3)})
     parts.append(a); t += len(a) / SR
-    gap = np.zeros(int(l['after'] * SR), np.float32); parts.append(gap); t += l['after']
+    gap = np.zeros(int(l.get('after', 0) * SR), np.float32); parts.append(gap); t += l.get('after', 0)
 voice = np.concatenate(parts)
 w = wave.open(os.path.join(out, 'voice.wav'), 'wb'); w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR)
 w.writeframes((np.clip(voice, -1, 1) * 32767).astype(np.int16).tobytes()); w.close()
@@ -65,5 +71,5 @@ who = []
 for i in range(len(env)):
     tt = i / fps; who.append(next((x['who'] for x in timeline if x['start'] <= tt < x['end']), ''))
 json.dump({'fps': fps, 'open': [round(float(x), 3) for x in env], 'who': who}, open(os.path.join(out, 'mouth.json'), 'w'))
-json.dump({'licensed': licensed, 'voice': VOICE, 'duration': round(t, 3), 'lines': timeline}, open(os.path.join(out, 'timeline.json'), 'w'), ensure_ascii=False, indent=1)
+json.dump({'licensed': licensed, 'voice': sorted({voice_of(l['who']) for l in lines}), 'duration': round(t, 3), 'lines': timeline}, open(os.path.join(out, 'timeline.json'), 'w'), ensure_ascii=False, indent=1)
 print('licensed' if licensed else 'DRAFT (edge-tts)', round(t, 2), 's')

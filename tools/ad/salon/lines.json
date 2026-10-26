@@ -1,0 +1,23 @@
+{
+  "voices": {
+    "father": { "voice": "ar-EG-ShakirNeural", "rate": "-8%", "pitch": "-14Hz" },
+    "groom":  { "voice": "ar-EG-ShakirNeural", "rate": "+12%", "pitch": "+10Hz" },
+    "mother": { "voice": "ar-EG-SalmaNeural", "rate": "-6%", "pitch": "-10Hz" },
+    "bride":  { "voice": "ar-EG-SalmaNeural", "rate": "+6%", "pitch": "+6Hz" }
+  },
+  "lines": [
+    { "id": "f1", "who": "father", "before": 0.8,  "text": "قبل ما نتكلم في الشبكة، هتلاعبني." },
+    { "id": "g1", "who": "groom",  "before": 0.25, "text": "أ، ألاعب حضرتك؟" },
+    { "id": "g2", "who": "groom",  "before": 0.6,  "text": "طب ما نلعب أونلاين يا عمي؟ كل واحد يختار لعبته." },
+    { "id": "f2", "who": "father", "before": 0.45, "text": "هات. طاولة." },
+    { "id": "f3", "who": "father", "before": 1.5,  "text": "دُش! اتفضل، ارجع بيتكم." },
+    { "id": "g3", "who": "groom",  "before": 0.3,  "text": "لا لا، دومينو. دي بتاعتي." },
+    { "id": "g4", "who": "groom",  "before": 1.6,  "text": "قفلت يا عمي." },
+    { "id": "m1", "who": "mother", "before": 2.3,  "text": "معلش يا حاج، أكلتك. وأكلتك انت كمان يا مروان." },
+    { "id": "b1", "who": "bride",  "before": 1.4,  "text": "كش ملك يا بابا." },
+    { "id": "f4", "who": "father", "before": 1.1,  "text": "هو انتو كلكو معاه؟!" },
+    { "id": "f5", "who": "father", "before": 2.0,  "text": "اصحى! الماتش الفاصل." },
+    { "id": "g5", "who": "groom",  "before": 0.35, "text": "يا عمي، أنا جاي أخطب بنتك، ولا أخطبك انت؟" },
+    { "id": "vo", "who": "father", "before": 1.4,  "after": 1.2, "text": "بورد باتلز، نزّلها ببلاش، واللي يكسب يتكلم." }
+  ]
+}

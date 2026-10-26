@@ -24,7 +24,10 @@ jobs:
           sudo apt-get install -y -qq ffmpeg > /dev/null
           pip install -q edge-tts numpy
           python3 tools/ad/voice.py out | tee out-log.txt
+          python3 tools/ad/voice.py out-salon tools/ad/salon/lines.json | tee salon-log.txt
       - name: Publish
         run: |
           gh release delete ad-voice --yes --cleanup-tag 2>/dev/null || true
           gh release create ad-voice out/voice.wav out/timeline.json out/mouth.json out/l*.wav --title "Ad voice" --prerelease --notes "$(cat out-log.txt)"
+          gh release delete ad-voice-salon --yes --cleanup-tag 2>/dev/null || true
+          gh release create ad-voice-salon out-salon/*.wav out-salon/timeline.json out-salon/mouth.json --title "Ad voice: the engagement visit" --prerelease --notes "$(cat salon-log.txt)"
