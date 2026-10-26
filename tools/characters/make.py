@@ -4,7 +4,8 @@
 # a Mixamo-compatible rig for Unity, the Egyptian pieces made here (tarboosh, emma, hijab), studio renders
 # of the face and the whole body, and a .glb for the game.
 import bpy, bmesh, os, sys, glob, zipfile, traceback, importlib, math
-from mathutils import Vector, Euler
+from mathutils import Vector, Euler, Matrix
+CAM = None   # the studio camera (set once it exists; the export uses it for the open-mouth picture)
 
 OUT = os.environ.get("OUT", "/tmp/out")
 os.makedirs(OUT, exist_ok=True)
@@ -578,6 +579,8 @@ def build(spec, x):
         top, rx, ry = head_frame(basemesh)
         km = flat_material("Khimar", spec["scarf"], 0.85)
         extra = [make_hood(basemesh, rig, km, top, rx, ry), make_cape(basemesh, rig, km, top, rx, ry)]
+    try: extra.append(mouth_inside(basemesh, rig))
+    except Exception: p(traceback.format_exc())
     rig.location.x = x
     p("  objects:", sorted(objs.keys()), "+", [e.name for e in extra])
     return basemesh, rig
@@ -604,6 +607,55 @@ def shoot(cam, target, dist, lens, name, height_off=0.0):
     bpy.context.scene.render.filepath = os.path.join(OUT, name)
     bpy.ops.render.render(write_still=True)
 
+def mouth_inside(basemesh, rig):
+    """A dark hollow behind the lips (seen when the mouth opens to talk), riding on the head bone."""
+    dg = bpy.context.evaluated_depsgraph_get(); ev = basemesh.evaluated_get(dg); me = ev.to_mesh()
+    nose, mouth_z = face_points(me.vertices, basemesh.matrix_world)
+    ev.to_mesh_clear()
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=10, radius=1)
+    o = bpy.context.active_object; o.name = "MouthInside"
+    o.scale = (0.021, 0.018, 0.011)
+    o.location = (nose.x, nose.y + 0.036, mouth_z - 0.003)
+    o.data.materials.append(flat_material("MouthInside", (0.06, 0.012, 0.012), 0.6))
+    bone_parent(o, rig, "mixamorig:Head")
+    return o
+
+def face_points(verts, mw):
+    """The tip of the nose and the line between the lips (the character faces -Y), from the head's own shape."""
+    pts = [mw @ v.co for v in verts]
+    top = max(p_.z for p_ in pts)
+    cx = sum(p_.x for p_ in pts if p_.z > top - 0.2) / max(1, sum(1 for p_ in pts if p_.z > top - 0.2))
+    front = [p_ for p_ in pts if top - 0.2 < p_.z < top - 0.07 and abs(p_.x - cx) < 0.015]
+    nose = min(front, key=lambda p_: p_.y)
+    return Vector((cx, nose.y, nose.z)), nose.z - 0.033
+
+def add_mouth(obj):
+    """A "MouthOpen" shape key: the jaw turns open about a hinge in front of the ears, the lower lip and chin go
+    down and a little back, blending into the cheeks and neck. The game drives it while a character talks."""
+    me = obj.data
+    nose, mz = face_points(me.vertices, Matrix.Identity(4))
+    hy, hz = nose.y + 0.085, mz + 0.012
+    chin = nose.z - 0.09
+    if not me.shape_keys: obj.shape_key_add(name="Basis", from_mix=False)
+    key = obj.shape_key_add(name="MouthOpen", from_mix=False)
+    ang = math.radians(13)
+    def smooth(a, b, x):
+        t = min(1.0, max(0.0, (x - a) / (b - a))); return t * t * (3 - 2 * t)
+    moved = 0
+    for v in me.vertices:
+        c = v.co
+        if c.z > mz + 0.007 or c.z < chin - 0.05 or c.y > hy + 0.02 or abs(c.x - nose.x) > 0.07: continue
+        w = 1 - smooth(mz - 0.004, mz + 0.007, c.z)                    # the lower lip moves, the upper one stays
+        w *= smooth(chin - 0.05, chin - 0.012, c.z)                    # fading down the neck
+        w *= 1 - smooth(0.045, 0.07, abs(c.x - nose.x))                # and out into the cheeks
+        w *= 1 - smooth(hy - 0.03, hy + 0.02, c.y)                     # and back toward the ears
+        if w <= 0: continue
+        a = ang * w; dy, dz = c.y - hy, c.z - hz
+        key.data[v.index].co = Vector((c.x, hy + dy * math.cos(a) - dz * math.sin(a), hz + dy * math.sin(a) + dz * math.cos(a)))
+        moved += 1
+    key.value = 0.0
+    p("  mouth: moved", moved, "vertices")
+
 def export(spec, basemesh, rig):
     """A copy of the character with the body shape baked in, as a .glb for the game (skinned to the Mixamo rig)."""
     copy_root = ExportService.create_character_copy(rig, name_suffix="_x")
@@ -619,10 +671,13 @@ def export(spec, basemesh, rig):
     copy_body = next(o for o in objs if o.type == "MESH" and o.name.startswith(basemesh.name) and o.name.endswith("_x"))
     ExportService.bake_modifiers_remove_helpers(copy_body, bake_masks=True)
     for o in objs:
-        if o.type == "MESH" and o.data.shape_keys:
+        if o.type == "MESH" and o.data.shape_keys and not (o is copy_body and "MouthOpen" in o.data.shape_keys.key_blocks):
             bpy.ops.object.select_all(action="DESELECT"); o.select_set(True)
             bpy.context.view_layer.objects.active = o
             bpy.ops.object.shape_key_remove(all=True, apply_mix=True)
+    # the jaw for talking (lip sync in the game and the advert)
+    try: add_mouth(copy_body)
+    except Exception: p(traceback.format_exc())
     # light enough for phones: the body at about half, garments and shoes simplified (hair and brow cards untouched)
     for o in objs:
         if o.type != "MESH": continue
@@ -694,7 +749,19 @@ def export(spec, basemesh, rig):
     bpy.context.view_layer.objects.active = copy_root
     path = os.path.join(OUT, spec["name"] + ".glb")
     bpy.ops.export_scene.gltf(filepath=path, use_selection=True, export_apply=True, export_skins=True, export_animations=False,
-                              export_morph=False, export_yup=True, export_image_format="AUTO")
+                              export_morph=True, export_morph_normal=False, export_yup=True, export_image_format="AUTO")
+    # a picture of the open mouth, to check the lip sync
+    try:
+        kb = copy_body.data.shape_keys.key_blocks.get("MouthOpen") if copy_body.data.shape_keys else None
+        if kb is not None and CAM is not None:
+            kb.value = 1.0
+            others = [o for o in bpy.data.objects if o not in objs and o.type in ("MESH", "CURVE") and not o.hide_render]
+            for o in others: o.hide_render = True
+            nose, mz = face_points(copy_body.evaluated_get(bpy.context.evaluated_depsgraph_get()).data.vertices, copy_body.matrix_world)
+            shoot(CAM, Vector((nose.x, nose.y + 0.04, mz + 0.03)), 0.55, 85, f"talk-{spec['name']}.png", 0.0)
+            for o in others: o.hide_render = False
+            kb.value = 0.0
+    except Exception: p(traceback.format_exc())
     tris = sum(len(o.evaluated_get(bpy.context.evaluated_depsgraph_get()).data.polygons) for o in objs if o.type == "MESH")
     p("  exported", spec["name"], round(os.path.getsize(path) / 1e6, 1), "MB,", tris, "faces")
     for o in objs: bpy.data.objects.remove(o, do_unlink=True)
@@ -708,7 +775,7 @@ try:
         except Exception:
             p(traceback.format_exc())
     shrink_images(1024)
-    cam = studio()
+    cam = studio(); CAM = cam
     only = os.environ.get("ONLY")
     for spec, basemesh, rig in built:
         if only and spec["name"] != only: continue
