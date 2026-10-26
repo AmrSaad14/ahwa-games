@@ -154,7 +154,8 @@ window.render = function (t) {
     put(cap, CX, capY, W * 0.94, size * 2.9, 1, 0, o);
     const first = window.LINES.find(x => x.who === l.who) === l;
     who.textContent = NAME[l.who] || ''; who.style.fontSize = size * 0.6 + 'px';
-    put(who, CX, capY - size * 1.75, W * 0.7, size, 1, 0, first ? o : 0);
+    const two = cap.textContent.includes('\n');
+    put(who, CX, capY - size * (two ? 2.25 : 1.55), W * 0.7, size, 1, 0, first ? o : 0);
   } else { hide(cap); hide(who); }
 
   const bs = S * (V ? 0.14 : 0.1);
