@@ -1,6 +1,8 @@
 // The premium advert, put together: the café film (AdFilm.cs, from the ad-film release), graded, captioned and
 // closed with the end card (premium.html), with the mixed sound (tools/ad/mix.py).
-//   node compose.mjs <film.mp4> <timeline.json> <mix.wav> <out.mp4> <w> <h> <ar|en> [--preview t1,t2,…]
+//   node compose.mjs <film.mp4> <timeline.json> <mix.wav> <out.mp4> <w> <h> <ar|en> [--game landscape-film.mp4] [--preview t1,t2,…]
+// --game: for the vertical cut, the game itself is shown from the landscape film on a phone held sideways
+// (the game is made for landscape screens; its own vertical layout is cramped).
 import { chromium } from 'playwright';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -10,6 +12,7 @@ const here = path.dirname(new URL(import.meta.url).pathname);
 const [filmP, timelineP, mixP, out, w, h, lang] = process.argv.slice(2);
 const preview = process.argv.includes('--preview') ? process.argv[process.argv.indexOf('--preview') + 1].split(',').map(Number) : null;
 const FPS = 30;
+const gameFilm = process.argv.includes('--game') ? process.argv[process.argv.indexOf('--game') + 1] : null;
 const work = path.join(path.dirname(path.resolve(out)), path.basename(out, '.mp4') + '-work');
 const src = path.join(work, 'film'), frames = path.join(work, 'frames');
 fs.rmSync(work, { recursive: true, force: true }); fs.mkdirSync(src, { recursive: true }); fs.mkdirSync(frames, { recursive: true });
@@ -17,13 +20,19 @@ fs.rmSync(work, { recursive: true, force: true }); fs.mkdirSync(src, { recursive
 // the film's frames, fitted to the size asked for
 execFileSync('ffmpeg', ['-loglevel', 'error', '-i', filmP, '-vf', `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h}`, '-q:v', '2', path.join(src, 'f%05d.jpg')]);
 const files = fs.readdirSync(src).filter(f => f.endsWith('.jpg')).sort().map(f => 'file://' + path.join(src, f));
+let gameFiles = [];
+if (gameFilm) {
+  const gsrc = path.join(work, 'game'); fs.mkdirSync(gsrc);
+  execFileSync('ffmpeg', ['-loglevel', 'error', '-i', gameFilm, '-vf', 'scale=1280:720', '-q:v', '2', path.join(gsrc, 'g%05d.jpg')]);
+  gameFiles = fs.readdirSync(gsrc).filter(f => f.endsWith('.jpg')).sort().map(f => 'file://' + path.join(gsrc, f));
+}
 const lines = JSON.parse(fs.readFileSync(timelineP, 'utf8')).lines;
 const D = files.length / FPS;
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
 const page = await browser.newPage({ viewport: { width: +w, height: +h } });
 await page.goto(`file://${path.join(here, 'premium.html')}?w=${w}&h=${h}&lang=${lang}`);
-await page.evaluate(([f, l, d]) => { window.FRAMES = f; window.LINES = l; window.DURATION = d; window.FPS = 30; }, [files, lines, D]);
+await page.evaluate(([f, l, d, g]) => { window.FRAMES = f; window.LINES = l; window.DURATION = d; window.FPS = 30; window.GAME = g; }, [files, lines, D, gameFiles]);
 await page.waitForFunction(() => window.READY === true);
 await page.waitForTimeout(500);
 const times = preview ?? Array.from({ length: files.length }, (_, i) => i / FPS);
