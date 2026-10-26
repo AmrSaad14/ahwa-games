@@ -1,0 +1,161 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;900&family=Poppins:wght@600;800;900&display=block" rel="stylesheet">
+<style>
+  html,body{margin:0;background:#000;overflow:hidden}
+  #stage{position:relative;overflow:hidden;background:#12070a}
+  .abs{position:absolute;left:0;top:0;transform-origin:50% 50%;will-change:transform,opacity}
+  #film{object-fit:cover}
+  .txt{color:#fff;font-weight:900;text-align:center;white-space:nowrap;text-shadow:0 4px 18px rgba(0,0,0,.75)}
+  .ar{font-family:Cairo,sans-serif;direction:rtl}
+  .en{font-family:Poppins,sans-serif}
+  .cap{color:#fff;font-weight:800;text-align:center;line-height:1.35;text-shadow:0 2px 3px rgba(0,0,0,.9),0 0 22px rgba(0,0,0,.6)}
+  .who{color:#f3cd62;font-weight:900;text-align:center;letter-spacing:.02em;text-shadow:0 2px 10px rgba(0,0,0,.8)}
+  .pill{background:#f3cd62;color:#22120a;border-radius:999px;font-weight:900;text-align:center;box-shadow:0 10px 40px rgba(243,205,98,.45)}
+</style></head>
+<body><div id="stage"></div>
+<script>
+// The premium advert: the film shot in the game's café (AdFilm.cs) with a warm grade, captions of what Am Fathi
+// and Hajj Mahmoud say, and the end card. render(t) draws the frame at t seconds; compose.mjs records each one.
+// Page address: w, h, lang (captions: ar, or en for English subtitles under the Egyptian voice).
+const P = new URLSearchParams(location.search);
+const W = +P.get('w') || 1080, H = +P.get('h') || 1920, LANG = P.get('lang') || 'ar';
+const AR = LANG === 'ar', V = H > W, S = Math.min(W, H), CX = W / 2;
+const stage = document.getElementById('stage');
+stage.style.width = W + 'px'; stage.style.height = H + 'px';
+const A = 'assets/';
+const EN = {
+  l1: 'Good evening, folks! I’m Am Fathi, and this is Hajj Mahmoud, my friend of forty years.',
+  l2: 'Every night at the café: dominoes, backgammon, chess, ludo.',
+  l3: 'But Hajj Mahmoud is bored. He says nobody can beat him anymore!',
+  l4: 'Nobody beats me!',
+  l5: 'So we brought the café to your phone!',
+  l6: 'Play with your friends, or with people from all over Egypt, and get coins every day.',
+  l7: 'Board Battles. Download it free, and come sit with us!',
+};
+const NAME = { fathi: AR ? 'عم فتحي' : 'Am Fathi', hajj: AR ? 'الحاج محمود' : 'Hajj Mahmoud' };
+const T = {
+  name: AR ? 'بورد باتلز' : 'Board Battles', play: AR ? 'العب ببلاش دلوقتي' : 'Play free now',
+  games: AR ? 'دومينو · طاولة · شطرنج · لودو' : 'Dominoes · Backgammon · Chess · Ludo',
+};
+const font = AR ? 'ar' : 'en';
+
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const ease = x => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, x) => a + (b - a) * x;
+const back = x => { x = clamp(x); const c = 1.9; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
+function el(html, cls = '') { const d = document.createElement('div'); d.className = 'abs ' + cls; d.innerHTML = html; stage.appendChild(d); return d; }
+function img(src, cls = '') { return el(`<img src="${A + src}" style="width:100%;height:100%;display:block">`, cls); }
+function put(e, x, y, w, h, s = 1, r = 0, o = 1) {
+  e.style.width = w + 'px'; e.style.height = h + 'px';
+  e.style.transform = `translate(${x - w / 2}px,${y - h / 2}px) rotate(${r}deg) scale(${s})`;
+  e.style.opacity = o; e.style.display = o <= 0.001 ? 'none' : 'block';
+}
+
+/* ---------- layers ---------- */
+const film = el('<img id="film" style="width:100%;height:100%;display:block">');
+const filmImg = film.querySelector('img');
+// the grade: warm, a little more contrast, deep corners
+filmImg.style.filter = 'contrast(1.08) saturate(1.12) sepia(.10) brightness(1.03)';
+const warm = el(''); warm.style.background = 'linear-gradient(180deg, rgba(255,170,90,.06), rgba(120,40,10,.10))'; warm.style.mixBlendMode = 'soft-light';
+const vig = el(''); vig.style.background = 'radial-gradient(ellipse at 50% 46%, rgba(0,0,0,0) 52%, rgba(10,4,2,.62) 100%)';
+const bottom = el(''); bottom.style.background = 'linear-gradient(180deg, rgba(0,0,0,0), rgba(8,3,1,.62))';
+const bug = img('Logo.png');                         // the game's mark in a corner
+const who = el('', 'who ' + font);
+const cap = el('', 'cap ' + font);
+// the end card
+const endBg = el(''); endBg.style.background = 'radial-gradient(ellipse at 50% 40%, rgba(70,28,12,.55), rgba(12,5,3,.92) 75%)';
+const rays = el(''); rays.style.background = 'repeating-conic-gradient(from 0deg, rgba(243,205,98,.12) 0deg 7deg, rgba(243,205,98,0) 7deg 15deg)';
+rays.style.borderRadius = '50%'; rays.style.webkitMaskImage = 'radial-gradient(circle, #000 20%, transparent 70%)';
+const names = ['Shield', 'DominoLayer', 'DieLayer', 'Spark2', 'Crown', 'Ribbon'];
+const crest = names.map(n => img(n + '.png'));
+const PIV = { Shield: [.5, .5], DominoLayer: [.4, .46], DieLayer: [.62, .42], Spark2: [.5, 1 - 380 / 700], Crown: [.5, 1 - 100 / 700], Ribbon: [.5, 1 - 590 / 700] };
+crest.forEach((c, i) => { const p = PIV[names[i]]; c.style.transformOrigin = `${p[0] * 100}% ${p[1] * 100}%`; });
+const tGames = el('', 'txt ' + font); tGames.style.color = '#ffe9b0'; tGames.style.fontWeight = '700';
+const playBtn = el('', 'pill ' + font);
+const tStore = el('', 'txt en'); tStore.style.color = 'rgba(255,233,176,.75)'; tStore.style.fontWeight = '600';
+
+/* ---------- inputs (filled in by compose.mjs) ---------- */
+window.FRAMES = window.FRAMES || [];     // the film, one file per frame at FPS
+window.FPS = window.FPS || 30;
+window.LINES = window.LINES || [];       // [{id, who, text, start, end}]
+window.DURATION = 30;
+
+function lineAt(t) {
+  for (const l of window.LINES) if (t >= l.start - 0.05 && t < l.end + 0.35) return l;
+  return null;
+}
+
+/** Long lines over two rows, split near the middle at a space (and after a comma when there is one near it). */
+function wrap(s, maxChars) {
+  if (s.length <= maxChars) return s;
+  const mid = s.length / 2; let best = -1, bd = 1e9;
+  for (let i = 0; i < s.length; i++) if (s[i] === ' ') { const d = Math.abs(i - mid) - ('،,'.includes(s[i - 1]) ? 6 : 0); if (d < bd) { bd = d; best = i; } }
+  return best < 0 ? s : s.slice(0, best) + '\n' + s.slice(best + 1);
+}
+
+window.render = function (t) {
+  const D = window.DURATION, l7 = window.LINES.find(l => l.id === 'l7');
+  const endAt = l7 ? l7.end + 0.15 : D - 3.5;
+  // the film, frame for frame
+  const i = Math.min(window.FRAMES.length - 1, Math.max(0, Math.floor(t * window.FPS + 1e-6)));
+  if (window.FRAMES.length && filmImg.dataset.i !== String(i)) { filmImg.src = window.FRAMES[i]; filmImg.dataset.i = i; }
+  const endK = ease(seg(t, endAt, endAt + 0.7));
+  const blur = endK * S * 0.012;
+  filmImg.style.filter = `contrast(1.08) saturate(${1.12 - endK * 0.3}) sepia(.10) brightness(${1.03 - endK * 0.25}) blur(${blur}px)`;
+  const fadeIn = ease(seg(t, 0, 0.6)), fadeOut = 1 - seg(t, D - 0.35, D);
+  put(film, CX, H / 2, W, H, 1 + endK * 0.04, 0, fadeIn * fadeOut);
+  put(warm, CX, H / 2, W, H, 1, 0, 1);
+  put(vig, CX, H / 2, W, H, 1, 0, 1);
+  put(bottom, CX, H - H * (V ? 0.17 : 0.2), W, H * (V ? 0.34 : 0.4), 1, 0, 1 - endK);
+  // the corner mark (hidden while the game is on the screen: the game has its own)
+  const l6 = window.LINES.find(l => l.id === 'l6');
+  const inGame = l6 && t > l6.start - 0.4 && l7 && t < l7.start - 0.2;
+  const bs = S * (V ? 0.15 : 0.11);
+  put(bug, V ? W - bs * 0.75 : W - bs * 0.8, V ? bs * 0.85 : bs * 0.7, bs, bs * 700 / 600, 1, 0, (inGame ? 0 : 0.85) * ease(seg(t, 0.4, 1.2)) * (1 - endK));
+
+  // captions: what is being said, in Egyptian Arabic (or its English subtitle), with who says it the first time
+  const l = t < endAt ? lineAt(t) : null;
+  if (l) {
+    const o = ease(seg(t, l.start - 0.05, l.start + 0.2)) * (1 - seg(t, l.end + 0.15, l.end + 0.35));
+    const txt = AR ? l.text : EN[l.id] || '';
+    const size = S * (V ? 0.05 : 0.042);
+    const maxChars = Math.floor((W * 0.86) / (size * (AR ? 0.5 : 0.52)));
+    cap.style.whiteSpace = 'pre'; cap.textContent = wrap(txt, maxChars); cap.style.fontSize = size + 'px';
+    const capY = V ? H * 0.80 : H * 0.84;
+    put(cap, CX, capY, W * 0.94, size * 2.9, 1, 0, o);
+    cap.style.transform += ` translateY(${(1 - o) * size * 0.25}px)`;
+    const first = window.LINES.find(x => x.who === l.who) === l || l.id === 'l4';
+    who.textContent = NAME[l.who] || ''; who.style.fontSize = size * 0.62 + 'px';
+    put(who, CX, capY - size * 1.75, W * 0.6, size, 1, 0, first ? o : 0);
+  } else { put(cap, 0, 0, 1, 1, 1, 0, 0); put(who, 0, 0, 1, 1, 1, 0, 0); }
+
+  // the end card: the café behind, softened; the crest builds like the game's splash; the button
+  put(endBg, CX, H / 2, W, H, 1, 0, endK);
+  const lt = t - endAt - 0.15;
+  const cw = S * (V ? 0.56 : 0.36), ch = cw * 700 / 600, ccy = V ? H * 0.36 : H * 0.36;
+  put(rays, CX, ccy, S * 1.7, S * 1.7, 1, t * 8, endK * 0.9);
+  names.forEach((n, k) => {
+    let s = 1, r = 0, o = 0, dx = 0, dy = 0;
+    if (n === 'Shield') { const c = seg(lt, 0, 0.45); o = clamp(c * 2); s = lerp(0.6, 1, back(c)); }
+    if (n === 'DominoLayer' || n === 'DieLayer') { const c = seg(lt, 0.3, 0.75), d = n === 'DieLayer' ? 1 : -1; o = clamp(c * 2.5); dx = d * (1 - back(c)) * cw * 0.6; r = d * (1 - back(c)) * 60; }
+    if (n === 'Spark2') { const c = seg(lt, 0.7, 1.2); o = c <= 0 || c >= 1 ? 0 : c < 0.3 ? c / 0.3 : 1 - (c - 0.3) / 0.7; s = c < 0.3 ? lerp(0.2, 1.2, c / 0.3) : lerp(1.2, 1.5, (c - 0.3) / 0.7); r = -40 * c; }
+    if (n === 'Crown') { const c = seg(lt, 0.9, 1.4); o = clamp(c * 3); dy = -(1 - back(c)) * ch * 0.12; }
+    if (n === 'Ribbon') { const c = seg(lt, 1.2, 1.7); o = clamp(c * 3); s = lerp(0.05, 1, back(c)); }
+    const e = crest[k];
+    e.style.width = cw + 'px'; e.style.height = ch + 'px';
+    e.style.transform = `translate(${CX - cw / 2 + dx}px,${ccy - ch / 2 + dy}px) rotate(${r}deg) scale(${n === 'Ribbon' ? s + ',' + lerp(0.6, 1, ease(seg(lt, 1.2, 1.7))) : s})`;
+    e.style.opacity = o * fadeOut; e.style.display = o > 0.001 ? 'block' : 'none';
+  });
+  const gy = V ? H * 0.585 : H * 0.69;
+  tGames.textContent = T.games; tGames.style.fontSize = S * (V ? 0.045 : 0.04) + 'px';
+  put(tGames, CX, gy, W * 0.94, S * 0.06, 1, 0, ease(seg(lt, 1.4, 1.9)) * fadeOut);
+  const p = back(seg(lt, 1.7, 2.1));
+  const bw = S * (V ? 0.66 : 0.46), bh = S * (V ? 0.13 : 0.11);
+  playBtn.textContent = T.play; playBtn.style.fontSize = bh * 0.47 + 'px'; playBtn.style.lineHeight = bh + 'px';
+  put(playBtn, CX, V ? H * 0.68 : H * 0.81, bw, bh, p * (1 + 0.035 * Math.sin(t * 7)), 0, clamp(p * 2) * fadeOut);
+  tStore.textContent = 'Free on Google Play  ·  Qimma Labs'; tStore.style.fontSize = S * 0.03 + 'px';
+  put(tStore, CX, V ? H * 0.9 : H * 0.93, W, S * 0.05, 1, 0, ease(seg(lt, 2.2, 2.7)) * fadeOut);
+};
+document.fonts.ready.then(() => { window.READY = true; });
+</script></body></html>

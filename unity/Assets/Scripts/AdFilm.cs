@@ -101,7 +101,7 @@ public class AdFilm : MonoBehaviour
         yield return new WaitForSeconds(2f);   // let the café settle (not filmed)
         Debug.Log($"[ad] filming: fathi {fathi != null}, hajj {hajj != null}, lines {lines.Count}");
         recording = true;
-        float end = End("l7", 25.5f) + 3.2f;
+        float end = End("l7", 25.5f) + 4.2f;   // the end card goes over the last seconds
         bool inGame = false, hajjCheered = false, fathiCheered = false;
         var cam = app.cafe;
         while (T < end)
