@@ -39,6 +39,34 @@ public class Person : MonoBehaviour
     bool walking;
     Vector3 gesture; float gestureAt = -10f; bool slam;
     float seed, nextLook, lookYaw, lookYawTo, lookPitch, lookPitchTo, nextSaccade; Vector2 saccade;
+    Vector3? lookPoint;       // set: the head turns to this point (the camera, filming the advert)
+    float mouthOpen;          // 0 shut … 1 wide open (talking, from the voice)
+    SkinnedMeshRenderer mouthMesh; int mouthShape = -2;
+
+    /// Look at a point (null: back to looking around the table on their own).
+    public void LookAt(Vector3? point) => lookPoint = point;
+
+    /// The mouth, 0 shut to 1 open: the "MouthOpen" shape made with the character (tools/characters/make.py).
+    public void Mouth(float open)
+    {
+        mouthOpen = Mathf.Clamp01(open);
+        if (mouthShape == -2)
+        {
+            mouthShape = -1;
+            foreach (var r in GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                var m = r.sharedMesh; if (m == null) continue;
+                for (int i = 0; i < m.blendShapeCount; i++)
+                    if (m.GetBlendShapeName(i).ToLowerInvariant().Contains("mouth")) { mouthMesh = r; mouthShape = i; break; }
+                if (mouthShape >= 0) break;
+            }
+            if (mouthShape < 0)   // the importer may not keep the name: the one mesh with a single shape is the body's
+                foreach (var r in GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                    if (r.sharedMesh != null && r.sharedMesh.blendShapeCount == 1) { mouthMesh = r; mouthShape = 0; break; }
+            Debug.Log($"[person] {name}: mouth shape {(mouthShape >= 0 ? mouthMesh.sharedMesh.GetBlendShapeName(mouthShape) + " on " + mouthMesh.name : "not found")}");
+        }
+        if (mouthMesh != null) mouthMesh.SetBlendShapeWeight(mouthShape, mouthOpen * 100f);
+    }
 
     static Transform Find(Transform t, string name)
     {
@@ -277,6 +305,14 @@ public class Person : MonoBehaviour
             nextLook = now + Random.Range(1.8f, 5f);
             lookYawTo = Random.value < 0.55f ? Random.Range(-12f, 12f) : Random.Range(-38f, 38f);
             lookPitchTo = Random.value < 0.6f ? 14f * wSit : Random.Range(-6f, 6f);
+        }
+        if (lookPoint.HasValue && head != null)
+        {
+            // at the camera: turn the head (and a little the neck) toward it, small nods while talking
+            var to = lookPoint.Value - head.position; var flat = Vector3.ProjectOnPlane(to, upW);
+            lookYawTo = Mathf.Clamp(Vector3.SignedAngle(fwdW, flat, upW), -65f, 65f);
+            lookPitchTo = Mathf.Clamp(-Mathf.Atan2(Vector3.Dot(to, upW), flat.magnitude) * Mathf.Rad2Deg, -20f, 30f) + mouthOpen * 4f;
+            nextLook = now + 1f;
         }
         float ease = 1 - Mathf.Exp(-Time.deltaTime * 4f);
         lookYaw = Mathf.Lerp(lookYaw, lookYawTo * (1 - wWin) * (1 - wLose * 0.7f), ease);

@@ -633,7 +633,10 @@ def add_mouth(obj):
     """A "MouthOpen" shape key: the jaw turns open about a hinge in front of the ears, the lower lip and chin go
     down and a little back, blending into the cheeks and neck. The game drives it while a character talks."""
     me = obj.data
-    nose, mz = face_points(me.vertices, Matrix.Identity(4))
+    # worked out in the world (metres, face toward -Y), whatever scale and turn the exported copy carries
+    bpy.context.view_layer.update()
+    mw = obj.matrix_world.copy(); inv = mw.inverted()
+    nose, mz = face_points(me.vertices, mw)
     hy, hz = nose.y + 0.085, mz + 0.012
     chin = nose.z - 0.09
     if not me.shape_keys: obj.shape_key_add(name="Basis", from_mix=False)
@@ -643,7 +646,7 @@ def add_mouth(obj):
         t = min(1.0, max(0.0, (x - a) / (b - a))); return t * t * (3 - 2 * t)
     moved = 0
     for v in me.vertices:
-        c = v.co
+        c = mw @ v.co
         if c.z > mz + 0.007 or c.z < chin - 0.05 or c.y > hy + 0.02 or abs(c.x - nose.x) > 0.07: continue
         w = 1 - smooth(mz - 0.004, mz + 0.007, c.z)                    # the lower lip moves, the upper one stays
         w *= smooth(chin - 0.05, chin - 0.012, c.z)                    # fading down the neck
@@ -651,10 +654,10 @@ def add_mouth(obj):
         w *= 1 - smooth(hy - 0.03, hy + 0.02, c.y)                     # and back toward the ears
         if w <= 0: continue
         a = ang * w; dy, dz = c.y - hy, c.z - hz
-        key.data[v.index].co = Vector((c.x, hy + dy * math.cos(a) - dz * math.sin(a), hz + dy * math.sin(a) + dz * math.cos(a)))
+        key.data[v.index].co = inv @ Vector((c.x, hy + dy * math.cos(a) - dz * math.sin(a), hz + dy * math.sin(a) + dz * math.cos(a)))
         moved += 1
     key.value = 0.0
-    p("  mouth: moved", moved, "vertices")
+    p("  mouth: moved", moved, "vertices; copy scale", tuple(round(x, 3) for x in mw.to_scale()))
 
 def export(spec, basemesh, rig):
     """A copy of the character with the body shape baked in, as a .glb for the game (skinned to the Mixamo rig)."""

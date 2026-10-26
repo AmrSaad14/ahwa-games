@@ -118,14 +118,18 @@ public class App : MonoBehaviour
         net = new Net();
         net.OnMessage += OnMessage;
         net.OnOnline += SetStatus;
-        net.Start();
-        Push.Begin();
-        Ads.Begin();
-        Growth.CheckReferrer();
+        if (!AdFilm.On)   // filming the advert: no server, no ads, nothing popping up over the café
+        {
+            net.Start();
+            Push.Begin();
+            Ads.Begin();
+            Growth.CheckReferrer();
+        }
 
         splash.Ready();
         while (!splash.Opened) yield return null;
         cafe.Entrance();
+        if (AdFilm.On) { gameObject.AddComponent<AdFilm>().Begin(this); yield break; }
         StartCoroutine(FadeIn(homeGroup, 0.6f));
 
         if (Recording) StartCoroutine(Shots());
@@ -326,6 +330,9 @@ public class App : MonoBehaviour
         game.ShowHud(true);
     }
 
+    /// The home menu out of sight (filming the advert).
+    public void HideHome() { homeGroup.alpha = 0; homeGroup.blocksRaycasts = false; }
+
     public void ExitGame()
     {
         offline = null;
@@ -387,7 +394,7 @@ public class App : MonoBehaviour
     {
         // the first practice game of each game starts with a short guide
         string g = Modes.GameOf(mode);
-        if (!Tutorial.Seen(g) && !Recording) { game.HidePicker(); Tutorial.Show(g, Loc.T(GameNames[g]), () => Practice(mode)); return; }
+        if (!Tutorial.Seen(g) && !Recording && !AdFilm.On) { game.HidePicker(); Tutorial.Show(g, Loc.T(GameNames[g]), () => Practice(mode)); return; }
         lastMode = mode; lastStake = 0;
         if (view != null) Leave();
         if (searching) CancelQueue();

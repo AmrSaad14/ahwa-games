@@ -13,6 +13,7 @@ public class Cafe : MonoBehaviour
 
     Vector3 center, front;          // the middle of the four tables; the way toward the camera side of the room
     public Vector3 Front => front;
+    public Vector3 Center => center;
     Transform lobby;                // the four small game tables (hidden while a game is on)
     Transform chairModel;           // a café chair, copied for the game table
     readonly List<GameObject> regulars = new List<GameObject>();
@@ -278,6 +279,7 @@ public class Cafe : MonoBehaviour
     {
         if (pos == null) { Focus(focus); return; }
         camPos = camPosTo = pos.Value; camLook = camLookTo = look; drift = 0;
+        if (ready) Apply();
     }
     public IEnumerable<Person> Regulars() { foreach (var r in regulars) if (r != null) { var p = r.GetComponent<Person>(); if (p != null) yield return p; } }
 
