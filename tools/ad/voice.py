@@ -11,7 +11,7 @@ here = os.path.dirname(os.path.abspath(__file__))
 out = sys.argv[1]; os.makedirs(out, exist_ok=True)
 lines = json.load(open(os.path.join(here, 'lines.json'), encoding='utf8'))
 VOICE = 'ar-EG-ShakirNeural'
-STYLE = {'fathi': {'rate': '-4%', 'pitch': '+0Hz'}, 'hajj': {'rate': '-12%', 'pitch': '-18Hz'}}
+STYLE = {'fathi': {'rate': '+6%', 'pitch': '+0Hz'}, 'hajj': {'rate': '-6%', 'pitch': '-18Hz'}}
 key, region = os.environ.get('AZURE_SPEECH_KEY', ''), os.environ.get('AZURE_SPEECH_REGION', '')
 licensed = bool(key and region)
 
@@ -35,7 +35,14 @@ def read(path):
     a = np.frombuffer(raw, np.int16).astype(np.float32) / 32768
     # trim the silence around the line
     idx = np.where(np.abs(a) > 0.01)[0]
-    return a[max(0, idx[0] - 600): idx[-1] + 2400] if len(idx) else a
+    a = a[max(0, idx[0] - 600): idx[-1] + 2400] if len(idx) else a
+    # pauses inside a line no longer than a quarter of a second (keeps the pace up)
+    win = SR // 50; loud = np.array([np.abs(a[i:i + win]).max() > 0.012 for i in range(0, len(a), win)])
+    keep, run = [], 0
+    for i, l in enumerate(loud):
+        run = 0 if l else run + 1
+        if run * win <= 0.22 * SR: keep.append(a[i * win:(i + 1) * win])
+    return np.concatenate(keep) if keep else a
 
 parts, timeline, t = [], [], 0.0
 for l in lines:
