@@ -679,7 +679,10 @@ def export(spec, basemesh, rig):
             mw = src.matrix_world.copy()
             c.parent = copy_root; c.parent_type = "BONE"; c.parent_bone = src.parent_bone
             bpy.context.view_layer.update(); c.matrix_world = mw
-    copy_body = next(o for o in objs if o.type == "MESH" and o.name.startswith(basemesh.name) and o.name.endswith("_x"))
+    # the body: named like the character (its garments and brows can start with the same name: the biggest one)
+    cands = [o for o in objs if o.type == "MESH" and o.name.startswith(basemesh.name) and o.name.endswith("_x")]
+    copy_body = next((o for o in cands if o.name == basemesh.name + "_x"), None) or max(cands, key=lambda o: len(o.data.vertices))
+    p("  export body:", copy_body.name, len(copy_body.data.vertices), "vertices; others", [o.name for o in cands if o is not copy_body])
     ExportService.bake_modifiers_remove_helpers(copy_body, bake_masks=True)
     for o in objs:
         if o.type == "MESH" and o.data.shape_keys and not (o is copy_body and "MouthOpen" in o.data.shape_keys.key_blocks):
