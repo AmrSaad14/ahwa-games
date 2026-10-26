@@ -121,7 +121,7 @@ public class AdSalon : MonoBehaviour
         // seated on the sofa: hands on the lap, or together in front of the chest holding a phone
         p.tableY = Person.FloorY + (phone ? 0.8f : 0.6f) * Salon.M;
         p.reach = (phone ? 0.3f : 0.36f) * Salon.M;
-        p.spread = phone ? 0.22f : 0.75f;
+        p.spread = phone ? 0.5f : 0.75f;
     }
 
     IEnumerator Film()
@@ -223,7 +223,8 @@ public class AdSalon : MonoBehaviour
             else if (t < E("m1") + 0.1f)
             {
                 mother.LookAt(phoneM.position); father.LookAt(phoneG.position); groom.LookAt(fF);
-                Shot(fM + (mother.Forward * 1.5f + Vector3.up * 0.05f) * Salon.M, fM - Vector3.up * 0.2f * Salon.M, 28f);
+                // from low and in front, so her face shows under the hood while she looks down at her phone
+                Shot(fM + (mother.Forward * 1.35f - Vector3.up * 0.32f) * Salon.M, fM - Vector3.up * 0.12f * Salon.M, 30f);
             }
             else if (t < S("b1") - 0.1f)
             {
@@ -257,6 +258,7 @@ public class AdSalon : MonoBehaviour
                 if (!night)
                 {
                     night = true; set.Night(true); set.SetClock(2f);
+                    RenderSettings.ambientSkyColor = new Color(0.16f, 0.18f, 0.28f); RenderSettings.ambientEquatorColor = new Color(0.11f, 0.11f, 0.16f);
                     mother.gameObject.SetActive(false); bride.gameObject.SetActive(false); phoneM.gameObject.SetActive(false); phoneB.gameObject.SetActive(false);
                     holding.Remove(phoneM); holding.Remove(phoneB);
                     groom.dozing = true; Pose(groom, false);
