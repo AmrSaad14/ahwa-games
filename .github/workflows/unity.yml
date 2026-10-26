@@ -110,7 +110,7 @@ jobs:
           true
 
       - name: Screenshots of the desktop build
-        if: always()
+        if: always() && !contains(github.event.head_commit.message, '[salon]')
         run: |
           set +e
           mkdir -p shots
@@ -171,12 +171,14 @@ jobs:
               rm -rf "$GITHUB_WORKSPACE/sraw"
               timeout 3600 xvfb-run -a -s "-screen 0 ${1}x${2}x24" ./BoardBattles.x86_64 -screen-width $1 -screen-height $2 -screen-fullscreen 0 -force-glcore -logFile "$GITHUB_WORKSPACE/logs/salon-$3.log" -adsalon -advoice "$GITHUB_WORKSPACE/svoice" -adout "$GITHUB_WORKSPACE/sraw" $4 >> "$GITHUB_WORKSPACE/logs/salon-step.txt" 2>&1
               echo "$3: player exit $?, frames $(ls $GITHUB_WORKSPACE/sraw/frames 2>/dev/null | wc -l)" >> "$GITHUB_WORKSPACE/logs/salon-step.txt"
-              ffmpeg -loglevel error -y -framerate 30 -i "$GITHUB_WORKSPACE/sraw/frames/f%05d.png" -c:v libx264 -preset slow -crf 14 -pix_fmt yuv420p -movflags +faststart "$GITHUB_WORKSPACE/salonfilm/film-$3.mp4" >> "$GITHUB_WORKSPACE/logs/salon-step.txt" 2>&1
+              ffmpeg -loglevel error -y -framerate 30 -i "$GITHUB_WORKSPACE/sraw/frames/f%05d.jpg" -c:v libx264 -preset slow -crf 14 -pix_fmt yuv420p -movflags +faststart "$GITHUB_WORKSPACE/salonfilm/film-$3.mp4" >> "$GITHUB_WORKSPACE/logs/salon-step.txt" 2>&1
               for d in "$GITHUB_WORKSPACE"/sraw/ins-*; do
-                [ -d "$d" ] && ffmpeg -loglevel error -y -framerate 30 -i "$d/f%05d.png" -c:v libx264 -preset slow -crf 14 -pix_fmt yuv420p -movflags +faststart "$GITHUB_WORKSPACE/salonfilm/$(basename $d).mp4" >> "$GITHUB_WORKSPACE/logs/salon-step.txt" 2>&1
+                [ -d "$d" ] && ffmpeg -loglevel error -y -framerate 30 -i "$d/f%05d.jpg" -c:v libx264 -preset slow -crf 14 -pix_fmt yuv420p -movflags +faststart "$GITHUB_WORKSPACE/salonfilm/$(basename $d).mp4" >> "$GITHUB_WORKSPACE/logs/salon-step.txt" 2>&1
               done
             done
+            rm -rf "$GITHUB_WORKSPACE/sraw"
             cd "$GITHUB_WORKSPACE"
+            df -h . | tee -a logs/salon-step.txt
             cp svoice/* salonfilm/ 2>/dev/null
             ls -la salonfilm | tee -a logs/salon-step.txt
             if ls salonfilm/film-*.mp4 > /dev/null 2>&1; then

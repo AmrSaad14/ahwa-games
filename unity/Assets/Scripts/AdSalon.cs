@@ -71,8 +71,17 @@ public class AdSalon : MonoBehaviour
         float since = Time.time - impactAt;
         for (int i = 0; i < glasses.Count; i++)
             if (glasses[i] != null) glasses[i].position = glassRest[i] + Vector3.up * (since < 0.5f ? Mathf.Abs(Mathf.Sin(since * 30f + i)) * 0.06f * (1 - since / 0.5f) : 0);
-        ScreenCapture.CaptureScreenshot(Path.Combine(outDir, sub, $"f{saved:D5}.png"));
+        StartCoroutine(Grab(Path.Combine(outDir, sub, $"f{saved:D5}.jpg")));
         saved++;
+    }
+
+    /// The finished frame as a JPEG (PNGs of 2,000 full-HD frames would fill the build machine's disk).
+    IEnumerator Grab(string path)
+    {
+        yield return new WaitForEndOfFrame();
+        var tex = ScreenCapture.CaptureScreenshotAsTexture();
+        File.WriteAllBytes(path, tex.EncodeToJPG(93));
+        Destroy(tex);
     }
 
     void Mouths()
