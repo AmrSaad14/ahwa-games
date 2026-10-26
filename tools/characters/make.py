@@ -624,8 +624,16 @@ def face_points(verts, mw):
     """The tip of the nose and the line between the lips (the character faces -Y), from the head's own shape."""
     pts = [mw @ v.co for v in verts]
     top = max(p_.z for p_ in pts)
-    cx = sum(p_.x for p_ in pts if p_.z > top - 0.2) / max(1, sum(1 for p_ in pts if p_.z > top - 0.2))
-    front = [p_ for p_ in pts if top - 0.2 < p_.z < top - 0.07 and abs(p_.x - cx) < 0.015]
+    head = [p_ for p_ in pts if p_.z > top - 0.2]
+    cx = sum(p_.x for p_ in head) / max(1, len(head))
+    front = []
+    for tol in (0.015, 0.03, 0.06):
+        front = [p_ for p_ in pts if top - 0.2 < p_.z < top - 0.07 and abs(p_.x - cx) < tol]
+        if front: break
+    if not front:
+        lo = Vector((min(p_.x for p_ in pts), min(p_.y for p_ in pts), min(p_.z for p_ in pts)))
+        hi = Vector((max(p_.x for p_ in pts), max(p_.y for p_ in pts), max(p_.z for p_ in pts)))
+        raise ValueError(f"no face found: {len(pts)} points, box {tuple(round(c, 3) for c in lo)} .. {tuple(round(c, 3) for c in hi)}, cx {cx:.3f}")
     nose = min(front, key=lambda p_: p_.y)
     return Vector((cx, nose.y, nose.z)), nose.z - 0.033
 
