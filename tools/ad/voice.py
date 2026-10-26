@@ -53,8 +53,15 @@ parts, timeline, t = [], [], 0.0
 for l in lines:
     if l.get('before'): parts.append(np.zeros(int(l['before'] * SR), np.float32)); t += l['before']
     p = os.path.join(out, l['id'] + '.wav')
-    if licensed: azure(l['text'], l['who'], p)
-    else: asyncio.run(edge(l['text'], l['who'], p))
+    for attempt in range(4):   # the free service drops a request now and then
+        try:
+            if licensed: azure(l['text'], l['who'], p)
+            else: asyncio.run(edge(l['text'], l['who'], p))
+            break
+        except Exception as e:
+            print(f"  {l['id']} ({voice_of(l['who'])}): attempt {attempt + 1} failed: {type(e).__name__}: {e}", flush=True)
+            import time; time.sleep(3 + attempt * 4)
+            if attempt == 3: raise
     a = read(p)
     timeline.append({'id': l['id'], 'who': l['who'], 'text': l['text'], 'start': round(t, 3), 'end': round(t + len(a) / SR, 3)})
     parts.append(a); t += len(a) / SR

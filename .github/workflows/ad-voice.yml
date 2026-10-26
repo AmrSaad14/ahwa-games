@@ -24,8 +24,8 @@ jobs:
           sudo apt-get install -y -qq ffmpeg > /dev/null
           pip install -q edge-tts numpy
           set -o pipefail
-          python3 tools/ad/voice.py out | tee out-log.txt
-          python3 tools/ad/voice.py out-salon tools/ad/salon/lines.json | tee salon-log.txt
+          python3 tools/ad/voice.py out 2>&1 | tee out-log.txt
+          python3 tools/ad/voice.py out-salon tools/ad/salon/lines.json 2>&1 | tee salon-log.txt
       - name: Publish
         run: |
           publish() {   # tag, title, files…
@@ -41,3 +41,8 @@ jobs:
           ls -la out out-salon
           publish ad-voice "Ad voice" out/voice.wav out/timeline.json out/mouth.json out/l*.wav
           publish ad-voice-salon "Ad voice: the engagement visit" out-salon/*.wav out-salon/timeline.json out-salon/mouth.json
+      - name: Keep the log
+        if: always()
+        run: |
+          gh release delete ad-voice-log --yes --cleanup-tag 2>/dev/null || true
+          gh release create ad-voice-log out-log.txt salon-log.txt --title "Ad voice log" --prerelease --notes "log" || true
