@@ -41,7 +41,7 @@ public partial class Menus : MonoBehaviour
         canvas = Ui.MakeCanvas("Menus", 40);
 
         // down the left side: what's waiting for you today, your friends and the shop
-        var rail = Ui.Rect("Rail", home).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(64, 360), new Vector2(10, -88));
+        var rail = Ui.Rect("Rail", home).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(64, 290), new Vector2(10, -80));
         dailyDot = Dot(RailButton(rail, 0, "gift", "يومي", OpenDaily));
         missionsDot = Dot(RailButton(rail, 1, "target", "المهام", OpenMissions));
         seasonDot = Dot(RailButton(rail, 2, "pass", "الموسم", () => OpenSeason()));
@@ -94,12 +94,12 @@ public partial class Menus : MonoBehaviour
     RectTransform RailButton(RectTransform rail, int i, string icon, string label, Action onClick)
     {
         var b = Ui.Button(rail, "", Ui.Panel, Ui.GoldLight, 10, () => { Sfx.Tap(); onClick(); });
-        var r = ((RectTransform)b.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(60, 54), new Vector2(0, -i * 60));
+        var r = ((RectTransform)b.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(60, 44), new Vector2(0, -i * 48));
         b.gameObject.AddComponent<Outline>().effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.3f);
         var ic = Ui.Picture(r, "Icon", Icon(icon)); ic.color = Ui.Gold;
-        ic.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(26, 26), new Vector2(0, -6));
+        ic.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(22, 22), new Vector2(0, -4));
         var t = Ui.Label(r, label, 9, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Bold);
-        t.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(62, 16), new Vector2(0, 3));
+        t.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(60, 16), new Vector2(0, 1));
         return r;
     }
 
@@ -813,9 +813,8 @@ public partial class Menus : MonoBehaviour
         for (int i = 0; i < GameTabs.Length; i++)
         {
             int k = Loc.En ? i : GameTabs.Length - 1 - i, idx = i;
-            var b = Ui.Button(row, GameTabs[i], i == sel ? new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.25f) : new Color(1, 1, 1, 0.05f), i == sel ? Ui.Gold : new Color(1, 1, 1, 0.6f), 12, () => { Sfx.Tap(); pick(idx); });
+            var b = Ui.Button(row, GameTabs[i], i == sel ? Ui.Gold : new Color(1, 1, 1, 0.06f), i == sel ? Ui.Ink : new Color(1, 1, 1, 0.7f), 12, () => { Sfx.Tap(); pick(idx); });
             ((RectTransform)b.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(96, 24), new Vector2((k - 1) * 102, 0));
-            if (i == sel) b.gameObject.AddComponent<Outline>().effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.6f);
         }
         var rest = Ui.Rect("Below", row); rest.anchorMin = Vector2.zero; rest.anchorMax = Vector2.one; rest.offsetMin = Vector2.zero; rest.offsetMax = new Vector2(0, -26);
         return rest;
@@ -868,7 +867,11 @@ public partial class Menus : MonoBehaviour
         if (onClick == null) b.interactable = false;
         if (coin)
         {
-            var ci = Ui.Picture(r, "Coin", Icon("coin")); ci.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(18, 18), new Vector2(8, 0));
+            // the coin on the left, the price beside it (narrow cards: a smaller coin, the text kept clear of it)
+            bool narrow = card.sizeDelta.x < 100;
+            var ci = Ui.Picture(r, "Coin", Icon("coin")); ci.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(narrow ? 14 : 18, narrow ? 14 : 18), new Vector2(narrow ? 5 : 8, 0));
+            var t = b.GetComponentInChildren<Text>();
+            if (t != null) { t.rectTransform.offsetMin = new Vector2(narrow ? 18 : 22, t.rectTransform.offsetMin.y); if (narrow) t.fontSize = 13; }
         }
     }
 
