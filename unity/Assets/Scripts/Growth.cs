@@ -37,7 +37,7 @@ public static class Growth
     public static string InviteLink(string code)
     {
         var net = App.I != null ? App.I.net : null;
-        return (net != null ? net.HttpBase : "https://kings-battle.onrender.com") + "/i/" + (code ?? "").ToUpperInvariant();
+        return (net != null ? net.HttpBase : "https://ahwa-games.a7medhussien.com") + "/i/" + (code ?? "").ToUpperInvariant();
     }
 
     /// The share sheet with a message (and a picture, when there is one).

@@ -187,6 +187,12 @@ server to a long random password). Send the money from your Vodafone Cash wallet
 the transaction number); **رفض** turns a request down and gives the coins back. The player gets a notification
 either way.
 
+## The game server's address
+
+The apps connect to **`https://ahwa-games.a7medhussien.com`** (WebSocket `wss://ahwa-games.a7medhussien.com/ws`;
+set in `unity/Assets/Scripts/Net.cs`, and as `SERVER_URL` for the web app build). Sign-in redirect addresses on
+that host: `https://ahwa-games.a7medhussien.com/auth/google/callback` and `…/auth/apple/callback`.
+
 ## Free hosting for testing (Render)
 
 Until you rent a server, the game runs on Render's free plan, with no card needed. `render.yaml` describes everything:

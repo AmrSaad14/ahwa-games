@@ -12,7 +12,7 @@ using UnityEngine;
 
 public class Net
 {
-    public const string ServerUrl = "wss://kings-battle.onrender.com/ws";
+    public const string ServerUrl = "wss://ahwa-games.a7medhussien.com/ws";
     const string TokenKey = "ahwa.token";
 
     readonly string url;
