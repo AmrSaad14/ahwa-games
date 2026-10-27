@@ -125,6 +125,27 @@ test('season pass skins can be worn once earned, not bought in the shop', async 
   a.close();
 });
 
+test('skins for tawla checkers and chess pieces: worn, priced, on the season track; the season pass costs 299 EGP', async () => {
+  const { SKINS, SKIN_CATS } = await import('../shared/skins');
+  const { SEASON_PASS, TIERS } = await import('../shared/season');
+  assert.equal(SEASON_PASS.egp, 299);
+  for (const c of ['checkers', 'pieces'] as const) assert.ok(SKIN_CATS.includes(c) && SKINS.filter(s => s.cat === c).length >= 5);
+  // every season-pass skin is on the season track, and every skin on the track exists
+  const onTrack = TIERS.flatMap(t => [t.free, t.prem]).filter(r => 'skin' in r).map(r => (r as { skin: string }).skin);
+  for (const s of SKINS.filter(s => s.pass)) assert.ok(onTrack.includes(s.id), s.id + ' is not on the season track');
+  for (const id of onTrack) assert.ok(SKINS.some(s => s.id === id), id + ' is not a skin');
+  const a = await new Client().open();
+  a.send({ t: 'equipSkin', id: 'checkers_classic' });
+  await a.until(() => a.user().equip.checkers === 'checkers_classic');
+  a.send({ t: 'equipSkin', id: 'pieces_wood' });
+  await a.until(() => a.user().equip.pieces === 'pieces_wood');
+  a.send({ t: 'equipSkin', id: 'pieces_onyx' });   // the season's: not owned yet
+  await a.until(() => a.last('err')?.code === 'not_owned');
+  a.send({ t: 'buySkin', id: 'checkers_marble' });   // 150K, more than a new player has
+  await a.until(() => a.last('err')?.code === 'not_enough_coins');
+  a.close();
+});
+
 test("matchmaking: computer players get people's names; the hat and drink show at the table", async () => {
   const a = await new Client().open();
   a.send({ t: 'equipSkin', id: 'drink_tea' });

@@ -929,14 +929,17 @@ function skinPreview(id: string) {
   board.style.background = bg;
   return h('div', { class: 'skin-pic' }, board);
 }
+/** The kinds the web game draws (the app also sells checkers, chess pieces, hats, cloths and drinks). */
+const WEB_CATS: SkinCat[] = ['tiles', 'dice', 'tawla', 'chess', 'ludo'];
+const hasLook = (id: string) => id in TILE_LOOKS || id in DICE_LOOKS || id in TAWLA_LOOKS || id in CHESS_LOOKS || id in LUDO_LOOKS;
 function skinsScreen() {
   const cat = S.skinCat, owned = ownedSkins(), worn = wornSkin(cat);
   const coins = S.user?.coins ?? 0;
   const canShop = !!wallet || S.online;
   return h('section', { class: 'sheet-card tall skins-page' },
     h('div', { class: 'row between' }, h('h2', null, t('skinShop')), S.user ? btn('🪙 ' + num(coins), openCoins, 'chip coins') : null),
-    chips(SKIN_CATS, cat, c => t(('cat_' + c) as Key), c => { S.skinCat = c as SkinCat; render(); }),
-    h('div', { class: 'skins' }, ...SKINS.filter(s => s.cat === cat).map(s => {
+    chips(WEB_CATS, cat, c => t(('cat_' + c) as Key), c => { S.skinCat = c as SkinCat; render(); }),
+    h('div', { class: 'skins' }, ...SKINS.filter(s => s.cat === cat && !s.pass && hasLook(s.id)).map(s => {
       const have = s.price === 0 || owned.includes(s.id), on = worn === s.id;
       const action = on ? h('span', { class: 'in-use' }, '✓ ' + t('skinInUse'))
         : have ? btn(t('skinUse'), () => equipSkin(s.id), 'btn alt', { disabled: !canShop })

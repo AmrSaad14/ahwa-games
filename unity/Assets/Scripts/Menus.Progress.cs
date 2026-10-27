@@ -207,11 +207,11 @@ public partial class Menus
                 .Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(680, 18), new Vector2(0, 2));
             var head = Ui.Rect("Head", body).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(680, 50), new Vector2(0, -20));
             At(Ui.Label(head, Loc.T("المستوى") + " " + tier + " / 30", 20, Ui.Gold, StartAlign, Ui.Display).rectTransform, 4, 170, 30);
-            var bar = Ui.Box(head, "Bar", new Color(1, 1, 1, 0.1f)).rectTransform; At(bar, 180, 260, 12);
+            var bar = Ui.Box(head, "Bar", new Color(1, 1, 1, 0.1f)).rectTransform; At(bar, 180, 210, 12);
             float frac = tier >= 30 ? 1 : (sp % 100) / 100f;
             var fill = Ui.Box(bar, "Fill", Ui.Gold).rectTransform;
             fill.anchorMin = new Vector2(Loc.En ? 0 : 1 - frac, 0); fill.anchorMax = new Vector2(Loc.En ? frac : 1, 1); fill.offsetMin = fill.offsetMax = Vector2.zero;
-            At(Ui.Label(head, tier >= 30 ? Loc.T("خلصت الموسم!") : (sp % 100) + " / 100 SP", 12, Ui.GoldLight, StartAlign).rectTransform, 446, 90, 20);
+            At(Ui.Label(head, tier >= 30 ? Loc.T("خلصت الموسم!") : (sp % 100) + " / 100 SP", 12, Ui.GoldLight, StartAlign).rectTransform, 396, 86, 20);
             if (premium)
             {
                 var pb = Ui.Box(head, "Premium", Ui.Gold).rectTransform; At(pb, 540, 140, 30);
@@ -219,13 +219,16 @@ public partial class Menus
             }
             else
             {
-                var buy = Ui.Button(head, Loc.T("افتح المميز") + "  " + Loc.Short((long)s.Num("price", 750_000)), Ui.Gold, Ui.Ink, 13, () =>
+                // the premium track: 299 EGP on Google Play, or with coins
+                var buy = Ui.Button(head, Loc.T("افتح المميز") + "  " + (int)s.Num("egp", 299) + " " + Loc.T("ج.م"), Ui.Gold, Ui.Ink, 13, () => { Sfx.Tap(); Billing.Buy("season_pass"); });
+                At((RectTransform)buy.transform, 486, 120, 34);
+                var withCoins = Ui.Button(head, Loc.T("أو") + " " + Loc.Short((long)s.Num("price", 750_000)), new Color(1, 1, 1, 0.08f), Ui.Gold, 12, () =>
                 {
                     Sfx.Tap();
                     if (user.Num("coins") < s.Num("price", 750_000)) { app.Toast(Loc.T("رصيدك مش كفاية")); return; }
                     app.Send(new Dictionary<string, object> { ["t"] = "seasonBuy" });
                 });
-                At((RectTransform)buy.transform, 540, 140, 34);
+                At((RectTransform)withCoins.transform, 612, 70, 34);
             }
             // the track: tiers side by side, free above, premium below
             var area = Ui.Rect("Track", body); area.anchorMin = Vector2.zero; area.anchorMax = Vector2.one; area.offsetMin = new Vector2(0, 18); area.offsetMax = new Vector2(0, -76);
@@ -298,26 +301,9 @@ public partial class Menus
 
     /* ---------- skins of the new kinds: names and pictures (the shop and the season use them) ---------- */
 
-    static readonly Dictionary<string, string> SkinNames = new Dictionary<string, string>
-    {
-        ["hat_classic"] = "الأصلي", ["hat_fez_red"] = "طربوش أحمر", ["hat_fez_black"] = "طربوش أسود", ["hat_fez_green"] = "طربوش أخضر", ["hat_fez_navy"] = "طربوش كحلي",
-        ["hat_fez_white"] = "طربوش أبيض", ["hat_fez_gold"] = "طربوش دهبي",
-        ["felt_wood"] = "خشب", ["felt_green"] = "جوخ أخضر", ["felt_red"] = "جوخ أحمر", ["felt_blue"] = "جوخ أزرق", ["felt_royal"] = "ملكي", ["felt_kilim"] = "كليم",
-        ["drink_tea"] = "شاي", ["drink_mint"] = "شاي بالنعناع", ["drink_coffee"] = "قهوة", ["drink_karkade"] = "كركديه", ["drink_sahlab"] = "سحلب", ["drink_qasab"] = "قصب",
-        ["dice_gold"] = "زهر دهب",
-    };
-    static string SkinName(string id) => SkinNames.TryGetValue(id ?? "", out var n) ? Loc.T(n) : id;
-
+    static string SkinName(string id) => Skins.Name(id);
     /// A small picture for a skin, and the colour to show it in.
-    static Texture SkinPicture(string id, out Color tint)
-    {
-        tint = Color.white;
-        if (id.StartsWith("hat_")) { tint = id == "hat_classic" ? new Color(1, 1, 1, 0.5f) : Look.HatColor(id); return Icon("fez"); }
-        if (id.StartsWith("drink_")) { tint = Look.DrinkColor(id); tint.a = 1; return Icon("glass"); }
-        if (id.StartsWith("felt_")) return id == "felt_wood" ? (Texture)Icon("view") : Look.FeltTexture(id);
-        if (id.StartsWith("dice_")) return DiceArt(new Color(0.93f, 0.75f, 0.35f), new Color(0.3f, 0.15f, 0.05f));
-        return Icon("coin");
-    }
+    static Texture SkinPicture(string id, out Color tint) => Skins.Picture(id, out tint);
 
     /* ---------- the weekly tournament ---------- */
 

@@ -67,7 +67,8 @@ public class ChessBoard : Board
 {
     public const float S = 1.15f;                       // one square
     const float FrameW = 0.55f, PS = 0.98f;              // frame width, piece scale
-    static Material whiteMat, blackMat, whiteDark, blackDark, felt;
+    static Material whiteMat, blackMat, felt;
+    static string pieceSkin;
     static readonly Dictionary<string, Mesh[]> meshes = new Dictionary<string, Mesh[]>();
     readonly Dictionary<int, GameObject> bySq = new Dictionary<int, GameObject>();
 
@@ -75,22 +76,24 @@ public class ChessBoard : Board
     {
         topY = 0.3f;
         float B = S * 8;
-        var frameTex = Art.WoodTex(512, 512, Art.Hex("#5a2d18"), Art.Hex("#2e130a"), Art.Hex("#7a4428"), 60, 3.3f);
-        Art.Box("Frame", spin, B + 2 * FrameW, 0.3f, B + 2 * FrameW, Vector3.zero, Art.Mat(Color.white, 0.62f, 0, frameTex));
-        // a boxwood stringing line round the squares
-        Art.Box("Line", spin, B + 0.12f, 0.302f, B + 0.12f, Vector3.zero, Art.Mat(Art.Hex("#e8cf9c"), 0.5f));
-        // maple and walnut squares, each with its own piece of grain
-        var light = new[] { Art.Hex("#e7c993"), Art.Hex("#c9a46a"), Art.Hex("#f4dfb2") };
-        var dark = new[] { Art.Hex("#7a4a26"), Art.Hex("#4e2c14"), Art.Hex("#9a6236") };
+        var L = Skins.Chess(Skins.Worn("chess"));
+        var frameMat = L.metalFrame ? Art.Mat(L.frame[0], 0.7f, 0.85f) : Art.Mat(Color.white, 0.62f, 0, Art.WoodTex(512, 512, L.frame[0], L.frame[1], L.frame[2], 60, 3.3f));
+        Art.Box("Frame", spin, B + 2 * FrameW, 0.3f, B + 2 * FrameW, Vector3.zero, frameMat);
+        // a stringing line round the squares
+        Art.Box("Line", spin, B + 0.12f, 0.302f, B + 0.12f, Vector3.zero, Art.Mat(L.line, 0.5f));
+        // the squares (the worn skin's): each with its own piece of grain, marble, or plain
+        var light = L.light; var dark = L.dark;
         var tex = Art.Paint(512, 512, (x, y) =>
         {
             int f = x / 64, r = y / 64;
             var w = (f + r) % 2 == 1 ? light : dark;
-            var c = Art.Wood(x * 3 + f * 97, y * 3 + r * 53, w[0], w[1], w[2], 50, f * 0.7f + r * 1.3f);
+            var c = L.kind == "wood" ? Art.Wood(x * 3 + f * 97, y * 3 + r * 53, w[0], w[1], w[2], 50, f * 0.7f + r * 1.3f)
+                  : L.kind == "marble" ? Skins.Marble(x * 2 + f * 97, y * 2 + r * 53, w, f * 0.7f + r * 1.3f)
+                  : w[0] * (0.97f + Mathf.PerlinNoise(x * 0.05f, y * 0.05f) * 0.06f);
             if (x % 64 == 0 || y % 64 == 0) c *= 0.75f;
             return c;
         });
-        Art.Sheet("Squares", spin, B, B, new Vector3(0, 0.303f, 0), Art.Mat(new Color(0.85f, 0.83f, 0.8f), 0.4f, 0, tex));
+        Art.Sheet("Squares", spin, B, B, new Vector3(0, 0.303f, 0), Art.Mat(new Color(0.85f, 0.83f, 0.8f), L.kind == "wood" ? 0.4f : 0.55f, 0, tex));
     }
 
     /// Square to board position: a1 at your bottom-left when you play white (the board turns for black).
@@ -233,11 +236,12 @@ public class ChessBoard : Board
     public static GameObject Piece(string p, Transform parent)
     {
         bool white = p == p.ToUpperInvariant();
-        if (whiteMat == null)
+        string skin = Skins.Worn("pieces");
+        if (whiteMat == null || pieceSkin != skin)
         {
-            whiteMat = Art.Mat(Color.white, 0.68f, 0, Art.WoodTex(128, 256, Art.Hex("#e3c592"), Art.Hex("#b98d55"), Art.Hex("#f3dfb6"), 30, 1.1f));
-            blackMat = Art.Mat(Color.white, 0.78f, 0, Art.WoodTex(128, 256, Art.Hex("#1d130e"), Art.Hex("#0a0604"), Art.Hex("#3a281d"), 30, 2.2f));
-            whiteDark = Art.Mat(Art.Hex("#6b4a26"), 0.4f); blackDark = Art.Mat(Art.Hex("#050302"), 0.4f);
+            pieceSkin = skin;
+            var (w, b) = Skins.Pieces(skin);
+            whiteMat = Skins.Mat(skin + ":w", w, 1); blackMat = Skins.Mat(skin + ":b", b, 2);
             felt = Art.Mat(Art.Hex("#1f4a2c"), 0.05f);
         }
         var g = new GameObject("Piece " + p); g.transform.SetParent(parent, false);
@@ -259,18 +263,20 @@ public class TawlaBoard : Board
     static readonly float COLW = (TW - TRAY - BARW - EDGE * 2) / 12f;
     static Mesh checker;
     static Material[] checkerMats;
+    static string checkerSkin;
     Dictionary<string, object> s;
 
     public TawlaBoard(Transform parent) : base("tawla", parent)
     {
         topY = FIELD_Y;
         spin.localScale = Vector3.one * 0.95f;    // a little smaller than the web board, so it fits the table with room for hands
-        var side = Art.Mat(Color.white, 0.6f, 0, Art.WoodTex(512, 128, Art.Hex("#6b3a1e"), Art.Hex("#3d1f0e"), Art.Hex("#8c5530"), 50, 4.2f));
+        var L = Skins.Tawla(Skins.Worn("tawla"));
+        var side = Art.Mat(Color.white, 0.6f, 0, Art.WoodTex(512, 128, L.box[0], L.box[1], L.box[2], 50, 4.2f));
         Art.Box("Box", spin, TW, FIELD_Y, TD, Vector3.zero, side);
-        // the playing fields: olive wood with inlaid points, and the felt-lined tray
-        Color field0 = Art.Hex("#c9a46c"), field1 = Art.Hex("#a7834f"), field2 = Art.Hex("#dcbd88");
-        Color ptA0 = Art.Hex("#3b2414"), ptA1 = Art.Hex("#24140a"), ptA2 = Art.Hex("#5a3a22");
-        Color ptB0 = Art.Hex("#8e2a1c"), ptB1 = Art.Hex("#5e180e"), ptB2 = Art.Hex("#b0402c");
+        // the playing fields (the worn skin's woods) with inlaid points, and the felt-lined tray
+        Color field0 = L.field[0], field1 = L.field[1], field2 = L.field[2];
+        Color ptA0 = L.ptA[0], ptA1 = L.ptA[1], ptA2 = L.ptA[2];
+        Color ptB0 = L.ptB[0], ptB1 = L.ptB[1], ptB2 = L.ptB[2];
         const int W = 1024, H = 688;
         var tex = Art.Paint(W, H, (px, py) =>
         {
@@ -279,8 +285,8 @@ public class TawlaBoard : Board
             float zw = -zf;                                       // the web game's z (toward you is +)
             var wood = Art.Wood(px, py, field0, field1, field2, 70, 0.5f);
             // outside the fields: the box's own wood shows (the rails sit on top)
-            if (Mathf.Abs(x) > TW / 2 - EDGE || Mathf.Abs(zf) > TD / 2 - EDGE) return side.color * Art.Wood(px, py, Art.Hex("#6b3a1e"), Art.Hex("#3d1f0e"), Art.Hex("#8c5530"), 50, 4.2f);
-            if (x > TW / 2 - EDGE - TRAY) return Art.Hex("#1e3b26") * (0.9f + Mathf.PerlinNoise(px * 0.3f, py * 0.3f) * 0.15f);
+            if (Mathf.Abs(x) > TW / 2 - EDGE || Mathf.Abs(zf) > TD / 2 - EDGE) return side.color * Art.Wood(px, py, L.box[0], L.box[1], L.box[2], 50, 4.2f);
+            if (x > TW / 2 - EDGE - TRAY) return L.tray * (0.9f + Mathf.PerlinNoise(px * 0.3f, py * 0.3f) * 0.15f);
             // the points: a long triangle from each side toward the middle
             for (int c = 0; c < 12; c++)
             {
@@ -293,14 +299,14 @@ public class TawlaBoard : Board
                 if (Mathf.Abs(x - cx) > w) continue;
                 bool red = (c + (near ? 0 : 1)) % 2 == 1;
                 var pc = red ? Art.Wood(px * 2, py * 2, ptB0, ptB1, ptB2, 60, 2.1f) : Art.Wood(px * 2, py * 2, ptA0, ptA1, ptA2, 60, 1.3f);
-                if (Mathf.Abs(x - cx) > w - 0.02f) pc = Color.Lerp(pc, Art.Hex("#e7d3a8"), 0.6f);   // a pale inlay line
+                if (Mathf.Abs(x - cx) > w - 0.02f) pc = Color.Lerp(pc, L.line, 0.6f);   // a pale inlay line
                 return pc;
             }
             return wood;
         });
         Art.Sheet("Field", spin, TW, TD, new Vector3(0, FIELD_Y + 0.001f, 0), Art.Mat(new Color(0.68f, 0.66f, 0.64f), 0.25f, 0, tex));
         // the rails: four sides, the middle bar and the tray's divider, with a mother-of-pearl strip on top
-        var railTop = Art.Mat(Art.Hex("#bdb3a2"), 0.55f, 0.05f);
+        var railTop = Art.Mat(L.pearl, 0.55f, 0.05f);
         void Rail(float x, float z, float w, float d)
         {
             Art.Box("Rail", spin, w, RAIL_H, d, new Vector3(x, FIELD_Y, z), side);
@@ -341,10 +347,16 @@ public class TawlaBoard : Board
 
     GameObject Checker(int p, Vector3 at, bool flat = true)
     {
+        string skin = Skins.Worn("checkers");
+        if (checkerMats == null || checkerSkin != skin)
+        {
+            checkerSkin = skin;
+            var (a, b) = Skins.Checkers(skin);
+            checkerMats = new[] { Skins.Mat(skin + ":a", a, 1), Skins.Mat(skin + ":b", b, 2) };
+        }
         if (checker == null)
         {
             checker = Art.Lathe(new[] { new Vector2(0, -0.07f), new Vector2(CR - 0.025f, -0.07f), new Vector2(CR, -0.05f), new Vector2(CR, 0.045f), new Vector2(CR - 0.02f, 0.07f), new Vector2(CR * 0.78f, 0.07f), new Vector2(CR * 0.74f, 0.058f), new Vector2(CR * 0.7f, 0.07f), new Vector2(CR * 0.3f, 0.07f), new Vector2(CR * 0.27f, 0.062f), new Vector2(CR * 0.24f, 0.07f), new Vector2(0, 0.07f) }, 40);
-            checkerMats = new[] { Art.Mat(Art.Hex("#efe3c8"), 0.72f), Art.Mat(Art.Hex("#3a160e"), 0.8f) };
         }
         var go = Art.Obj("Checker", pieces, checker, checkerMats[p]);
         go.transform.localPosition = at;
@@ -428,7 +440,8 @@ public class TawlaBoard : Board
                 int val = i == 0 ? a : b;
                 int usedCount = (a == b ? 4 : 2) - dice.Count;
                 bool used = a == b ? usedCount >= (i == 0 ? 2 : 4) : !dice.Contains(val);
-                var d = Art.Die(pieces, val, used ? 0.4f : 0.5f, Art.Hex("#f6efe0"), Art.Hex("#1a0f0a"));
+                var (dFace, dPip) = Skins.Dice(Skins.Worn("dice"));
+                var d = Art.Die(pieces, val, used ? 0.4f : 0.5f, dFace, dPip);
                 d.transform.localPosition = new Vector3(ColX(9) + (i == 1 ? 0.45f : -0.45f), used ? 0.62f : 0.68f, 0);
                 d.transform.localRotation = Quaternion.Euler(0, i * 23 - 11, 0);
                 if (newMove && v.last.t == "roll") d.AddComponent<Tumble>();
@@ -624,7 +637,9 @@ public class LudoBoard : Board
         if (showDie)
         {
             int val = dv is double dd ? (int)dd : v.last != null && v.last.dice.Count > 0 ? v.last.dice[0] : 1;
-            die = Art.Die(pieces, Mathf.Clamp(val, 1, 6), 0.55f, Art.Hex("#f6efe0"), Art.Hex("#c8402f"));
+            var dsk = Skins.Worn("dice");
+            var (lFace, lPip) = Skins.Dice(dsk);
+            die = Art.Die(pieces, Mathf.Clamp(val, 1, 6), 0.55f, lFace, dsk == "dice_ivory" ? Art.Hex("#c8402f") : lPip);
             die.transform.localPosition = CellPos(7, 7) + Vector3.up * 0.3f;
             if (newMove && v.last.t == "roll") die.AddComponent<Tumble>();
         }

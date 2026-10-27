@@ -156,6 +156,8 @@ public class App : MonoBehaviour
     // called from Java (BBExtras): who invited this install, and the review card closing
     public void OnReferrer(string value) => Growth.OnReferrer(value);
     public void OnReview(string value) { Debug.Log("[review] " + value); }
+    public void OnPurchase(string value) => Billing.OnPurchase(value);
+    public void OnBillingError(string value) => Billing.OnError(value);
 
     void SetStatus(bool on) { statusText.Set(on ? Loc.T("متصل") : Loc.T("جاري الاتصال…")); statusText.color = on ? new Color(0.55f, 0.85f, 0.5f) : Ui.GoldLight; }
 
@@ -288,6 +290,12 @@ public class App : MonoBehaviour
                 break;
             case "payout":
                 game.ShowPayout(m.Str("kind"), m.Num("delta"));
+                break;
+            case "bought":
+                Billing.OnBought(m);
+                break;
+            case "buyFailed":
+                Billing.OnFailed(m);
                 break;
             case "err":
                 if (menus != null && menus.OnError(m.Str("code"))) break;
@@ -700,9 +708,13 @@ public class App : MonoBehaviour
             menus.OpenFriends(); yield return new WaitForSeconds(1.2f); Still("x3-friends.png");
             menus.OpenTourney(); yield return new WaitForSeconds(1.2f); Still("x4-tourney.png");
             menus.OpenMyCard(); yield return new WaitForSeconds(1.2f); Still("x5-card.png");
-            menus.OpenShop(3); yield return new WaitForSeconds(0.8f); Still("x6-shop-hat.png");
-            menus.OpenShop(4); yield return new WaitForSeconds(0.8f); Still("x7-shop-felt.png");
-            menus.OpenShop(5); yield return new WaitForSeconds(0.8f); Still("x8-shop-drink.png");
+            menus.ShopGame = 1; menus.OpenShop(1); yield return new WaitForSeconds(0.8f); Still("x6-shop-boards-tawla.png");
+            menus.ShopGame = 2; menus.OpenShop(1); yield return new WaitForSeconds(0.8f); Still("x7-shop-boards-chess.png");
+            menus.ShopGame = 1; menus.OpenShop(2); yield return new WaitForSeconds(0.8f); Still("x8-shop-checkers.png");
+            menus.ShopGame = 2; menus.OpenShop(2); yield return new WaitForSeconds(0.8f); Still("x9-shop-pieces.png");
+            menus.ShopGame = 0; menus.OpenShop(1); yield return new WaitForSeconds(0.8f); Still("x10-shop-domino-board.png");
+            menus.OpenShop(3); yield return new WaitForSeconds(0.8f); Still("x11-shop-dice.png");
+            menus.OpenCollection(0); yield return new WaitForSeconds(0.8f); Still("x12-collection.png");
             menus.Close();
             menus.OpenSettings(); yield return new WaitForSeconds(0.8f); Still("m1-settings.png");
             menus.OpenShop(0); yield return new WaitForSeconds(0.8f); Still("m2-shop-coins.png");
@@ -759,6 +771,11 @@ public class App : MonoBehaviour
             // the board games, each a practice game against the computer, played by the test for a while
             foreach (var (mode, tag) in new[] { ("tawla", "tawla"), ("chess", "chess"), ("ludo4", "ludo"), ("mahbousa", "mahbousa") })
             {
+                // the board games in some of the new skins (mahbousa stays classic, to compare)
+                Skins.Force.Clear();
+                if (tag == "tawla") { Skins.Force["tawla"] = "tawla_pharaoh"; Skins.Force["checkers"] = "checkers_gold"; Skins.Force["dice"] = "dice_emerald"; }
+                if (tag == "chess") { Skins.Force["chess"] = "chess_marble"; Skins.Force["pieces"] = "pieces_porcelain"; }
+                if (tag == "ludo") Skins.Force["dice"] = "dice_pharaoh";
                 recordOn = false;
                 if (view != null) Leave();
                 yield return new WaitForSeconds(0.5f);

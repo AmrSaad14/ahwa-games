@@ -114,6 +114,12 @@ public static class Look
                     c = (inner ? pal[(band + 2) % 4] : diamond ? pal[(band + 1) % 4] : pal[band]) * (1 + n);
                     if (e < 8) c = pal[3] * (1 + n);
                 }
+                else if (id == "felt_marble")
+                {
+                    // white Carrara marble with grey veins, a gold edge
+                    c = Skins.Marble(x * 2, y * 2, new[] { new Color(0.93f, 0.92f, 0.9f), new Color(0.55f, 0.55f, 0.58f), new Color(1f, 1f, 0.99f) }, 3.1f);
+                    if (e >= 6 && e < 9) c = gold * (0.95f + n);
+                }
                 else if (e >= 6 && e < 8) c = Color.Lerp(c, gold, 0.55f);   // a thin gold piping
                 px[y * S + x] = c;
             }

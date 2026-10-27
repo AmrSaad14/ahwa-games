@@ -162,7 +162,7 @@ export interface PublicUser {
 }
 
 export interface MissionRow { id: string; game: string; kind: 'play' | 'win'; need: number; have: number; coins: number; xp: number; online: boolean; claimed: boolean }
-export interface SeasonState { id: string; endsAt: number; sp: number; tier: number; premium: boolean; free: number[]; prem: number[]; price: number }
+export interface SeasonState { id: string; endsAt: number; sp: number; tier: number; premium: boolean; free: number[]; prem: number[]; price: number; egp: number }
 
 /** The weekly tournament as one player sees it. */
 export interface TourneyEntrant { name: string; ch: number; bot: boolean; me: boolean }

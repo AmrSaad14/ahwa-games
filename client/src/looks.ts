@@ -31,6 +31,8 @@ export const DICE_LOOKS: Record<string, DiceLook | null> = {
   dice_obsidian: { bg: ['#34343a', '#0c0c0e'], pip: ['#fff2c4', '#c9962f'], rough: 0.12, metal: 0.1, css: { face: 'linear-gradient(145deg, #3d3d44, #0d0d10)', dot: '#e7bd5c' } },
   dice_turquoise: { bg: ['#4fd0bf', '#1b7d72'], pip: ['#ffffff', '#e6f6f2'], one: ['#d4a347', '#7a5520'], rough: 0.2, metal: 0, css: { face: 'linear-gradient(145deg, #5fdcc9, #1a7468)', dot: '#fff' } },
   dice_gold: { bg: ['#fbe7a0', '#c9962f'], pip: ['#3a2a10', '#0b0705'], rough: 0.3, metal: 0.8, css: { face: 'linear-gradient(145deg, #fff0b8, #c38f2a)', dot: '#1c1206' } },
+  dice_emerald: { bg: ['#3ec27a', '#13663a'], pip: ['#ffffff', '#e2f2e8'], rough: 0.15, metal: 0, css: { face: 'linear-gradient(145deg, #4fd08a, #13663a)', dot: '#fff' } },
+  dice_pharaoh: { bg: ['#3a6ac0', '#12306a'], pip: ['#f3cd62', '#a07a20'], rough: 0.2, metal: 0.2, css: { face: 'linear-gradient(145deg, #4a7ad0, #12306a)', dot: '#f3cd62' } },
 };
 
 /** Wood colours: base, dark grain, light grain. */
@@ -44,6 +46,12 @@ export const TAWLA_LOOKS: Record<string, TawlaLook> = {
     css: 'linear-gradient(90deg, #f2eee6 0 46%, #2a1d14 46% 54%, #f2eee6 54%)' },
   tawla_royal: { field: ['#145a45', '#0b3a2c', '#1f7a5e'], pointA: ['#e3b75a', '#a7792a', '#f6d58c'], pointB: ['#18110f', '#060303', '#30241f'], side: ['#120c0a', '#050302', '#2a1c16'], tray: '#3a070c', line: '#f3cd62',
     css: 'linear-gradient(90deg, #145a45 0 46%, #120c0a 46% 54%, #145a45 54%)' },
+  tawla_olive: { field: ['#9aa36a', '#7a8450', '#b3bb82'], pointA: ['#4a2a14', '#2a160a', '#6a4022'], pointB: ['#e8dcc0', '#c8b894', '#f6eedc'], side: ['#4a3a1a', '#2a200c', '#6a5428'], tray: '#2a3a1a', line: '#e8dcc0',
+    css: 'linear-gradient(90deg, #9aa36a 0 46%, #4a3a1a 46% 54%, #9aa36a 54%)' },
+  tawla_ebony: { field: ['#2a2420', '#16110e', '#3e3530'], pointA: ['#efe6d2', '#cfc2a6', '#fff8ea'], pointB: ['#a8322a', '#701c16', '#c8483c'], side: ['#100c0a', '#050302', '#241c18'], tray: '#3a0a0e', line: '#c9a25a',
+    css: 'linear-gradient(90deg, #2a2420 0 46%, #100c0a 46% 54%, #2a2420 54%)' },
+  tawla_pharaoh: { field: ['#e2c98a', '#c4a462', '#f2dca6'], pointA: ['#1f4e9a', '#12306a', '#3a6ac0'], pointB: ['#2f8a7a', '#1a5a4e', '#46aa98'], side: ['#1f3f7a', '#10234a', '#2f5aa0'], tray: '#12306a', line: '#f3cd62',
+    css: 'linear-gradient(90deg, #e2c98a 0 46%, #1f3f7a 46% 54%, #e2c98a 54%)' },
 };
 
 export interface ChessLook { kind: 'wood' | 'flat' | 'marble'; light: Wood; dark: Wood; frame: Wood; css: string }
@@ -54,6 +62,12 @@ export const CHESS_LOOKS: Record<string, ChessLook> = {
     css: 'conic-gradient(#eeeed2 25%, #769656 0 50%, #eeeed2 0 75%, #769656 0)' },
   chess_marble: { kind: 'marble', light: ['#f4f2ee', '#d8d4cc', '#ffffff'], dark: ['#3e434a', '#23272c', '#6a7078'], frame: ['#1c1c20', '#0a0a0c', '#34343a'],
     css: 'conic-gradient(#f4f2ee 25%, #3e434a 0 50%, #f4f2ee 0 75%, #3e434a 0)' },
+  chess_blue: { kind: 'flat', light: ['#e8edf4', '#d6dde8', '#f6f8fb'], dark: ['#4a6d9a', '#3a5a84', '#5a80b0'], frame: ['#22324a', '#121c2a', '#34486a'],
+    css: 'conic-gradient(#e8edf4 25%, #4a6d9a 0 50%, #e8edf4 0 75%, #4a6d9a 0)' },
+  chess_rosewood: { kind: 'wood', light: ['#f0d8b0', '#d8b888', '#fae8c8'], dark: ['#7a2a24', '#4a1410', '#9a3c32'], frame: ['#3a1410', '#1e0806', '#5a2420'],
+    css: 'conic-gradient(#f0d8b0 25%, #7a2a24 0 50%, #f0d8b0 0 75%, #7a2a24 0)' },
+  chess_gold: { kind: 'flat', light: ['#f3d98a', '#d8b660', '#ffe9b0'], dark: ['#1a1614', '#0a0807', '#2e2826'], frame: ['#c9962f', '#8a6420', '#f0c862'],
+    css: 'conic-gradient(#f3d98a 25%, #1a1614 0 50%, #f3d98a 0 75%, #1a1614 0)' },
 };
 
 export interface LudoLook { base: string; track: string; colors: string[]; line: string; star: string; frame: Wood; css: string }

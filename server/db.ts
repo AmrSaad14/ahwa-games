@@ -464,7 +464,7 @@ export class Store {
     const id = seasonOf(now), r = this.seasonRow(uid, id);
     const list = (j: string | undefined) => { try { return (JSON.parse(j || '[]') as number[]).filter(n => Number.isInteger(n)); } catch { return []; } };
     const sp = r?.sp ?? 0;
-    return { id, endsAt: seasonEndsAt(now), sp, tier: tierOf(sp), premium: !!r?.premium, free: list(r?.free), prem: list(r?.prem), price: SEASON_PASS.coins };
+    return { id, endsAt: seasonEndsAt(now), sp, tier: tierOf(sp), premium: !!r?.premium, free: list(r?.free), prem: list(r?.prem), price: SEASON_PASS.coins, egp: SEASON_PASS.egp };
   }
   /** Season points; returns the tier before and after. */
   addSeasonSp(uid: string, n: number, now = Date.now()): { from: number; to: number } {

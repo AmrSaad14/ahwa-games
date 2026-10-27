@@ -1,11 +1,14 @@
-// The skin shop: looks for domino tiles, dice and the three boards, bought with game coins, and the player's
+// The skin shop: looks for the boards (domino table, tawla, chess, ludo), the pieces (domino tiles, tawla
+// checkers, chess pieces), the dice, bought with game coins, and the player's
 // own look: a hat on their character, the cloth on their game table and the drink in front of them.
 // The first skin of each kind is the free classic one. Skins change how the game looks (tiles, dice, boards
 // and the table cloth to the player who owns them; the hat and the drink to everyone at the table); they never
 // change the rules. Season-pass skins (pass: true) can't be bought: they come from the season track.
 
-export type SkinCat = 'tiles' | 'dice' | 'tawla' | 'chess' | 'ludo' | 'hat' | 'felt' | 'drink';
-export const SKIN_CATS: SkinCat[] = ['tiles', 'dice', 'tawla', 'chess', 'ludo', 'hat', 'felt', 'drink'];
+// Boards: 'felt' (the domino table), 'tawla', 'chess', 'ludo'. Pieces: 'tiles' (dominoes), 'checkers' (tawla),
+// 'pieces' (chess). Then the dice, and your own look: 'hat' and 'drink'.
+export type SkinCat = 'tiles' | 'checkers' | 'pieces' | 'dice' | 'tawla' | 'chess' | 'ludo' | 'hat' | 'felt' | 'drink';
+export const SKIN_CATS: SkinCat[] = ['tiles', 'checkers', 'pieces', 'dice', 'tawla', 'chess', 'ludo', 'hat', 'felt', 'drink'];
 
 export interface Skin { id: string; cat: SkinCat; price: number; pass?: boolean }
 
@@ -16,20 +19,42 @@ export const SKINS: Skin[] = [
   { id: 'tiles_marble', cat: 'tiles', price: 300_000 },
   { id: 'tiles_jade', cat: 'tiles', price: 450_000 },
   { id: 'tiles_gold', cat: 'tiles', price: 900_000 },
+  // tawla checkers
+  { id: 'checkers_classic', cat: 'checkers', price: 0 },
+  { id: 'checkers_marble', cat: 'checkers', price: 150_000 },
+  { id: 'checkers_amber', cat: 'checkers', price: 250_000 },
+  { id: 'checkers_ruby', cat: 'checkers', price: 300_000 },
+  { id: 'checkers_gold', cat: 'checkers', price: 600_000 },
+  { id: 'checkers_pharaoh', cat: 'checkers', price: 0, pass: true },
+  // chess pieces
+  { id: 'pieces_wood', cat: 'pieces', price: 0 },
+  { id: 'pieces_porcelain', cat: 'pieces', price: 250_000 },
+  { id: 'pieces_marble', cat: 'pieces', price: 300_000 },
+  { id: 'pieces_ruby', cat: 'pieces', price: 400_000 },
+  { id: 'pieces_gold', cat: 'pieces', price: 800_000 },
+  { id: 'pieces_onyx', cat: 'pieces', price: 0, pass: true },
   // dice (tawla and ludo)
   { id: 'dice_ivory', cat: 'dice', price: 0 },
   { id: 'dice_ruby', cat: 'dice', price: 100_000 },
   { id: 'dice_obsidian', cat: 'dice', price: 200_000 },
   { id: 'dice_turquoise', cat: 'dice', price: 300_000 },
+  { id: 'dice_emerald', cat: 'dice', price: 250_000 },
   { id: 'dice_gold', cat: 'dice', price: 600_000 },
+  { id: 'dice_pharaoh', cat: 'dice', price: 0, pass: true },
   // tawla boards
   { id: 'tawla_walnut', cat: 'tawla', price: 0 },
+  { id: 'tawla_olive', cat: 'tawla', price: 200_000 },
+  { id: 'tawla_ebony', cat: 'tawla', price: 300_000 },
   { id: 'tawla_pearl', cat: 'tawla', price: 400_000 },
   { id: 'tawla_royal', cat: 'tawla', price: 800_000 },
+  { id: 'tawla_pharaoh', cat: 'tawla', price: 0, pass: true },
   // chess boards
   { id: 'chess_wood', cat: 'chess', price: 0 },
+  { id: 'chess_blue', cat: 'chess', price: 200_000 },
   { id: 'chess_tournament', cat: 'chess', price: 250_000 },
+  { id: 'chess_rosewood', cat: 'chess', price: 350_000 },
   { id: 'chess_marble', cat: 'chess', price: 500_000 },
+  { id: 'chess_gold', cat: 'chess', price: 0, pass: true },
   // ludo boards
   { id: 'ludo_classic', cat: 'ludo', price: 0 },
   { id: 'ludo_night', cat: 'ludo', price: 200_000 },
@@ -47,6 +72,7 @@ export const SKINS: Skin[] = [
   { id: 'felt_green', cat: 'felt', price: 150_000 },
   { id: 'felt_red', cat: 'felt', price: 150_000 },
   { id: 'felt_blue', cat: 'felt', price: 200_000 },
+  { id: 'felt_marble', cat: 'felt', price: 350_000 },
   { id: 'felt_royal', cat: 'felt', price: 0, pass: true },
   { id: 'felt_kilim', cat: 'felt', price: 0, pass: true },
   // the drink by your place (shown to everyone at the table)

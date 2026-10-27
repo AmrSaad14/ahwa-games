@@ -41,12 +41,13 @@ public partial class Menus : MonoBehaviour
         canvas = Ui.MakeCanvas("Menus", 40);
 
         // down the left side: what's waiting for you today, your friends and the shop
-        var rail = Ui.Rect("Rail", home).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(64, 300), new Vector2(10, -88));
+        var rail = Ui.Rect("Rail", home).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(64, 360), new Vector2(10, -88));
         dailyDot = Dot(RailButton(rail, 0, "gift", "يومي", OpenDaily));
         missionsDot = Dot(RailButton(rail, 1, "target", "المهام", OpenMissions));
         seasonDot = Dot(RailButton(rail, 2, "pass", "الموسم", () => OpenSeason()));
         friendsDot = Dot(RailButton(rail, 3, "friends", "صحابك", OpenFriends));
         RailButton(rail, 4, "shop", "المتجر", () => OpenShop(0));
+        RailButton(rail, 5, "chest", "مجموعتي", () => OpenCollection(0));
         // along the top, beside the logo: the tournament, the leaderboard, how to play, settings
         var top = Ui.Rect("Top", home).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(240, 54), new Vector2(82, -8));
         tourneyDot = Dot(TopButton(top, 0, "cup", "البطولة", () => OpenTourney()));
@@ -125,8 +126,10 @@ public partial class Menus : MonoBehaviour
         int left = (int)u.Num("adsLeft");
         adText.Set(left > 0 ? "+5K" : "0");
         var eq = u.Obj("equip");
-        TileArt.SetSkin(eq != null ? eq.Str("tiles") : null);
-        Look.MyFelt = Wearing("felt");
+        Skins.SetUser(u);
+        Billing.SetUser(u.Str("id"));
+        TileArt.SetSkin(Skins.Worn("tiles"));
+        Look.MyFelt = Skins.Worn("felt");
         var d = u.Obj("daily");
         bool ready = d != null && d.Bool("ready");
         dailyDot.SetActive(ready);
@@ -725,37 +728,29 @@ public partial class Menus : MonoBehaviour
 
     /* ---------- the shop ---------- */
 
-    struct SkinItem { public string id, name; public long price; public Color face, pip; }
-    static readonly SkinItem[] TileSkins =
-    {
-        new SkinItem { id = "tiles_ivory", name = "عاجي", price = 0 },
-        new SkinItem { id = "tiles_ebony", name = "أبنوس", price = 150_000 },
-        new SkinItem { id = "tiles_marble", name = "رخام", price = 300_000 },
-        new SkinItem { id = "tiles_jade", name = "يشم", price = 450_000 },
-        new SkinItem { id = "tiles_gold", name = "ذهب", price = 900_000 },
-    };
-    static readonly SkinItem[] DiceSkins =
-    {
-        new SkinItem { id = "dice_ivory", name = "عاجي", price = 0, face = new Color(0.96f, 0.93f, 0.85f), pip = new Color(0.1f, 0.07f, 0.05f) },
-        new SkinItem { id = "dice_ruby", name = "ياقوت", price = 100_000, face = new Color(0.62f, 0.07f, 0.12f), pip = Color.white },
-        new SkinItem { id = "dice_obsidian", name = "سبج", price = 200_000, face = new Color(0.08f, 0.08f, 0.1f), pip = new Color(0.95f, 0.8f, 0.4f) },
-        new SkinItem { id = "dice_turquoise", name = "فيروز", price = 300_000, face = new Color(0.16f, 0.62f, 0.64f), pip = Color.white },
-        new SkinItem { id = "dice_gold", name = "ذهب", price = 600_000, face = new Color(0.93f, 0.75f, 0.35f), pip = new Color(0.3f, 0.15f, 0.05f) },
-    };
     static readonly (string id, long coins, int egp)[] Packs = { ("coins_50k", 50_000, 200), ("coins_100k", 100_000, 379), ("coins_500k", 500_000, 599), ("coins_1m", 1_000_000, 899) };
+
+    // the shop's skin tabs: boards and pieces each for dominoes, tawla and chess; then dice, hats, drinks
+    static readonly string[] GameTabs = { "دومينو", "طاولة", "شطرنج" };
+    static readonly string[] BoardCats = { "felt", "tawla", "chess" }, PieceCats = { "tiles", "checkers", "pieces" };
+    int shopGame, invTab, invGame;
+    public int ShopGame { set => shopGame = value; }
+    static string CatOf(int tab, int game) => tab == 0 ? BoardCats[game] : tab == 1 ? PieceCats[game] : tab == 2 ? "dice" : tab == 3 ? "hat" : "drink";
 
     public void OpenShop(int tab)
     {
         shopTab = tab;
-        Panel(Loc.T("المتجر"), out var body, new Vector2(680, 340));
+        Panel(Loc.T("المتجر"), out var body, new Vector2(700, 372));
         refreshOpen = () =>
         {
             foreach (Transform c in body) Destroy(c.gameObject);
-            var area = Tabs(body, new[] { "عملات", "دومينو", "زهر", "طربوش", "مفرش", "مشروب", "بدون إعلانات" }, shopTab, i => { shopTab = i; refreshOpen(); });
-            // your coins, bottom corner
+            var area = Tabs(body, new[] { "عملات", "ترابيزات", "قطع", "زهر", "طربوش", "مشروب", "بدون إعلانات" }, shopTab, i => { shopTab = i; refreshOpen(); });
+            // your coins, bottom corner; your collection, the other corner
             var have = Ui.Label(area, Loc.T("رصيدك") + ": " + ((long)(user?.Num("coins") ?? 0)).ToString("N0"), 13, Ui.GoldLight, StartAlign, Ui.Bold);
-            have.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(620, 20), new Vector2(0, -6));
-            var row = Ui.Rect("Cards", area); row.anchorMin = Vector2.zero; row.anchorMax = Vector2.one; row.offsetMin = new Vector2(0, 18); row.offsetMax = Vector2.zero;
+            have.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(640, 20), new Vector2(0, -6));
+            var mine = Ui.Button(area, Loc.T("مجموعتي"), new Color(1, 1, 1, 0.08f), Ui.Gold, 12, () => { Sfx.Tap(); Close(); OpenCollection(shopTab >= 1 && shopTab <= 5 ? shopTab - 1 : 0); });
+            ((RectTransform)mine.transform).Place(new Vector2(Loc.En ? 1 : 0, 0), new Vector2(Loc.En ? 1 : 0, 0), new Vector2(110, 24), new Vector2(Loc.En ? -60 : 60, -4));
+            var row = Ui.Rect("Cards", area); row.anchorMin = Vector2.zero; row.anchorMax = Vector2.one; row.offsetMin = new Vector2(0, 22); row.offsetMax = Vector2.zero;
             if (shopTab == 0)
                 for (int i = 0; i < Packs.Length; i++)
                 {
@@ -763,52 +758,17 @@ public partial class Menus : MonoBehaviour
                     var c = ShopCard(row, i, Packs.Length);
                     var ci = Ui.Picture(c, "Coin", Icon("coin")); ci.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(56, 56), new Vector2(0, -14));
                     Ui.Label(c, Loc.Short(p.coins), 22, Ui.Gold, TextAnchor.MiddleCenter, Ui.Display).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(140, 30), new Vector2(0, -74));
-                    BuyButton(c, p.egp + " " + Loc.T("ج.م"), Ui.Gold, Ui.Ink, () => app.Toast(Loc.T("الشراء بالفلوس جاي قريب")));
+                    BuyButton(c, p.egp + " " + Loc.T("ج.م"), Ui.Gold, Ui.Ink, () => Billing.Buy(p.id));
                 }
-            else if (shopTab == 1 || shopTab == 2)
+            else if (shopTab <= 5)
             {
-                var items = shopTab == 1 ? TileSkins : DiceSkins;
-                for (int i = 0; i < items.Length; i++)
-                {
-                    var s = items[i];
-                    var c = ShopCard(row, i, items.Length);
-                    Texture tex = shopTab == 1 ? TileArt.Preview(s.id) : DiceArt(s.face, s.pip);
-                    var pic = Ui.Picture(c, "Look", tex);
-                    pic.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), shopTab == 1 ? new Vector2(96, 48) : new Vector2(56, 56), new Vector2(0, shopTab == 1 ? -24 : -16));
-                    Ui.Label(c, s.name, 16, Color.white, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(110, 24), new Vector2(0, -80));
-                    bool owned = s.price == 0 || Owns(s.id);
-                    string cat = shopTab == 1 ? "tiles" : "dice";
-                    bool wearing = Equipped(cat) == s.id || (string.IsNullOrEmpty(Equipped(cat)) && s.price == 0);
-                    if (wearing) BuyButton(c, Loc.T("متلبس"), new Color(1, 1, 1, 0.1f), Ui.GoldLight, null);
-                    else if (owned) BuyButton(c, Loc.T("البس"), new Color32(0x2f, 0x6b, 0x3a, 0xff), Color.white, () => app.Send(new Dictionary<string, object> { ["t"] = "equipSkin", ["id"] = s.id }));
-                    else BuyButton(c, Loc.Short(s.price), Ui.Gold, Ui.Ink, () => { app.Send(new Dictionary<string, object> { ["t"] = "buySkin", ["id"] = s.id }); Sfx.Coins(); }, true);
-                }
-            }
-            else if (shopTab >= 3 && shopTab <= 5)
-            {
-                // your look: the hat on your character, the cloth on your table, the drink by your place
-                string cat = shopTab == 3 ? "hat" : shopTab == 4 ? "felt" : "drink";
-                var items = LookItems[cat];
-                for (int i = 0; i < items.Length; i++)
-                {
-                    var (id, price, pass) = items[i];
-                    var c = ShopCard(row, i, items.Length);
-                    float w = c.sizeDelta.x;
-                    var pic = Ui.Picture(c, "Look", SkinPicture(id, out var tint)); pic.color = tint;
-                    pic.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(Mathf.Min(56, w - 16), Mathf.Min(56, w - 16)), new Vector2(0, -14));
-                    var nm = Ui.Label(c, SkinName(id), 13, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
-                    nm.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(w - 4, 36), new Vector2(0, -74));
-                    nm.horizontalOverflow = HorizontalWrapMode.Wrap;
-                    bool owned = (price == 0 && !pass) || Owns(id);
-                    string worn = Wearing(cat);
-                    bool wearing = worn == id || (string.IsNullOrEmpty(worn) && price == 0 && !pass);
-                    if (wearing) BuyButton(c, Loc.T("متلبس"), new Color(1, 1, 1, 0.1f), Ui.GoldLight, null);
-                    else if (owned) BuyButton(c, Loc.T("البس"), new Color32(0x2f, 0x6b, 0x3a, 0xff), Color.white, () => app.Send(new Dictionary<string, object> { ["t"] = "equipSkin", ["id"] = id }));
-                    else if (pass) BuyButton(c, Loc.T("الموسم"), new Color(1, 1, 1, 0.08f), Ui.Gold, () => { Close(); OpenSeason(); });
-                    else BuyButton(c, Loc.Short(price), Ui.Gold, Ui.Ink, () => { app.Send(new Dictionary<string, object> { ["t"] = "buySkin", ["id"] = id }); Sfx.Coins(); }, true);
-                }
-                var note = Ui.Label(area, Loc.T(cat == "felt" ? "المفرش بيبان ليك على ترابيزتك" : cat == "hat" ? "الطربوش بيبان لكل اللي على الترابيزة (للرجالة)" : "المشروب بيبان قدامك لكل اللي على الترابيزة"), 11, new Color(1, 1, 1, 0.55f));
-                note.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(620, 16), new Vector2(0, 12));
+                int t = shopTab - 1;
+                if (t <= 1) row = GameSwitch(row, shopGame, g => { shopGame = g; refreshOpen(); });
+                string cat = CatOf(t, shopGame);
+                var items = new List<Skins.Def>(Skins.Of(cat));
+                for (int i = 0; i < items.Count; i++) SkinCard(ShopCard(row, i, items.Count), items[i], false);
+                var note = Ui.Label(area, Loc.T(Note(cat)), 11, new Color(1, 1, 1, 0.55f));
+                note.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(460, 16), new Vector2(0, 14));
             }
             else
             {
@@ -816,30 +776,88 @@ public partial class Menus : MonoBehaviour
                 c.sizeDelta = new Vector2(300, c.sizeDelta.y);
                 var vi = Ui.Picture(c, "Icon", Icon("video")); vi.color = Ui.Gold; vi.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(50, 50), new Vector2(0, -16));
                 Ui.Label(c, "بدون إعلانات", 20, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(280, 30), new Vector2(0, -76));
-                BuyButton(c, "199 " + Loc.T("ج.م") + " / " + Loc.T("شهرياً"), Ui.Gold, Ui.Ink, () => app.Toast(Loc.T("الشراء بالفلوس جاي قريب")));
+                BuyButton(c, "199 " + Loc.T("ج.م") + " / " + Loc.T("شهرياً"), Ui.Gold, Ui.Ink, () => Billing.Buy("no_ads_monthly"));
             }
         };
         refreshOpen();
     }
 
-    bool Owns(string id) { var l = user?.Arr("skins"); return l != null && l.Contains(id); }
-    string Equipped(string cat) => user?.Obj("equip")?.Str(cat);
-
-    /// The hat, cloth and drink in the shop (prices as on the server: shared/skins.ts); pass: from the season pass only.
-    static readonly Dictionary<string, (string id, long price, bool pass)[]> LookItems = new Dictionary<string, (string, long, bool)[]>
+    /// Your collection: every skin you have (the classic ones too), kind by kind, to wear with a tap.
+    public void OpenCollection(int tab)
     {
-        ["hat"] = new[] { ("hat_classic", 0L, false), ("hat_fez_red", 120_000L, false), ("hat_fez_black", 180_000L, false), ("hat_fez_green", 220_000L, false), ("hat_fez_navy", 260_000L, false), ("hat_fez_white", 0L, true), ("hat_fez_gold", 0L, true) },
-        ["felt"] = new[] { ("felt_wood", 0L, false), ("felt_green", 150_000L, false), ("felt_red", 150_000L, false), ("felt_blue", 200_000L, false), ("felt_royal", 0L, true), ("felt_kilim", 0L, true) },
-        ["drink"] = new[] { ("drink_tea", 0L, false), ("drink_mint", 80_000L, false), ("drink_coffee", 80_000L, false), ("drink_karkade", 120_000L, false), ("drink_sahlab", 0L, true), ("drink_qasab", 0L, true) },
-    };
+        invTab = Mathf.Clamp(tab, 0, 4);
+        Panel(Loc.T("مجموعتي"), out var body, new Vector2(700, 372));
+        refreshOpen = () =>
+        {
+            foreach (Transform c in body) Destroy(c.gameObject);
+            var area = Tabs(body, new[] { "ترابيزات", "قطع", "زهر", "طربوش", "مشروب" }, invTab, i => { invTab = i; refreshOpen(); });
+            var row = Ui.Rect("Cards", area); row.anchorMin = Vector2.zero; row.anchorMax = Vector2.one; row.offsetMin = new Vector2(0, 22); row.offsetMax = Vector2.zero;
+            if (invTab <= 1) row = GameSwitch(row, invGame, g => { invGame = g; refreshOpen(); });
+            string cat = CatOf(invTab, invGame);
+            var all = new List<Skins.Def>(Skins.Of(cat));
+            var have = all.FindAll(d => Skins.Owns(d.id));
+            for (int i = 0; i < have.Count; i++) SkinCard(ShopCard(row, i, have.Count), have[i], true);
+            // how many of this kind you have, all kinds together, and the way to the shop for the rest
+            int total = 0, mineAll = 0; foreach (var d in Skins.All) { total++; if (Skins.Owns(d.id)) mineAll++; }
+            var count = Ui.Label(area, Loc.T("عندك") + " " + have.Count + " / " + all.Count + "   ·   " + Loc.T("كل مجموعتك") + " " + mineAll + " / " + total, 13, Ui.GoldLight, StartAlign, Ui.Bold);
+            count.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(640, 20), new Vector2(0, -6));
+            var shop = Ui.Button(area, Loc.T("المتجر"), Ui.Gold, Ui.Ink, 12, () => { Sfx.Tap(); Close(); shopGame = invGame; OpenShop(invTab + 1); });
+            ((RectTransform)shop.transform).Place(new Vector2(Loc.En ? 1 : 0, 0), new Vector2(Loc.En ? 1 : 0, 0), new Vector2(110, 24), new Vector2(Loc.En ? -60 : 60, -4));
+        };
+        refreshOpen();
+    }
+
+    /// Dominoes · tawla · chess, above the cards; returns the space left for them.
+    RectTransform GameSwitch(RectTransform row, int sel, Action<int> pick)
+    {
+        for (int i = 0; i < GameTabs.Length; i++)
+        {
+            int k = Loc.En ? i : GameTabs.Length - 1 - i, idx = i;
+            var b = Ui.Button(row, GameTabs[i], i == sel ? new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.25f) : new Color(1, 1, 1, 0.05f), i == sel ? Ui.Gold : new Color(1, 1, 1, 0.6f), 12, () => { Sfx.Tap(); pick(idx); });
+            ((RectTransform)b.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(96, 24), new Vector2((k - 1) * 102, 0));
+            if (i == sel) b.gameObject.AddComponent<Outline>().effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.6f);
+        }
+        var rest = Ui.Rect("Below", row); rest.anchorMin = Vector2.zero; rest.anchorMax = Vector2.one; rest.offsetMin = Vector2.zero; rest.offsetMax = new Vector2(0, -26);
+        return rest;
+    }
+
+    static string Note(string cat) => cat == "felt" ? "ترابيزة الدومينو بتبان ليك وانت بتلعب" : cat == "tawla" ? "الطاولة بتبان ليك وانت بتلعب" : cat == "chess" ? "رقعة الشطرنج بتبان ليك وانت بتلعب"
+        : cat == "tiles" ? "قطع الدومينو اللي في إيدك وعلى الترابيزة" : cat == "checkers" ? "قشاط الطاولة بتاعك" : cat == "pieces" ? "عساكر الشطرنج بتاعتك"
+        : cat == "dice" ? "الزهر في الطاولة واللودو" : cat == "hat" ? "الطربوش بيبان لكل اللي على الترابيزة (للرجالة)" : "المشروب بيبان قدامك لكل اللي على الترابيزة";
+
+    /// One skin's card: its picture and name, and wear / worn / buy / from the season.
+    void SkinCard(RectTransform c, Skins.Def s, bool collection)
+    {
+        float w = c.sizeDelta.x;
+        var pic = Ui.Picture(c, "Look", Skins.Picture(s.id, out var tint)); pic.color = tint;
+        var size = s.cat == "tiles" ? new Vector2(Mathf.Min(96, w - 12), Mathf.Min(48, (w - 12) / 2)) : new Vector2(Mathf.Min(64, w - 16), Mathf.Min(64, w - 16));
+        pic.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), size, new Vector2(0, s.cat == "tiles" ? -26 : -12));
+        var nm = Ui.Label(c, Loc.T(s.name), 13, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
+        nm.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(w - 4, 36), new Vector2(0, -96));
+        nm.horizontalOverflow = HorizontalWrapMode.Wrap;
+        if (s.pass)
+        {
+            var tag = Ui.Label(c, Loc.T("الموسم"), 10, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold);
+            tag.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(w - 8, 14), new Vector2(0, -2));
+        }
+        bool owned = Skins.Owns(s.id), wearing = Skins.Worn(s.cat) == s.id;
+        if (wearing) BuyButton(c, Loc.T("متلبس"), new Color(1, 1, 1, 0.1f), Ui.GoldLight, null);
+        else if (owned) BuyButton(c, Loc.T("البس"), new Color32(0x2f, 0x6b, 0x3a, 0xff), Color.white, () => app.Send(new Dictionary<string, object> { ["t"] = "equipSkin", ["id"] = s.id }));
+        else if (s.pass) BuyButton(c, Loc.T("من الموسم"), new Color(1, 1, 1, 0.08f), Ui.Gold, () => { Close(); OpenSeason(); });
+        else BuyButton(c, Loc.Short(s.price), Ui.Gold, Ui.Ink, () =>
+        {
+            if ((user?.Num("coins") ?? 0) < s.price) { app.Toast(Loc.T("رصيدك مش كفاية")); return; }
+            app.Send(new Dictionary<string, object> { ["t"] = "buySkin", ["id"] = s.id }); Sfx.Coins();
+        }, true);
+    }
 
     static RectTransform ShopCard(RectTransform row, int i, int n)
     {
         const float Gap = 10;
-        float W = Mathf.Min(122, (640f - (n - 1) * Gap) / Mathf.Max(1, n));
+        float W = Mathf.Min(122, (660f - (n - 1) * Gap) / Mathf.Max(1, n));
         int k = Loc.En ? i : n - 1 - i;
         var c = Ui.Box(row, "Card", Card).rectTransform;
-        c.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(W, 170), new Vector2((k - (n - 1) / 2f) * (W + Gap), 4));
+        c.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(W, 176), new Vector2((k - (n - 1) / 2f) * (W + Gap), 4));
         return c;
     }
 
