@@ -419,9 +419,9 @@ public partial class Menus : MonoBehaviour
             At((RectTransform)pv.transform, 280, 100, 32); At((RectTransform)tm.transform, 384, 100, 32);
             if (Ads.PrivacyOptionsRequired)
             {
-                var ap = Row(list, 44, Card);
-                At(Ui.Label(ap, "خصوصية الإعلانات", 16, Color.white, StartAlign, Ui.Bold).rectTransform, 14, 200, 40);
-                var apb = Ui.Button(ap, "غيّر", new Color(1, 1, 1, 0.08f), Ui.GoldLight, 14, () => { Sfx.Tap(); Ads.ShowPrivacyOptions(); });
+                var adp = Row(list, 44, Card);
+                At(Ui.Label(adp, "خصوصية الإعلانات", 16, Color.white, StartAlign, Ui.Bold).rectTransform, 14, 200, 40);
+                var apb = Ui.Button(adp, "غيّر", new Color(1, 1, 1, 0.08f), Ui.GoldLight, 14, () => { Sfx.Tap(); Ads.ShowPrivacyOptions(); });
                 At((RectTransform)apb.transform, 384, 100, 32);
             }
             var del = Row(list, 44, Card);
