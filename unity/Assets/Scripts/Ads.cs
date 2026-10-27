@@ -41,6 +41,20 @@ public static class Ads
 #endif
     }
 
+    /// Players where the law asks for it (EU, UK) can change their ad privacy choice from Settings.
+    public static bool PrivacyOptionsRequired
+    {
+        get
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            try { using (var c = new AndroidJavaClass("com.ahwa.ads.BBAds")) return c.CallStatic<bool>("privacyOptionsRequired"); }
+            catch (Exception) { }
+#endif
+            return false;
+        }
+    }
+    public static void ShowPrivacyOptions() => Call("showPrivacyOptions");
+
     static bool Call(string method, params object[] args)
     {
 #if UNITY_ANDROID && !UNITY_EDITOR

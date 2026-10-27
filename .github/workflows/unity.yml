@@ -65,15 +65,22 @@ jobs:
           ADMOB_APP_ID: ${{ secrets.ADMOB_APP_ID }}
           ADMOB_INTERSTITIAL_ID: ${{ secrets.ADMOB_INTERSTITIAL_ID }}
           ADMOB_REWARDED_ID: ${{ secrets.ADMOB_REWARDED_ID }}
+          # release signing (your upload key; without it the debug key) and the version code
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASS: ${{ secrets.ANDROID_KEY_PASS }}
+          BUILD_NUMBER: ${{ github.run_number }}
         run: |
           set +e
           mkdir -p build logs
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > unity/release.keystore; echo "upload key: yes" >> logs/build-step.txt; fi
           df -h / > logs/build-step.txt
           docker pull -q $IMAGE >> logs/build-step.txt 2>&1
           echo "pull exit $?" >> logs/build-step.txt
           # a license file only works on the computer that made it, so the seat comes from the Unity account
           # (Personal) for this run and goes back at the end
-          docker run --rm -e UNITY_EMAIL -e UNITY_PASSWORD -e ADMOB_APP_ID -e ADMOB_INTERSTITIAL_ID -e ADMOB_REWARDED_ID -v "$PWD":/w -w /w $IMAGE bash -c '
+          docker run --rm -e UNITY_EMAIL -e UNITY_PASSWORD -e ADMOB_APP_ID -e ADMOB_INTERSTITIAL_ID -e ADMOB_REWARDED_ID -e ANDROID_KEYSTORE_PASS -e ANDROID_KEY_ALIAS -e ANDROID_KEY_PASS -e BUILD_NUMBER -v "$PWD":/w -w /w $IMAGE bash -c '
             LC=/opt/unity/Editor/Data/Resources/Licensing/Client/Unity.Licensing.Client
             for i in 1 2 3; do
               "$LC" --activate-all --include-personal --username "$UNITY_EMAIL" --password "$UNITY_PASSWORD" > /w/logs/activate.log 2>&1 && break
@@ -87,6 +94,7 @@ jobs:
             chmod -R a+rwX /w/build /w/logs /w/unity/Library 2>/dev/null
             true' >> logs/build-step.txt 2>&1
           echo "docker exit $?" >> logs/build-step.txt
+          rm -f unity/release.keystore
           cat logs/build-step.txt logs/editor-exit.txt
           grep -E "^\[build|error CS|Error building|Scripts have compiler errors" logs/editor.log | head -60
           grep -E "^\[push\]|^\[ads\]" logs/editor.log | head
@@ -228,4 +236,10 @@ jobs:
             cp build/android/BoardBattles.apk board-battles.apk
             gh release delete unity-apk --yes --cleanup-tag || true
             publish unity-apk "Unity APK" board-battles.apk
+          fi
+          # the app bundle for Google Play (only with the upload key)
+          if [ -f build/android/BoardBattles.aab ]; then
+            cp build/android/BoardBattles.aab board-battles-${{ github.run_number }}.aab
+            gh release delete unity-aab --yes --cleanup-tag || true
+            publish unity-aab "App bundle for Google Play (version code ${{ github.run_number }})" board-battles-${{ github.run_number }}.aab
           fi

@@ -340,8 +340,10 @@ public partial class Menus : MonoBehaviour
 
     /* ---------- settings ---------- */
 
+    bool deleteArmed;
     public void OpenSettings()
     {
+        deleteArmed = false;
         Panel(Loc.T("الإعدادات"), out var body, new Vector2(560, 330));
         var area = Ui.Rect("Area", body); area.Fill();
         refreshOpen = () =>
@@ -408,6 +410,32 @@ public partial class Menus : MonoBehaviour
             At(Ui.Label(sup, "الدعم الفني", 16, Color.white, StartAlign, Ui.Bold).rectTransform, 14, 200, 40);
             var sb = Ui.Button(sup, "كلّمنا", Ui.Gold, Ui.Ink, 14, OpenSupport);
             At((RectTransform)sb.transform, 384, 100, 32);
+            // the privacy policy and the terms (pages on the server), and deleting your account
+            string web = app.net != null ? app.net.HttpBase : "https://ahwa-games.a7medhussien.com";
+            var lg = Row(list, 44, Card);
+            At(Ui.Label(lg, "الخصوصية والشروط", 16, Color.white, StartAlign, Ui.Bold).rectTransform, 14, 200, 40);
+            var pv = Ui.Button(lg, "الخصوصية", new Color(1, 1, 1, 0.08f), Ui.GoldLight, 14, () => { Sfx.Tap(); Application.OpenURL(web + "/privacy"); });
+            var tm = Ui.Button(lg, "الشروط", new Color(1, 1, 1, 0.08f), Ui.GoldLight, 14, () => { Sfx.Tap(); Application.OpenURL(web + "/terms"); });
+            At((RectTransform)pv.transform, 280, 100, 32); At((RectTransform)tm.transform, 384, 100, 32);
+            if (Ads.PrivacyOptionsRequired)
+            {
+                var ap = Row(list, 44, Card);
+                At(Ui.Label(ap, "خصوصية الإعلانات", 16, Color.white, StartAlign, Ui.Bold).rectTransform, 14, 200, 40);
+                var apb = Ui.Button(ap, "غيّر", new Color(1, 1, 1, 0.08f), Ui.GoldLight, 14, () => { Sfx.Tap(); Ads.ShowPrivacyOptions(); });
+                At((RectTransform)apb.transform, 384, 100, 32);
+            }
+            var del = Row(list, 44, Card);
+            At(Ui.Label(del, "امسح حسابي", 16, new Color(1f, 0.6f, 0.55f), StartAlign, Ui.Bold).rectTransform, 14, 200, 40);
+            var dl = Ui.Button(del, deleteArmed ? "متأكد؟ دوس تاني" : "امسح", new Color32(0x8a, 0x22, 0x1c, 0xff), Color.white, 14, () =>
+            {
+                Sfx.Tap();
+                if (!deleteArmed) { deleteArmed = true; app.Toast(Loc.T("الحساب والكوينز والسكينز هيتمسحوا خالص. دوس تاني للتأكيد")); refreshOpen(); return; }
+                deleteArmed = false;
+                app.Send(new Dictionary<string, object> { ["t"] = "delete" });
+                app.Toast(Loc.T("اتمسح حسابك. بدأت من جديد كضيف"));
+                Close();
+            });
+            At((RectTransform)dl.transform, 334, 150, 32);
             var ver = Row(list, 22);
             Ui.Label(ver, "Board Battles  ·  " + Application.version, 11, new Color(1, 1, 1, 0.4f)).rectTransform.Fill();
             var by = Row(list, 20);

@@ -1,0 +1,39 @@
+# Checks the live game server from the outside (scripts/check-server.mjs): health, the API, the legal pages,
+# Google sign-in, and a real game session over the WebSocket. Run it by hand (Actions → Server check), or it runs
+# when the check changes. The result goes to the "server-check" release.
+name: Server check
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: The server's address
+        default: https://ahwa-games.a7medhussien.com
+  push:
+    branches: [main]
+    paths: ['scripts/check-server.mjs', '.github/workflows/server-check.yml']
+permissions:
+  contents: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check
+        run: |
+          mkdir -p /tmp/check && cp scripts/check-server.mjs /tmp/check/ && cd /tmp/check
+          npm init -y > /dev/null && npm install --no-audit --no-fund ws@8.18.0 > /dev/null 2>&1
+          set +e
+          node check-server.mjs "${{ github.event.inputs.url || 'https://ahwa-games.a7medhussien.com' }}" 2>&1 | tee "$GITHUB_WORKSPACE/server-check.txt"
+          echo "exit ${PIPESTATUS[0]}" >> "$GITHUB_WORKSPACE/server-check.txt"
+          true
+      - name: Publish
+        if: always()
+        run: |
+          gh release delete server-check --yes --cleanup-tag 2>/dev/null || true
+          gh release create server-check server-check.txt --title "Server check" --prerelease --notes "$(tail -1 server-check.txt)" || true

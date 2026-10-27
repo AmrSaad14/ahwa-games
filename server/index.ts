@@ -1,3 +1,4 @@
+import { deletePage, privacyPage, termsPage } from './legal';
 import http from 'node:http';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -58,6 +59,12 @@ export function createServer(opts = config) {
     if (url.pathname === '/healthz') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ ok: true, ...hub.stats() }));
+    }
+    // the privacy policy, the terms and the delete-account page (Google Play links to them)
+    const legal = url.pathname === '/privacy' ? privacyPage : url.pathname === '/terms' ? termsPage : url.pathname === '/delete-account' ? deletePage : null;
+    if (legal) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'max-age=3600' });
+      return res.end(legal());
     }
     if (url.pathname === '/api/leaderboard') {
       res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'max-age=30' });

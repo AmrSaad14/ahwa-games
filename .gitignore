@@ -8,3 +8,7 @@ ios/
 *.db
 *.db-*
 unity/google-services.json
+
+# the Android upload key (written by CI from a secret, never committed)
+*.keystore
+*.jks

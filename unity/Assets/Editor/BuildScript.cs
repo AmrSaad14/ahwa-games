@@ -134,13 +134,47 @@ public static class BuildScript
         PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, "com.ahwa.boardbattles");
         // the classic activity, so the custom manifest (Plugins/Android) can add the sign-in link to it
         PlayerSettings.Android.applicationEntry = AndroidApplicationEntry.Activity;
-        PlayerSettings.Android.bundleVersionCode = 1;
+        // each build a higher version code (Google Play only accepts a higher one than the last upload)
+        PlayerSettings.Android.bundleVersionCode = int.TryParse(System.Environment.GetEnvironmentVariable("BUILD_NUMBER"), out var bn) && bn > 0 ? bn : 1;
+        PlayerSettings.bundleVersion = "1.0." + PlayerSettings.Android.bundleVersionCode;
         PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel24;
         PlayerSettings.SetScriptingBackend(NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
         PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
         PlayerSettings.Android.forceInternetPermission = true;
+        bool signed = Sign();
         EditorUserBuildSettings.buildAppBundle = false;
-        return Build(BuildTarget.Android, BuildTargetGroup.Android, "../build/android/BoardBattles.apk");
+        bool ok = Build(BuildTarget.Android, BuildTargetGroup.Android, "../build/android/BoardBattles.apk");
+        // with the upload key: the app bundle (.aab) for Google Play too
+        if (ok && signed)
+        {
+            EditorUserBuildSettings.buildAppBundle = true;
+            if (!Build(BuildTarget.Android, BuildTargetGroup.Android, "../build/android/BoardBattles.aab")) Debug.Log("[build] the app bundle failed");
+            EditorUserBuildSettings.buildAppBundle = false;
+        }
+        return ok;
+    }
+
+    /// Release signing with your upload key (GitHub secrets ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASS,
+    /// ANDROID_KEY_ALIAS, ANDROID_KEY_PASS; the workflow writes the key to unity/release.keystore). Without them:
+    /// the debug key, fine for testing but not for Google Play.
+    static bool Sign()
+    {
+        string pass = System.Environment.GetEnvironmentVariable("ANDROID_KEYSTORE_PASS"), alias = System.Environment.GetEnvironmentVariable("ANDROID_KEY_ALIAS"),
+               keyPass = System.Environment.GetEnvironmentVariable("ANDROID_KEY_PASS");
+        string store = Path.GetFullPath("release.keystore");
+        if (!File.Exists(store) || string.IsNullOrEmpty(pass) || string.IsNullOrEmpty(alias))
+        {
+            PlayerSettings.Android.useCustomKeystore = false;
+            Debug.Log("[build] signing: debug key (no upload key set)");
+            return false;
+        }
+        PlayerSettings.Android.useCustomKeystore = true;
+        PlayerSettings.Android.keystoreName = store;
+        PlayerSettings.Android.keystorePass = pass;
+        PlayerSettings.Android.keyaliasName = alias;
+        PlayerSettings.Android.keyaliasPass = string.IsNullOrEmpty(keyPass) ? pass : keyPass;
+        Debug.Log("[build] signing: the upload key");
+        return true;
     }
 
     /// The desktop build (for the screenshots) and the phone build, in one editor session.

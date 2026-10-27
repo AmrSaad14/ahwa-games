@@ -23,6 +23,8 @@ public class PushGradle : IPostGenerateGradleAndroidProject
             File.AppendAllText(gradle, "\n// push reminders and ads (Editor/PushGradle.cs)\ndependencies {\n    implementation platform('com.google.firebase:firebase-bom:33.7.0')\n    implementation 'com.google.firebase:firebase-messaging'\n    implementation 'com.google.android.gms:play-services-ads:23.6.0'\n}\n");
         if (!g.Contains("installreferrer"))
             File.AppendAllText(gradle, "\n// the review card, sharing a picture, the install referrer (Plugins/Android/BBExtras.java)\ndependencies {\n    implementation 'com.google.android.play:review:2.0.2'\n    implementation 'androidx.core:core:1.13.1'\n    implementation 'com.android.installreferrer:installreferrer:2.2'\n}\n");
+        if (!g.Contains("user-messaging-platform"))
+            File.AppendAllText(gradle, "\n// the ad privacy consent where the law asks for it (Plugins/Android/BBAds.java)\ndependencies {\n    implementation 'com.google.android.ump:user-messaging-platform:3.1.0'\n}\n");
         if (!g.Contains("billingclient"))
             File.AppendAllText(gradle, "\n// Google Play purchases: coin packs, the season pass, the ad-free month (Plugins/Android/BBBilling.java)\ndependencies {\n    implementation 'com.android.billingclient:billing:7.1.1'\n}\n");
         var props = Path.Combine(Path.GetDirectoryName(path), "gradle.properties");

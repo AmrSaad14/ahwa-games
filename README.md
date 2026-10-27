@@ -193,6 +193,18 @@ The apps connect to **`https://ahwa-games.a7medhussien.com`** (WebSocket `wss://
 set in `unity/Assets/Scripts/Net.cs`, and as `SERVER_URL` for the web app build). Sign-in redirect addresses on
 that host: `https://ahwa-games.a7medhussien.com/auth/google/callback` and `…/auth/apple/callback`.
 
+### Going live on that address
+
+- **Server:** `docker compose up -d --build` with `.env` from `.env.example` (`DOMAIN=ahwa-games.a7medhussien.com`);
+  Caddy gets the certificate and passes the WebSocket. Without Docker: `deploy/nginx.conf` in front of `node dist/server.cjs`.
+- **Check it from outside:** GitHub → Actions → **Server check** → Run (or `node scripts/check-server.mjs https://ahwa-games.a7medhussien.com`):
+  health, API, legal pages, Google sign-in and a real game session over `/ws`.
+- **Google Play's required pages:** `/privacy`, `/terms`, `/delete-account` (server/legal.ts). In the app: Settings →
+  Privacy & terms, and Delete my account.
+- **Release builds:** add the GitHub secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASS`, `ANDROID_KEY_ALIAS`,
+  `ANDROID_KEY_PASS` (your upload key); every Unity build then also makes the `.aab` for Google Play ("unity-aab" release),
+  with the build number as its version code.
+
 ## Free hosting for testing (Render)
 
 Until you rent a server, the game runs on Render's free plan, with no card needed. `render.yaml` describes everything:

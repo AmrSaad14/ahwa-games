@@ -18,6 +18,9 @@ import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
 import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 import com.google.android.gms.ads.rewarded.ServerSideVerificationOptions;
+import com.google.android.ump.ConsentInformation;
+import com.google.android.ump.ConsentRequestParameters;
+import com.google.android.ump.UserMessagingPlatform;
 import com.unity3d.player.UnityPlayer;
 
 public class BBAds {
@@ -32,10 +35,34 @@ public class BBAds {
         go = gameObject; interId = interstitialId; rewardId = rewardedId;
         final Activity a = UnityPlayer.currentActivity;
         a.runOnUiThread(() -> {
+            // first the privacy consent Google requires (shown only where the law asks for it, e.g. the EU and UK),
+            // then the ads
             try {
-                MobileAds.initialize(a, status -> { started = true; loadInter(); loadReward(); });
-            } catch (Throwable t) { send("error:" + t); }
+                consent = UserMessagingPlatform.getConsentInformation(a);
+                consent.requestConsentInfoUpdate(a, new ConsentRequestParameters.Builder().build(),
+                    () -> UserMessagingPlatform.loadAndShowConsentFormIfRequired(a, err -> { if (consent.canRequestAds()) start(a); }),
+                    err -> { if (consent.canRequestAds()) start(a); });
+                if (consent.canRequestAds()) start(a);
+            } catch (Throwable t) { start(a); }
         });
+    }
+
+    static ConsentInformation consent;
+    static boolean initializing;
+    static void start(final Activity a) {
+        if (initializing) return;
+        initializing = true;
+        try { MobileAds.initialize(a, status -> { started = true; loadInter(); loadReward(); }); }
+        catch (Throwable t) { send("error:" + t); }
+    }
+
+    /** Whether the player must be able to change their ad privacy choice (a button in Settings then). */
+    public static boolean privacyOptionsRequired() {
+        return consent != null && consent.getPrivacyOptionsRequirementStatus() == ConsentInformation.PrivacyOptionsRequirementStatus.REQUIRED;
+    }
+    public static void showPrivacyOptions() {
+        final Activity a = UnityPlayer.currentActivity;
+        a.runOnUiThread(() -> UserMessagingPlatform.showPrivacyOptionsForm(a, err -> { }));
     }
 
     static void loadInter() {

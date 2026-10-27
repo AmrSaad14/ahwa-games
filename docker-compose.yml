@@ -8,7 +8,7 @@ services:
     environment:
       SECRET: ${SECRET:-}
       TURN_SECONDS: ${TURN_SECONDS:-10}
-      BOT_FILL_SECONDS: ${BOT_FILL_SECONDS:-12}
+      BOT_FILL_SECONDS: ${BOT_FILL_SECONDS:-8}
       CHESS_MINUTES: ${CHESS_MINUTES:-}
       NEXT_ROUND_SECONDS: ${NEXT_ROUND_SECONDS:-7}
       TRUST_PROXY: "1"
@@ -26,6 +26,26 @@ services:
       TWILIO_VERIFY_SID: ${TWILIO_VERIFY_SID:-}
       SMS_HTTP_URL: ${SMS_HTTP_URL:-}
       SMS_HTTP_TOKEN: ${SMS_HTTP_TOKEN:-}
+      # Sign in with Apple (README → Sign in with Apple)
+      APPLE_SERVICE_ID: ${APPLE_SERVICE_ID:-}
+      APPLE_TEAM_ID: ${APPLE_TEAM_ID:-}
+      APPLE_KEY_ID: ${APPLE_KEY_ID:-}
+      APPLE_PRIVATE_KEY: ${APPLE_PRIVATE_KEY:-}
+      # Google Play purchases: coin packs, the season pass, the ad-free month (README → Shop)
+      GOOGLE_PLAY_SERVICE_ACCOUNT: ${GOOGLE_PLAY_SERVICE_ACCOUNT:-}
+      ANDROID_PACKAGE: ${ANDROID_PACKAGE:-com.ahwa.boardbattles}
+      # push reminders (README → Push reminders)
+      FIREBASE_SERVICE_ACCOUNT: ${FIREBASE_SERVICE_ACCOUNT:-}
+      # support messages by e-mail
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      # the weekly tournament (0 Sunday … 4 Thursday) and hour, Cairo time
+      TOURNEY_WEEKDAY: ${TOURNEY_WEEKDAY:-4}
+      TOURNEY_HOUR: ${TOURNEY_HOUR:-21}
     volumes:
       - domino-data:/data
     expose:
