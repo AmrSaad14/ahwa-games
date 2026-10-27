@@ -202,7 +202,7 @@ Until you rent a server, the game runs on Render's free plan, with no card neede
    with **Contents: Read and write**. The server uses it to back up the database.
 3. Render → **New → Blueprint** → pick this repository. Fill in `BACKUP_GITHUB_TOKEN` (the token) and
    `GOOGLE_CLIENT_SECRET` (from `ahwa-signin.env`), then **Apply**.
-4. The server is at `https://kings-battle.onrender.com` (if Render gives a different address, set the repository
+4. The server's address is `https://ahwa-games.a7medhussien.com` (`PUBLIC_URL`; if it moves, set the repository
    variable `SERVER_URL` to it so the APK connects there).
 5. For Google sign-in, add `https://<that address>/auth/google/callback` to the OAuth client's redirect URIs in Google Cloud.
 
@@ -253,7 +253,7 @@ sign-in runs in the browser like Google's, so it works in the Android app too. Y
 1. **Certificates, Identifiers & Profiles → Identifiers → +** → **App IDs** → an App ID (e.g. `com.ahwa.boardbattles`)
    with **Sign in with Apple** ticked.
 2. **Identifiers → + → Services IDs** → e.g. `com.ahwa.boardbattles.signin`; tick **Sign in with Apple** → **Configure**:
-   primary App ID the one above; **Domains**: your server's domain (e.g. `kings-battle.onrender.com`);
+   primary App ID the one above; **Domains**: your server's domain (`ahwa-games.a7medhussien.com`);
    **Return URLs**: `https://YOUR-SERVER/auth/apple/callback`.
 3. **Keys → +** → tick **Sign in with Apple** (configure it with the App ID) → download the `.p8` file (only once).
 4. On the server (Render → Environment): `APPLE_SERVICE_ID` (the Services ID), `APPLE_TEAM_ID` (top right of the

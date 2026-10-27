@@ -54,7 +54,7 @@ export const config = {
   },
   // Sign-in (see README → Sign-in with Google and a mobile number)
   login: {
-    publicUrl: process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '',   // https address players reach this server on (Render sets RENDER_EXTERNAL_URL)
+    publicUrl: process.env.PUBLIC_URL || 'https://ahwa-games.a7medhussien.com',   // https address players reach this server on (sign-in comes back here)
     appScheme: process.env.APP_SCHEME || 'ahwagames',
     appName: process.env.APP_NAME || 'Board Battles',
     googleClientId: process.env.GOOGLE_CLIENT_ID || '',

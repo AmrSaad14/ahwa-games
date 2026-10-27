@@ -14,6 +14,8 @@ services:
     envVars:
       - key: TRUST_PROXY
         value: "1"
+      - key: PUBLIC_URL
+        value: https://ahwa-games.a7medhussien.com
       - key: BACKUP_GITHUB_REPO
         value: AmrSaad14/ahwa-games
       - key: BACKUP_GITHUB_TOKEN   # a fine-grained GitHub token for this repo with "Contents: read and write"
