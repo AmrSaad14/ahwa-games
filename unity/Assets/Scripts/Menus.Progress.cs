@@ -18,6 +18,9 @@ public partial class Menus
         if (user == null) return;
         bool m = false;
         foreach (var o in user.Arr("missions") ?? new List<object>()) if (o is Dictionary<string, object> d && !d.Bool("claimed") && d.Num("have") >= d.Num("need")) m = true;
+        // the weekly chest, ready to open, lights the missions too
+        var chest = user.Obj("chest");
+        if (chest != null) { var steps = chest.Arr("steps"); var op = Ints(chest.Arr("opened")); if (steps != null) for (int k = 0; k < steps.Count; k++) if (chest.Num("done") >= (double)steps[k] && !op.Contains(k)) m = true; }
         missionsDot.SetActive(m);
         seasonDot.SetActive(SeasonOn && SeasonClaimable() > 0);
         friendsDot.SetActive(incoming > 0);
@@ -56,6 +59,19 @@ public partial class Menus
             case "missionDone":
                 app.Toast(Loc.T("خلصت مهمة! خد جايزتك") + "  ·  " + MissionText(FindMission(m.Str("id"))));
                 Sfx.Chime();
+                break;
+            case "tutorialReward":
+                Sfx.Coins();
+                ShowCard(Loc.T("أحسنت!"), Loc.T("خلصت أول دور. هدية") + ": +" + Loc.Short((long)m.Num("coins")) + " " + Loc.T("كوين") + "\n" + Loc.T("جرّب تلعب أونلاين ضد ناس حقيقية"), null, false);
+                break;
+            case "chestOpened":
+                Sfx.Coins(); Sfx.Chime();
+                app.Toast(Loc.T("فتحت الصندوق!") + "  +" + Loc.Short((long)m.Num("coins")) + "  ·  +" + (int)m.Num("xp") + " XP");
+                break;
+            case "comeback":
+                // back after a while: a warm welcome and a gift
+                Sfx.Coins();
+                ShowCard(Loc.T("وحشتنا!"), Loc.T("هدية رجوعك للقهوة") + ": +" + Loc.Short((long)m.Num("coins")) + " " + Loc.T("كوين"), null, false);
                 break;
             case "missionClaimed":
                 Sfx.Coins();
@@ -115,6 +131,9 @@ public partial class Menus
         int need = (int)d.Num("need");
         bool online = d.Bool("online");
         (string ar, string en) w = GameWords.TryGetValue(game, out var x) ? x : (game, game);
+        if (kind == "gift") return Loc.En ? "Send a gift to someone at your table" : "ابعت هدية لحد على الترابيزة";
+        if (kind == "friend") return Loc.En ? "Play a game" + (game == "any" ? "" : " of " + w.en) + " with a friend" : "العب دور " + (game == "any" ? "" : w.ar + " ") + "مع صاحبك";
+        if (kind == "bigwin") return Loc.En ? "Win a game with a 50K+ stake" : "اكسب دور على رهان ٥٠ ألف أو أكتر";
         if (Loc.En)
             return (kind == "win" ? "Win " : "Play ") + need + (need == 1 ? " game" : " games") + (game == "any" ? "" : " of " + w.en) + (online ? " online" : "");
         string n = ArNum(need);
@@ -125,7 +144,7 @@ public partial class Menus
 
     public void OpenMissions()
     {
-        Panel(Loc.T("مهام النهارده"), out var body, new Vector2(600, 320));
+        Panel(Loc.T("مهام النهارده"), out var body, new Vector2(600, 392));
         refreshOpen = () =>
         {
             foreach (Transform c in body) Destroy(c.gameObject);
@@ -155,6 +174,32 @@ public partial class Menus
                 At((RectTransform)b.transform, 446, 104, 34).anchoredPosition += new Vector2(0, -8);
                 if (done && !got) StartCoroutine(Pulse((RectTransform)b.transform));
             }
+            // the weekly chest: missions collected this week open it in three steps
+            var chest = user.Obj("chest");
+            if (chest != null)
+            {
+                int doneW = (int)chest.Num("done");
+                var steps = chest.Arr("steps") ?? new List<object>(); var coinsL = chest.Arr("coins") ?? new List<object>();
+                var opened = Ints(chest.Arr("opened"));
+                var bar = Ui.Box(body, "Chest", new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.1f)).rectTransform;
+                bar.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(560, 62), new Vector2(0, -238));
+                var ci = Ui.Picture(bar, "Icon", Icon("chest")); ci.color = Ui.Gold; At(ci.rectTransform, 10, 36, 36);
+                var cl = Ui.Label(bar, "", 13, Ui.Gold, StartAlign, Ui.Bold);
+                cl.Set(Loc.T("صندوق الأسبوع") + "\n" + doneW + " " + Loc.T("مهام خلصت"));
+                cl.horizontalOverflow = HorizontalWrapMode.Wrap;
+                At(cl.rectTransform, 52, 150, 52);
+                for (int k = 0; k < steps.Count; k++)
+                {
+                    int need = (int)(double)steps[k], step = k;
+                    long c = k < coinsL.Count ? (long)(double)coinsL[k] : 0;
+                    bool can = doneW >= need, got = opened.Contains(k);
+                    var b = Ui.Button(bar, got ? "✓" : can ? Loc.T("افتح") + " +" + Loc.Short(c) : need + " " + Loc.T("مهام") + " · " + Loc.Short(c),
+                        got ? new Color(0.18f, 0.42f, 0.23f, 0.8f) : can ? Ui.Gold : new Color(1, 1, 1, 0.08f), got ? Color.white : can ? Ui.Ink : new Color(1, 1, 1, 0.55f), 12,
+                        () => { if (!can || got) return; Sfx.Tap(); app.Send(new Dictionary<string, object> { ["t"] = "chestOpen", ["step"] = (double)step }); });
+                    At((RectTransform)b.transform, 214 + k * 112, 104, 40);
+                    if (can && !got) StartCoroutine(Pulse((RectTransform)b.transform));
+                }
+            }
             double resets = user.Num("missionsAt");
             long left = Math.Max(0, (long)(resets - App.LocalMs())) / 1000;
             Ui.Label(body, Loc.T("مهام جديدة بعد") + " " + (left / 3600) + ":" + (left / 60 % 60).ToString("00") + "  ·  " + Loc.T("الماتشات ضد الكمبيوتر بتتحسب كمان"), 12, new Color(1, 1, 1, 0.6f)).rectTransform
@@ -165,18 +210,15 @@ public partial class Menus
 
     /* ---------- the season pass ---------- */
 
-    // the same track as the server (shared/season.ts): coins on most tiers, skins on some
-    static (long coins, string skin) TierReward(int n, bool prem)
+    // the track comes from the server (the dashboard can change it); a tier's reward on one track
+    (long coins, string skin) TierReward(int n, bool prem)
     {
-        if (prem)
-        {
-            switch (n) { case 5: return (0, "drink_qasab"); case 10: return (0, "felt_royal"); case 15: return (0, "hat_fez_gold"); case 20: return (0, "drink_karkade"); case 25: return (0, "dice_gold"); case 30: return (0, "felt_kilim"); }
-            return (15_000 + 3_000 * n, null);
-        }
-        if (n == 10) return (0, "hat_fez_white");
-        if (n == 20) return (0, "drink_sahlab");
-        if (n == 30) return (200_000, null);
-        return (5_000 + 1_000 * n, null);
+        var tiers = user?.Obj("season")?.Arr("tiers");
+        if (tiers == null || n < 1 || n > tiers.Count || !(tiers[n - 1] is Dictionary<string, object> t)) return (0, null);
+        var r = t.Obj(prem ? "prem" : "free");
+        if (r == null) return (0, null);
+        string skin = r.Str("skin");
+        return string.IsNullOrEmpty(skin) ? ((long)r.Num("coins"), null) : (0, skin);
     }
 
     int SeasonClaimable()

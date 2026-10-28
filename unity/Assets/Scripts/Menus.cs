@@ -166,6 +166,8 @@ public partial class Menus : MonoBehaviour
         dailyDot.SetActive(ready);
         UpdateDots();
         // a friend's invite code from Google Play (or a link) waiting: credit them, once the account is new
+        // a new player: the first-game guide, offered once (an easy game of dominoes with hints, and a gift)
+        if (!u.Bool("tutorial") && u.Num("games") == 0 && PlayerPrefs.GetInt("guideOffered", 0) == 0 && !IsOpen && app.view == null && !App.Recording && !AdFilm.Any) { PlayerPrefs.SetInt("guideOffered", 1); OfferGuide(); }
         if (Growth.PendingCode != null && u.Bool("canRefer")) { app.Send(new Dictionary<string, object> { ["t"] = "referral", ["code"] = Growth.PendingCode }); Growth.PendingCode = null; }
         // the first time today's reward is waiting, show the track by itself (on the home screen, nothing else open)
         if (ready && !dailyShown && app.view == null && !IsOpen && !App.Recording) { dailyShown = true; OpenDaily(); return; }
@@ -200,7 +202,8 @@ public partial class Menus : MonoBehaviour
                 else app.Toast("+" + (int)m.Num("gained") + " XP");
                 break;
             case "weeklyPrize":
-                app.Toast(Loc.T("مبروك! جيت المركز") + " " + (int)m.Num("rank") + "  +" + Loc.Short((long)m.Num("coins")));
+                if (app.view == null) ShowCard(Loc.T("مبروك!"), Loc.T("جيت المركز") + " " + (int)m.Num("rank") + " " + Loc.T("في ترتيب الأسبوع") + "  ·  +" + Loc.Short((long)m.Num("coins")) + " " + Loc.T("كوين"), null, true);
+                else app.Toast(Loc.T("مبروك! جيت المركز") + " " + (int)m.Num("rank") + "  +" + Loc.Short((long)m.Num("coins")));
                 Sfx.Coins(); Sfx.Buzz();
                 break;
             case "lb":
@@ -239,9 +242,13 @@ public partial class Menus : MonoBehaviour
                 break;
             case "prizeWon":
                 // you were the best of a game last month: the money, and where to put your number
-                app.Toast(Loc.T("كسبت") + " " + (int)m.Num("egp") + " " + Loc.T("جنيه") + "! 🏆", 6f);
-                Sfx.Coins();
-                if (!IsOpen && app.view == null) OpenPrizes();
+                {
+                    var tt = Titles.List.Find(x => x.monthly == m.Str("game"));
+                    string head = Loc.T("كسبت") + " " + (int)m.Num("egp") + " " + Loc.T("جنيه") + "!";
+                    if (app.view == null) ShowCard(head, (tt != null ? tt.Name + ". " : "") + Loc.T("دوس على «جايزتك» واكتب رقم فودافون كاش"), tt?.id, true, head + " " + (tt != null ? tt.Name : ""));
+                    else app.Toast(head + " 🏆", 6f);
+                    Sfx.Coins();
+                }
                 break;
             case "adReward":
                 app.Toast("+" + ((long)m.Num("coins")).ToString("N0") + " " + Loc.T("عملة"));

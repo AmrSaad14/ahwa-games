@@ -159,3 +159,33 @@ test('admin: the season pass and the tournament can be switched off', async () =
   await adm('PUT', '/settings', { season: { enabled: true }, tourney: { enabled: true } });
   assert.equal(SEASON_PASS.enabled, true);
 });
+
+test('retention: new missions count, the weekly chest, the first-game guide, the gift for coming back', async () => {
+  const { counts, MISSIONS, CHEST } = await import('../shared/missions');
+  const m = (id: string) => MISSIONS.find(x => x.id === id)!;
+  assert.equal(counts(m('gift_1'), { type: 'gift' }), true);
+  assert.equal(counts(m('play_any_3'), { type: 'gift' }), false);
+  assert.equal(counts(m('friend_1'), { type: 'game', game: 'tawla', won: false, online: true, friend: true }), true);
+  assert.equal(counts(m('friend_1'), { type: 'game', game: 'tawla', won: true, online: true }), false);
+  assert.equal(counts(m('bigwin_1'), { type: 'game', game: 'chess', won: true, online: true, stake: 100_000 }), true);
+  assert.equal(counts(m('bigwin_1'), { type: 'game', game: 'chess', won: true, online: true, stake: 20_000 }), false);
+  // the chest: three collected missions open the first step
+  const g = await guest('Chest Opener');
+  const st = app.store.chestState(g.user.id);
+  assert.deepEqual([st.done, st.opened], [0, []]);
+  assert.equal(app.store.chestOpen(g.user.id, 0), 'chest_locked');
+  for (const ms of app.store.missions(g.user.id)) for (let i = 0; i < ms.need; i++) app.store.missionProgress(g.user.id, ms.kind === 'gift' ? { type: 'gift' } : { type: 'game', game: ms.game === 'any' ? 'domino' : ms.game, won: true, online: true, friend: true, stake: 1_000_000 });
+  for (const ms of app.store.missions(g.user.id)) assert.equal(typeof app.store.missionClaim(g.user.id, ms.id), 'object', ms.id);
+  assert.equal(app.store.chestState(g.user.id).done, 3);
+  const before = app.store.coinsOf(g.user.id);
+  assert.deepEqual(app.store.chestOpen(g.user.id, 0), { coins: CHEST.coins[0], xp: CHEST.xp[0] });
+  assert.equal(app.store.coinsOf(g.user.id), before + CHEST.coins[0]);
+  assert.equal(app.store.chestOpen(g.user.id, 0), 'already_claimed');
+  // the guide pays once
+  assert.equal(app.store.tutorialDone(g.user.id, 10_000), 10_000);
+  assert.equal(app.store.tutorialDone(g.user.id, 10_000), 0);
+  // back after 5 days: a gift; after 1 day: none; and one push reminder while away
+  const u = app.store.get(g.user.id)!;
+  assert.equal(app.store.comebackGift({ ...u, seen: Date.now() - 86_400_000, created: Date.now() - 30 * 86_400_000 }, 3, 30_000), 0);
+  assert.equal(app.store.comebackGift({ ...u, seen: Date.now() - 5 * 86_400_000, created: Date.now() - 30 * 86_400_000 }, 3, 30_000), 30_000);
+});

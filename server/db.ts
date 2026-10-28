@@ -7,7 +7,7 @@ import type { PrizeRow, CoinRow, LeaderRow, PublicUser } from '../shared/protoco
 import type { GameId } from '../shared/engine';
 import { ECONOMY, WEEKLY_PRIZES, cairoDay, levelOf, nextCairoDay, streakBonus, weekKey } from '../shared/gifts';
 import { Equipped, isFree, skinById } from '../shared/skins';
-import { MISSION_SP, counts, missionById, missionsFor } from '../shared/missions';
+import { CHEST, MISSION_SP, counts, missionById, missionsFor, type MissionEvent } from '../shared/missions';
 import { SEASON_PASS, SEASON_TIERS, SP, TIERS, seasonEndsAt, seasonOf, tierOf } from '../shared/season';
 import type { GameId as Game } from '../shared/engine';
 import { maskPhone } from './login';
@@ -20,6 +20,7 @@ export interface UserRow {
   phone: string | null; google_sub: string | null; google_email: string | null; apple_sub?: string | null; apple_email?: string | null;
   pg_id: string | null; friend_code: string | null; streak?: number; xp?: number;
   ref_by?: string | null; ref_paid?: number; muted_until?: number; pid?: string | null; banned?: number; ban_reason?: string | null; title?: string | null;
+  tutorial?: number; nudged?: number;
 }
 
 export class Store {
@@ -91,6 +92,9 @@ export class Store {
     if (!cols.has('banned')) this.db.exec('ALTER TABLE users ADD COLUMN banned INTEGER NOT NULL DEFAULT 0; ALTER TABLE users ADD COLUMN ban_reason TEXT');
     // titles: the ones a player has (some until a date), the one they wear, and each game's monthly standings
     if (!cols.has('title')) this.db.exec('ALTER TABLE users ADD COLUMN title TEXT');
+    // the first-game guide done (its reward paid once), and when a player who stayed away was last nudged
+    if (!cols.has('tutorial')) this.db.exec('ALTER TABLE users ADD COLUMN tutorial INTEGER NOT NULL DEFAULT 0; ALTER TABLE users ADD COLUMN nudged INTEGER NOT NULL DEFAULT 0');
+    this.db.exec('CREATE TABLE IF NOT EXISTS chest (week TEXT NOT NULL, user_id TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0, opened TEXT NOT NULL DEFAULT \'[]\', PRIMARY KEY (week, user_id))');
     this.db.exec(`CREATE TABLE IF NOT EXISTS user_titles (user_id TEXT NOT NULL, title TEXT NOT NULL, ts INTEGER NOT NULL, until INTEGER NOT NULL DEFAULT 0,
         note TEXT, PRIMARY KEY (user_id, title));
       CREATE INDEX IF NOT EXISTS user_titles_title ON user_titles(title);
@@ -430,7 +434,7 @@ export class Store {
     const now = Date.now(), season = this.seasonState(u.id);
     // no full-screen ads: with the season pass, until the season ends
     const adFreeUntil = Math.max(u.ad_free_until ?? 0, season.premium ? season.endsAt : 0);
-    return { ...toPublic(u), adFreeUntil, titles: this.titlesOf(u.id, now), title: this.wornTitle(u.id, now), xp: u.xp ?? 0, level: levelOf(u.xp ?? 0), streak: u.streak ?? 0, daily: this.dailyState(u), code: this.friendCode(u.id), ratings: this.ratingsOf(u.id),
+    return { ...toPublic(u), adFreeUntil, titles: this.titlesOf(u.id, now), title: this.wornTitle(u.id, now), chest: this.chestState(u.id, now), tutorial: !!u.tutorial, xp: u.xp ?? 0, level: levelOf(u.xp ?? 0), streak: u.streak ?? 0, daily: this.dailyState(u), code: this.friendCode(u.id), ratings: this.ratingsOf(u.id),
       adsLeft: Math.max(0, ECONOMY.adsPerDay - this.adsToday(u.id)), skins: this.skinsOf(u.id),
       missions: this.missions(u.id), missionsAt: nextCairoDay(now), season,
       canRefer: !u.ref_by && now - u.created < REFER_DAYS * 86_400_000, referred: !!u.ref_by, muted: (u.muted_until ?? 0) > now ? u.muted_until : 0 };
@@ -448,10 +452,10 @@ export class Store {
     });
   }
   /** A finished game moves today's missions on. Returns the missions it just completed. */
-  missionProgress(uid: string, game: Game, won: boolean, online: boolean, now = Date.now()): string[] {
+  missionProgress(uid: string, ev: MissionEvent, now = Date.now()): string[] {
     const day = cairoDay(now), done: string[] = [];
     for (const m of missionsFor(uid, day)) {
-      if (!counts(m, game, won, online)) continue;
+      if (!counts(m, ev)) continue;
       const r = this.db.prepare('SELECT have FROM missions WHERE user_id = ? AND day = ? AND id = ?').get(uid, day, m.id) as { have: number } | undefined;
       const before = r?.have ?? 0;
       if (before >= m.need) continue;
@@ -472,7 +476,27 @@ export class Store {
     if (!Number(ch.changes)) return 'already_claimed';
     this.addCoins(uid, m.coins); this.logCoins(uid, 'mission', m.coins);
     this.addSeasonSp(uid, MISSION_SP, now);
+    // one more for the weekly chest
+    this.db.prepare('INSERT INTO chest (week, user_id, done) VALUES (?, ?, 1) ON CONFLICT(week, user_id) DO UPDATE SET done = done + 1').run(weekKey(now), uid);
     return { coins: m.coins, xp: m.xp };
+  }
+
+  /** The weekly chest: how many missions were collected this week, and which steps were opened. */
+  chestState(uid: string, now = Date.now()) {
+    const week = weekKey(now);
+    const r = this.db.prepare('SELECT done, opened FROM chest WHERE week = ? AND user_id = ?').get(week, uid) as { done: number; opened: string } | undefined;
+    let opened: number[] = []; try { opened = JSON.parse(r?.opened || '[]'); } catch { /* none */ }
+    return { week, done: r?.done ?? 0, opened, steps: CHEST.steps, coins: CHEST.coins };
+  }
+  /** Opens one step of the chest (0, 1, 2). */
+  chestOpen(uid: string, step: number, now = Date.now()): { coins: number; xp: number } | string {
+    const st = this.chestState(uid, now);
+    if (!Number.isInteger(step) || step < 0 || step >= CHEST.steps.length) return 'bad_step';
+    if (st.done < CHEST.steps[step]) return 'chest_locked';
+    if (st.opened.includes(step)) return 'already_claimed';
+    this.db.prepare('UPDATE chest SET opened = ? WHERE week = ? AND user_id = ?').run(JSON.stringify([...st.opened, step]), st.week, uid);
+    this.addCoins(uid, CHEST.coins[step]); this.logCoins(uid, 'chest', CHEST.coins[step]);
+    return { coins: CHEST.coins[step], xp: CHEST.xp[step] };
   }
 
   /* ---------- the season pass ---------- */
@@ -484,7 +508,7 @@ export class Store {
     const id = seasonOf(now), r = this.seasonRow(uid, id);
     const list = (j: string | undefined) => { try { return (JSON.parse(j || '[]') as number[]).filter(n => Number.isInteger(n)); } catch { return []; } };
     const sp = r?.sp ?? 0;
-    return { id, endsAt: seasonEndsAt(now), sp, tier: tierOf(sp), premium: !!r?.premium, free: list(r?.free), prem: list(r?.prem), price: SEASON_PASS.coins, egp: SEASON_PASS.egp };
+    return { id, endsAt: seasonEndsAt(now), sp, tier: tierOf(sp), premium: !!r?.premium, free: list(r?.free), prem: list(r?.prem), price: SEASON_PASS.coins, egp: SEASON_PASS.egp, tiers: TIERS };
   }
   /** Season points; returns the tier before and after. */
   addSeasonSp(uid: string, n: number, now = Date.now()): { from: number; to: number } {
@@ -803,6 +827,31 @@ export class Store {
     this.db.prepare('INSERT INTO admin_log (ts, who, action, target, detail) VALUES (?, ?, ?, ?, ?)').run(Date.now(), who, action, target, detail === undefined ? null : JSON.stringify(detail).slice(0, 2000));
   }
   adminLogAll(limit = 300) { return this.db.prepare('SELECT * FROM admin_log ORDER BY id DESC LIMIT ?').all(limit); }
+
+  /* ---------- the first-game guide, coming back ---------- */
+
+  /** The first-game guide was finished: its reward, once. Returns the coins (0 if already paid). */
+  tutorialDone(uid: string, coins: number): number {
+    const r = this.db.prepare('UPDATE users SET tutorial = 1 WHERE id = ? AND tutorial = 0').run(uid);
+    if (!Number(r.changes) || coins <= 0) return 0;
+    this.addCoins(uid, coins); this.logCoins(uid, 'tutorial', coins);
+    return coins;
+  }
+  /** A gift for a player back after `days` days or more away (called before `touch`). Returns the coins, or 0. */
+  comebackGift(u: UserRow, days: number, coins: number, now = Date.now()): number {
+    if (days <= 0 || coins <= 0 || !u.seen || now - u.seen < days * 86_400_000 || now - u.created < days * 86_400_000) return 0;
+    this.addCoins(u.id, coins); this.logCoins(u.id, 'comeback', coins);
+    return coins;
+  }
+  /** Players away for `days` days (not more than a day longer), with a phone to remind, not reminded since. */
+  awayToNudge(days: number, now = Date.now(), limit = 500): string[] {
+    const to = now - days * 86_400_000, from = to - 86_400_000;
+    const ids = (this.db.prepare(`SELECT DISTINCT u.id FROM users u JOIN push_tokens p ON p.user_id = u.id
+      WHERE u.seen >= ? AND u.seen < ? AND u.nudged < u.seen AND u.banned = 0 LIMIT ?`).all(from, to, limit) as { id: string }[]).map(r => r.id);
+    const mark = this.db.prepare('UPDATE users SET nudged = ? WHERE id = ?');
+    for (const id of ids) mark.run(now, id);
+    return ids;
+  }
 
   /* ---------- titles ---------- */
 

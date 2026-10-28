@@ -5,7 +5,7 @@ import type { GameId } from './engine';
 export interface MissionDef {
   id: string;
   game: GameId | 'any';
-  kind: 'play' | 'win';
+  kind: 'play' | 'win' | 'friend' | 'gift' | 'bigwin';   // friend: a game with a friend at the table · gift: send a table gift · bigwin: win a game with a big stake
   need: number;
   coins: number;
   xp: number;
@@ -27,7 +27,22 @@ export const MISSIONS: MissionDef[] = [
   { id: 'win_domino_2', game: 'domino', kind: 'win', need: 2, coins: 35_000, xp: 60, tier: 3 },
   { id: 'online_any_2', game: 'any', kind: 'play', need: 2, coins: 30_000, xp: 60, online: true, tier: 3 },
   { id: 'online_win_1', game: 'any', kind: 'win', need: 1, coins: 40_000, xp: 80, online: true, tier: 3 },
+  // something different: play with friends, be generous, take a risk
+  { id: 'gift_1', game: 'any', kind: 'gift', need: 1, coins: 10_000, xp: 20, tier: 1 },
+  { id: 'friend_1', game: 'any', kind: 'friend', need: 1, coins: 25_000, xp: 50, tier: 2 },
+  { id: 'friend_domino_1', game: 'domino', kind: 'friend', need: 1, coins: 25_000, xp: 50, tier: 2 },
+  { id: 'bigwin_1', game: 'any', kind: 'bigwin', need: 1, coins: 60_000, xp: 100, online: true, tier: 3 },
 ];
+/** A stake this big or bigger makes a win a "big win". */
+export const BIG_STAKE = 50_000;
+
+/** Something that happened that missions may count. */
+export type MissionEvent =
+  | { type: 'game'; game: GameId; won: boolean; online: boolean; friend?: boolean; stake?: number }
+  | { type: 'gift' };
+
+/** The weekly chest: missions collected this week open it in three steps. */
+export const CHEST = { steps: [3, 8, 15], coins: [20_000, 50_000, 120_000], xp: [50, 100, 200] };
 export const missionById = (id: string) => MISSIONS.find(m => m.id === id);
 
 /** Season points for finishing a mission. */
@@ -49,9 +64,13 @@ export function missionsFor(uid: string, day: string): MissionDef[] {
   return out;
 }
 
-/** Does a finished game count toward a mission? */
-export function counts(m: MissionDef, game: GameId, won: boolean, online: boolean): boolean {
-  if (m.game !== 'any' && m.game !== game) return false;
-  if (m.online && !online) return false;
-  return m.kind === 'play' || won;
+/** Does something that happened count toward a mission? */
+export function counts(m: MissionDef, ev: MissionEvent): boolean {
+  if (ev.type === 'gift') return m.kind === 'gift';
+  if (m.kind === 'gift') return false;
+  if (m.game !== 'any' && m.game !== ev.game) return false;
+  if (m.online && !ev.online) return false;
+  if (m.kind === 'friend') return !!ev.friend;
+  if (m.kind === 'bigwin') return ev.won && (ev.stake ?? 0) >= BIG_STAKE;
+  return m.kind === 'play' || ev.won;
 }

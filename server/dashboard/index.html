@@ -554,7 +554,8 @@ RENDER.settings = async main => {
       n('cg', 'Online games needed in the month', s.titles.minGames) +
       '<label class="f">Accepted numbers (prefixes)<input id="cp" value="' + esc(s.prizes.prefixes.join(', ')) + '"></label>' +
     '</div><div class="sub" style="margin-top:8px">Four games, so up to ' + num(4 * s.prizes.egp) + ' EGP a month. The winner must be signed in (Google, Apple or phone). Vodafone Cash works on Vodafone lines (010). Coins can\'t be turned into money.</div></div>' +
-    '<h2>Economy</h2><div class="card"><div class="form">' + n('es', 'Coins for a new player', s.economy.startCoins) + n('ea', 'Coins for a rewarded ad', s.economy.adReward) + n('ed', 'Rewarded ads a day', s.economy.adsPerDay) + '</div>' +
+    '<h2>Economy</h2><div class="card"><div class="form">' + n('es', 'Coins for a new player', s.economy.startCoins) + n('ea', 'Coins for a rewarded ad', s.economy.adReward) + n('ed', 'Rewarded ads a day', s.economy.adsPerDay) +
+      n('et', 'Coins for finishing the first-game guide', s.economy.tutorialCoins) + n('eb', 'Gift for coming back', s.economy.comebackCoins) + n('ey', '…after this many days away (0: off)', s.economy.comebackDays) + '</div>' +
       '<div class="sub" style="margin:12px 0 6px">Daily reward, day by day (day 7 repeats after)</div><div class="form">' + list('ek', 'Day', s.economy.streak) + '</div>' +
       '<div class="sub" style="margin:12px 0 6px">Weekly leaderboard prizes, places 1–10 (paid every Monday)</div><div class="form">' + list('ew', 'Place', s.economy.weeklyPrizes) + '</div></div>' +
     '<h2>Play</h2><div class="card"><div class="form">' + n('pb', 'Seconds before computer players fill a table', s.play.botFillSeconds, ' min="2" max="120"') + n('pt', 'Seconds for a turn (dominoes)', s.play.turnSeconds, ' min="5" max="60"') + '</div></div>' +
@@ -565,7 +566,7 @@ RENDER.settings = async main => {
       maintenance: { on: $('#mo').checked, message: $('#mm').value },
       prizes: { enabled: $('#co').checked, egp: Number($('#ce').value), claimDays: Number($('#cd').value), prefixes: $('#cp').value.split(/[ ,]+/).filter(Boolean) },
       titles: { minGames: Number($('#cg').value) },
-      economy: { startCoins: Number($('#es').value), adReward: Number($('#ea').value), adsPerDay: Number($('#ed').value), streak: vals('ek'), weeklyPrizes: vals('ew') },
+      economy: { startCoins: Number($('#es').value), adReward: Number($('#ea').value), adsPerDay: Number($('#ed').value), tutorialCoins: Number($('#et').value), comebackCoins: Number($('#eb').value), comebackDays: Number($('#ey').value), streak: vals('ek'), weeklyPrizes: vals('ew') },
       play: { botFillSeconds: Number($('#pb').value), turnSeconds: Number($('#pt').value) },
     } }), 'Settings saved'); go();
   };

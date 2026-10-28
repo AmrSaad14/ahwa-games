@@ -138,6 +138,15 @@ public class App : MonoBehaviour
 
     /// A practice game against the computer is running on the phone.
     public bool Practicing => offline != null;
+    /// The first-game guide: an easy practice game of dominoes with hints, for a new player (its reward once).
+    bool guided; int guideHints;
+    public void StartGuide()
+    {
+        guided = true; guideHints = 0;
+        OfflineGame.Level = 0;
+        PlayerPrefs.SetInt("guideOffered", 1);
+        Practice("ffa2");
+    }
     /// Ends a practice game (a tournament match or a friend's room is waiting).
     public void StopPractice() { offline = null; if (view != null) ExitGame(); }
     bool pumping;   // the table message being handled comes from the practice game, not the server
@@ -276,7 +285,7 @@ public class App : MonoBehaviour
                 // a tile going down clacks; your turn chimes (and buzzes the phone)
                 int tilesNow = v.line.Empty ? 0 : 1 + v.line.L.Count + v.line.R.Count;
                 if (view != null && tilesNow > tilesOnTable) Sfx.Slap();
-                if (v.MyTurn && v.phase == "play" && (view == null || !view.MyTurn)) { Sfx.Chime(); Sfx.Buzz(); }
+                if (v.MyTurn && v.phase == "play" && (view == null || !view.MyTurn)) { Sfx.Chime(); Sfx.Buzz(); if (guided && guideHints < 3) { guideHints++; Toast(Loc.T(v.game == "domino" ? "دورك! دوس على حجر بينوّر عشان تلعبه" : "دورك! دوس على اللوح"), 4f); } }
                 tilesOnTable = tilesNow;
                 view = v;
                 Redraw();
@@ -306,7 +315,8 @@ public class App : MonoBehaviour
             case "titleWon":
             {
                 var t = Titles.Get(m.Str("id"));
-                if (t != null) Toast(Loc.T("مبروك! بقيت") + " «" + t.Name + "» " + Loc.T("الشهر ده كله"), 8f);
+                if (t != null && view == null && menus != null) menus.ShowCard(Loc.T("مبروك!"), Loc.T("بقيت") + " «" + t.Name + "» " + Loc.T("الشهر ده كله"), t.id, true);
+                else if (t != null) Toast(Loc.T("مبروك! بقيت") + " «" + t.Name + "» " + Loc.T("الشهر ده كله"), 8f);
                 Sfx.Coins();
                 break;
             }
@@ -466,6 +476,8 @@ public class App : MonoBehaviour
                 reportedPractice = view.id;
                 bool won = view.you >= 0 && view.match.team == view.TeamOf(view.you);
                 if (net != null && net.Online) net.Send(new Dictionary<string, object> { ["t"] = "practiceDone", ["game"] = view.game, ["won"] = won });
+                // the first-game guide is done: its reward (once, the server checks)
+                if (guided && net != null && net.Online) { guided = false; net.Send(new Dictionary<string, object> { ["t"] = "tutorialDone" }); }
             }
         }
         catch (System.Exception e) { Debug.LogException(e); }

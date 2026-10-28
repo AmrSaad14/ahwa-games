@@ -1,0 +1,79 @@
+// Celebration cards: a big moment (a new title, a monthly prize, a weekly prize, coming back) shown on its own,
+// with a button to share a picture of it (WhatsApp and the rest) with an invite link.
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+
+public partial class Menus
+{
+    /// A card: a headline, a line under it, maybe a title's badge, your face and name; "share" sends a picture of it.
+    public void ShowCard(string headline, string line, string titleId, bool share, string shareText = null)
+    {
+        Panel("", out var body, new Vector2(560, 330));
+        // light rays behind
+        var glow = Ui.Picture(body, "Glow", Ui.Glow(256)); glow.color = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.35f);
+        glow.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), new Vector2(420, 260), new Vector2(0, -90));
+        // you
+        int ch = (int)(user?.Num("ch") ?? 0);
+        var frame = Ui.Box(body, "Frame", new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.9f)).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(84, 104), new Vector2(0, 6));
+        Ui.Picture(frame, "Face", Face(ch)).rectTransform.Fill(3);
+        var nm = Ui.Label(body, "", 15, Color.white, TextAnchor.MiddleCenter, Ui.Bold); nm.Set(user?.Str("name") ?? "");
+        nm.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(400, 22), new Vector2(0, -102));
+        float y = -128;
+        var b = Titles.Badge(body, titleId, 17);
+        if (b != null) { b.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), b.sizeDelta, new Vector2(0, y - 18)); y -= 40; StartCoroutine(Bounce(b)); }
+        var h = Ui.Label(body, "", 26, Ui.Gold, TextAnchor.MiddleCenter, Ui.Display); h.Set(headline);
+        h.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(520, 40), new Vector2(0, y));
+        var l = Ui.Label(body, "", 15, Color.white, TextAnchor.MiddleCenter, Ui.Bold); l.Set(line);
+        l.horizontalOverflow = HorizontalWrapMode.Wrap;
+        l.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(500, 44), new Vector2(0, y - 40));
+        // the game's name, for the picture
+        var brand = Ui.Label(body, "", 11, new Color(1, 1, 1, 0.5f), TextAnchor.MiddleCenter, Ui.Bold); brand.Set(Loc.T("بورد باتلز") + " · Board Battles");
+        brand.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(400, 16), new Vector2(0, 46));
+
+        var buttons = new List<GameObject>();
+        if (share)
+        {
+            var sb = Ui.Button(body, "شارك", new Color32(0x2f, 0x6b, 0x3a, 0xff), Color.white, 16, () =>
+            {
+                Sfx.Tap();
+                string code = user?.Str("code") ?? "", link = Growth.InviteLink(code);
+                string text = (shareText ?? headline + " " + line) + (Loc.En ? "\nPlay with me in Board Battles: " : "\nتعالى العب معايا في بورد باتلز: ") + link;
+                StartCoroutine(Growth.ShareScreen(text, () => { foreach (var x in buttons) x.SetActive(false); }, () => { foreach (var x in buttons) if (x != null) x.SetActive(true); }));
+            });
+            ((RectTransform)sb.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(150, 40), new Vector2(Loc.En ? -82 : 82, 0));
+            buttons.Add(sb.gameObject);
+        }
+        var ok = Ui.Button(body, "تمام", Ui.Gold, Ui.Ink, 16, () => { Sfx.Tap(); Close(); });
+        ((RectTransform)ok.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(150, 40), new Vector2(share ? (Loc.En ? 82 : -82) : 0, 0));
+        buttons.Add(ok.gameObject);
+        // the panel's own close button is left out of the picture too
+        var x0 = open?.GetComponentsInChildren<Button>(true);
+        if (x0 != null) foreach (var x in x0) if (x.name == "Button" && x.transform.parent != null && x.transform.parent.name == "Sheet") buttons.Add(x.gameObject);
+        Sfx.Chime();
+    }
+
+    /// New here? An easy first game of dominoes with hints, and a gift at the end.
+    void OfferGuide()
+    {
+        Panel(Loc.T("أهلاً بيك في القهوة!"), out var body, new Vector2(520, 300));
+        int ch = (int)(user?.Num("ch") ?? 0);
+        var frame = Ui.Box(body, "Frame", new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.9f)).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(76, 94), new Vector2(0, 0));
+        Ui.Picture(frame, "Face", Face(ch)).rectTransform.Fill(3);
+        var l = Ui.Label(body, "", 16, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
+        l.Set(Loc.T("أول مرة هنا؟ العب دور دومينو سهل ضد الكمبيوتر وإحنا هنقولك تعمل إيه خطوة بخطوة") + "\n" + Loc.T("وفي الآخر خد") + " " + Loc.Short((long)(user?.Num("tutorialCoins", 10000) ?? 10000)) + " " + Loc.T("كوين هدية"));
+        l.horizontalOverflow = HorizontalWrapMode.Wrap;
+        l.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(470, 84), new Vector2(0, -104));
+        var go = Ui.Button(body, "يلا نلعب", Ui.Gold, Ui.Ink, 17, () => { Sfx.Tap(); Close(); app.StartGuide(); });
+        ((RectTransform)go.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(170, 44), new Vector2(Loc.En ? 90 : -90, 0));
+        var later = Ui.Button(body, "بعدين", new Color(1, 1, 1, 0.1f), Ui.GoldLight, 15, () => { Sfx.Tap(); Close(); });
+        ((RectTransform)later.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(130, 44), new Vector2(Loc.En ? -90 : 90, 0));
+    }
+
+    static IEnumerator Bounce(RectTransform r)
+    {
+        for (float t = 0; t < 0.5f; t += Time.unscaledDeltaTime) { if (r == null) yield break; r.localScale = Vector3.one * Mathf.Lerp(0.4f, 1f, Ui.Back(t / 0.5f)); yield return null; }
+        if (r != null) r.localScale = Vector3.one;
+    }
+}

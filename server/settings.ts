@@ -19,7 +19,7 @@ export interface GameSettings {
   };
   tourney: { enabled: boolean; weekday: number; hour: number; game: TourneyGame; prizes: number[]; played: number };
   season: { enabled: boolean; passCoins: number; passEgp: number; tiers: { free: Reward; prem: Reward }[] };
-  economy: { startCoins: number; adReward: number; adsPerDay: number; streak: number[]; weeklyPrizes: number[] };
+  economy: { startCoins: number; adReward: number; adsPerDay: number; streak: number[]; weeklyPrizes: number[]; tutorialCoins: number; comebackCoins: number; comebackDays: number };
   play: { botFillSeconds: number; turnSeconds: number };
   maintenance: { on: boolean; message: string };
   notice: { text: string; until: number };
@@ -33,7 +33,7 @@ function defaults(): GameSettings {
     prizes: { enabled: true, egp: 500, claimDays: 30, prefixes: ['010'] },
     tourney: { enabled: true, weekday: TOURNEY.weekday, hour: TOURNEY.hour, game: 'rotate', prizes: [...TOURNEY.prizes], played: TOURNEY.played },
     season: { enabled: true, passCoins: SEASON_PASS.coins, passEgp: SEASON_PASS.egp, tiers: TIERS.map(t => ({ free: { ...t.free }, prem: { ...t.prem } })) },
-    economy: { startCoins: ECONOMY.startCoins, adReward: ECONOMY.adReward, adsPerDay: ECONOMY.adsPerDay, streak: [...STREAK], weeklyPrizes: [...WEEKLY_PRIZES] },
+    economy: { startCoins: ECONOMY.startCoins, adReward: ECONOMY.adReward, adsPerDay: ECONOMY.adsPerDay, tutorialCoins: ECONOMY.tutorialCoins, comebackCoins: ECONOMY.comebackCoins, comebackDays: ECONOMY.comebackDays, streak: [...STREAK], weeklyPrizes: [...WEEKLY_PRIZES] },
     play: { botFillSeconds: 8, turnSeconds: 10 },
     maintenance: { on: false, message: 'السيرفر في صيانة دلوقتي، ارجع كمان شوية · Maintenance, back soon' },
     notice: { text: '', until: 0 },
@@ -90,6 +90,9 @@ export function sanitize(input: unknown, cur: GameSettings): GameSettings {
       startCoins: int(e.startCoins, 0, 100_000_000, cur.economy.startCoins),
       adReward: int(e.adReward, 0, 10_000_000, cur.economy.adReward),
       adsPerDay: int(e.adsPerDay, 0, 100, cur.economy.adsPerDay),
+      tutorialCoins: int(e.tutorialCoins, 0, 10_000_000, cur.economy.tutorialCoins ?? SHIPPED.economy.tutorialCoins),
+      comebackCoins: int(e.comebackCoins, 0, 10_000_000, cur.economy.comebackCoins ?? SHIPPED.economy.comebackCoins),
+      comebackDays: int(e.comebackDays, 0, 60, cur.economy.comebackDays ?? SHIPPED.economy.comebackDays),
       streak: ints(e.streak, 0, 100_000_000, cur.economy.streak, 7),
       weeklyPrizes: ints(e.weeklyPrizes, 0, 100_000_000, cur.economy.weeklyPrizes, 10),
     },
@@ -106,6 +109,7 @@ function apply(s: GameSettings) {
   SEASON_PASS.coins = s.season.passCoins; SEASON_PASS.egp = s.season.passEgp; SEASON_PASS.enabled = s.season.enabled;
   s.season.tiers.forEach((t, k) => { if (TIERS[k]) { TIERS[k].free = { ...t.free }; TIERS[k].prem = { ...t.prem }; } });
   ECONOMY.startCoins = s.economy.startCoins; ECONOMY.adReward = s.economy.adReward; ECONOMY.adsPerDay = s.economy.adsPerDay;
+  ECONOMY.tutorialCoins = s.economy.tutorialCoins; ECONOMY.comebackCoins = s.economy.comebackCoins; ECONOMY.comebackDays = s.economy.comebackDays;
   STREAK.splice(0, STREAK.length, ...s.economy.streak);
   WEEKLY_PRIZES.splice(0, WEEKLY_PRIZES.length, ...s.economy.weeklyPrizes);
 }

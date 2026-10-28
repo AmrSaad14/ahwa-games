@@ -260,6 +260,8 @@ export type C2S =
   | { t: 'pushToken'; token: string; lang?: string; platform?: string }
   /** Cash out: every 1,000,000 coins pays 10 EGP to a Vodafone Cash number, paid by hand within one working day. */
   | { t: 'prizeClaim'; id: number; phone: string }
+  | { t: 'tutorialDone' }
+  | { t: 'chestOpen'; step: number }
   | { t: 'wearTitle'; id: string | null }
   /** A practice game (played on the phone) finished: a little experience. */
   | { t: 'practiceDone'; game: GameId; won: boolean }
@@ -300,6 +302,9 @@ export type S2C =
   | { t: 'titleWon'; id: string; month: string }
   | { t: 'notice'; text: string }
   | { t: 'prizeClaimed'; id: number }
+  | { t: 'chestOpened'; step: number; coins: number; xp: number }
+  | { t: 'comeback'; coins: number; days: number }
+  | { t: 'tutorialReward'; coins: number }
   | { t: 'prizeWon'; id: number; game: string; month: string; egp: number }
   | { t: 'supportSent'; id: number }
   | { t: 'rematch'; seats: number[]; need: number; gone: boolean }

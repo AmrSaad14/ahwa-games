@@ -116,7 +116,7 @@ export class Hub {
       this.matchmake(); this.sweep();
       try { this.tourney.tick(); } catch (e) { console.error('[tourney]', (e as Error).message); }
       if (++this.ticks % 60 === 0) { this.weeklyPrizes(); try { this.monthlyTitles(); } catch (e) { console.error('[titles]', (e as Error).message); } }
-      if (this.ticks % 3600 === 0) this.store.expirePrizes(this.prizeCfg.claimDays);
+      if (this.ticks % 3600 === 0) { this.store.expirePrizes(this.prizeCfg.claimDays); this.nudgeAway(); }
     }, 1000);
   }
 
@@ -160,6 +160,15 @@ export class Hub {
     }
     this.store.metaSet('potm_winners_' + prev, JSON.stringify(won.map(w => ({ ...w, name: this.store.get(w.uid)?.name ?? '' }))));
     return won;
+  }
+
+  /** Players away for a few days get one push: we miss you, and a gift is waiting (hourly). */
+  nudgeAway(now = Date.now()): string[] {
+    const days = ECONOMY.comebackDays; if (!days || !this.opts.push) return [];
+    const ids = this.store.awayToNudge(days, now);
+    const c = ECONOMY.comebackCoins.toLocaleString('en');
+    if (ids.length) this.opts.push(ids, ['وحشتنا! 👋', `القهوة مستنياك، وفي ${c} كوين هدية أول ما ترجع`], ['We miss you! 👋', `The café is waiting, with a ${c}-coin gift when you come back`]);
+    return ids;
   }
 
   /** This month's race for a game's title, as one player sees it. */
@@ -565,6 +574,7 @@ export class Hub {
         if (!this.giftLimiter.allow(uid)) return err('slow_down');
         if (!this.store.sendGift(uid, target.uid, g.k, g.price)) return err('not_enough_coins');
         for (const p of table.seats) if (p && !p.bot && this.userTable.get(p.uid) === table) this.byUser.get(p.uid)?.conn.send({ t: 'gift', from, to, k: g.k });
+        for (const id of this.store.missionProgress(uid, { type: 'gift' })) s.conn.send({ t: 'missionDone', id });
         this.sendUser(uid); this.sendUser(target.uid);
         return;
       }
@@ -609,6 +619,19 @@ export class Hub {
         const contact = String(m.contact || '').trim().slice(0, 200) || u?.google_email || u?.email || u?.phone || '';
         const id = this.opts.support({ uid, name: u?.name ?? '', contact, text, app: String(m.app || '').slice(0, 80) });
         return s.conn.send({ t: 'supportSent', id });
+      }
+      case 'tutorialDone': {
+        // the first-game guide: its reward, once
+        const coins = this.store.tutorialDone(uid, ECONOMY.tutorialCoins);
+        if (coins) s.conn.send({ t: 'tutorialReward', coins });
+        return this.sendUser(uid);
+      }
+      case 'chestOpen': {
+        const r = this.store.chestOpen(uid, Number(m.step));
+        if (typeof r === 'string') return err(r);
+        s.conn.send({ t: 'chestOpened', step: Number(m.step), ...r });
+        const x = this.store.addXp(uid, r.xp); s.conn.send({ t: 'xp', ...x });
+        return this.sendUser(uid);
       }
       case 'prizeClaim': {
         // the month's winner gives the Vodafone Cash number to pay the prize to
@@ -731,6 +754,8 @@ export class Hub {
     if (prev && prev !== s) { prev.uid = null; prev.conn.close(4001, 'replaced'); }
     s.uid = u.id;
     this.byUser.set(u.id, s);
+    // back after a while away: a gift (before `touch` moves "last seen")
+    const back = this.store.comebackGift(u, ECONOMY.comebackDays, ECONOMY.comebackCoins);
     this.store.touch(u.id);
     // the daily reward: newer phones show the track and the player collects it; older ones get it at once
     const daily = (s.v ?? 1) < 2 ? this.store.claimDaily(u.id) : { coins: 0, streak: 0 };
@@ -739,6 +764,7 @@ export class Hub {
       login: { google: !!this.opts.google?.enabled, apple: !!this.opts.apple?.enabled, phone: !!this.opts.phones?.enabled, playGames: this.opts.google?.playGamesEnabled ? this.opts.google.clientId : undefined } });
     this.friendsChanged(u.id);
     if (daily.coins) s.conn.send({ t: 'bonus', coins: daily.coins, streak: daily.streak });
+    if (back) s.conn.send({ t: 'comeback', coins: back, days: Math.floor((Date.now() - u.seen) / 86_400_000) });
     const t = this.userTable.get(u.id);
     if (t && !t.closed) { t.setOnline(u.id, true); this.pushView(t, u.id); }
   }
@@ -770,7 +796,7 @@ export class Hub {
   /** A player as the app sees them, with their monthly prizes and what the prizes are this month. */
   private pub(u: UserRow) {
     const c = this.prizeCfg;
-    return { ...this.store.publicUser(u), prizes: this.store.prizesOf(u.id), prize: { on: c.enabled, egp: c.egp, claimDays: c.claimDays }, adReward: ECONOMY.adReward,
+    return { ...this.store.publicUser(u), prizes: this.store.prizesOf(u.id), prize: { on: c.enabled, egp: c.egp, claimDays: c.claimDays }, adReward: ECONOMY.adReward, tutorialCoins: ECONOMY.tutorialCoins,
       // what the dashboard switched on: the tournament section and the season pass
       features: { tourney: TOURNEY.enabled !== false, season: SEASON_PASS.enabled } };
   }
@@ -982,10 +1008,13 @@ export class Hub {
     // the weekly leaderboard counts matchmade games and rooms with at least two people (not a room full of bots)
     const weekly = !t.isPrivate || t.seats.filter(s => s && !s.bot).length >= 2;
     const vsPeople = t.seats.filter(s => s && !s.bot).length >= 2 || !t.isPrivate;
+    const humans = t.seats.filter(s => s && !s.bot).map(s => s!.uid);
     const xpFor = (uid: string, won: boolean) => {
       const r = this.store.addXp(uid, won ? XP.win : XP.loss);
       this.byUser.get(uid)?.conn.send({ t: 'xp', ...r });
-      this.afterGame(uid, game, won, vsPeople, won ? SP.win : SP.loss);
+      // missions: a friend at the table, a big stake
+      const friend = humans.some(o => o !== uid && this.store.friendStatus(uid, o) === 'friend');
+      this.afterGame(uid, game, won, vsPeople, won ? SP.win : SP.loss, { friend, stake: t.stake });
     };
     // the tournament: who goes on
     if (this.tourneyTables.has(t.id)) setTimeout(() => this.tourney.onResult(t.id, res.team), 0);
@@ -1015,9 +1044,9 @@ export class Hub {
   }
 
   /** After any finished game (online or practice on the phone): missions, season points, the referral bonus. */
-  private afterGame(uid: string, game: GameId, won: boolean, online: boolean, sp: number) {
+  private afterGame(uid: string, game: GameId, won: boolean, online: boolean, sp: number, extra: { friend?: boolean; stake?: number } = {}) {
     const conn = this.byUser.get(uid)?.conn;
-    for (const id of this.store.missionProgress(uid, game, won, online)) conn?.send({ t: 'missionDone', id });
+    for (const id of this.store.missionProgress(uid, { type: 'game', game, won, online, ...extra })) conn?.send({ t: 'missionDone', id });
     if (online) this.store.addMonthly(uid, game, won, seasonOf(Date.now()));   // the race for player of the month
     const tier = this.store.addSeasonSp(uid, sp);
     if (tier.to > tier.from) conn?.send({ t: 'seasonTier', tier: tier.to });
