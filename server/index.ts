@@ -81,6 +81,11 @@ export function createServer(opts = config) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ ok: true, ...hub.stats() }));
     }
+    // app-ads.txt: AdMob checks it on the website given in the Play listing before serving real ads
+    if (url.pathname === '/app-ads.txt') {
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'max-age=3600' });
+      return res.end(`google.com, ${process.env.ADMOB_PUBLISHER_ID || 'pub-3492998296780013'}, DIRECT, f08c47fec0942fa0\n`);
+    }
     // the privacy policy, the terms and the delete-account page (Google Play links to them)
     const legal = url.pathname === '/privacy' ? privacyPage : url.pathname === '/terms' ? termsPage : url.pathname === '/delete-account' ? deletePage : null;
     if (legal) {
