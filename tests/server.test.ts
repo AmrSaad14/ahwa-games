@@ -405,7 +405,7 @@ test('rewarded ads: AdMob\'s signed callback is checked', async () => {
   assert.equal(await verifySsv(`${msg.replace('u1', 'u2')}&signature=${sig}&key_id=3335741209`, publicKey), null, 'a changed callback is refused');
 });
 
-test('shop: the season pass is credited once per purchase, the ad-free plan sets a date, coins are not sold', async () => {
+test('shop: the season pass is credited once per purchase and removes ads, coins and the ad-free plan are not sold', async () => {
   const a = await new Client().open(), b = await new Client().open();
   const before = a.last('welcome')!.user.coins;
   a.send({ t: 'buy', product: 'season_pass', token: 'test:order-1' });
@@ -429,8 +429,13 @@ test('shop: the season pass is credited once per purchase, the ad-free plan sets
   await b.until(() => !!b.last('buyFailed'));
   assert.equal(b.last('buyFailed')!.code, 'wrong_account');
   // ad-free for a month
+  // the season pass also means no ads until the season ends; there's no ad-free plan on its own
+  const pu = app.store.publicUser(app.store.get(a.uid)!);
+  assert.ok(pu.adFreeUntil > Date.now() && pu.adFreeUntil === pu.season!.endsAt);
+  a.msgs = [];
   a.send({ t: 'buy', product: 'no_ads_monthly', token: 'test:sub-1' });
-  await a.until(() => (a.last('bought')?.adFreeUntil ?? 0) > Date.now() + 29 * 86_400_000);
+  await a.until(() => !!a.last('buyFailed'));
+  assert.equal(a.last('buyFailed')!.code, 'bad_product');
   // unknown products and unverifiable tokens are refused
   b.msgs = [];
   b.send({ t: 'buy', product: 'coins_free', token: 'test:x' });

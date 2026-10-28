@@ -55,7 +55,7 @@ export function termsPage(c?: CashoutTerms): string {
 <h1>Terms of use</h1><div class="sub">Board Battles, by Qimma Labs · last updated ${UPDATED}</div>
 <ul><li>Board Battles is a game for fun. Coins can't be sold or traded between players.</li>
 ${c?.enabled ? `<li><b>Prizes:</b> players aged 18 or over who live in Egypt can ask to exchange coins for a Vodafone Cash transfer: every ${fmt(c.coins)} coins = ${fmt(c.egp)} EGP. Requests are checked by hand before paying (the account must be signed in and have played enough online games); we can refuse a request that breaks these terms, and the coins then go back. The rate and the rules can change.</li>` : `<li><b>Coins have no money value</b>: they can't be cashed out.</li>`}
-<li>Coins can't be bought. Purchases (the season pass, the ad-free month) are digital items for the game, sold through Google Play under its refund rules.</li>
+<li>Coins can't be bought. Purchases (the season pass: skins and no ads until the season ends) are digital items for the game, sold through Google Play under its refund rules.</li>
 <li>Be decent: no cheating, no abuse in names or chat, no harassment. Players others report are muted automatically, and we may close accounts that break these rules.</li>
 <li>One account per player. Don't use bots or modified apps.</li>
 <li>The game is provided as it is; we do our best to keep it running but can't promise it never stops. We may change or end features and seasons.</li>
@@ -63,7 +63,7 @@ ${c?.enabled ? `<li><b>Prizes:</b> players aged 18 or over who live in Egypt can
 <div class="ar"><h1>شروط الاستخدام</h1><ul>
 <li>بورد باتلز لعبة للتسلية. الكوينز مش بتتباع ولا بتتبادل بين اللاعيبة.</li>
 ${c?.enabled ? `<li><b>الجوايز:</b> اللاعيبة من ١٨ سنة وساكنين في مصر يقدروا يطلبوا تحويل الكوينز لفودافون كاش: كل ${fmt(c.coins)} كوين = ${fmt(c.egp)} جنيه. الطلبات بتتراجع قبل الدفع (لازم الحساب يكون متسجل ولعبت ماتشات أونلاين كفاية)، وممكن نرفض الطلب اللي بيخالف الشروط وترجعلك الكوينز. السعر والقواعد ممكن يتغيروا.</li>` : `<li><b>الكوينز ملهاش قيمة فلوس</b>: مش بتتسحب.</li>`}
-<li>الكوينز مش بتتباع. المشتريات (الموسم المميز، بدون إعلانات) حاجات رقمية جوه اللعبة، بتتباع من خلال Google Play وبقواعد الاسترجاع بتاعته.</li>
+<li>الكوينز مش بتتباع. المشتريات (الموسم المميز: سكينز ومن غير إعلانات لآخر الموسم) حاجات رقمية جوه اللعبة، بتتباع من خلال Google Play وبقواعد الاسترجاع بتاعته.</li>
 <li>خليك محترم: ممنوع الغش والشتيمة والمضايقة. اللي بيتبلغ عنه بيتكتم، وممكن نقفل الحساب اللي بيكسر القواعد.</li>
 <li>حساب واحد لكل لاعب، وممنوع البوتات والنسخ المعدلة. لازم يكون عندك ١٣ سنة أو أكتر.</li></ul></div>`);
 }

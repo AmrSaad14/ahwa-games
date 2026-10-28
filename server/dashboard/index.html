@@ -367,8 +367,8 @@ RENDER.tourney = async main => {
 /* ---------------- season pass ---------------- */
 RENDER.season = async main => {
   const d = await api('/season'), st = d.settings;
-  const skinOpts = sel => '<option value="">— coins —</option>' + d.skins.map(k => '<option value="' + k.id + '"' + (k.id === sel ? ' selected' : '') + '>' + esc(k.cat + ' · ' + k.id) + (k.pass ? ' ★' : '') + '</option>').join('');
-  const cell = (rw, track, i) => '<div class="row" style="gap:6px"><select class="rk" data-t="' + track + '" data-i="' + i + '">' + skinOpts(rw.skin) + '</select><input type="number" class="rc" data-t="' + track + '" data-i="' + i + '" value="' + (rw.coins ?? '') + '" placeholder="coins" style="width:110px' + (rw.skin ? ';display:none' : '') + '"></div>';
+  const skinOpts = (sel, coins) => (coins ? '<option value="">— coins —</option>' : '') + d.skins.map(k => '<option value="' + k.id + '"' + (k.id === sel ? ' selected' : '') + '>' + esc(k.cat + ' · ' + k.id) + (k.pass ? ' ★' : '') + '</option>').join('');
+  const cell = (rw, track, i) => '<div class="row" style="gap:6px"><select class="rk" data-t="' + track + '" data-i="' + i + '">' + skinOpts(rw.skin, track === 'free') + '</select><input type="number" class="rc" data-t="' + track + '" data-i="' + i + '" value="' + (rw.coins ?? '') + '" placeholder="coins" style="width:110px' + (rw.skin || track === 'prem' ? ';display:none' : '') + '"></div>';
   const max = Math.max(1, ...d.tiers);
   main.innerHTML = '<h1>Season pass</h1><div class="sub">Season ' + esc(d.season) + ' · ends ' + when(d.endsAt) + '</div>' +
     '<div class="grid" style="margin-top:12px">' +
@@ -380,7 +380,7 @@ RENDER.season = async main => {
     '<h2>Price</h2><div class="card"><div class="form"><label class="f">Premium with coins<input id="sc" type="number" value="' + st.passCoins + '"></label>' +
       '<label class="f">Premium price shown (EGP)<input id="se" type="number" value="' + st.passEgp + '"></label></div>' +
       '<div class="sub" style="margin-top:8px">The price players actually pay on Google Play is set in Play Console (product <span class="mono">season_pass</span>); keep the two the same.</div></div>' +
-    '<h2>Rewards per tier</h2><div class="sub">Pick a skin, or leave "coins" and set the amount. ★ = only from the season.</div>' +
+    '<h2>Rewards per tier</h2><div class="sub">Free track: a skin or coins. Premium track: skins only (premium also removes ads until the season ends). ★ = only from the season.</div>' +
     '<div class="tablewrap"><table><thead><tr><th>Tier</th><th>Free track</th><th>Premium track</th></tr></thead><tbody>' +
       st.tiers.map((t, i) => '<tr class="tierrow"><td><b>' + (i + 1) + '</b></td><td>' + cell(t.free, 'free', i) + '</td><td>' + cell(t.prem, 'prem', i) + '</td></tr>').join('') +
     '</tbody></table></div><button class="btn gold" id="ssv" style="margin-top:12px">Save the season pass</button>';

@@ -128,6 +128,7 @@ public static class Loc
         ["سجّل دخول الأول عشان تقدر تسحب"] = "Sign in first to cash out", ["اكتب رقم فودافون صحيح يبدأ بـ 010"] = "Enter a valid Vodafone number starting with 010",
         ["عندك طلب لسه بيتحول، استنى لما يخلص"] = "You already have a payout in progress", ["المبلغ مش مظبوط"] = "That amount isn't right",
         ["استنى شوية وجرّب تاني"] = "Wait a bit and try again",
+        ["الموسم المميز"] = "Premium season", ["سكين في كل مستوى (٣٠ سكين) + بدون إعلانات لآخر الموسم"] = "A skin at every tier (30 skins) + no ads until the season ends",
         ["كوينز ببلاش"] = "Free coins", ["شوف إعلان وخد"] = "Watch an ad, get", ["فاضلك النهارده"] = "Left today",
         ["شوف الإعلان"] = "Watch the ad", ["خلصت إعلانات النهارده"] = "No ads left today",
         ["العب"] = "Play", ["ماتش أونلاين كمان وتقدر تسحب"] = "more online games to cash out",

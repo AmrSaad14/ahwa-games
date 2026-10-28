@@ -81,7 +81,8 @@ export function sanitize(input: unknown, cur: GameSettings): GameSettings {
       passEgp: int(s.passEgp, 1, 100_000, cur.season.passEgp),
       tiers: Array.from({ length: SEASON_TIERS }, (_, k) => {
         const was = cur.season.tiers[k] ?? SHIPPED.season.tiers[k], x = tiers[k] as { free?: unknown; prem?: unknown } | undefined;
-        return { free: reward(x?.free, was.free), prem: reward(x?.prem, was.prem) };
+        const prem = reward(x?.prem, was.prem);
+        return { free: reward(x?.free, was.free), prem: 'skin' in prem ? prem : was.prem };   // premium: skins only
       }),
     },
     economy: {

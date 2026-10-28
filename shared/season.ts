@@ -7,24 +7,30 @@ export const SEASON_TIERS = 30;
 export const SP_PER_TIER = 100;
 /** Season points: a finished online game, a practice game, a mission, the daily reward. */
 export const SP = { win: 40, loss: 15, practiceWin: 10, practiceLoss: 4, daily: 20 };
-/** The premium track: with coins, or bought on Google Play (a consumable product, once per season). */
+/** The premium track: with coins, or bought on Google Play (a consumable product, once per season). Premium
+ * also means no full-screen ads until the season ends. */
 export const SEASON_PASS = { id: 'season_pass', coins: 750_000, egp: 299 };
 
 export type Reward = { coins: number } | { skin: string };
 export interface Tier { free: Reward; prem: Reward }
 
-const coinTier = (n: number, prem: boolean): Reward => ({ coins: prem ? 15_000 + 3_000 * n : 5_000 + 1_000 * n });
+const coinTier = (n: number): Reward => ({ coins: 5_000 + 1_000 * n });
 const FREE_SKINS: Record<number, string> = { 10: 'hat_fez_white', 20: 'drink_sahlab' };
+// The premium track is skins only (no coins: coins can be exchanged for prizes, so the pass must not sell them).
+// Every third tier is a skin only the season gives; the tiers between are shop skins, cheapest first.
 const PREM_SKINS: Record<number, string> = {
-  3: 'drink_qasab', 6: 'checkers_pharaoh', 9: 'felt_royal', 12: 'dice_pharaoh', 15: 'hat_fez_gold',
-  18: 'tawla_pharaoh', 21: 'pieces_onyx', 24: 'chess_gold', 27: 'felt_kilim',
+  1: 'drink_mint', 2: 'drink_coffee', 3: 'dice_ruby', 4: 'hat_fez_red', 5: 'drink_karkade', 6: 'drink_qasab',
+  7: 'tiles_ebony', 8: 'checkers_marble', 9: 'checkers_pharaoh', 10: 'felt_green', 11: 'felt_red', 12: 'felt_royal',
+  13: 'hat_fez_black', 14: 'dice_obsidian', 15: 'dice_pharaoh', 16: 'tawla_olive', 17: 'chess_blue', 18: 'hat_fez_gold',
+  19: 'felt_blue', 20: 'ludo_night', 21: 'tawla_pharaoh', 22: 'hat_fez_green', 23: 'checkers_amber', 24: 'pieces_onyx',
+  25: 'pieces_porcelain', 26: 'chess_tournament', 27: 'felt_kilim', 28: 'dice_emerald', 29: 'hat_fez_navy', 30: 'chess_gold',
 };
 /** Tier 1‥30 (index 0‥29). */
 export const TIERS: Tier[] = Array.from({ length: SEASON_TIERS }, (_, i) => {
   const n = i + 1;
   return {
-    free: FREE_SKINS[n] ? { skin: FREE_SKINS[n] } : n === SEASON_TIERS ? { coins: 200_000 } : coinTier(n, false),
-    prem: PREM_SKINS[n] ? { skin: PREM_SKINS[n] } : n === SEASON_TIERS ? { coins: 500_000 } : coinTier(n, true),
+    free: FREE_SKINS[n] ? { skin: FREE_SKINS[n] } : n === SEASON_TIERS ? { coins: 200_000 } : coinTier(n),
+    prem: { skin: PREM_SKINS[n] },
   };
 });
 

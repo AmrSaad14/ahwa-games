@@ -384,6 +384,7 @@ export class Hub {
         if (!this.buyLimiter.allow(uid)) return fail('slow_down');
         const billing = this.opts.billing;
         if (!billing?.enabled) return fail('purchases_off');
+        if (product === NO_ADS.id) return fail('bad_product');   // no ad-free plan on its own: it comes with the season pass
         const seen = this.store.purchase(token);
         if (seen && seen.product !== NO_ADS.id) {
           // already credited (the app asks again until it hears back): just confirm

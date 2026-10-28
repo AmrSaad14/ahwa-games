@@ -793,7 +793,7 @@ public partial class Menus : MonoBehaviour
         refreshOpen = () =>
         {
             foreach (Transform c in body) Destroy(c.gameObject);
-            var area = Tabs(body, new[] { "كوينز ببلاش", "ترابيزات", "قطع", "زهر", "طربوش", "مشروب", "بدون إعلانات" }, shopTab, i => { shopTab = i; refreshOpen(); });
+            var area = Tabs(body, new[] { "كوينز ببلاش", "ترابيزات", "قطع", "زهر", "طربوش", "مشروب", "الموسم المميز" }, shopTab, i => { shopTab = i; refreshOpen(); });
             // your coins, bottom corner; your collection, the other corner
             var have = Ui.Label(area, Loc.T("رصيدك") + ": " + ((long)(user?.Num("coins") ?? 0)).ToString("N0"), 13, Ui.GoldLight, StartAlign, Ui.Bold);
             have.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(640, 20), new Vector2(0, -6));
@@ -825,9 +825,15 @@ public partial class Menus : MonoBehaviour
             {
                 var c = ShopCard(row, 0, 1);
                 c.sizeDelta = new Vector2(300, c.sizeDelta.y);
-                var vi = Ui.Picture(c, "Icon", Icon("video")); vi.color = Ui.Gold; vi.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(50, 50), new Vector2(0, -16));
-                Ui.Label(c, "بدون إعلانات", 20, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(280, 30), new Vector2(0, -76));
-                BuyButton(c, "199 " + Loc.T("ج.م") + " / " + Loc.T("شهرياً"), Ui.Gold, Ui.Ink, () => Billing.Buy("no_ads_monthly"));
+                // the season pass: a skin at every tier, and no ads until the season ends (there's no ad-free plan on its own)
+                var season = user?.Obj("season");
+                bool prem = season != null && season.Bool("premium");
+                c.sizeDelta = new Vector2(340, c.sizeDelta.y);
+                var vi = Ui.Picture(c, "Icon", Icon("pass")); vi.color = Ui.Gold; vi.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(44, 44), new Vector2(0, -10));
+                Ui.Label(c, "الموسم المميز", 20, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(320, 28), new Vector2(0, -58));
+                Ui.Label(c, "سكين في كل مستوى (٣٠ سكين) + بدون إعلانات لآخر الموسم", 12, Color.white, TextAnchor.MiddleCenter).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(330, 36), new Vector2(0, -88));
+                if (prem) BuyButton(c, Loc.T("المميز مفتوح"), new Color(1, 1, 1, 0.1f), Ui.GoldLight, () => { Sfx.Tap(); Close(); OpenSeason(); });
+                else BuyButton(c, (int)(season?.Num("egp", 299) ?? 299) + " " + Loc.T("ج.م"), Ui.Gold, Ui.Ink, () => Billing.Buy("season_pass"));
             }
         };
         refreshOpen();

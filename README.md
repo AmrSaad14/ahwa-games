@@ -109,22 +109,21 @@ CLIENT_STUBS=1 npm run build && node tests/ui-smoke.mjs ./screenshots
 npm run build          # rebuild afterwards: CLIENT_STUBS swaps out three.js for the test
 ```
 
-## Shop: the season pass and the ad-free plan (Google Play Billing)
+## Shop: the season pass (Google Play Billing)
 
 Coins are **not sold**. Players get them from games, the daily reward, missions, the season track, tournaments and
 rewarded ads (2,000 coins an ad, changeable in the dashboard). The server refuses the old coin products.
 
 | Product ID (Play Console) | Type | Price | Gives |
 |---|---|---|---|
-| `season_pass` | In-app product (consumable) | 299 EGP | This month's premium season track (also 750,000 coins in the game) |
-| `no_ads_monthly` | Subscription, monthly | 199 EGP | No full-screen ads after games |
+| `season_pass` | In-app product (consumable) | 299 EGP | This month's premium track: a skin at every tier (30 skins, no coins) and no full-screen ads until the season ends (also 750,000 coins in the game) |
 
 The Unity app buys through Google Play Billing 7 (`unity/Assets/Plugins/Android/BBBilling.java`, `Scripts/Billing.cs`)
 and sends each purchase to the server, which checks it with the Google Play Developer API before crediting it,
-once (`server/billing.ts`); then the app consumes it (or acknowledges the subscription). A purchase that was paid
+once (`server/billing.ts`); then the app consumes it. A purchase that was paid
 but not credited (the app closed mid-way) is sent again the next time the app connects.
 To switch it on after the app is on Play:
-1. Create the two products above in Play Console → Monetize, with those IDs and prices (the season pass is a
+1. Create the product above in Play Console → Monetize, with those IDs and prices (the season pass is a
    one-time product: a player can buy it again next season).
 2. In Google Cloud, create a service account and a JSON key; in Play Console → Users and permissions, invite its
    email with "View financial data" and "Manage orders and subscriptions".
@@ -132,7 +131,7 @@ To switch it on after the app is on Play:
 Until then buying says the product isn't on Google Play yet. Coins can't be cashed out.
 
 A full-screen ad (video when AdMob has one; AdMob decides the length, usually up to 30 seconds) shows after
-every finished game, never during play, and never on the ad-free plan.
+every finished game, never during play, and never for season pass holders.
 
 ## Push reminders (Firebase Cloud Messaging)
 
@@ -153,7 +152,7 @@ a "come and play" notification, in the player's language.
 ## Ads (Google AdMob)
 
 The Unity app shows an **interstitial** when a player taps "Play again" after a game, and a **rewarded video** for
-the "+5K" coins button (players on the ad-free plan see no interstitials). Until you set your own units it shows
+the "+2K" coins button (season pass holders see no interstitials). Until you set your own units it shows
 the Board Battles app's own AdMob units (app `ca-app-pub-3492998296780013~6952389253`, interstitial
 `…/2334487395`, rewarded `…/1021405722`; these ids are not secret, they ship inside every app). To use other units,
 set the GitHub secrets `ADMOB_APP_ID`, `ADMOB_INTERSTITIAL_ID` and `ADMOB_REWARDED_ID`. Ads serve fully once the app

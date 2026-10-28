@@ -1062,11 +1062,8 @@ function shopSection() {
       h('button', { type: 'button', class: 'pack' + (p.id === best ? ' best' : ''), onclick: () => buyItem(p.id) },
         p.id === best ? h('span', { class: 'tag' }, t('bestValue')) : null,
         h('span', { class: 'pc' }, '🪙'), h('b', null, shortCoins(p.coins)), h('span', { class: 'pp' }, priceOf(p.id, p.egp))))),
-    h('div', { class: 'noads' + (on ? ' on' : '') },
-      h('div', { class: 'stack tight' }, h('b', null, t('noAdsTitle')),
-        h('span', { class: 'muted small' }, on ? t('adFreeUntil', { d: dateText(S.user!.adFreeUntil) }) : t('noAdsDesc'))),
-      on ? (billingSupported() ? btn(t('manageSub'), () => { window.open('https://play.google.com/store/account/subscriptions?sku=' + NO_ADS.id, '_blank'); }, 'btn alt') : null)
-        : btn(t('perMonth', { p: priceOf(NO_ADS.id, NO_ADS.egp) }), () => buyItem(NO_ADS.id), 'btn')),
+    // no ad-free plan on its own any more: it comes with the season pass (in the app)
+    on ? h('p', { class: 'muted small' }, t('adFreeUntil', { d: dateText(S.user!.adFreeUntil) })) : null,
     !billingSupported() && !wallet ? h('p', { class: 'muted small' }, t('buyInApp')) : null,
   ];
 }

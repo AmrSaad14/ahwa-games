@@ -414,10 +414,12 @@ export class Store {
   }
 
   publicUser(u: UserRow): PublicUser {
-    const now = Date.now();
-    return { ...toPublic(u), xp: u.xp ?? 0, level: levelOf(u.xp ?? 0), streak: u.streak ?? 0, daily: this.dailyState(u), code: this.friendCode(u.id), ratings: this.ratingsOf(u.id),
+    const now = Date.now(), season = this.seasonState(u.id);
+    // no full-screen ads: with the season pass, until the season ends
+    const adFreeUntil = Math.max(u.ad_free_until ?? 0, season.premium ? season.endsAt : 0);
+    return { ...toPublic(u), adFreeUntil, xp: u.xp ?? 0, level: levelOf(u.xp ?? 0), streak: u.streak ?? 0, daily: this.dailyState(u), code: this.friendCode(u.id), ratings: this.ratingsOf(u.id),
       adsLeft: Math.max(0, ECONOMY.adsPerDay - this.adsToday(u.id)), skins: this.skinsOf(u.id),
-      missions: this.missions(u.id), missionsAt: nextCairoDay(now), season: this.seasonState(u.id),
+      missions: this.missions(u.id), missionsAt: nextCairoDay(now), season,
       canRefer: !u.ref_by && now - u.created < REFER_DAYS * 86_400_000, referred: !!u.ref_by, muted: (u.muted_until ?? 0) > now ? u.muted_until : 0 };
   }
 

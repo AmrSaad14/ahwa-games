@@ -134,6 +134,9 @@ test('skins for tawla checkers and chess pieces: worn, priced, on the season tra
   const onTrack = TIERS.flatMap(t => [t.free, t.prem]).filter(r => 'skin' in r).map(r => (r as { skin: string }).skin);
   for (const s of SKINS.filter(s => s.pass)) assert.ok(onTrack.includes(s.id), s.id + ' is not on the season track');
   for (const id of onTrack) assert.ok(SKINS.some(s => s.id === id), id + ' is not a skin');
+  // the premium track is skins only, 30 different ones
+  assert.ok(TIERS.every(t => 'skin' in t.prem));
+  assert.equal(new Set(TIERS.map(t => (t.prem as { skin: string }).skin)).size, 30);
   const a = await new Client().open();
   a.send({ t: 'equipSkin', id: 'checkers_classic' });
   await a.until(() => a.user().equip.checkers === 'checkers_classic');
