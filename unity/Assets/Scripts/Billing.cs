@@ -2,7 +2,7 @@
 // Google Play takes the payment (Plugins/Android/BBBilling.java); the app sends the purchase token to the
 // server, which checks it with Google and credits it exactly once ("bought"); then the purchase is finished on
 // the phone (consumed, or acknowledged for the subscription). Products are set up in the Play Console with
-// these ids: coins_50k, coins_100k, coins_500k, coins_1m, season_pass (one-time), no_ads_monthly (subscription).
+// these ids: season_pass (one-time), no_ads_monthly (subscription). Coins are not sold.
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;

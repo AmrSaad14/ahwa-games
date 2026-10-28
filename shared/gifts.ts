@@ -14,7 +14,7 @@ export const giftByKind = (k: string) => GIFTS.find(g => g.k === k);
 export const ECONOMY = {
   startCoins: 100_000,
   dailyBonus: 10_000,
-  adReward: 5_000,      // coins for watching a rewarded video ad
+  adReward: 2_000,      // coins for watching a rewarded video ad (the only way to get coins besides playing)
   adsPerDay: 10,
 };
 
@@ -74,17 +74,12 @@ export function shortCoins(n: number) {
   return sign + a;
 }
 
-/* ---------------- the shop: coin packs and the ad-free plan ----------------
- * Sold through Google Play Billing (App Store later). The product IDs must match the ones created in the
- * Play Console; the EGP prices here are only shown when the store can't be reached (the store's own,
- * localized price is shown otherwise). Coins can't be turned back into money. */
+/* ---------------- the shop: what is sold for money ----------------
+ * Coins are NOT sold: players get them by playing, daily rewards, missions and rewarded ads only (coins can be
+ * exchanged for prizes, so they must never be bought). Sold through Google Play Billing: the season pass and the
+ * ad-free month. The old coin packs (coins_50k…coins_1m) are refused by the server. */
 export interface CoinPack { id: string; coins: number; egp: number }
-export const COIN_PACKS: CoinPack[] = [
-  { id: 'coins_50k', coins: 50_000, egp: 200 },
-  { id: 'coins_100k', coins: 100_000, egp: 379 },
-  { id: 'coins_500k', coins: 500_000, egp: 599 },
-  { id: 'coins_1m', coins: 1_000_000, egp: 899 },
-];
+export const COIN_PACKS: CoinPack[] = [];
 /** Monthly subscription: no full-screen ads (the optional "watch an ad for coins" button stays). */
 export const NO_ADS = { id: 'no_ads_monthly', egp: 199, days: 30 };
 export const packById = (id: string) => COIN_PACKS.find(p => p.id === id);

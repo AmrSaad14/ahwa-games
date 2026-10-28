@@ -21,7 +21,7 @@ import { adsSupported, afterMatch, initAds, showRewarded } from './ads';
 import { billingSupported, buy, initBilling, purchaseDone, purchaseRefused, storePrice } from './billing';
 import { SKINS, SKIN_CATS, SkinCat, skinById, skinFor } from '../../shared/skins';
 import { CHESS_LOOKS, DICE_LOOKS, LUDO_LOOKS, TAWLA_LOOKS, TILE_LOOKS } from './looks';
-import { COIN_PACKS, GIFTS, GiftKind, NO_ADS, STAKES, giftByKind, isStake, shortCoins, winnings } from '../../shared/gifts';
+import { COIN_PACKS, ECONOMY, GIFTS, GiftKind, NO_ADS, STAKES, giftByKind, isStake, shortCoins, winnings } from '../../shared/gifts';
 
 /** Demo build (no game server): stakes are played against the computer with a wallet kept in this browser. */
 declare const __DEMO__: boolean;
@@ -890,7 +890,7 @@ async function playRewarded(ticket: string, ssv: boolean) {
 /** The coin button for an ad: "🎬 +5K". */
 function adButton(cls = 'chip ad-chip', long = false) {
   if (!canWatchAd()) return null;
-  return btn(long ? '🎬 ' + t('watchAd', { n: shortCoins(5_000) }) : '🎬 +' + shortCoins(5_000), watchAd, cls, { 'aria-label': t('watchAd', { n: shortCoins(5_000) }), title: t('watchAd', { n: shortCoins(5_000) }) });
+  return btn(long ? '🎬 ' + t('watchAd', { n: shortCoins(ECONOMY.adReward) }) : '🎬 +' + shortCoins(ECONOMY.adReward), watchAd, cls, { 'aria-label': t('watchAd', { n: shortCoins(ECONOMY.adReward) }), title: t('watchAd', { n: shortCoins(ECONOMY.adReward) }) });
 }
 /** Demo only: a stand-in for the video, five seconds long. */
 /* ---------------- the skin shop ---------------- */
@@ -1054,11 +1054,11 @@ function checkoutSheet(id: string) {
 }
 /** The shop on the coins page: coin packs and the ad-free plan. */
 function shopSection() {
-  const best = COIN_PACKS[COIN_PACKS.length - 1].id;
+  const best = COIN_PACKS[COIN_PACKS.length - 1]?.id;
   const on = adFree();
   return [
     h('p', { class: 'lab' }, t('shopTitle')),
-    h('div', { class: 'packs' }, ...COIN_PACKS.map(p =>
+    !COIN_PACKS.length ? null : h('div', { class: 'packs' }, ...COIN_PACKS.map(p =>
       h('button', { type: 'button', class: 'pack' + (p.id === best ? ' best' : ''), onclick: () => buyItem(p.id) },
         p.id === best ? h('span', { class: 'tag' }, t('bestValue')) : null,
         h('span', { class: 'pc' }, '🪙'), h('b', null, shortCoins(p.coins)), h('span', { class: 'pp' }, priceOf(p.id, p.egp))))),
@@ -1076,7 +1076,7 @@ function fakeAdSheet() {
   const count = h('b', { class: 'big' }, '5');
   const close = btn(t('close'), () => {
     S.sheet = null;
-    if (wallet && wallet.adsToday() < 10) { wallet.add('ad', 5_000, 5_000); syncWallet(); toast(t('adRewarded', { n: shortCoins(5_000) })); sfx.gift(); }
+    if (wallet && wallet.adsToday() < 10) { wallet.add('ad', ECONOMY.adReward, ECONOMY.adReward); syncWallet(); toast(t('adRewarded', { n: shortCoins(ECONOMY.adReward) })); sfx.gift(); }
     render();
   }, 'btn', { disabled: true });
   box.append(count, close);

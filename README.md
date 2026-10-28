@@ -109,14 +109,13 @@ CLIENT_STUBS=1 npm run build && node tests/ui-smoke.mjs ./screenshots
 npm run build          # rebuild afterwards: CLIENT_STUBS swaps out three.js for the test
 ```
 
-## Shop: coin packs, the season pass and the ad-free plan (Google Play Billing)
+## Shop: the season pass and the ad-free plan (Google Play Billing)
+
+Coins are **not sold**. Players get them from games, the daily reward, missions, the season track, tournaments and
+rewarded ads (2,000 coins an ad, changeable in the dashboard). The server refuses the old coin products.
 
 | Product ID (Play Console) | Type | Price | Gives |
 |---|---|---|---|
-| `coins_50k` | In-app product (consumable) | 200 EGP | 50,000 coins |
-| `coins_100k` | In-app product (consumable) | 379 EGP | 100,000 coins |
-| `coins_500k` | In-app product (consumable) | 599 EGP | 500,000 coins |
-| `coins_1m` | In-app product (consumable) | 899 EGP | 1,000,000 coins |
 | `season_pass` | In-app product (consumable) | 299 EGP | This month's premium season track (also 750,000 coins in the game) |
 | `no_ads_monthly` | Subscription, monthly | 199 EGP | No full-screen ads after games |
 
@@ -125,7 +124,7 @@ and sends each purchase to the server, which checks it with the Google Play Deve
 once (`server/billing.ts`); then the app consumes it (or acknowledges the subscription). A purchase that was paid
 but not credited (the app closed mid-way) is sent again the next time the app connects.
 To switch it on after the app is on Play:
-1. Create the six products above in Play Console → Monetize, with those IDs and prices (the season pass is a
+1. Create the two products above in Play Console → Monetize, with those IDs and prices (the season pass is a
    one-time product: a player can buy it again next season).
 2. In Google Cloud, create a service account and a JSON key; in Play Console → Users and permissions, invite its
    email with "View financial data" and "Manage orders and subscriptions".

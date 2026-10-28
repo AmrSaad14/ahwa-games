@@ -729,7 +729,7 @@ export class Hub {
   /** A player as the app sees them, with what the cash-out offers right now. */
   private pub(u: UserRow) {
     const c = this.cash;
-    return { ...this.store.publicUser(u), cashout: { on: c.enabled, coins: c.coins, egp: c.egp, maxUnits: c.maxUnits, minGames: c.minGames } };
+    return { ...this.store.publicUser(u), cashout: { on: c.enabled, coins: c.coins, egp: c.egp, maxUnits: c.maxUnits, minGames: c.minGames }, adReward: ECONOMY.adReward };
   }
   /** How long matchmaking waits for people, and a turn's length (dashboard). */
   setTiming(botFillMs: number, turnMs: number) { this.opts.botFillMs = botFillMs; this.opts.turnMs = turnMs; }

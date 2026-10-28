@@ -27,20 +27,21 @@ function fakeGoogle(answers: Record<string, unknown>) {
   return { calls, restore: () => { globalThis.fetch = real; } };
 }
 
-test('billing: a paid coin pack is accepted and consumed; pending and other-account purchases are not', async () => {
+test('billing: a paid season pass is accepted and consumed; pending and other-account purchases are not', async () => {
   const g = fakeGoogle({
-    '/products/coins_100k/tokens/good': { purchaseState: 0, consumptionState: 0, orderId: 'GPA.1', obfuscatedExternalAccountId: crypto.createHash('md5').update('u1').digest('hex') },
-    '/products/coins_100k/tokens/pending': { purchaseState: 2 },
-    '/products/coins_100k/tokens/theirs': { purchaseState: 0, obfuscatedExternalAccountId: 'someone-else' },
+    '/products/season_pass/tokens/good': { purchaseState: 0, consumptionState: 0, orderId: 'GPA.1', obfuscatedExternalAccountId: crypto.createHash('md5').update('u1').digest('hex') },
+    '/products/season_pass/tokens/pending': { purchaseState: 2 },
+    '/products/season_pass/tokens/theirs': { purchaseState: 0, obfuscatedExternalAccountId: 'someone-else' },
     ':consume': {},
   });
   try {
     const b = new PlayBilling({ serviceAccount: Buffer.from(JSON.stringify(sa)).toString('base64'), packageName: 'com.ahwa.domino', testMode: false });
-    assert.deepEqual(await b.verify('u1', 'coins_100k', 'good'), { ok: true, coins: 100_000, until: 0, orderId: 'GPA.1' });
+    assert.deepEqual(await b.verify('u1', 'season_pass', 'good'), { ok: true, coins: 0, until: 0, orderId: 'GPA.1' });
     assert.ok(g.calls.some(c => c.startsWith('POST') && c.includes('/tokens/good:consume')), 'consumed on the server too');
-    assert.deepEqual(await b.verify('u1', 'coins_100k', 'pending'), { ok: false, code: 'purchase_pending' });
-    assert.deepEqual(await b.verify('u1', 'coins_100k', 'theirs'), { ok: false, code: 'wrong_account' });
-    assert.deepEqual(await b.verify('u1', 'coins_100k', 'unknown'), { ok: false, code: 'bad_purchase' });
+    assert.deepEqual(await b.verify('u1', 'season_pass', 'pending'), { ok: false, code: 'purchase_pending' });
+    assert.deepEqual(await b.verify('u1', 'season_pass', 'theirs'), { ok: false, code: 'wrong_account' });
+    assert.deepEqual(await b.verify('u1', 'season_pass', 'unknown'), { ok: false, code: 'bad_purchase' });
+    assert.deepEqual(await b.verify('u1', 'coins_100k', 'good'), { ok: false, code: 'bad_product' }, 'coins are not sold');
     assert.equal(g.calls.filter(c => c.includes('oauth2') || c.startsWith('POST /token')).length, 1, 'one access token, reused');
   } finally { g.restore(); }
 });

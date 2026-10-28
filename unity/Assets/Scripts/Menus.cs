@@ -60,7 +60,7 @@ public partial class Menus : MonoBehaviour
         cashChip = cash.gameObject; cashChip.SetActive(false);
 
         // along the top, left of your name and coins: watch an ad, sign in, language
-        var ad = Chip(home, "video", "+5K", new Vector2(-252, -10), 98, new Color32(0x2f, 0x6b, 0x3a, 0xf0), Color.white, WatchAd);
+        var ad = Chip(home, "video", "+2K", new Vector2(-252, -10), 98, new Color32(0x2f, 0x6b, 0x3a, 0xf0), Color.white, WatchAd);
         adText = ad.GetComponentInChildren<Text>();
         var lang = Chip(home, "globe", Loc.En ? "ع" : "EN", new Vector2(-358, -10), 70, Ui.Panel, Ui.GoldLight, () => { Sfx.Tap(); Loc.Set(!Loc.En); });
         langText = lang.GetComponentInChildren<Text>();
@@ -130,7 +130,8 @@ public partial class Menus : MonoBehaviour
         cashChip.SetActive(co != null && co.Bool("on"));
         if (co != null) { cashCoins = (long)co.Num("coins", cashCoins); cashEgp = (int)co.Num("egp", cashEgp); cashMax = (int)co.Num("maxUnits", cashMax); cashMinGames = (int)co.Num("minGames", 0); }
         int left = (int)u.Num("adsLeft");
-        adText.Set(left > 0 ? "+5K" : "0");
+        adReward = (long)u.Num("adReward", adReward);
+        adText.Set(left > 0 ? AdLabel : "0");
         var eq = u.Obj("equip");
         Skins.SetUser(u);
         Billing.SetUser(u.Str("id"));
@@ -773,7 +774,10 @@ public partial class Menus : MonoBehaviour
 
     /* ---------- the shop ---------- */
 
-    static readonly (string id, long coins, int egp)[] Packs = { ("coins_50k", 50_000, 200), ("coins_100k", 100_000, 379), ("coins_500k", 500_000, 599), ("coins_1m", 1_000_000, 899) };
+    // coins are not sold: the shop's first tab is free coins (a rewarded ad); coins also come from games, the daily
+    // reward, missions, the season track and tournaments
+    long adReward = 2_000;
+    string AdLabel => "+" + Loc.Short(adReward);
 
     // the shop's skin tabs: boards and pieces each for dominoes, tawla and chess; then dice, hats, drinks
     static readonly string[] GameTabs = { "دومينو", "طاولة", "شطرنج" };
@@ -789,7 +793,7 @@ public partial class Menus : MonoBehaviour
         refreshOpen = () =>
         {
             foreach (Transform c in body) Destroy(c.gameObject);
-            var area = Tabs(body, new[] { "عملات", "ترابيزات", "قطع", "زهر", "طربوش", "مشروب", "بدون إعلانات" }, shopTab, i => { shopTab = i; refreshOpen(); });
+            var area = Tabs(body, new[] { "كوينز ببلاش", "ترابيزات", "قطع", "زهر", "طربوش", "مشروب", "بدون إعلانات" }, shopTab, i => { shopTab = i; refreshOpen(); });
             // your coins, bottom corner; your collection, the other corner
             var have = Ui.Label(area, Loc.T("رصيدك") + ": " + ((long)(user?.Num("coins") ?? 0)).ToString("N0"), 13, Ui.GoldLight, StartAlign, Ui.Bold);
             have.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(640, 20), new Vector2(0, -6));
@@ -797,14 +801,16 @@ public partial class Menus : MonoBehaviour
             ((RectTransform)mine.transform).Place(new Vector2(Loc.En ? 1 : 0, 0), new Vector2(Loc.En ? 1 : 0, 0), new Vector2(110, 24), new Vector2(Loc.En ? -60 : 60, -4));
             var row = Ui.Rect("Cards", area); row.anchorMin = Vector2.zero; row.anchorMax = Vector2.one; row.offsetMin = new Vector2(0, 22); row.offsetMax = Vector2.zero;
             if (shopTab == 0)
-                for (int i = 0; i < Packs.Length; i++)
-                {
-                    var p = Packs[i];
-                    var c = ShopCard(row, i, Packs.Length);
-                    var ci = Ui.Picture(c, "Coin", Icon("coin")); ci.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(56, 56), new Vector2(0, -14));
-                    Ui.Label(c, Loc.Short(p.coins), 22, Ui.Gold, TextAnchor.MiddleCenter, Ui.Display).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(140, 30), new Vector2(0, -74));
-                    BuyButton(c, p.egp + " " + Loc.T("ج.م"), Ui.Gold, Ui.Ink, () => Billing.Buy(p.id));
-                }
+            {
+                // free coins: watch an ad (coins can't be bought)
+                int left = (int)(user?.Num("adsLeft") ?? 0);
+                var c = ShopCard(row, 0, 1);
+                c.sizeDelta = new Vector2(320, c.sizeDelta.y);
+                var vi = Ui.Picture(c, "Icon", Icon("video")); vi.color = Ui.Gold; vi.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(50, 50), new Vector2(0, -14));
+                Ui.Label(c, Loc.T("شوف إعلان وخد") + " " + Loc.Short(adReward) + " " + Loc.T("كوين"), 18, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 30), new Vector2(0, -70));
+                Ui.Label(c, Loc.T("فاضلك النهارده") + ": " + left, 12, Ui.GoldLight, TextAnchor.MiddleCenter).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 20), new Vector2(0, -96));
+                BuyButton(c, left > 0 ? Loc.T("شوف الإعلان") : Loc.T("خلصت إعلانات النهارده"), left > 0 ? Ui.Gold : new Color(1, 1, 1, 0.1f), left > 0 ? Ui.Ink : Ui.GoldLight, () => { if (left > 0) WatchAd(); else app.Toast(Loc.T("خلصت إعلانات النهارده، تعالى بكرة")); });
+            }
             else if (shopTab <= 5)
             {
                 int t = shopTab - 1;

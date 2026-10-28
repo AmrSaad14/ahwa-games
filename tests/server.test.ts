@@ -378,8 +378,8 @@ test('rewarded ads: 5K per watched ad, one reward per ticket, ten a day', async 
   const { ticket, ssv } = a.last('adTicket')!;
   assert.equal(ssv, false);
   a.send({ t: 'adWatched', ticket });
-  await a.until(() => a.last('adReward')?.coins === 5_000);
-  await a.until(() => a.last('user')?.user.coins === start + 5_000 && a.last('user')!.user.adsLeft === 9);
+  await a.until(() => a.last('adReward')?.coins === 2_000);
+  await a.until(() => a.last('user')?.user.coins === start + 2_000 && a.last('user')!.user.adsLeft === 9);
   // the same ticket doesn't pay twice
   await new Promise(r => setTimeout(r, 20_100));
   a.send({ t: 'adWatched', ticket });
@@ -405,20 +405,27 @@ test('rewarded ads: AdMob\'s signed callback is checked', async () => {
   assert.equal(await verifySsv(`${msg.replace('u1', 'u2')}&signature=${sig}&key_id=3335741209`, publicKey), null, 'a changed callback is refused');
 });
 
-test('shop: a coin pack is credited once per purchase, the ad-free plan sets a date', async () => {
+test('shop: the season pass is credited once per purchase, the ad-free plan sets a date, coins are not sold', async () => {
   const a = await new Client().open(), b = await new Client().open();
   const before = a.last('welcome')!.user.coins;
-  a.send({ t: 'buy', product: 'coins_50k', token: 'test:order-1' });
-  await a.until(() => !!a.last('bought'));
-  assert.equal(a.last('bought')!.coins, 50_000);
-  await a.until(() => a.msgs.some(m => m.t === 'user' && m.user.coins === before + 50_000));
-  // the app may ask again (it retries until it hears back): never credited twice
-  a.msgs = [];
-  a.send({ t: 'buy', product: 'coins_50k', token: 'test:order-1' });
+  a.send({ t: 'buy', product: 'season_pass', token: 'test:order-1' });
   await a.until(() => !!a.last('bought'));
   assert.equal(a.last('bought')!.coins, 0);
+  assert.equal(app.store.seasonState(a.uid).premium, true);
+  assert.equal(app.store.coinsOf(a.uid), before);
+  // the app may ask again (it retries until it hears back): never credited twice
+  a.msgs = [];
+  a.send({ t: 'buy', product: 'season_pass', token: 'test:order-1' });
+  await a.until(() => !!a.last('bought'));
+  assert.equal(a.last('bought')!.coins, 0);
+  // coin packs are not sold any more
+  a.msgs = [];
+  a.send({ t: 'buy', product: 'coins_50k', token: 'test:order-2' });
+  await a.until(() => !!a.last('buyFailed'));
+  assert.equal(a.last('buyFailed')!.code, 'bad_product');
+  assert.equal(app.store.coinsOf(a.uid), before);
   // someone else can't claim the same purchase
-  b.send({ t: 'buy', product: 'coins_50k', token: 'test:order-1' });
+  b.send({ t: 'buy', product: 'season_pass', token: 'test:order-1' });
   await b.until(() => !!b.last('buyFailed'));
   assert.equal(b.last('buyFailed')!.code, 'wrong_account');
   // ad-free for a month
@@ -430,7 +437,7 @@ test('shop: a coin pack is credited once per purchase, the ad-free plan sets a d
   await b.until(() => !!b.last('buyFailed'));
   assert.equal(b.last('buyFailed')!.code, 'bad_product');
   b.msgs = [];
-  b.send({ t: 'buy', product: 'coins_1m', token: 'real-looking-token' });
+  b.send({ t: 'buy', product: 'season_pass', token: 'real-looking-token' });
   await b.until(() => !!b.last('buyFailed'));
   assert.equal(b.last('buyFailed')!.code, 'purchases_off');
   a.ws.close(); b.ws.close();
