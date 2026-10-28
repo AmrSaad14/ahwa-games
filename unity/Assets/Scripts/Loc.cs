@@ -132,6 +132,7 @@ public static class Loc
         ["وفي الآخر خد"] = "and get", ["كوين هدية"] = "coins as a gift", ["يلا نلعب"] = "Let's play", ["بعدين"] = "Later",
         ["دورك! دوس على حجر بينوّر عشان تلعبه"] = "Your turn! Tap a glowing tile to play it", ["دورك! دوس على اللوح"] = "Your turn! Tap the board",
         ["أحسنت!"] = "Well done!", ["خلصت أول دور. هدية"] = "You finished your first game. Gift", ["جرّب تلعب أونلاين ضد ناس حقيقية"] = "Now try playing online against real people",
+        ["من غير سحب"] = "Block game (no drawing)", ["بالسحب"] = "Draw game", ["مفيش سحب في الغرفة دي"] = "No drawing in this room",
         ["صندوق الأسبوع"] = "Weekly chest", ["مهام خلصت"] = "missions done", ["افتح"] = "Open", ["مهام"] = "missions", ["فتحت الصندوق!"] = "Chest opened!",
         ["وحشتنا!"] = "We missed you!", ["هدية رجوعك للقهوة"] = "A welcome-back gift", ["مبروك!"] = "Congratulations!", ["بقيت"] = "You are now",
         ["دوس على «جايزتك» واكتب رقم فودافون كاش"] = "Tap \"Your prize\" and enter your Vodafone Cash number", ["جيت المركز"] = "You finished", ["في ترتيب الأسبوع"] = "in this week's ranking",

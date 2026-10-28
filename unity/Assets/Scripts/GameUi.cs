@@ -122,6 +122,7 @@ public class GameUi : MonoBehaviour
     readonly int[] seatTitleVer = new int[4];
     // the end of a match: play again with new people, the same people (rematch), or the tournament
     GameObject againButton, homeButton, rematchButton, shareButton; Text againText, rematchText;
+    RectTransform rulesButton; Text rulesText;
     string rematchFor = ""; bool rematchGone; int rematchVotes, rematchNeed; bool rematchMine;
     string celebrated = "";
     Text endL, endR;
@@ -312,11 +313,19 @@ public class GameUi : MonoBehaviour
         var t = Ui.Label(lobby, "غرفة صحابك", 20, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold);
         t.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 30), new Vector2(0, -6));
         lobbyCode = Ui.Label(lobby, "", 30, Color.white, TextAnchor.MiddleCenter, Ui.Display);
-        lobbyCode.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(220, 40), new Vector2(-60, -40));
+        lobbyCode.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(160, 40), new Vector2(18, -40));
         var copy = Ui.Button(lobby, "انسخ", Ui.Panel, Ui.GoldLight, 14, () => { Sfx.Tap(); GUIUtility.systemCopyBuffer = app.view?.code ?? ""; app.Toast(Loc.T("الكود اتنسخ")); });
         ((RectTransform)copy.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(70, 34), new Vector2(100, -43));
         var share = Ui.Button(lobby, "شارك", new Color32(0x2f, 0x6b, 0x3a, 0xff), Color.white, 14, () => { Sfx.Tap(); Share(app.view); });
         ((RectTransform)share.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(70, 34), new Vector2(176, -43));
+        // house rule for dominoes: with drawing (the usual) or the block game (من غير سحب); the host picks
+        var rules = Ui.Button(lobby, "", Ui.Panel, Ui.GoldLight, 12, () =>
+        {
+            var v = app.view; if (v == null || v.game != "domino" || v.Me == null || !v.Me.host) return;
+            Sfx.Tap(); app.Send(new Dictionary<string, object> { ["t"] = "setup", ["block"] = !v.block });
+        });
+        rulesButton = ((RectTransform)rules.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(150, 26), new Vector2(-120, -42));
+        rulesText = rules.GetComponentInChildren<Text>();
         lobbySeats = Ui.Rect("Seats", lobby).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(390, 150), new Vector2(0, -86));
         lobbyNote = Ui.Label(lobby, "", 12, new Color(1, 1, 1, 0.7f));
         lobbyNote.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(400, 20), new Vector2(0, 58));
@@ -334,6 +343,8 @@ public class GameUi : MonoBehaviour
         var key = new System.Text.StringBuilder(v.id + "|" + Loc.En);
         for (int i = 0; i < v.seats.Count; i++) { var s = v.seats[i]; key.Append(s == null ? "-" : s.name + s.bot + s.ch); if (s == null) full = false; }
         lobbyCode.text = (v.code ?? "").ToUpperInvariant();
+        rulesButton.gameObject.SetActive(v.game == "domino");
+        rulesText.Set(Loc.T(v.block ? "من غير سحب" : "بالسحب") + (host ? "  ⇄" : ""));
         startButton.SetActive(host);
         startButton.GetComponent<Button>().interactable = full;
         lobbyNote.Set(host ? (full ? Loc.T("كله جاهز، ابدأ") : Loc.T("ابعت الكود لصحابك، أو حط الكمبيوتر مكانهم")) : Loc.T("مستنيين صاحب الغرفة يبدأ"));

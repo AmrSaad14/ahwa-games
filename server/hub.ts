@@ -483,6 +483,7 @@ export class Hub {
         this.dequeue(uid);
         if (table) this.leaveTable(uid);
         const t = this.newTable(m.mode, target, true, stake);
+        if (m.block && t instanceof Table) t.block = true;   // house rule: the block game (dominoes)
         t.join(this.player(uid, gameOf(m.mode)));
         this.userTable.set(uid, t);
         return this.pushView(t, uid);
@@ -510,7 +511,8 @@ export class Hub {
         if (mode && gameOf(mode) !== gameOf(table.mode)) return err('bad_mode');
         const target = m.target !== undefined && targetOptions(mode ?? table.mode).includes(m.target) ? m.target : undefined;
         const stake = isStake(m.stake) ? m.stake : undefined;
-        const e = table.setup(uid, mode, target, stake); return e ? err(e) : undefined;
+        const block = typeof m.block === 'boolean' && table instanceof Table ? m.block : undefined;
+        const e = table instanceof Table ? table.setup(uid, mode, target, stake, block) : table.setup(uid, mode, target, stake); return e ? err(e) : undefined;
       }
       case 'bot': { if (!table) return err('no_table'); const e = table.addBot(uid, Number(m.seat)); return e ? err(e) : undefined; }
       case 'kick': {

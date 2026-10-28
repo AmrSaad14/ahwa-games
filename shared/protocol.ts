@@ -73,6 +73,7 @@ export interface TableView {
   hand: number[];
   line: Line;
   yard: number;
+  block?: boolean;     // the block game: no drawing (a room's house rule)
   /** Tile that must open the round (heaviest double), while the line is empty. */
   open: number | null;
   turn: number;
@@ -232,12 +233,12 @@ export type C2S =
   | { t: 'delete' }
   | { t: 'quick'; mode: Mode; stake?: number }
   | { t: 'cancel' }
-  | { t: 'create'; mode: Mode; target: number; stake?: number }
+  | { t: 'create'; mode: Mode; target: number; stake?: number; block?: boolean }
   /** A free, unrated game against computer players that starts at once. */
   | { t: 'practice'; mode: Mode }
   | { t: 'join'; code: string }
   | { t: 'leave' }
-  | { t: 'setup'; mode?: Mode; target?: number; stake?: number }
+  | { t: 'setup'; mode?: Mode; target?: number; stake?: number; block?: boolean }
   | { t: 'bot'; seat: number }
   | { t: 'kick'; seat: number }
   | { t: 'start' }

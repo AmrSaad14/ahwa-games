@@ -40,6 +40,7 @@ public class TableView
 {
     public string game, id, code, mode, phase;
     public int target, stake, you, yard, turn, round, v;
+    public bool block;   // the block game (no drawing): a room's house rule
     public int open = -1;
     public double turnEndsAt, turnMs, nextAt, now;
     public bool isPrivate;
@@ -64,7 +65,7 @@ public class TableView
     {
         var v = new TableView { raw = m };
         v.game = m.Str("game"); v.id = m.Str("id"); v.code = m.Str("code", null); v.mode = m.Str("mode"); v.phase = m.Str("phase");
-        v.target = I(m, "target"); v.stake = I(m, "stake"); v.you = I(m, "you", -1); v.yard = I(m, "yard"); v.turn = I(m, "turn", -1); v.round = I(m, "round"); v.v = I(m, "v");
+        v.target = I(m, "target"); v.stake = I(m, "stake"); v.block = m.Bool("block"); v.you = I(m, "you", -1); v.yard = I(m, "yard"); v.turn = I(m, "turn", -1); v.round = I(m, "round"); v.v = I(m, "v");
         v.open = m.TryGetValue("open", out var op) && op is double od ? (int)od : -1;
         v.turnEndsAt = m.Num("turnEndsAt"); v.turnMs = m.Num("turnMs"); v.nextAt = m.Num("nextAt"); v.now = m.Num("now");
         v.isPrivate = m.Bool("private");

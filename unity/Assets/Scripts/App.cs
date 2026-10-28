@@ -355,6 +355,7 @@ public class App : MonoBehaviour
             case "choose_end": return Loc.T("اختار هتحطها في أنهي ناحية");
             case "can_play": return Loc.T("معاك حجر ينفع، العبه");
             case "must_draw": return Loc.T("اسحب من الكوم الأول");
+            case "no_draw": return Loc.T("مفيش سحب في الغرفة دي");
             case "already_rolled": return Loc.T("انت رميت الزهر خلاص");
             case "must_move": return Loc.T("لسه عندك لعب، حرّك");
             case "not_playing": case "no_tile": case "bad_action": return Loc.T("الحركة دي مش هينفع دلوقتي");

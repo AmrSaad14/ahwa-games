@@ -248,3 +248,24 @@ test('1 vs 1 plays to 101 and the heaviest double opens', () => {
   if (ov.open !== null) assert.ok(ov.hand.includes(ov.open));
   t.close();
 });
+
+test('the block game (house rule): nobody draws, the yard stays out, and a full match still finishes', async () => {
+  let ended = false, drew = false, yardSeen = -1;
+  await new Promise<void>((resolve, reject) => {
+    const t = new Table({ ...fast, id: 'blk', code: null, mode: 'ffa2', private: false, block: true }, {
+      changed(tb) {
+        if (tb.last?.t === 'draw') drew = true;
+        if (tb.phase === 'play') { yardSeen = tb.view('x').yard; assert.equal(tb.view('x').block, true); }
+      },
+      emote() {},
+      matchEnd(tb) { ended = true; tb.close(); },
+      closed() { resolve(); },
+    });
+    t.hostUid = 'h'; for (let i = 0; i < t.n; i++) t.addBot('h', i);
+    const err = t.start('h'); if (err) reject(new Error(err));
+    setTimeout(() => reject(new Error('timeout')), 20000).unref();
+  });
+  assert.ok(ended);
+  assert.equal(drew, false, 'nobody drew');
+  assert.equal(yardSeen, 0, 'the players see no pile');
+});

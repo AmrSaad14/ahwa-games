@@ -26,6 +26,7 @@ export interface TableOptions {
   humanBots?: boolean;     // computer players take their time like people (matchmade games)
   lobbyAfterMatchMs: number;
   autoMoveMs?: number;     // pause before the game draws or passes for a player with no tile that fits (default 900)
+  block?: boolean;         // the block game (من غير سحب): the tiles left after the deal stay out; no tile that fits means pass
 }
 
 export interface TableHooks {
@@ -55,6 +56,8 @@ export class Table {
   target: number;
   readonly isPrivate: boolean;
   stake: number;
+  /** The block game: no drawing (a room's house rule). */
+  block = false;
   seats: (Seat | null)[];
   phase: TableView['phase'] = 'lobby';
   hands: number[][] = [];
@@ -79,7 +82,7 @@ export class Table {
   private lastPlayedValue: number[] = [];
 
   constructor(public opts: TableOptions, private hooks: TableHooks) {
-    this.id = opts.id; this.code = opts.code; this.mode = opts.mode; this.target = opts.target; this.isPrivate = opts.private; this.stake = opts.stake ?? 0;
+    this.id = opts.id; this.code = opts.code; this.mode = opts.mode; this.target = opts.target; this.isPrivate = opts.private; this.stake = opts.stake ?? 0; this.block = !!opts.block;
     this.seats = new Array(MODE_PLAYERS[this.mode]).fill(null);
     this.scores = new Array(teamCount(this.mode)).fill(0);
   }
@@ -171,9 +174,10 @@ export class Table {
     return null;
   }
 
-  setup(byUid: string, mode?: Mode, target?: number, stake?: number): string | null {
+  setup(byUid: string, mode?: Mode, target?: number, stake?: number, block?: boolean): string | null {
     if (byUid !== this.hostUid) return 'not_host';
     if (this.phase !== 'lobby') return 'in_progress';
+    if (block !== undefined) this.block = block;
     if (target !== undefined) this.target = target;
     if (stake !== undefined) this.stake = stake;
     if (mode && mode !== this.mode) {
@@ -291,6 +295,7 @@ export class Table {
       return null;
     }
     if (a.t === 'draw') {
+      if (this.block) return 'no_draw';
       if (canPlay(this.line, hand)) return 'can_play';
       if (!this.yard.length) return 'yard_empty';
       hand.push(this.yard.pop()!);
@@ -302,7 +307,7 @@ export class Table {
     }
     if (a.t === 'pass') {
       if (canPlay(this.line, hand)) return 'can_play';
-      if (this.yard.length) return 'must_draw';
+      if (this.yard.length && !this.block) return 'must_draw';
       this.passes++;
       this.last = { t: 'pass', s: seat, k: ++this.v };
       if (this.passes >= this.n) { this.endRound(-1, true); return null; }
@@ -316,7 +321,7 @@ export class Table {
     const partner = this.mode === 'team' ? (seat + 2) % 4 : -1;
     const m = this.line.f === null && this.opening !== null && this.hands[seat].includes(this.opening)
       ? { t: 'play' as const, id: this.opening, e: 'C' as End }
-      : chooseMove(this.line, this.hands[seat], this.yard.length, 'normal', partner >= 0 && this.lastPlayedValue[partner] >= 0 ? this.lastPlayedValue[partner] : undefined);
+      : chooseMove(this.line, this.hands[seat], this.block ? 0 : this.yard.length, 'normal', partner >= 0 && this.lastPlayedValue[partner] >= 0 ? this.lastPlayedValue[partner] : undefined);
     this.doMove(seat, m.t === 'play' ? { t: 'play', id: m.id, e: m.e } : m);
     if (timedOut && this.last) this.last.auto = true;
     this.bump();
@@ -397,7 +402,7 @@ export class Table {
         // nothing fits: draw for them (one tile at a time, so they can see it) or pass when the boneyard is empty
         const pause = this.opts.autoMoveMs ?? 900;
         at(drawing ? pause * 0.72 : pause, () => {
-          this.doMove(seat, this.yard.length ? { t: 'draw' } : { t: 'pass' });
+          this.doMove(seat, this.yard.length && !this.block ? { t: 'draw' } : { t: 'pass' });
           if (this.last) this.last.forced = true;
           // once a drawn tile fits, the player gets their full turn time to play it
           if (this.turn === seat && this.phase === 'play' && canPlay(this.line, this.hands[seat])) this.turnEndsAt = Date.now() + this.opts.turnMs;
@@ -451,7 +456,7 @@ export class Table {
         hat: s.hat, drink: s.drink, muted: s.muted || undefined, title: s.title || undefined,
       }),
       hand: you >= 0 && this.hands[you] ? this.hands[you].slice() : [],
-      line: this.line, yard: this.yard.length, open: this.line.f === null ? this.opening : null, turn: this.turn, turnEndsAt: this.turnEndsAt, turnMs: this.opts.turnMs,
+      line: this.line, yard: this.block ? 0 : this.yard.length, block: this.block || undefined, open: this.line.f === null ? this.opening : null, turn: this.turn, turnEndsAt: this.turnEndsAt, turnMs: this.opts.turnMs,
       round: this.round, scores: this.scores.slice(), last: this.last,
       result: reveal ? this.result : null, match: this.match, nextAt: this.nextAt, now: Date.now(), v: this.v,
     };
