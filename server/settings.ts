@@ -1,4 +1,4 @@
-// The game's live settings, changed from the dashboard (/admin) without a restart: cash-out to Vodafone Cash,
+// The game's live settings, changed from the dashboard (/admin) without a restart: the monthly prizes (Vodafone Cash),
 // the weekly tournament, the season pass, the economy (starting coins, daily streak, ads, weekly prizes), how
 // play runs (computer players, turn time), maintenance mode and a notice shown to every player.
 // They are kept in the database (meta 'settings') and applied to the running game at once.
@@ -10,13 +10,11 @@ import { TOURNEY } from './tourney';
 export type TourneyGame = 'rotate' | 'domino' | 'tawla' | 'chess' | 'ludo';
 
 export interface GameSettings {
-  cashout: {
+  /** Monthly prizes: the best player of each game (the "player of the month") wins money on Vodafone Cash. */
+  prizes: {
     enabled: boolean;
-    coins: number;            // coins in one unit (1,000,000)
-    egp: number;              // EGP paid for one unit (5)
-    maxUnits: number;         // most units in one request
-    minGames: number;         // online games a player must have played first
-    minAccountDays: number;   // how old the account must be
+    egp: number;              // EGP for each game's winner (500)
+    claimDays: number;        // days the winner has to give their Vodafone Cash number
     prefixes: string[];       // accepted mobile prefixes (Vodafone: 010)
   };
   tourney: { enabled: boolean; weekday: number; hour: number; game: TourneyGame; prizes: number[]; played: number };
@@ -32,7 +30,7 @@ export interface GameSettings {
 /** The settings the game ships with (read once, before anything is changed). */
 function defaults(): GameSettings {
   return {
-    cashout: { enabled: process.env.CASHOUT_ENABLED === '1', coins: 1_000_000, egp: 5, maxUnits: 10, minGames: 20, minAccountDays: 3, prefixes: ['010'] },
+    prizes: { enabled: true, egp: 500, claimDays: 30, prefixes: ['010'] },
     tourney: { enabled: true, weekday: TOURNEY.weekday, hour: TOURNEY.hour, game: 'rotate', prizes: [...TOURNEY.prizes], played: TOURNEY.played },
     season: { enabled: true, passCoins: SEASON_PASS.coins, passEgp: SEASON_PASS.egp, tiers: TIERS.map(t => ({ free: { ...t.free }, prem: { ...t.prem } })) },
     economy: { startCoins: ECONOMY.startCoins, adReward: ECONOMY.adReward, adsPerDay: ECONOMY.adsPerDay, streak: [...STREAK], weeklyPrizes: [...WEEKLY_PRIZES] },
@@ -59,19 +57,16 @@ function reward(v: unknown, d: Reward): Reward {
 /** Checks and fixes settings from the dashboard (anything missing or out of range keeps its current value). */
 export function sanitize(input: unknown, cur: GameSettings): GameSettings {
   const i = (input ?? {}) as Partial<Record<keyof GameSettings, Record<string, unknown>>>;
-  const c = i.cashout ?? {}, t = i.tourney ?? {}, s = i.season ?? {}, e = i.economy ?? {}, p = i.play ?? {}, m = i.maintenance ?? {}, n = i.notice ?? {}, ti = i.titles ?? {};
+  const c = i.prizes ?? {}, t = i.tourney ?? {}, s = i.season ?? {}, e = i.economy ?? {}, p = i.play ?? {}, m = i.maintenance ?? {}, n = i.notice ?? {}, ti = i.titles ?? {};
   const curTi = cur.titles ?? SHIPPED_TITLES;
   const games: TourneyGame[] = ['rotate', 'domino', 'tawla', 'chess', 'ludo'];
   const tiers = Array.isArray(s.tiers) ? s.tiers : cur.season.tiers;
   return {
-    cashout: {
-      enabled: bool(c.enabled, cur.cashout.enabled),
-      coins: int(c.coins, 10_000, 1_000_000_000, cur.cashout.coins),
-      egp: int(c.egp, 1, 100_000, cur.cashout.egp),
-      maxUnits: int(c.maxUnits, 1, 1000, cur.cashout.maxUnits),
-      minGames: int(c.minGames, 0, 100_000, cur.cashout.minGames),
-      minAccountDays: int(c.minAccountDays, 0, 3650, cur.cashout.minAccountDays),
-      prefixes: Array.isArray(c.prefixes) ? c.prefixes.map(x => String(x).replace(/\D/g, '')).filter(x => /^01\d$/.test(x)).slice(0, 4) : cur.cashout.prefixes,
+    prizes: {
+      enabled: bool(c.enabled, cur.prizes.enabled),
+      egp: int(c.egp, 0, 1_000_000, cur.prizes.egp),
+      claimDays: int(c.claimDays, 1, 365, cur.prizes.claimDays),
+      prefixes: Array.isArray(c.prefixes) ? c.prefixes.map(x => String(x).replace(/\D/g, '')).filter(x => /^01\d$/.test(x)).slice(0, 4) : cur.prizes.prefixes,
     },
     tourney: {
       enabled: bool(t.enabled, cur.tourney.enabled),

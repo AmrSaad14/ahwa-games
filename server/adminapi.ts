@@ -80,7 +80,7 @@ export function adminApi(ctx: AdminCtx) {
       const st = settings.value;
       return { ...store.adminOverview(), live: { ...hub.stats(), online: hub.onlineIds.length }, daily: store.adminDaily(14),
         tourney: { state: hub.tourney.state, startsAt: hub.tourney.startsAt, game: hub.tourney.def.game, registered: store.tourneyRegs(hub.tourney.event).length, enabled: st.tourney.enabled },
-        flags: { season: st.season.enabled, cashout: st.cashout.enabled, maintenance: st.maintenance.on, notice: st.notice.until > Date.now() ? st.notice.text : '', push: ctx.pushOn() } };
+        flags: { season: st.season.enabled, prizes: st.prizes.enabled, maintenance: st.maintenance.on, notice: st.notice.until > Date.now() ? st.notice.text : '', push: ctx.pushOn() } };
     }
     if (p === '/catalog') return { skins: SKINS, tiers: TIERS, pass: SEASON_PASS, titles: hub.titles.list, icons: TITLE_ICONS };
 
@@ -161,20 +161,22 @@ export function adminApi(ctx: AdminCtx) {
       return { ok: true };
     }
 
-    // ---- prize requests: Vodafone Cash
-    if (p === '/cashouts' && m === 'GET') {
+    // ---- monthly prizes: Vodafone Cash, paid by hand
+    if (p === '/prizes' && m === 'GET') {
       const status = url.searchParams.get('status') || 'pending';
-      return { rows: store.cashoutsAll(status === 'all' ? null : status, 500), rules: settings.value.cashout };
+      return { rows: store.prizesAll(status === 'all' ? null : status, 500), rules: settings.value.prizes, minGames: settings.value.titles.minGames };
     }
-    const cm = p.match(/^\/cashouts\/(\d+)$/);
-    if (cm && m === 'POST') {
-      const b = await readBody(req), paid = b.action === 'paid';
-      if (b.action !== 'paid' && b.action !== 'reject') fail(400, 'bad_action');
-      const c = store.settleCashout(Number(cm[1]), paid, String(b.note || '')) ?? fail(409, 'not_pending');
-      ctx.push([c.user_id], paid ? ['اتحولك الفلوس 💸', `${c.egp} جنيه على فودافون كاش ${c.phone}`] : ['طلب السحب اترفض', 'رجعنالك الكوينز' + (b.note ? ': ' + String(b.note).slice(0, 100) : '')],
-        paid ? ['Paid 💸', `${c.egp} EGP sent to Vodafone Cash ${c.phone}`] : ['Cash-out declined', 'Your coins are back' + (b.note ? ': ' + String(b.note).slice(0, 100) : '')]);
+    const pzm = p.match(/^\/prizes\/(\d+)$/);
+    if (pzm && m === 'POST') {
+      const b = await readBody(req), action = String(b.action || '');
+      if (!['paid', 'reject', 'again'].includes(action)) fail(400, 'bad_action');
+      const note = String(b.note || '').slice(0, 200);
+      const c = store.settlePrize(Number(pzm[1]), action as 'paid' | 'reject' | 'again', note) ?? fail(409, 'not_waiting');
+      if (action === 'paid') ctx.push([c.user_id], ['اتحولك الجايزة 💸', `${c.egp} جنيه على فودافون كاش ${c.phone}`], ['Prize paid 💸', `${c.egp} EGP sent to Vodafone Cash ${c.phone}`]);
+      else if (action === 'again') ctx.push([c.user_id], ['محتاجين رقمك تاني', 'افتح اللعبة واكتب رقم فودافون كاش صح عشان نحولك الجايزة' + (note ? ': ' + note : '')], ['We need your number again', 'Open the game and enter the right Vodafone Cash number for your prize' + (note ? ': ' + note : '')]);
+      else ctx.push([c.user_id], ['الجايزة اترفضت', note || 'تواصل مع الدعم من الإعدادات'], ['Prize declined', note || 'Contact support from Settings']);
       hub.refreshPlayer(c.user_id);
-      log(req, paid ? 'cashout_paid' : 'cashout_rejected', c.user_id, { id: c.id, egp: c.egp, phone: c.phone, note: b.note });
+      log(req, 'prize_' + action, c.user_id, { id: c.id, egp: c.egp, phone: c.phone, month: c.month, game: c.game, note });
       return { ok: true };
     }
 

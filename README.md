@@ -178,8 +178,7 @@ E-mail through Gmail: turn on 2-step verification for the sending Google account
 password and sign in with it (the session lasts 12 hours). Everything done there is in its **Activity log**.
 
 - **Overview:** players online, played today, new players, games, purchases, coins held, 14-day charts.
-- **Prize requests:** coins → Vodafone Cash requests. Send the money from your wallet, press **Paid** (add the
-  transaction number); **Reject** gives the coins back. The player gets a notification either way.
+- **Monthly prizes:** each game's monthly winner and their Vodafone Cash number. Send the money, press **Paid**.
 - **Players:** search by name, friend code, id, e-mail or phone; give or take coins, give skins, season premium and
   points, rename, mute, ban, send a push, delete; coin history, purchases, reports.
 - **Rewards & notices:** coins for everyone (or everyone who played lately), a notice shown in the game.
@@ -195,14 +194,16 @@ password and sign in with it (the session lasts 12 hours). Everything done there
 
 Changes reach the running game at once, no restart.
 
-## Cash out to Vodafone Cash
+## Monthly prizes (Vodafone Cash)
 
-Off until you switch it on in the dashboard (**Game settings → Prizes**), or with `CASHOUT_ENABLED=1` before the
-first change there. While it is on, the app shows a **Cash out** button and the terms page describes it.
+Coins can't be bought, sold or turned into money. The money prizes are for the **monthly leaderboards**: when a
+month ends, the player with the most points in each game (3 a win, 1 a game, online games, at least 10 games)
+wins **500 EGP** and that game's "Player of the Month" title (four games: up to 2,000 EGP a month).
 
-Default rules: every **1,000,000 coins = 5 EGP**, up to 10 units a request, one request at a time, players signed in
-(Google, Apple or phone) with 20 online games and an account 3 days old, Vodafone numbers (010). The coins are taken
-when the request is made and come back if you reject it.
+The winner gets a push and a "Your prize" button in the game, signs in if they haven't (Google, Apple or phone) and
+enters a Vodafone Cash number (010…) within 30 days. The team gets a support message, pays from the Vodafone Cash
+wallet, and presses **Paid** in the dashboard (**Monthly prizes** page); **Ask again** if the number is wrong,
+**Reject** if the win broke the rules. Amount, days and the minimum games are in the dashboard (**Game settings**).
 
 ## The game server's address
 

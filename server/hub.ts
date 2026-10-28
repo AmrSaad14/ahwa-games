@@ -42,15 +42,15 @@ export interface HubOptions {
   phones?: PhoneCodes; google?: GoogleSignIn; apple?: AppleSignIn; defaultCountry?: string;
   adsSsv?: boolean;
   billing?: PlayBilling;
-  /** A cash-out request came in (the dashboard can be told). */
-  onCashout?: (id: number, egp: number) => void;
+  /** A winner gave their number: a prize to pay (e-mail the team). */
+  onPrize?: (id: number, egp: number) => void;
   /** A player won a weekly prize (the server sends them a push). */
   onWeeklyPrize?: (uid: string, rank: number, coins: number) => void;
   /** A push to players' phones (the tournament's reminders, a referral bonus). */
   push?: (uids: string[], ar: [string, string], en: [string, string]) => void;
   /** How long a player who dropped out has to come back before the computer plays for them (default 30 s). */
   graceMs?: number;
-  /** The live settings from the dashboard (cash-out, maintenance, notice, how play runs). */
+  /** The live settings from the dashboard (prizes, maintenance, notice, how play runs). */
   settings?: Settings;
   titles?: Titles;
   /** Files a support message (and e-mails it); the server sets it up (server/support.ts). */
@@ -116,6 +116,7 @@ export class Hub {
       this.matchmake(); this.sweep();
       try { this.tourney.tick(); } catch (e) { console.error('[tourney]', (e as Error).message); }
       if (++this.ticks % 60 === 0) { this.weeklyPrizes(); try { this.monthlyTitles(); } catch (e) { console.error('[titles]', (e as Error).message); } }
+      if (this.ticks % 3600 === 0) this.store.expirePrizes(this.prizeCfg.claimDays);
     }, 1000);
   }
 
@@ -134,24 +135,28 @@ export class Hub {
   }
 
   /** When a month ends, the best player of each game (with enough games) is "<game> player of the month" for
-   *  the whole next month (once per month). */
-  monthlyTitles(now = Date.now()): { uid: string; game: string; title: string; month: string }[] {
+   *  the whole next month, and wins the month's prize on Vodafone Cash (once per month). */
+  monthlyTitles(now = Date.now()): { uid: string; game: string; title: string; month: string; prize: number | null }[] {
     const cfg = this.opts.settings?.value.titles ?? { monthly: true, minGames: 10 };
     const [y, mo] = seasonOf(now).split('-').map(Number);
     const prev = mo === 1 ? `${y - 1}-12` : `${y}-${String(mo - 1).padStart(2, '0')}`;
     if (this.store.metaGet('potm_' + prev)) return [];
     this.store.metaSet('potm_' + prev, String(now));
-    if (!cfg.monthly) return [];
-    const until = seasonEndsAt(now), won: { uid: string; game: string; title: string; month: string }[] = [];
+    if (!cfg.monthly && !this.prizeCfg.enabled) return [];
+    const until = seasonEndsAt(now), won: { uid: string; game: string; title: string; month: string; prize: number | null }[] = [];
+    const pz = this.prizeCfg;
     for (const game of GAMES) {
       const t = this.titles.monthlyFor(game); if (!t) continue;
       const top = this.store.monthlyBoard(game, prev, 1, cfg.minGames)[0]; if (!top) continue;
-      this.store.grantTitle(top.id, t.id, until, prev);
-      won.push({ uid: top.id, game, title: t.id, month: prev });
-      console.log(`[titles] ${prev} ${game}: ${top.name}`);
-      this.byUser.get(top.id)?.conn.send({ t: 'titleWon', id: t.id, month: prev });
+      if (cfg.monthly) this.store.grantTitle(top.id, t.id, until, prev);
+      const prize = pz.enabled && pz.egp > 0 ? this.store.createPrize(top.id, prev, game, pz.egp, now) : null;
+      won.push({ uid: top.id, game, title: t.id, month: prev, prize });
+      console.log(`[titles] ${prev} ${game}: ${top.name}${prize ? ` (prize #${prize}, ${pz.egp} EGP)` : ''}`);
+      if (cfg.monthly) this.byUser.get(top.id)?.conn.send({ t: 'titleWon', id: t.id, month: prev });
+      if (prize) this.byUser.get(top.id)?.conn.send({ t: 'prizeWon', id: prize, game, month: prev, egp: pz.egp });
       this.titleToTable(top.id); this.sendUser(top.id);
-      this.opts.push?.([top.id], ['مبروك! 🏅', `انت ${t.ar} — اللقب بتاعك الشهر ده كله`], ['Congratulations! 🏅', `You are ${t.en}: the title is yours all month`]);
+      if (prize) this.opts.push?.([top.id], ['كسبت ' + pz.egp + ' جنيه! 🏆', `انت ${t.ar}. افتح اللعبة واكتب رقم فودافون كاش عشان نحولك الجايزة`], ['You won ' + pz.egp + ' EGP! 🏆', `You are ${t.en}. Open the game and enter your Vodafone Cash number to get the prize`]);
+      else this.opts.push?.([top.id], ['مبروك! 🏅', `انت ${t.ar} — اللقب بتاعك الشهر ده كله`], ['Congratulations! 🏅', `You are ${t.en}: the title is yours all month`]);
     }
     this.store.metaSet('potm_winners_' + prev, JSON.stringify(won.map(w => ({ ...w, name: this.store.get(w.uid)?.name ?? '' }))));
     return won;
@@ -580,7 +585,6 @@ export class Hub {
         this.store.savePushToken(uid, tok, m.lang === 'en' ? 'en' : 'ar', m.platform === 'ios' ? 'ios' : 'android');
         return;
       }
-      case 'cashouts': return this.sendCashouts(uid);
       case 'wearTitle': {
         const id = typeof m.id === 'string' && m.id ? m.id : null;
         if (id && !this.titles.get(id)) return err('bad_title');
@@ -606,30 +610,20 @@ export class Hub {
         const id = this.opts.support({ uid, name: u?.name ?? '', contact, text, app: String(m.app || '').slice(0, 80) });
         return s.conn.send({ t: 'supportSent', id });
       }
-      case 'cashout': {
-        const cs = this.cash;
-        if (!cs.enabled) return err('cashout_off');
-        const u = this.store.get(uid);
-        if (!u) return;
+      case 'prizeClaim': {
+        // the month's winner gives the Vodafone Cash number to pay the prize to
+        const u = this.store.get(uid); if (!u) return;
         // paid to a real wallet: only for accounts that can be got back (Google, Apple, mobile number or e-mail)
         if (!u.google_sub && !u.apple_sub && !u.phone && !u.email) return err('sign_in_first');
-        const check = this.store.cashoutCheck(uid);
-        if (check.games < cs.minGames) return err('cashout_games');
-        if (check.ageDays < cs.minAccountDays) return err('cashout_new_account');
-        const phone = walletNumber(String(m.phone || ''), cs.prefixes);
+        const phone = walletNumber(String(m.phone || ''), this.prizeCfg.prefixes);
         if (!phone) return err('bad_wallet');
-        const units = Math.floor(Number(m.millions));
-        if (!(units >= 1 && units <= cs.maxUnits)) return err('bad_amount');
-        if (!this.cashLimiter.allow(uid)) return err('slow_down');
-        const coins = units * cs.coins, egp = units * cs.egp;
-        const r = this.store.requestCashout(uid, coins, egp, phone);
-        if (r === 'pending') return err('cashout_pending');
-        if (r === null) return err('not_enough_coins');
-        console.log(`[cashout] #${r} ${egp} EGP for ${coins} coins`);
-        this.opts.onCashout?.(r, egp);
-        s.conn.send({ t: 'cashoutDone', id: r, egp, coins, phone });
-        this.sendUser(uid); this.sendCashouts(uid);
-        return;
+        const e = this.store.claimPrize(uid, Number(m.id), phone);
+        if (e) return err(e);
+        const p = this.store.prizeGet(Number(m.id))!;
+        console.log(`[prize] #${p.id} ${p.month} ${p.game}: ${p.egp} EGP asked for`);
+        this.opts.onPrize?.(p.id, p.egp);
+        s.conn.send({ t: 'prizeClaimed', id: p.id });
+        return this.sendUser(uid);
       }
       case 'report': {
         // someone at your table (by seat), or anyone by the pid on their card
@@ -770,20 +764,13 @@ export class Hub {
     return out;
   }
 
-  private sendCashouts(uid: string) {
-    const cs = this.cash;
-    this.byUser.get(uid)?.conn.send({ t: 'cashouts', rows: this.store.cashoutsOf(uid), rate: { coins: cs.coins, egp: cs.egp }, maxMillions: cs.maxUnits });
-  }
-
-  /** Lets the player know (cash-out paid or turned down), if they're connected. */
-  refreshPlayer(uid: string) { this.sendUser(uid); this.sendCashouts(uid); }
-
-  /** The live cash-out rules. */
-  private get cash(): GameSettings['cashout'] { return this.opts.settings?.value.cashout ?? CASHOUT; }
-  /** A player as the app sees them, with what the cash-out offers right now. */
+  /** A player's app should show what changed (the dashboard settled their prize). */
+  refreshPlayer(uid: string) { this.sendUser(uid); }
+  private get prizeCfg(): GameSettings['prizes'] { return this.opts.settings?.value.prizes ?? PRIZES; }
+  /** A player as the app sees them, with their monthly prizes and what the prizes are this month. */
   private pub(u: UserRow) {
-    const c = this.cash;
-    return { ...this.store.publicUser(u), cashout: { on: c.enabled, coins: c.coins, egp: c.egp, maxUnits: c.maxUnits, minGames: c.minGames }, adReward: ECONOMY.adReward,
+    const c = this.prizeCfg;
+    return { ...this.store.publicUser(u), prizes: this.store.prizesOf(u.id), prize: { on: c.enabled, egp: c.egp, claimDays: c.claimDays }, adReward: ECONOMY.adReward,
       // what the dashboard switched on: the tournament section and the season pass
       features: { tourney: TOURNEY.enabled !== false, season: SEASON_PASS.enabled } };
   }
@@ -1155,11 +1142,10 @@ export class Hub {
   }
 }
 
-/** Cash out: every 1,000,000 coins is 10 EGP on Vodafone Cash, paid by hand (see /admin/cashouts). */
-/** (Without the dashboard's settings: off, 1,000,000 coins = 5 EGP.) */
-export const CASHOUT: GameSettings['cashout'] = { enabled: false, coins: 1_000_000, egp: 5, maxUnits: 10, minGames: 0, minAccountDays: 0, prefixes: ['010'] };
+/** The monthly prizes when the dashboard hasn't changed anything (see server/settings.ts). */
+export const PRIZES: GameSettings['prizes'] = { enabled: true, egp: 500, claimDays: 30, prefixes: ['010'] };
 
-/** A Vodafone Cash number as 010xxxxxxxx (accepts +20 / 0020, spaces and Arabic digits), or null. */
+/** A Vodafone Cash number in any common form (Arabic digits, +20…) as 010xxxxxxxx, or null if it isn't one. */
 export function walletNumber(raw: string, prefixes: string[] = ['010']): string | null {
   let d = raw.replace(/[\u0660-\u0669]/g, c => String(c.charCodeAt(0) - 0x0660)).replace(/[\u06F0-\u06F9]/g, c => String(c.charCodeAt(0) - 0x06F0)).replace(/\D/g, '');
   if (d.startsWith('0020')) d = '0' + d.slice(4);

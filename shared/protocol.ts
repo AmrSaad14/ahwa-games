@@ -259,8 +259,7 @@ export type C2S =
   /** The phone's Firebase Cloud Messaging token, for the daily reminders. */
   | { t: 'pushToken'; token: string; lang?: string; platform?: string }
   /** Cash out: every 1,000,000 coins pays 10 EGP to a Vodafone Cash number, paid by hand within one working day. */
-  | { t: 'cashout'; phone: string; millions: number }
-  | { t: 'cashouts' }
+  | { t: 'prizeClaim'; id: number; phone: string }
   | { t: 'wearTitle'; id: string | null }
   /** A practice game (played on the phone) finished: a little experience. */
   | { t: 'practiceDone'; game: GameId; won: boolean }
@@ -300,8 +299,8 @@ export type S2C =
   | { t: 'titles'; list: TitleDef[] }
   | { t: 'titleWon'; id: string; month: string }
   | { t: 'notice'; text: string }
-  | { t: 'cashouts'; rows: CashoutRow[]; rate: { coins: number; egp: number }; maxMillions: number }
-  | { t: 'cashoutDone'; id: number; egp: number; coins: number; phone: string }
+  | { t: 'prizeClaimed'; id: number }
+  | { t: 'prizeWon'; id: number; game: string; month: string; egp: number }
   | { t: 'supportSent'; id: number }
   | { t: 'rematch'; seats: number[]; need: number; gone: boolean }
   | { t: 'profileCard'; card: PlayerCard }
@@ -314,4 +313,5 @@ export type S2C =
   | { t: 'referral'; coins: number; name: string; you: 'inviter' | 'invited' }
   | { t: 'pong'; c: number; now: number };
 
-export interface CashoutRow { id: number; coins: number; egp: number; phone: string; status: 'pending' | 'paid' | 'rejected'; ts: number; doneTs: number | null }
+/** A monthly prize: unclaimed (the winner hasn't given a Vodafone Cash number), pending (to pay), paid, rejected, expired. */
+export interface PrizeRow { id: number; month: string; game: string; egp: number; status: 'unclaimed' | 'pending' | 'paid' | 'rejected' | 'expired'; phone: string | null; ts: number; doneTs: number | null; note: string | null }

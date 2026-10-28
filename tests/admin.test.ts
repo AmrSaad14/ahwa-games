@@ -73,13 +73,13 @@ test('admin: a gift for everyone', async () => {
 });
 
 test('admin: settings apply to the running game and are checked', async () => {
-  const s = await adm('PUT', '/settings', { economy: { startCoins: 77_000, streak: [1, 2, 3, 4, 5, 6, 7] }, tourney: { weekday: 5, hour: 21, game: 'chess' }, cashout: { coins: 5, prefixes: ['010', 'abc'] } });
+  const s = await adm('PUT', '/settings', { economy: { startCoins: 77_000, streak: [1, 2, 3, 4, 5, 6, 7] }, tourney: { weekday: 5, hour: 21, game: 'chess' }, prizes: { egp: -5, prefixes: ['010', 'abc'] } });
   assert.equal(s.json.economy.startCoins, 77_000);
   assert.equal(ECONOMY.startCoins, 77_000);
   assert.deepEqual(STREAK, [1, 2, 3, 4, 5, 6, 7]);
   assert.equal(TOURNEY.weekday, 5);
-  assert.equal(s.json.cashout.coins, 10_000);           // clamped to the lowest allowed
-  assert.deepEqual(s.json.cashout.prefixes, ['010']);
+  assert.equal(s.json.prizes.egp, 0);           // clamped to the lowest allowed
+  assert.deepEqual(s.json.prizes.prefixes, ['010']);
   const t = (await adm('GET', '/tourney')).json;
   assert.equal(t.view.game, 'chess');
   assert.equal(new Date(t.view.startsAt).getUTCDay() === 5 || new Date(t.view.startsAt + 3 * 3_600_000).getUTCDay() === 5, true);
@@ -125,6 +125,20 @@ test('titles: the designs, giving one, wearing it, and player of the month', asy
   assert.deepEqual(won.map(w => [w.uid, w.title]), [[a.user.id, 'potm_domino']]);
   assert.equal(app.store.wornTitle(a.user.id), 'potm_domino');
   assert.deepEqual(app.hub.monthlyTitles(), [], 'once a month');
+  // and 500 EGP: the winner gives a Vodafone Cash number, the team pays it
+  const pz = app.store.prizesOf(a.user.id)[0];
+  assert.deepEqual([pz.egp, pz.status, pz.game, pz.month], [500, 'unclaimed', 'domino', prev]);
+  assert.equal(app.store.claimPrize(b.user.id, pz.id, '01012345678'), 'prize_gone', 'not theirs');
+  assert.equal(app.store.claimPrize(a.user.id, pz.id, '01012345678'), null);
+  const list = await adm('GET', '/prizes?status=pending');
+  assert.equal(list.json.rows[0].phone, '01012345678');
+  assert.equal((await adm('POST', '/prizes/' + pz.id, { action: 'again', note: 'wrong number' })).status, 200);
+  assert.equal(app.store.prizesOf(a.user.id)[0].status, 'unclaimed');
+  app.store.claimPrize(a.user.id, pz.id, '01098765432');
+  assert.equal((await adm('POST', '/prizes/' + pz.id, { action: 'paid', note: 'ref 1' })).status, 200);
+  assert.equal(app.store.prizesOf(a.user.id)[0].status, 'paid');
+  assert.equal((await adm('POST', '/prizes/' + pz.id, { action: 'paid' })).status, 409, 'paid once');
+  assert.equal((await adm('GET', '/overview')).json.prizePaidEgp, 500);
 });
 
 test('admin: the season pass and the tournament can be switched off', async () => {

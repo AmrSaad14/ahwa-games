@@ -153,13 +153,13 @@ function showLogin() {
 
 /* ---------------- the frame ---------------- */
 const VIEWS = [
-  ['overview', 'Overview'], ['cashouts', 'Prize requests'], ['players', 'Players'], ['rewards', 'Rewards & notices'],
+  ['overview', 'Overview'], ['prizes', 'Monthly prizes'], ['players', 'Players'], ['rewards', 'Rewards & notices'],
   ['tourney', 'Tournaments'], ['season', 'Season pass'], ['titles', 'Titles'], ['settings', 'Game settings'], ['reports', 'Reports & support'],
   ['purchases', 'Purchases'], ['log', 'Activity log'],
 ];
 function frame() {
   $('#root').innerHTML = '<div class="app"><nav class="side"><div class="brand">♛ Board Battles<small>Control room</small></div>' +
-    VIEWS.map(([k, l]) => '<a href="#' + k + '" data-v="' + k + '">' + l + (k === 'cashouts' ? '<span class="pill" id="pendpill" hidden></span>' : '') + '</a>').join('') +
+    VIEWS.map(([k, l]) => '<a href="#' + k + '" data-v="' + k + '">' + l + (k === 'prizes' ? '<span class="pill" id="pendpill" hidden></span>' : '') + '</a>').join('') +
     '<a href="#" id="logout" style="margin-top:14px">Sign out</a></nav><main id="main"></main></div>';
   $('#logout').onclick = async e => { e.preventDefault(); await api('/logout', { body: {} }).catch(() => {}); showLogin(); };
 }
@@ -177,7 +177,7 @@ async function start() {
   try { state.catalog = await api('/catalog'); } catch { return; }
   window.onhashchange = go;
   go();
-  setInterval(async () => { try { const o = await api('/overview'); setPending(o.cashoutPending); } catch {} }, 60000);
+  setInterval(async () => { try { const o = await api('/overview'); setPending(o.prizePending); } catch {} }, 60000);
 }
 
 /* ---------------- charts (plain SVG) ---------------- */
@@ -200,18 +200,18 @@ const RENDER = {};
 /* ---------------- overview ---------------- */
 RENDER.overview = async main => {
   const o = await api('/overview');
-  setPending(o.cashoutPending);
+  setPending(o.prizePending);
   const k = (v, l, alert) => '<div class="card kpi' + (alert ? ' alert' : '') + '"><div class="v">' + v + '</div><div class="l">' + l + '</div></div>';
   const f = (on, l, warn) => '<span class="flag ' + (warn && on ? 'warn' : on ? 'on' : 'off') + '">' + l + ': ' + (on ? 'on' : 'off') + '</span>';
   const t = o.tourney;
   main.innerHTML = '<h1>Overview</h1><div class="sub">Cairo time · updated ' + when(Date.now()) + '</div>' +
-    '<div class="flags">' + f(o.flags.cashout, 'Cash-out') + f(o.flags.maintenance, 'Maintenance', true) + f(!!o.flags.notice, 'Notice') + f(t.enabled, 'Tournament') + f(o.flags.season, 'Season pass') + f(o.flags.push, 'Push') + '</div>' +
+    '<div class="flags">' + f(o.flags.prizes, 'Monthly prizes') + f(o.flags.maintenance, 'Maintenance', true) + f(!!o.flags.notice, 'Notice') + f(t.enabled, 'Tournament') + f(o.flags.season, 'Season pass') + f(o.flags.push, 'Push') + '</div>' +
     '<div class="grid">' +
       k(num(o.live.online), 'Online now · ' + num(o.live.tables) + ' tables · ' + num(o.live.queued) + ' waiting') +
       k(num(o.activeToday), 'Played today · ' + num(o.activeWeek) + ' this week') +
       k(num(o.players), 'Players · ' + num(o.signedIn) + ' signed in · ' + num(o.newToday) + ' new today') +
       k(num(o.gamesToday), 'Games today · fees ' + short(o.houseFeesToday) + ' coins') +
-      k(o.cashoutPending ? num(o.cashoutPending) + ' · ' + num(o.cashoutPendingEgp) + ' EGP' : '0', 'Prize requests waiting · ' + num(o.cashoutPaidEgp) + ' EGP paid in all', o.cashoutPending > 0) +
+      k(o.prizePending ? num(o.prizePending) + ' · ' + num(o.prizePendingEgp) + ' EGP' : '0', 'Prizes to pay · ' + num(o.prizeUnclaimed) + ' waiting for a number · ' + num(o.prizePaidEgp) + ' EGP paid in all', o.prizePending > 0) +
       k(num(o.seasonPremium), 'Season pass buyers this month') +
       k(num(o.purchasesToday) + ' / ' + num(o.purchasesWeek), 'Store purchases today / this week') +
       k(short(o.coinsHeld), 'Coins held by players') +
@@ -222,42 +222,40 @@ RENDER.overview = async main => {
       '<div class="card">' + bars(o.daily, 'active', 'Players who played', '#c9a25a') + '</div>' +
       '<div class="card">' + bars(o.daily, 'games', 'Games finished', '#4fae6a') + '</div>' +
       '<div class="card">' + bars(o.daily, 'newPlayers', 'New players', '#6f9fd8') + '</div>' +
-      '<div class="card">' + bars(o.daily, 'cashoutEgp', 'Prize requests (EGP)', '#e0a03a') + '</div>' +
+      '<div class="card">' + bars(o.daily, 'prizeEgp', 'Prizes paid (EGP)', '#e0a03a') + '</div>' +
     '</div>' +
     '<h2>Next tournament</h2><div class="card row" style="justify-content:space-between"><div><b>' + esc(GAMES[t.game] || t.game) + '</b> · ' + esc(t.state) + ' · ' + when(t.startsAt) + '<div class="sub">' + num(t.registered) + ' signed up</div></div><a class="btn" href="#tourney">Manage</a></div>' +
     (o.flags.notice ? '<h2>Notice showing</h2><div class="card">' + esc(o.flags.notice) + '</div>' : '');
 };
 
 /* ---------------- prize requests ---------------- */
-RENDER.cashouts = async main => {
+RENDER.prizes = async main => {
   const status = (location.hash.split('/')[1]) || 'pending';
-  const d = await api('/cashouts?status=' + status);
+  const d = await api('/prizes?status=' + status);
   const rules = d.rules;
   const pend = d.rows.filter(r => r.status === 'pending');
   if (status === 'pending') setPending(pend.length);
-  main.innerHTML = '<h1>Prize requests · Vodafone Cash</h1>' +
-    '<div class="sub">Every ' + num(rules.coins) + ' coins = ' + num(rules.egp) + ' EGP · up to ' + num(rules.maxUnits * rules.egp) + ' EGP a request · ' +
-      'needs ' + rules.minGames + ' online games and an account ' + rules.minAccountDays + ' days old · numbers ' + esc(rules.prefixes.join(', ')) + ' · cash-out is <b>' + (rules.enabled ? 'on' : 'off') + '</b> (<a href="#settings">change</a>)</div>' +
-    '<div class="tabs">' + ['pending', 'paid', 'rejected', 'all'].map(s => '<button data-s="' + s + '" class="' + (s === status ? 'on' : '') + '">' + s[0].toUpperCase() + s.slice(1) + '</button>').join('') + '</div>' +
-    (status === 'pending' && pend.length ? '<div class="card" style="margin-bottom:12px">To pay: <b>' + pend.length + '</b> requests · <b>' + num(pend.reduce((a, r) => a + r.egp, 0)) + ' EGP</b>. Send the money on Vodafone Cash, then press <b>Paid</b> (the player gets a notification). <b>Reject</b> gives the coins back.</div>' : '') +
-    (d.rows.length ? '<div class="tablewrap"><table><thead><tr><th>#</th><th>Asked</th><th>Player</th><th>Vodafone Cash</th><th class="num">Coins</th><th class="num">EGP</th><th>Status</th><th></th></tr></thead><tbody>' +
-      d.rows.map(r => '<tr><td class="mono">' + r.id + '</td><td>' + when(r.ts) + '</td><td><a href="#players/' + esc(r.user_id) + '" data-player="' + esc(r.user_id) + '">' + esc(r.name || '—') + '</a><div class="sub">balance now ' + short(r.coins_now) + '</div></td>' +
-        '<td><b class="mono" style="font-size:14px">' + esc(r.phone) + '</b> <button class="btn sm" data-copy="' + esc(r.phone) + '">Copy</button></td><td class="num">' + num(r.coins) + '</td><td class="num"><b>' + num(r.egp) + '</b></td>' +
-        '<td><span class="tag ' + r.status + '">' + r.status + '</span>' + (r.done_ts ? '<div class="sub">' + when(r.done_ts) + '</div>' : '') + (r.note ? '<div class="sub">' + esc(r.note) + '</div>' : '') + '</td>' +
-        '<td>' + (r.status === 'pending' ? '<div class="row"><button class="btn sm ok" data-pay="' + r.id + '" data-egp="' + r.egp + '" data-phone="' + esc(r.phone) + '">Paid</button><button class="btn sm bad" data-rej="' + r.id + '">Reject</button></div>' : '') + '</td></tr>').join('') +
-      '</tbody></table></div>' : '<div class="card empty">No ' + status + ' requests</div>');
-  main.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { location.hash = 'cashouts/' + b.dataset.s; });
+  const GN = { domino: 'Dominoes', tawla: 'Backgammon', chess: 'Chess', ludo: 'Ludo' };
+  const monthName = m => { const [y, mo] = m.split('-').map(Number); return new Date(Date.UTC(y, mo - 1, 15)).toLocaleString('en', { month: 'long', year: 'numeric' }); };
+  const LABEL = { pending: 'To pay', unclaimed: 'Waiting for a number', paid: 'Paid', rejected: 'Rejected', expired: 'Expired', all: 'All' };
+  main.innerHTML = '<h1>Monthly prizes · Vodafone Cash</h1>' +
+    '<div class="sub">On the 1st of each month, the top player of each game\'s monthly leaderboard (at least ' + d.minGames + ' online games) wins <b>' + num(rules.egp) + ' EGP</b> and the "player of the month" title. ' +
+      'The winner enters a Vodafone Cash number (' + esc(rules.prefixes.join(', ')) + ') in the game within ' + rules.claimDays + ' days. Prizes are <b>' + (rules.enabled ? 'on' : 'off') + '</b> (<a href="#settings">change</a>) · this month\'s race is on the <a href="#titles">Titles</a> page.</div>' +
+    '<div class="tabs">' + Object.keys(LABEL).map(s => '<button data-s="' + s + '" class="' + (s === status ? 'on' : '') + '">' + LABEL[s] + '</button>').join('') + '</div>' +
+    (status === 'pending' && pend.length ? '<div class="card" style="margin-bottom:12px">To pay: <b>' + pend.length + '</b> · <b>' + num(pend.reduce((a, r) => a + r.egp, 0)) + ' EGP</b>. Send the money on Vodafone Cash, then press <b>Paid</b> (the winner gets a notification). <b>Ask again</b> if the number is wrong; <b>Reject</b> if the win broke the rules (cheating, several accounts).</div>' : '') +
+    (d.rows.length ? '<div class="tablewrap"><table><thead><tr><th>#</th><th>Month</th><th>Game</th><th>Winner</th><th>Vodafone Cash</th><th class="num">EGP</th><th>Status</th><th></th></tr></thead><tbody>' +
+      d.rows.map(r => '<tr><td class="mono">' + r.id + '</td><td>' + esc(monthName(r.month)) + '</td><td>' + esc(GN[r.game] || r.game) + '</td><td><a href="#players/' + esc(r.user_id) + '" data-player="' + esc(r.user_id) + '">' + esc(r.name || '—') + '</a><div class="sub">won ' + when(r.ts) + '</div></td>' +
+        '<td>' + (r.phone ? '<b class="mono" style="font-size:14px">' + esc(r.phone) + '</b> <button class="btn sm" data-copy="' + esc(r.phone) + '">Copy</button>' : '<span class="muted">not given yet</span>') + '</td><td class="num"><b>' + num(r.egp) + '</b></td>' +
+        '<td><span class="tag ' + (r.status === 'unclaimed' ? '' : r.status === 'expired' ? 'rejected' : r.status) + '">' + (LABEL[r.status] || r.status) + '</span>' + (r.done_ts ? '<div class="sub">' + when(r.done_ts) + '</div>' : '') + (r.note ? '<div class="sub">' + esc(r.note) + '</div>' : '') + '</td>' +
+        '<td>' + (r.status === 'pending' ? '<div class="row"><button class="btn sm ok" data-pay="' + r.id + '" data-egp="' + r.egp + '" data-phone="' + esc(r.phone) + '">Paid</button><button class="btn sm" data-again="' + r.id + '">Ask again</button><button class="btn sm bad" data-rej="' + r.id + '">Reject</button></div>'
+          : r.status === 'unclaimed' ? '<button class="btn sm bad" data-rej="' + r.id + '">Reject</button>' : '') + '</td></tr>').join('') +
+      '</tbody></table></div>' : '<div class="card empty">Nothing here</div>');
+  main.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { location.hash = 'prizes/' + b.dataset.s; });
   main.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => { navigator.clipboard.writeText(b.dataset.copy); toast('Copied ' + b.dataset.copy); });
-  main.querySelectorAll('[data-pay]').forEach(b => b.onclick = async () => {
-    const note = prompt('Sent ' + b.dataset.egp + ' EGP to ' + b.dataset.phone + '?\nTransaction number (optional):', '');
-    if (note === null) return;
-    await act(() => api('/cashouts/' + b.dataset.pay, { body: { action: 'paid', note } }), 'Marked paid · the player was told'); go();
-  });
-  main.querySelectorAll('[data-rej]').forEach(b => b.onclick = async () => {
-    const note = prompt('Reject this request? The coins go back to the player.\nReason (the player sees it):', '');
-    if (note === null) return;
-    await act(() => api('/cashouts/' + b.dataset.rej, { body: { action: 'reject', note } }), 'Rejected · coins returned'); go();
-  });
+  const settle = (id, action, note, ok) => act(() => api('/prizes/' + id, { body: { action, note } }), ok).then(go);
+  main.querySelectorAll('[data-pay]').forEach(b => b.onclick = () => { const note = prompt('Sent ' + b.dataset.egp + ' EGP to ' + b.dataset.phone + '?\nTransaction number (optional):', ''); if (note !== null) settle(b.dataset.pay, 'paid', note, 'Marked paid · the winner was told'); });
+  main.querySelectorAll('[data-again]').forEach(b => b.onclick = () => { const note = prompt('Ask the winner for their number again?\nWhat was wrong (they see it):', 'الرقم مش على فودافون كاش'); if (note !== null) settle(b.dataset.again, 'again', note, 'The winner was asked again'); });
+  main.querySelectorAll('[data-rej]').forEach(b => b.onclick = () => { const note = prompt('Reject this prize for good?\nReason (the winner sees it):', ''); if (note !== null) settle(b.dataset.rej, 'reject', note, 'Rejected'); });
   main.querySelectorAll('[data-player]').forEach(a => a.onclick = e => { e.preventDefault(); openPlayer(a.dataset.player); });
 };
 
@@ -310,7 +308,7 @@ async function openPlayer(id) {
       '</div>' +
       '<h2>Coin history</h2>' + (d.coins.length ? '<div class="tablewrap"><table><thead><tr><th>When</th><th>What</th><th class="num">Change</th><th class="num">Balance</th></tr></thead><tbody>' +
         d.coins.map(c => '<tr><td>' + when(c.ts) + '</td><td>' + esc(c.kind) + (c.mode ? ' · ' + esc(c.mode) : '') + (c.stake ? ' · stake ' + short(c.stake) : '') + '</td><td class="num" style="color:' + (c.delta >= 0 ? '#9fe0b0' : '#ff9d92') + '">' + (c.delta >= 0 ? '+' : '') + num(c.delta) + '</td><td class="num">' + num(c.balance) + '</td></tr>').join('') + '</tbody></table></div>' : '<div class="card empty">None</div>') +
-      '<h2>Prize requests</h2>' + (d.cashouts.length ? '<table><tbody>' + d.cashouts.map(c => '<tr><td>#' + c.id + '</td><td>' + when(c.ts) + '</td><td class="mono">' + esc(c.phone) + '</td><td class="num">' + num(c.egp) + ' EGP</td><td><span class="tag ' + c.status + '">' + c.status + '</span></td></tr>').join('') + '</tbody></table>' : '<div class="card empty">None</div>') +
+      '<h2>Monthly prizes</h2>' + (d.prizes.length ? '<table><tbody>' + d.prizes.map(c => '<tr><td>#' + c.id + '</td><td>' + esc(c.month) + ' · ' + esc(c.game) + '</td><td class="mono">' + esc(c.phone || '—') + '</td><td class="num">' + num(c.egp) + ' EGP</td><td><span class="tag ' + c.status + '">' + c.status + '</span></td></tr>').join('') + '</tbody></table>' : '<div class="card empty">None</div>') +
       '<h2>Purchases</h2>' + (d.purchases.length ? '<table><tbody>' + d.purchases.map(p => '<tr><td>' + when(p.ts) + '</td><td>' + esc(p.product) + '</td><td class="mono">' + esc(p.order_id || '') + '</td></tr>').join('') + '</tbody></table>' : '<div class="card empty">None</div>') +
       '<h2>Skins (' + d.skins.length + ')</h2><div class="card">' + (d.skins.map(k => '<span class="tag" style="margin:2px">' + esc(k) + ' <a href="#" data-unskin="' + esc(k) + '" title="Take back">✕</a></span>').join('') || '<span class="muted">Only the free ones</span>') + '</div>' +
       '<h2>Titles</h2><div class="card" style="display:grid;gap:10px">' + (d.titles.length ? '<div class="row">' + d.titles.map(t => '<span>' + badge(titleById(t.id), 'en') + (d.title === t.id ? ' <span class="tag on">wearing</span>' : '') + (t.until ? ' <span class="sub">until ' + when(t.until) + '</span>' : '') + ' <a href="#" data-untitle="' + esc(t.id) + '" title="Take back">✕</a></span>').join('') + '</div>' : '<span class="muted">No titles</span>') +
@@ -550,12 +548,12 @@ RENDER.settings = async main => {
   main.innerHTML = '<h1>Game settings</h1><div class="sub">Changes reach the game at once, without a restart. Every change is in the activity log.</div>' +
     '<h2>Maintenance</h2><div class="card"><div class="form"><label class="f">Maintenance mode<span class="switch"><input type="checkbox" id="mo"' + (s.maintenance.on ? ' checked' : '') + '> no new games start</span></label>' +
       '<label class="f" style="grid-column:span 2">Message players see<input id="mm" value="' + esc(s.maintenance.message) + '"></label></div></div>' +
-    '<h2>Prizes: coins to Vodafone Cash</h2><div class="card"><div class="form">' +
-      '<label class="f">Cash-out<span class="switch"><input type="checkbox" id="co"' + (s.cashout.enabled ? ' checked' : '') + '> players can ask for prizes</span></label>' +
-      n('cc', 'Coins in one unit', s.cashout.coins) + n('ce', 'EGP for one unit', s.cashout.egp) + n('cm', 'Most units in one request', s.cashout.maxUnits) +
-      n('cg', 'Online games needed first', s.cashout.minGames) + n('ca', 'Account age needed (days)', s.cashout.minAccountDays) +
-      '<label class="f">Accepted numbers (prefixes)<input id="cp" value="' + esc(s.cashout.prefixes.join(', ')) + '"></label>' +
-    '</div><div class="sub" style="margin-top:8px">Vodafone Cash works on Vodafone lines (010). Players must be signed in (Google, Apple or phone) and can have one request waiting at a time.</div></div>' +
+    '<h2>Monthly prizes: Vodafone Cash</h2><div class="card"><div class="form">' +
+      '<label class="f">Monthly prizes<span class="switch"><input type="checkbox" id="co"' + (s.prizes.enabled ? ' checked' : '') + '> the top player of each game wins money</span></label>' +
+      n('ce', 'EGP for each game\'s winner', s.prizes.egp) + n('cd', 'Days to give a number', s.prizes.claimDays) +
+      n('cg', 'Online games needed in the month', s.titles.minGames) +
+      '<label class="f">Accepted numbers (prefixes)<input id="cp" value="' + esc(s.prizes.prefixes.join(', ')) + '"></label>' +
+    '</div><div class="sub" style="margin-top:8px">Four games, so up to ' + num(4 * s.prizes.egp) + ' EGP a month. The winner must be signed in (Google, Apple or phone). Vodafone Cash works on Vodafone lines (010). Coins can\'t be turned into money.</div></div>' +
     '<h2>Economy</h2><div class="card"><div class="form">' + n('es', 'Coins for a new player', s.economy.startCoins) + n('ea', 'Coins for a rewarded ad', s.economy.adReward) + n('ed', 'Rewarded ads a day', s.economy.adsPerDay) + '</div>' +
       '<div class="sub" style="margin:12px 0 6px">Daily reward, day by day (day 7 repeats after)</div><div class="form">' + list('ek', 'Day', s.economy.streak) + '</div>' +
       '<div class="sub" style="margin:12px 0 6px">Weekly leaderboard prizes, places 1–10 (paid every Monday)</div><div class="form">' + list('ew', 'Place', s.economy.weeklyPrizes) + '</div></div>' +
@@ -565,7 +563,8 @@ RENDER.settings = async main => {
     const vals = cls => [...main.querySelectorAll('.' + cls)].map(i => Number(i.value));
     await act(() => api('/settings', { method: 'PUT', body: {
       maintenance: { on: $('#mo').checked, message: $('#mm').value },
-      cashout: { enabled: $('#co').checked, coins: Number($('#cc').value), egp: Number($('#ce').value), maxUnits: Number($('#cm').value), minGames: Number($('#cg').value), minAccountDays: Number($('#ca').value), prefixes: $('#cp').value.split(/[ ,]+/).filter(Boolean) },
+      prizes: { enabled: $('#co').checked, egp: Number($('#ce').value), claimDays: Number($('#cd').value), prefixes: $('#cp').value.split(/[ ,]+/).filter(Boolean) },
+      titles: { minGames: Number($('#cg').value) },
       economy: { startCoins: Number($('#es').value), adReward: Number($('#ea').value), adsPerDay: Number($('#ed').value), streak: vals('ek'), weeklyPrizes: vals('ew') },
       play: { botFillSeconds: Number($('#pb').value), turnSeconds: Number($('#pt').value) },
     } }), 'Settings saved'); go();

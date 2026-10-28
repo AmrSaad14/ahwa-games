@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import type { CashoutRow, CoinRow, LeaderRow, PublicUser } from '../shared/protocol';
+import type { PrizeRow, CoinRow, LeaderRow, PublicUser } from '../shared/protocol';
 import type { GameId } from '../shared/engine';
 import { ECONOMY, WEEKLY_PRIZES, cairoDay, levelOf, nextCairoDay, streakBonus, weekKey } from '../shared/gifts';
 import { Equipped, isFree, skinById } from '../shared/skins';
@@ -119,13 +119,18 @@ export class Store {
     // every store purchase, so the same purchase can never be credited twice
     this.db.exec(`CREATE TABLE IF NOT EXISTS purchases (
       token TEXT PRIMARY KEY, user_id TEXT NOT NULL, product TEXT NOT NULL, order_id TEXT, ts INTEGER NOT NULL, coins INTEGER NOT NULL DEFAULT 0, until INTEGER NOT NULL DEFAULT 0)`);
-    // phones for push reminders (Firebase Cloud Messaging), and cash-out requests paid by hand
+    // phones for push reminders (Firebase Cloud Messaging); monthly prizes paid by hand (cashouts: the old coin cash-out, no longer used)
     this.db.exec(`CREATE TABLE IF NOT EXISTS push_tokens (token TEXT PRIMARY KEY, user_id TEXT NOT NULL, lang TEXT NOT NULL DEFAULT 'ar', platform TEXT NOT NULL DEFAULT 'android', ts INTEGER NOT NULL);
       CREATE INDEX IF NOT EXISTS push_user ON push_tokens(user_id);
       CREATE TABLE IF NOT EXISTS cashouts (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, coins INTEGER NOT NULL, egp INTEGER NOT NULL,
         phone TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', ts INTEGER NOT NULL, done_ts INTEGER, note TEXT);
       CREATE INDEX IF NOT EXISTS cashouts_user ON cashouts(user_id, id DESC);
       CREATE INDEX IF NOT EXISTS cashouts_status ON cashouts(status, id);
+      CREATE TABLE IF NOT EXISTS prizes (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, month TEXT NOT NULL, game TEXT NOT NULL,
+        egp INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'unclaimed', phone TEXT, ts INTEGER NOT NULL, claim_ts INTEGER, done_ts INTEGER, note TEXT,
+        UNIQUE (month, game));
+      CREATE INDEX IF NOT EXISTS prizes_user ON prizes(user_id, id DESC);
+      CREATE INDEX IF NOT EXISTS prizes_status ON prizes(status, id);
       CREATE TABLE IF NOT EXISTS support (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, name TEXT, contact TEXT, text TEXT NOT NULL,
         app TEXT, ts INTEGER NOT NULL, mailed INTEGER NOT NULL DEFAULT 0)`);
     this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_phone ON users(phone) WHERE phone IS NOT NULL; CREATE UNIQUE INDEX IF NOT EXISTS users_google ON users(google_sub) WHERE google_sub IS NOT NULL');
@@ -623,37 +628,43 @@ export class Store {
   metaLike(prefix: string) { return this.db.prepare("SELECT k, v FROM meta WHERE k LIKE ? || '%' ORDER BY k DESC").all(prefix) as { k: string; v: string }[]; }
   metaSet(k: string, v: string) { this.db.prepare('INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v').run(k, v); }
 
-  /* ---------- cash out (Vodafone Cash, paid by hand) ---------- */
+  /* ---------- monthly prizes: the best player of each game wins money on Vodafone Cash, paid by hand ---------- */
 
-  /** Takes the coins and files the request, in one step; null when the coins aren't there or one is already waiting. */
-  requestCashout(uid: string, coins: number, egp: number, phone: string): number | null | 'pending' {
-    this.db.exec('BEGIN');
-    try {
-      if (this.db.prepare("SELECT 1 FROM cashouts WHERE user_id = ? AND status = 'pending'").get(uid)) { this.db.exec('ROLLBACK'); return 'pending'; }
-      const r = this.db.prepare('UPDATE users SET coins = coins - ? WHERE id = ? AND coins >= ?').run(coins, uid, coins);
-      if (!Number(r.changes)) { this.db.exec('ROLLBACK'); return null; }
-      const ins = this.db.prepare('INSERT INTO cashouts (user_id, coins, egp, phone, ts) VALUES (?, ?, ?, ?, ?)').run(uid, coins, egp, phone, Date.now());
-      this.db.exec('COMMIT');
-      this.logCoins(uid, 'cashout', -coins);
-      return Number(ins.lastInsertRowid);
-    } catch (e) { this.db.exec('ROLLBACK'); throw e; }
+  /** The prize for a game's month (once): waiting for the winner's Vodafone Cash number. */
+  createPrize(uid: string, month: string, game: string, egp: number, now = Date.now()): number | null {
+    const r = this.db.prepare("INSERT OR IGNORE INTO prizes (user_id, month, game, egp, status, ts) VALUES (?, ?, ?, ?, 'unclaimed', ?)").run(uid, month, game, egp, now);
+    return Number(r.changes) ? Number(r.lastInsertRowid) : null;
   }
-  cashoutsOf(uid: string, limit = 20): CashoutRow[] {
-    return (this.db.prepare('SELECT * FROM cashouts WHERE user_id = ? ORDER BY id DESC LIMIT ?').all(uid, limit) as CashoutDb[]).map(toCashout);
+  /** A player's prizes, newest first. */
+  prizesOf(uid: string, limit = 12): PrizeRow[] {
+    return (this.db.prepare('SELECT * FROM prizes WHERE user_id = ? ORDER BY id DESC LIMIT ?').all(uid, limit) as PrizeDb[]).map(toPrize);
   }
-  cashoutsAll(status: string | null, limit = 300): (CashoutDb & { name: string; coins_now: number })[] {
-    const where = status ? 'WHERE c.status = ?' : '';
+  /** The winner gives the number to pay to. Returns an error code, or null. */
+  claimPrize(uid: string, id: number, phone: string, now = Date.now()): string | null {
+    const p = this.db.prepare('SELECT * FROM prizes WHERE id = ?').get(id) as PrizeDb | undefined;
+    if (!p || p.user_id !== uid) return 'prize_gone';
+    if (p.status !== 'unclaimed') return p.status === 'pending' ? 'prize_waiting' : 'prize_gone';
+    this.db.prepare("UPDATE prizes SET status = 'pending', phone = ?, claim_ts = ?, note = NULL WHERE id = ?").run(phone, now, id);
+    return null;
+  }
+  prizesAll(status: string | null, limit = 300): (PrizeDb & { name: string; pid: string })[] {
+    const where = status ? 'WHERE p.status = ?' : '';
     const args: (string | number)[] = status ? [status, limit] : [limit];
-    return this.db.prepare(`SELECT c.*, u.name, u.coins AS coins_now FROM cashouts c LEFT JOIN users u ON u.id = c.user_id ${where} ORDER BY c.id DESC LIMIT ?`).all(...args) as (CashoutDb & { name: string; coins_now: number })[];
+    return this.db.prepare(`SELECT p.*, u.name, u.pid FROM prizes p LEFT JOIN users u ON u.id = p.user_id ${where} ORDER BY p.id DESC LIMIT ?`).all(...args) as (PrizeDb & { name: string; pid: string })[];
   }
-  /** The admin paid it, or turned it down (the coins go back). Returns the request, or null if it wasn't waiting. */
-  settleCashout(id: number, paid: boolean, note: string): CashoutDb | null {
-    const c = this.db.prepare("SELECT * FROM cashouts WHERE id = ? AND status = 'pending'").get(id) as CashoutDb | undefined;
-    if (!c) return null;
-    this.db.prepare('UPDATE cashouts SET status = ?, done_ts = ?, note = ? WHERE id = ?').run(paid ? 'paid' : 'rejected', Date.now(), note.slice(0, 200), id);
-    if (!paid) { this.addCoins(c.user_id, c.coins); this.logCoins(c.user_id, 'cashout_refund', c.coins); }
-    return c;
+  /** The team paid it, turned it down for good, or asks the winner for the number again. Returns the prize, or null. */
+  settlePrize(id: number, action: 'paid' | 'reject' | 'again', note: string, now = Date.now()): PrizeDb | null {
+    const p = this.db.prepare('SELECT * FROM prizes WHERE id = ?').get(id) as PrizeDb | undefined;
+    if (!p || (action === 'paid' && p.status !== 'pending') || (action === 'again' && p.status !== 'pending') || (action === 'reject' && !['pending', 'unclaimed'].includes(p.status))) return null;
+    const status = action === 'paid' ? 'paid' : action === 'reject' ? 'rejected' : 'unclaimed';
+    this.db.prepare('UPDATE prizes SET status = ?, done_ts = ?, note = ? WHERE id = ?').run(status, action === 'again' ? null : now, note.slice(0, 200) || null, id);
+    return { ...p, status };
   }
+  /** Prizes nobody claimed in time. Returns how many. */
+  expirePrizes(days: number, now = Date.now()): number {
+    return Number(this.db.prepare("UPDATE prizes SET status = 'expired', done_ts = ? WHERE status = 'unclaimed' AND ts < ?").run(now, now - days * 86_400_000).changes);
+  }
+  prizeGet(id: number) { return this.db.prepare('SELECT * FROM prizes WHERE id = ?').get(id) as PrizeDb | undefined; }
 
   /* ---------- the dashboard (/admin) ---------- */
 
@@ -676,9 +687,10 @@ export class Store {
       purchasesToday: this.n('SELECT COUNT(*) AS n FROM purchases WHERE ts >= ?', day),
       purchasesWeek: this.n('SELECT COUNT(*) AS n FROM purchases WHERE ts >= ?', week),
       seasonPremium: this.n('SELECT COUNT(*) AS n FROM season WHERE season = ? AND premium = 1', season),
-      cashoutPending: this.n("SELECT COUNT(*) AS n FROM cashouts WHERE status = 'pending'"),
-      cashoutPendingEgp: this.n("SELECT SUM(egp) AS n FROM cashouts WHERE status = 'pending'"),
-      cashoutPaidEgp: this.n("SELECT SUM(egp) AS n FROM cashouts WHERE status = 'paid'"),
+      prizePending: this.n("SELECT COUNT(*) AS n FROM prizes WHERE status = 'pending'"),
+      prizePendingEgp: this.n("SELECT SUM(egp) AS n FROM prizes WHERE status = 'pending'"),
+      prizeUnclaimed: this.n("SELECT COUNT(*) AS n FROM prizes WHERE status = 'unclaimed'"),
+      prizePaidEgp: this.n("SELECT SUM(egp) AS n FROM prizes WHERE status = 'paid'"),
       reportsWeek: this.n('SELECT COUNT(*) AS n FROM reports WHERE ts >= ?', week),
       support: this.n('SELECT COUNT(*) AS n FROM support WHERE ts >= ?', week),
       banned: this.n('SELECT COUNT(*) AS n FROM users WHERE banned = 1'),
@@ -687,7 +699,7 @@ export class Store {
 
   /** Day by day for the last `days` Cairo days: new players, active players, games, purchases, cash-outs. */
   adminDaily(days = 14, now = Date.now()) {
-    const out: { day: string; newPlayers: number; active: number; games: number; purchases: number; cashoutEgp: number }[] = [];
+    const out: { day: string; newPlayers: number; active: number; games: number; purchases: number; prizeEgp: number }[] = [];
     let end = nextCairoDay(now);
     for (let i = 0; i < days; i++) {
       const start = end - 86_400_000;
@@ -697,7 +709,7 @@ export class Store {
         active: this.n("SELECT COUNT(DISTINCT user_id) AS n FROM coin_log WHERE ts >= ? AND ts < ?", start, end),
         games: this.n('SELECT COUNT(*) AS n FROM matches WHERE ended >= ? AND ended < ?', start, end),
         purchases: this.n('SELECT COUNT(*) AS n FROM purchases WHERE ts >= ? AND ts < ?', start, end),
-        cashoutEgp: this.n("SELECT SUM(egp) AS n FROM cashouts WHERE ts >= ? AND ts < ? AND status != 'rejected'", start, end),
+        prizeEgp: this.n("SELECT SUM(egp) AS n FROM prizes WHERE done_ts >= ? AND done_ts < ? AND status = 'paid'", start, end),
       });
       end = start;
     }
@@ -720,7 +732,7 @@ export class Store {
     return {
       user: u, pub: this.publicUser(u), stats: this.playerStats(id), skins: this.skinsOf(id), coins: this.coinHistory(id, 80),
       purchases: this.db.prepare('SELECT product, order_id, ts, coins, until FROM purchases WHERE user_id = ? ORDER BY ts DESC LIMIT 50').all(id),
-      cashouts: this.db.prepare('SELECT * FROM cashouts WHERE user_id = ? ORDER BY id DESC LIMIT 50').all(id),
+      prizes: this.db.prepare('SELECT * FROM prizes WHERE user_id = ? ORDER BY id DESC LIMIT 50').all(id),
       reportsAbout: this.db.prepare('SELECT r.*, u.name AS from_name FROM reports r LEFT JOIN users u ON u.id = r.from_id WHERE about_id = ? ORDER BY ts DESC LIMIT 50').all(id),
       reportsBy: this.n('SELECT COUNT(*) AS n FROM reports WHERE from_id = ?', id),
       season: this.seasonState(id), friends: this.friendCount(id), referredBy: u.ref_by ?? null,
@@ -787,13 +799,6 @@ export class Store {
     return (this.db.prepare("SELECT k, v FROM meta WHERE k LIKE 'tourney_results_%' ORDER BY k DESC LIMIT ?").all(limit) as { k: string; v: string }[])
       .map(r => { try { return { event: r.k.slice('tourney_results_'.length), ...JSON.parse(r.v) }; } catch { return null; } }).filter(Boolean);
   }
-  cashoutGet(id: number): CashoutDb | undefined { return this.db.prepare('SELECT * FROM cashouts WHERE id = ?').get(id) as CashoutDb | undefined; }
-  /** How many online games a player has finished, and how old the account is (cash-out rules). */
-  cashoutCheck(id: string): { games: number; ageDays: number } {
-    const u = this.get(id);
-    return { games: u?.games ?? 0, ageDays: u ? (Date.now() - u.created) / 86_400_000 : 0 };
-  }
-
   adminLog(who: string, action: string, target: string | null, detail: unknown) {
     this.db.prepare('INSERT INTO admin_log (ts, who, action, target, detail) VALUES (?, ?, ?, ?, ?)').run(Date.now(), who, action, target, detail === undefined ? null : JSON.stringify(detail).slice(0, 2000));
   }
@@ -878,5 +883,5 @@ export const toPublic = (u: UserRow): PublicUser => ({ id: u.id, name: u.name, c
 /** Referrals: the bonus each side gets, how long a new player has to enter a code, and the most one inviter is paid for. */
 export const REFER_BONUS = 50_000, REFER_DAYS = 7, REFER_MAX = 20;
 
-export interface CashoutDb { id: number; user_id: string; coins: number; egp: number; phone: string; status: 'pending' | 'paid' | 'rejected'; ts: number; done_ts: number | null; note: string | null }
-const toCashout = (c: CashoutDb): CashoutRow => ({ id: c.id, coins: c.coins, egp: c.egp, phone: c.phone, status: c.status, ts: c.ts, doneTs: c.done_ts });
+export interface PrizeDb { id: number; user_id: string; month: string; game: string; egp: number; status: PrizeRow['status']; phone: string | null; ts: number; claim_ts: number | null; done_ts: number | null; note: string | null }
+const toPrize = (p: PrizeDb): PrizeRow => ({ id: p.id, month: p.month, game: p.game, egp: p.egp, status: p.status, phone: p.phone, ts: p.ts, doneTs: p.done_ts, note: p.note });

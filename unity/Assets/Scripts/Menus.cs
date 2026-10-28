@@ -19,9 +19,9 @@ public partial class Menus : MonoBehaviour
     Dictionary<string, object> user;
     bool googleOn = true, appleOn;
     string pendingTicket;
-    // cash out: your requests and the rate, from the server
-    List<object> cashRows; long cashCoins = 1_000_000; int cashEgp = 5, cashMax = 10, cashMillions = 1, cashMinGames = 0;
-    GameObject cashChip;
+    // the monthly prizes: what a winner gets, and the chip that shows when you won one
+    int prizeEgp = 500; bool prizeOn = true;
+    GameObject prizeChip; Text prizeChipText;
     InputField walletField;
 
     // the leaderboard currently asked for
@@ -55,9 +55,9 @@ public partial class Menus : MonoBehaviour
         topButtons.Add(TopButton(top, 1, "trophy", "المتصدرين", () => OpenLeaders(0)));
         topButtons.Add(TopButton(top, 2, "help", "طريقة اللعب", () => OpenHowTo(0)));
         topButtons.Add(TopButton(top, 3, "settings", "الإعدادات", OpenSettings));
-        // prizes: coins to Vodafone Cash (shown only while the server has cash-out on, from the dashboard)
-        var cash = Chip(home, "coin", "اسحب فلوسك", new Vector2(-252, -56), 128, new Color32(0xc0, 0x1f, 0x2a, 0xf0), Color.white, () => { Sfx.Tap(); OpenCashout(); });
-        cashChip = cash.gameObject; cashChip.SetActive(false);
+        // the monthly prize: shown when you won one (to give your Vodafone Cash number), or one is on its way
+        var prize = Chip(home, "trophy", "جايزتك", new Vector2(-252, -56), 128, new Color32(0xc0, 0x1f, 0x2a, 0xf0), Color.white, () => { Sfx.Tap(); OpenPrizes(); });
+        prizeChip = prize.gameObject; prizeChipText = prize.GetComponentInChildren<Text>(); prizeChip.SetActive(false);
 
         // along the top, left of your name and coins: watch an ad, sign in, language
         var ad = Chip(home, "video", "+2K", new Vector2(-252, -10), 98, new Color32(0x2f, 0x6b, 0x3a, 0xf0), Color.white, WatchAd);
@@ -146,9 +146,13 @@ public partial class Menus : MonoBehaviour
         bool signed = !string.IsNullOrEmpty(u.Str("google")) || !string.IsNullOrEmpty(u.Str("apple")) || !string.IsNullOrEmpty(u.Str("phone")) || !string.IsNullOrEmpty(u.Str("email"));
         signChip.SetActive(!signed);
         ApplyFeatures(u.Obj("features"));
-        var co = u.Obj("cashout");
-        cashChip.SetActive(co != null && co.Bool("on"));
-        if (co != null) { cashCoins = (long)co.Num("coins", cashCoins); cashEgp = (int)co.Num("egp", cashEgp); cashMax = (int)co.Num("maxUnits", cashMax); cashMinGames = (int)co.Num("minGames", 0); }
+        var pz = u.Obj("prize");
+        if (pz != null) { prizeOn = pz.Bool("on"); prizeEgp = (int)pz.Num("egp", prizeEgp); }
+        // a prize to claim (or one on its way): the red chip on the home screen
+        int waiting = 0, coming = 0;
+        foreach (var o in u.Arr("prizes") ?? new List<object>()) if (o is Dictionary<string, object> p) { if (p.Str("status") == "unclaimed") waiting++; else if (p.Str("status") == "pending") coming++; }
+        prizeChip.SetActive(waiting + coming > 0);
+        prizeChipText.Set(Loc.T(waiting > 0 ? "جايزتك" : "جايزتك جاية"));
         int left = (int)u.Num("adsLeft");
         adReward = (long)u.Num("adReward", adReward);
         adText.Set(left > 0 ? AdLabel : "0");
@@ -225,20 +229,19 @@ public partial class Menus : MonoBehaviour
                 else StartCoroutine(PlayAd(ticket));   // off the phone: the game's own short spot
                 break;
             }
-            case "cashouts":
-                cashRows = m.Arr("rows") ?? new List<object>();
-                var rate = m.Obj("rate");
-                if (rate != null) { cashCoins = (long)rate.Num("coins", 1_000_000); cashEgp = (int)rate.Num("egp", 10); }
-                cashMax = (int)m.Num("maxMillions", 10);
-                refreshOpen?.Invoke();
-                break;
             case "supportSent":
                 app.Toast(Loc.T("وصلتنا رسالتك، شكراً! هنرد عليك قريب"));
                 Sfx.Chime();
                 break;
-            case "cashoutDone":
-                app.Toast(Loc.T("طلبك وصل! هيتحولك") + " " + (int)m.Num("egp") + " " + Loc.T("ج.م") + " " + Loc.T("خلال يوم عمل واحد"));
+            case "prizeClaimed":
+                app.Toast(Loc.T("وصلنا رقمك! هنحولك الجايزة خلال يومين شغل"), 6f);
                 Sfx.Coins(); Sfx.Buzz();
+                break;
+            case "prizeWon":
+                // you were the best of a game last month: the money, and where to put your number
+                app.Toast(Loc.T("كسبت") + " " + (int)m.Num("egp") + " " + Loc.T("جنيه") + "! 🏆", 6f);
+                Sfx.Coins();
+                if (!IsOpen && app.view == null) OpenPrizes();
                 break;
             case "adReward":
                 app.Toast("+" + ((long)m.Num("coins")).ToString("N0") + " " + Loc.T("عملة"));
@@ -255,10 +258,8 @@ public partial class Menus : MonoBehaviour
             case "ticket_expired": app.Toast(Loc.T("تسجيل الدخول بجوجل مش متاح على السيرفر ده")); return true;
             case "sign_in_first": app.Toast(Loc.T("سجّل دخول الأول عشان تقدر تسحب")); return true;
             case "bad_wallet": app.Toast(Loc.T("اكتب رقم فودافون صحيح يبدأ بـ 010")); return true;
-            case "cashout_off": app.Toast(Loc.T("السحب مقفول دلوقتي")); cashChip.SetActive(false); return true;
-            case "cashout_games": app.Toast(Loc.T("العب ماتشات أونلاين أكتر الأول عشان تقدر تسحب")); return true;
-            case "cashout_new_account": app.Toast(Loc.T("حسابك لسه جديد، جرّب السحب بعد كام يوم")); return true;
-            case "cashout_pending": app.Toast(Loc.T("عندك طلب لسه بيتحول، استنى لما يخلص")); return true;
+            case "prize_gone": app.Toast(Loc.T("الجايزة دي مش متاحة")); return true;
+            case "prize_waiting": app.Toast(Loc.T("رقمك وصلنا، الجايزة في الطريق")); return true;
             case "bad_amount": app.Toast(Loc.T("المبلغ مش مظبوط")); return true;
             case "slow_down": app.Toast(Loc.T("استنى شوية وجرّب تاني")); return true;
             case "support_empty": app.Toast(Loc.T("اكتب رسالتك الأول")); return true;
@@ -679,103 +680,69 @@ public partial class Menus : MonoBehaviour
         At((RectTransform)b.transform, 384, 100, 32);
     }
 
-    /* ---------- cash out: coins to Vodafone Cash ---------- */
+    /* ---------- monthly prizes: Vodafone Cash for the best player of each game ---------- */
 
-    public void OpenCashout()
+    public void OpenPrizes()
     {
-        if (app.net == null || !app.net.Online) { app.Toast(Loc.T("مش متصل بالسيرفر لسه")); return; }
-        app.Send(new Dictionary<string, object> { ["t"] = "cashouts" });
-        Panel(Loc.T("اسحب على فودافون كاش"), out var body, new Vector2(640, 350));
+        Panel(Loc.T("جوايز الشهر"), out var body, new Vector2(640, 350));
         refreshOpen = () =>
         {
             foreach (Transform c in body) Destroy(c.gameObject);
-            long coins = (long)(user?.Num("coins") ?? 0);
-            int canMillions = (int)Math.Min(cashMax, coins / Math.Max(1, cashCoins));
-            cashMillions = Mathf.Clamp(cashMillions, 1, Math.Max(1, canMillions));
             bool signed = user != null && (!string.IsNullOrEmpty(user.Str("google")) || !string.IsNullOrEmpty(user.Str("apple")) || !string.IsNullOrEmpty(user.Str("phone")) || !string.IsNullOrEmpty(user.Str("email")));
-            int gamesLeft = Math.Max(0, cashMinGames - (int)(user?.Num("games") ?? 0));
+            // how it works
+            var top = Ui.Box(body, "How", Card).rectTransform;
+            top.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(600, 50), new Vector2(0, 0));
+            At(Ui.Picture(top, "Cup", Icon("trophy")).rectTransform, 12, 30, 30).GetComponent<RawImage>().color = Ui.Gold;
+            var how = Ui.Label(top, "", 13, Ui.Gold, StartAlign, Ui.Bold);
+            how.Set(prizeOn ? Loc.T("كل شهر، الأول في ترتيب الشهر لكل لعبة بيكسب") + " " + prizeEgp + " " + Loc.T("جنيه على فودافون كاش + لقب لاعب الشهر") : Loc.T("جوايز الشهر متوقفة دلوقتي"));
+            how.horizontalOverflow = HorizontalWrapMode.Wrap; how.resizeTextForBestFit = true; how.resizeTextMinSize = 9; how.resizeTextMaxSize = 13;
+            At(how.rectTransform, 50, 540, 44);
 
-            // the rate and your balance
-            var top = Ui.Box(body, "Rate", Card).rectTransform;
-            top.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(600, 54), new Vector2(0, 0));
-            var ci = Ui.Picture(top, "Coin", Icon("coin"));
-            At(ci.rectTransform, 12, 34, 34);
-            At(Ui.Label(top, Loc.T("كل") + " " + cashCoins.ToString("N0") + " " + Loc.T("كوين") + " = " + cashEgp + " " + Loc.T("جنيه"), 17, Ui.Gold, StartAlign, Ui.Bold).rectTransform, 54, 330, 30);
-            var bal = Ui.Label(top, Loc.T("رصيدك") + ": " + coins.ToString("N0"), 14, Ui.GoldLight, Loc.En ? TextAnchor.MiddleRight : TextAnchor.MiddleLeft, Ui.Bold);
-            bal.rectTransform.Place(new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(210, 30), new Vector2(Loc.En ? -12 : 12, 0));
-
-            var form = Ui.Rect("Form", body);
-            form.anchorMin = Vector2.zero; form.anchorMax = Vector2.one; form.offsetMin = new Vector2(0, 0); form.offsetMax = new Vector2(0, -62);
-            if (!signed)
+            var listArea = Ui.Rect("List", body); listArea.anchorMin = Vector2.zero; listArea.anchorMax = Vector2.one; listArea.offsetMin = new Vector2(0, 26); listArea.offsetMax = new Vector2(0, -58);
+            var rows = Scroll(listArea, 6);
+            var mine = user?.Arr("prizes") ?? new List<object>();
+            if (mine.Count == 0)
+                Ui.Label(Row(rows, 60), "لسه مكسبتش جايزة. العب أونلاين واطلع الأول في ترتيب الشهر!", 14, Ui.GoldLight).rectTransform.Fill();
+            foreach (var o in mine)
             {
-                Ui.Label(form, "سجّل دخول الأول عشان تقدر تسحب فلوسك، وعشان كوينزك تتحفظ", 15, Color.white, TextAnchor.MiddleCenter, Ui.Bold).rectTransform
-                    .Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(580, 34), new Vector2(0, -8));
-                var b = Ui.Button(form, "تسجيل الدخول بجوجل", Color.white, Ui.Ink, 15, SignIn);
-                var br = ((RectTransform)b.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(250, 40), new Vector2(0, -50));
-                var gi = Ui.Picture(br, "G", Icon("google")); gi.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(22, 22), new Vector2(10, 0));
-            }
-            else if (gamesLeft > 0)
-            {
-                Ui.Label(form, Loc.T("العب") + " " + gamesLeft + " " + Loc.T("ماتش أونلاين كمان وتقدر تسحب"), 17, Color.white, TextAnchor.MiddleCenter, Ui.Bold).rectTransform
-                    .Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(580, 34), new Vector2(0, -14));
-                Ui.Label(form, "السحب للي عندهم ١٨ سنة وساكنين في مصر", 13, Ui.GoldLight, TextAnchor.MiddleCenter).rectTransform
-                    .Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(580, 26), new Vector2(0, -56));
-            }
-            else if (coins < cashCoins)
-            {
-                Ui.Label(form, Loc.T("فاضلك") + " " + (cashCoins - coins).ToString("N0") + " " + Loc.T("كوين وتقدر تسحب") + " " + cashEgp + " " + Loc.T("جنيه"), 17, Color.white, TextAnchor.MiddleCenter, Ui.Bold).rectTransform
-                    .Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(580, 34), new Vector2(0, -14));
-                // how far you are
-                var bar = Ui.Box(form, "Bar", new Color(1, 1, 1, 0.08f)).rectTransform;
-                bar.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(460, 16), new Vector2(0, -58));
-                var fill = Ui.Box(bar, "Fill", Ui.Gold).rectTransform;
-                fill.anchorMin = new Vector2(0, 0); fill.anchorMax = new Vector2(Mathf.Clamp01(coins / (float)cashCoins), 1); fill.offsetMin = fill.offsetMax = Vector2.zero;
-                Ui.Label(form, "العب واكسب، وخد مكافأتك اليومية، وشوف إعلانات عشان تجمع أسرع", 13, Ui.GoldLight, TextAnchor.MiddleCenter).rectTransform
-                    .Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(580, 26), new Vector2(0, -86));
-            }
-            else
-            {
-                // how much: − N million = 10·N EGP +
-                var amt = Ui.Rect("Amount", form).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(600, 44), new Vector2(0, -2));
-                var minus = Ui.Button(amt, "−", new Color(1, 1, 1, 0.1f), Ui.GoldLight, 24, () => { Sfx.Tap(); cashMillions = Math.Max(1, cashMillions - 1); refreshOpen(); });
-                ((RectTransform)minus.transform).Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(44, 40), new Vector2(Loc.En ? -170 : 170, 0));
-                var plus = Ui.Button(amt, "+", new Color(1, 1, 1, 0.1f), Ui.GoldLight, 24, () => { Sfx.Tap(); cashMillions = Math.Min(Math.Max(1, canMillions), cashMillions + 1); refreshOpen(); });
-                ((RectTransform)plus.transform).Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(44, 40), new Vector2(Loc.En ? 170 : -170, 0));
-                Ui.Label(amt, (cashMillions * cashCoins).ToString("N0") + " " + Loc.T("كوين") + "  =  " + (cashMillions * cashEgp) + " " + Loc.T("جنيه"), 19, Ui.Gold, TextAnchor.MiddleCenter, Ui.Display).rectTransform
-                    .Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(290, 40), Vector2.zero);
-                // the Vodafone Cash number
-                walletField = WalletField(form);
-                ((RectTransform)walletField.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 44), new Vector2(Loc.En ? -82 : 82, -56));
-                var go = Ui.Button(form, "اطلب السحب", Ui.Gold, Ui.Ink, 17, () =>
+                if (!(o is Dictionary<string, object> p)) continue;
+                string st = p.Str("status"), game = p.Str("game");
+                int id = (int)p.Num("id"), egp = (int)p.Num("egp");
+                bool open = st == "unclaimed";
+                var row = Row(rows, open ? 100 : 40, open ? new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.16f) : Card);
+                var what = Ui.Label(row, "", 15, Color.white, StartAlign, Ui.Bold);
+                var tt = Titles.List.Find(x => x.monthly == game);
+                what.Set(egp + " " + Loc.T("جنيه") + "  ·  " + (tt != null ? tt.Name : game) + "  ·  " + p.Str("month"));
+                what.rectTransform.Place(new Vector2(Loc.En ? 0 : 1, 1), new Vector2(Loc.En ? 0 : 1, 1), new Vector2(420, 36), new Vector2(Loc.En ? 12 : -12, -2));
+                string stText = st == "pending" ? Loc.T("بيتحول…") + " " + p.Str("phone") : st == "paid" ? Loc.T("اتحولت") + " ✓" : st == "rejected" ? Loc.T("اترفضت") : st == "expired" ? Loc.T("انتهى وقتها") : Loc.T("اكتب رقمك");
+                var stl = Ui.Label(row, "", 13, st == "paid" ? new Color(0.5f, 0.95f, 0.5f) : st == "rejected" || st == "expired" ? new Color(1f, 0.55f, 0.5f) : Ui.Gold, Loc.En ? TextAnchor.MiddleRight : TextAnchor.MiddleLeft, Ui.Bold);
+                stl.Set(stText);
+                stl.rectTransform.Place(new Vector2(Loc.En ? 1 : 0, 1), new Vector2(Loc.En ? 1 : 0, 1), new Vector2(170, 36), new Vector2(Loc.En ? -10 : 10, -2));
+                if (!open) continue;
+                if (!string.IsNullOrEmpty(p.Str("note"))) { var nt = Ui.Label(row, "", 11, new Color(1f, 0.7f, 0.6f), TextAnchor.MiddleCenter); nt.Set(p.Str("note")); nt.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(580, 16), new Vector2(0, -34)); }
+                if (!signed)
+                {
+                    var hint = Ui.Label(row, "سجّل دخول الأول عشان نقدر نحولك الجايزة", 13, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
+                    hint.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(330, 40), new Vector2(Loc.En ? -120 : 120, 8));
+                    var sb = Ui.Button(row, "تسجيل الدخول بجوجل", Color.white, Ui.Ink, 14, SignIn);
+                    ((RectTransform)sb.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(210, 40), new Vector2(Loc.En ? 180 : -180, 8));
+                    continue;
+                }
+                var field = WalletField(row);
+                ((RectTransform)field.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(300, 42), new Vector2(Loc.En ? -90 : 90, 8));
+                var go = Ui.Button(row, "ابعت الرقم", Ui.Gold, Ui.Ink, 16, () =>
                 {
                     Sfx.Tap();
-                    var phone = walletField.text.Trim();
+                    var phone = field.text.Trim();
                     if (phone.Length < 10) { app.Toast(Loc.T("اكتب رقم فودافون صحيح يبدأ بـ 010")); return; }
                     PlayerPrefs.SetString("wallet", phone);
-                    app.Send(new Dictionary<string, object> { ["t"] = "cashout", ["phone"] = phone, ["millions"] = (double)cashMillions });
+                    app.Send(new Dictionary<string, object> { ["t"] = "prizeClaim", ["id"] = (double)id, ["phone"] = phone });
                 });
-                ((RectTransform)go.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(150, 44), new Vector2(Loc.En ? 160 : -160, -56));
+                ((RectTransform)go.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(150, 42), new Vector2(Loc.En ? 160 : -160, 8));
             }
-            // the promise
-            var note = Ui.Label(form, Loc.T("الفلوس بتتحول على محفظة فودافون كاش خلال يوم عمل واحد"), 13, new Color(0.75f, 0.95f, 0.75f), TextAnchor.MiddleCenter, Ui.Bold);
-            note.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(600, 24), new Vector2(0, -112));
-            // your requests
-            var list = Ui.Rect("Requests", form);
-            list.anchorMin = Vector2.zero; list.anchorMax = Vector2.one; list.offsetMin = Vector2.zero; list.offsetMax = new Vector2(0, -140);
-            var rows = Scroll(list, 4);
-            if (cashRows == null) Ui.Label(Row(rows, 24), "جاري التحميل…", 12, new Color(1, 1, 1, 0.5f)).rectTransform.Fill();
-            else if (cashRows.Count == 0) Ui.Label(Row(rows, 24), "لسه مطلبتش سحب", 12, new Color(1, 1, 1, 0.5f)).rectTransform.Fill();
-            else foreach (var o in cashRows)
-            {
-                var r = o as Dictionary<string, object>; if (r == null) continue;
-                var st = r.Str("status");
-                var row = Row(rows, 30, Card);
-                string when = DateTimeOffset.FromUnixTimeMilliseconds((long)r.Num("ts")).ToLocalTime().ToString("dd/MM HH:mm");
-                At(Ui.Label(row, "#" + (int)r.Num("id") + "  ·  " + (int)r.Num("egp") + " " + Loc.T("ج.م") + "  ·  " + r.Str("phone") + "  ·  " + when, 13, Color.white, StartAlign).rectTransform, 12, 420, 28);
-                var stl = Ui.Label(row, st == "paid" ? "اتحولت" : st == "rejected" ? "اترفض (الكوينز رجعت)" : "بيتحول…", 13,
-                    st == "paid" ? new Color(0.5f, 0.95f, 0.5f) : st == "rejected" ? new Color(1f, 0.55f, 0.5f) : Ui.Gold, Loc.En ? TextAnchor.MiddleRight : TextAnchor.MiddleLeft, Ui.Bold);
-                stl.rectTransform.Place(new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(170, 28), new Vector2(Loc.En ? -10 : 10, 0));
-            }
+            var terms = Ui.Label(body, "", 10, new Color(1, 1, 1, 0.5f), TextAnchor.MiddleCenter);
+            terms.Set(Loc.T("لازم يكون عندك ١٨ سنة وساكن في مصر. اللعب ببلاش، ومفيش حاجة بتتشترى عشان تكسب"));
+            terms.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(600, 20), new Vector2(0, 2));
         };
         refreshOpen();
     }
@@ -1072,7 +1039,7 @@ public partial class Menus : MonoBehaviour
                 b.Place(new Vector2(Loc.En ? 0 : 1, 0.5f), new Vector2(Loc.En ? 0 : 1, 0.5f), b.sizeDelta, new Vector2(Loc.En ? 6 : -6, 0));
                 string lead = lbMonth.Str("leader");
                 int place = (int)lbMonth.Num("place");
-                string line = Loc.T("لأعلى نقط الشهر") + "  ·  " + (string.IsNullOrEmpty(lead) ? Loc.T("مفيش متصدر لسه") : Loc.T("المتصدر") + ": " + lead + " (" + (int)lbMonth.Num("leaderPoints") + ")")
+                string line = Loc.T("لأعلى نقط الشهر") + (prizeOn ? " + " + prizeEgp + " " + Loc.T("جنيه") : "") + "  ·  " + (string.IsNullOrEmpty(lead) ? Loc.T("مفيش متصدر لسه") : Loc.T("المتصدر") + ": " + lead + " (" + (int)lbMonth.Num("leaderPoints") + ")")
                     + (place > 0 ? "  ·  " + Loc.T("مركزك") + " " + place + " (" + (int)lbMonth.Num("points") + ")" : "");
                 var txt = Ui.Label(race, "", 11, Ui.GoldLight, StartAlign, Ui.Bold); txt.Set(line);
                 txt.rectTransform.Place(new Vector2(Loc.En ? 0 : 1, 0.5f), new Vector2(Loc.En ? 0 : 1, 0.5f), new Vector2(548 - b.sizeDelta.x - 18, 28), new Vector2(Loc.En ? b.sizeDelta.x + 14 : -(b.sizeDelta.x + 14), 0));

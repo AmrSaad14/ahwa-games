@@ -40,6 +40,8 @@ export function createServer(opts = config) {
   const settings = new Settings(store, { botFillSeconds: Math.round(opts.botFillMs / 1000), turnSeconds: Math.round(opts.turnMs / 1000) });
   const hub = new Hub(store, tokens, { phones, google, apple, billing, support: m => desk.file(m), settings,
     push: (uids, ar, en) => { for (const u of uids) push.toUser(u, ar, en).catch(() => {}); },
+    // a monthly winner gave their Vodafone Cash number: tell the team (support inbox and e-mail)
+    onPrize: (id, egp) => { desk.file({ uid: null, name: 'Monthly prize', contact: '', text: `Prize #${id}: ${egp} EGP to pay by Vodafone Cash. Open the dashboard → Prizes.`, app: 'prizes' }); },
     onWeeklyPrize: (uid, rank, coins) => { push.toUser(uid, ['مبروك! 🏆', `جيت المركز ${rank} الأسبوع ده وكسبت ${coins.toLocaleString('en')} كوين`], ['Congratulations! 🏆', `You finished #${rank} this week and won ${coins.toLocaleString('en')} coins`]).catch(() => {}); }, defaultCountry: opts.login.defaultCountry, adsSsv: opts.adsSsv, turnMs: opts.turnMs, botFillMs: opts.botFillMs, nextRoundMs: opts.nextRoundMs, botDelay: opts.botDelay, lobbyAfterMatchMs: opts.lobbyAfterMatchMs, msgsPer5s: (opts as { msgsPer5s?: number }).msgsPer5s, graceMs: (opts as { graceMs?: number }).graceMs,
     stunUrls: opts.stunUrls, turnUrls: opts.turnUrls, turnSecret: opts.turnSecret, autoMoveMs: opts.autoMoveMs, chessClockMs: opts.chessClockMs });
   const push = new Push(store, opts.push);
@@ -83,7 +85,7 @@ export function createServer(opts = config) {
     const legal = url.pathname === '/privacy' ? privacyPage : url.pathname === '/terms' ? termsPage : url.pathname === '/delete-account' ? deletePage : null;
     if (legal) {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'max-age=300' });
-      return res.end(legal(settings.value.cashout));
+      return res.end(legal(settings.value.prizes));
     }
     if (url.pathname === '/api/leaderboard') {
       res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'max-age=30' });
@@ -149,7 +151,7 @@ export function createServer(opts = config) {
       return res.end(supportPage(store.supportAll(300), desk.mailOn, opts.support.to));
     }
     // cash-out requests are in the dashboard now
-    if (url.pathname === '/admin/cashouts') { res.writeHead(302, { Location: '/admin#cashouts' }); return res.end(); }
+    if (url.pathname === '/admin/cashouts' || url.pathname === '/admin/prizes') { res.writeHead(302, { Location: '/admin#prizes' }); return res.end(); }
     // AdMob server-side verification: Google calls this after a player watched a rewarded ad
     if (url.pathname === '/ads/ssv') {
       const raw = (req.url || '').split('?')[1] || '';
