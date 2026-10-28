@@ -25,6 +25,8 @@ export interface GameSettings {
   play: { botFillSeconds: number; turnSeconds: number };
   maintenance: { on: boolean; message: string };
   notice: { text: string; until: number };
+  /** "<game> player of the month": given by itself when a month ends, to the best of each game with enough games. */
+  titles: { monthly: boolean; minGames: number };
 }
 
 /** The settings the game ships with (read once, before anything is changed). */
@@ -37,9 +39,11 @@ function defaults(): GameSettings {
     play: { botFillSeconds: 8, turnSeconds: 10 },
     maintenance: { on: false, message: 'السيرفر في صيانة دلوقتي، ارجع كمان شوية · Maintenance, back soon' },
     notice: { text: '', until: 0 },
+    titles: { monthly: true, minGames: 10 },
   };
 }
 const SHIPPED = defaults();
+const SHIPPED_TITLES = { ...SHIPPED.titles };
 
 const int = (v: unknown, lo: number, hi: number, d: number) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
 const ints = (v: unknown, lo: number, hi: number, d: number[], maxLen = 64) => Array.isArray(v) && v.length ? v.slice(0, maxLen).map((x, i) => int(x, lo, hi, d[i] ?? d[d.length - 1] ?? 0)) : d;
@@ -55,7 +59,8 @@ function reward(v: unknown, d: Reward): Reward {
 /** Checks and fixes settings from the dashboard (anything missing or out of range keeps its current value). */
 export function sanitize(input: unknown, cur: GameSettings): GameSettings {
   const i = (input ?? {}) as Partial<Record<keyof GameSettings, Record<string, unknown>>>;
-  const c = i.cashout ?? {}, t = i.tourney ?? {}, s = i.season ?? {}, e = i.economy ?? {}, p = i.play ?? {}, m = i.maintenance ?? {}, n = i.notice ?? {};
+  const c = i.cashout ?? {}, t = i.tourney ?? {}, s = i.season ?? {}, e = i.economy ?? {}, p = i.play ?? {}, m = i.maintenance ?? {}, n = i.notice ?? {}, ti = i.titles ?? {};
+  const curTi = cur.titles ?? SHIPPED_TITLES;
   const games: TourneyGame[] = ['rotate', 'domino', 'tawla', 'chess', 'ludo'];
   const tiers = Array.isArray(s.tiers) ? s.tiers : cur.season.tiers;
   return {
@@ -95,6 +100,7 @@ export function sanitize(input: unknown, cur: GameSettings): GameSettings {
     play: { botFillSeconds: int(p.botFillSeconds, 2, 120, cur.play.botFillSeconds), turnSeconds: int(p.turnSeconds, 5, 60, cur.play.turnSeconds) },
     maintenance: { on: bool(m.on, cur.maintenance.on), message: text(m.message, 300, cur.maintenance.message) },
     notice: { text: text(n.text, 400, cur.notice.text), until: int(n.until, 0, 4_102_444_800_000, cur.notice.until) },
+    titles: { monthly: bool(ti.monthly, curTi.monthly), minGames: int(ti.minGames, 0, 10_000, curTi.minGames) },
   };
 }
 

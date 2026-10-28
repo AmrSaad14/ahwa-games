@@ -86,13 +86,23 @@ public partial class Menus
         }
         Ui.Label(side, name, 18, Color.white, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(170, 26), new Vector2(0, -160));
         if (c0 == null) { Ui.Label(body, Loc.T("جاري التحميل…"), 15, Ui.GoldLight).rectTransform.Fill(); return; }
-        var lvl = Ui.Box(side, "Level", Ui.Gold).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(84, 20), new Vector2(0, -188));
+        // their title, under the name
+        float dy = 0;
+        var ttl = Titles.Badge(side, c0.Str("title"), 12);
+        if (ttl != null)
+        {
+            float tw = Mathf.Min(ttl.sizeDelta.x, 168), sc = tw / ttl.sizeDelta.x;
+            ttl.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), ttl.sizeDelta, new Vector2(0, -199));
+            ttl.localScale = new Vector3(sc, sc, 1);
+            dy = 26;
+        }
+        var lvl = Ui.Box(side, "Level", Ui.Gold).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(84, 20), new Vector2(0, -188 - dy));
         Ui.Label(lvl, Loc.T("مستوى") + " " + (int)c0.Num("level"), 12, Ui.Ink, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Fill();
         string status = c0.Bool("playing") ? Loc.T("بيلعب دلوقتي") : c0.Bool("online") ? Loc.T("متصل") : Loc.T("مش متصل");
-        Ui.Label(side, status, 12, Ui.GoldLight).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(170, 18), new Vector2(0, -212));
+        Ui.Label(side, status, 12, Ui.GoldLight).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(170, 18), new Vector2(0, -212 - dy));
         var since = DateTimeOffset.FromUnixTimeMilliseconds((long)c0.Num("since")).ToLocalTime();
         Ui.Label(side, Loc.T("من") + " " + since.ToString("MMM yyyy", System.Globalization.CultureInfo.InvariantCulture), 11, new Color(1, 1, 1, 0.55f)).rectTransform
-            .Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(170, 16), new Vector2(0, -230));
+            .Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(170, 16), new Vector2(0, -230 - dy));
 
         // the numbers: eight tiles in two rows
         var stats = Ui.Rect("Stats", body);

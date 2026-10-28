@@ -7,7 +7,8 @@ import { EMOTES } from '../shared/protocol';
 import { Table, publicId, Player, BotMaker } from '../shared/table';
 import { botIdentity } from '../shared/botnames';
 import { missionById } from '../shared/missions';
-import { SP, SEASON_PASS } from '../shared/season';
+import { SP, SEASON_PASS, seasonOf, seasonEndsAt } from '../shared/season';
+import { Titles } from './titles';
 import { skinFor } from '../shared/skins';
 import { Tourney, Entrant } from './tourney';
 import type { Settings, GameSettings } from './settings';
@@ -51,6 +52,7 @@ export interface HubOptions {
   graceMs?: number;
   /** The live settings from the dashboard (cash-out, maintenance, notice, how play runs). */
   settings?: Settings;
+  titles?: Titles;
   /** Files a support message (and e-mails it); the server sets it up (server/support.ts). */
   support?: (m: { uid: string | null; name: string; contact: string; text: string; app: string }) => number;
 }
@@ -90,7 +92,11 @@ export class Hub {
   private tourneyTables = new Map<string, (string | null)[]>();
   readonly tourney: Tourney;
 
+  /** The titles catalog (designs), changed from the dashboard. */
+  readonly titles: Titles;
   constructor(private store: Store, private tokens: Tokens, private opts: HubOptions) {
+    this.titles = opts.titles ?? new Titles(store);
+    this.titles.onChange(() => { for (const ss of this.byUser.values()) ss.conn.send({ t: 'titles', list: this.titles.list }); });
     this.tourney = new Tourney({
       regs: ev => this.store.tourneyRegs(ev),
       entrant: uid => { const u = this.store.get(uid); return u ? { uid, name: u.name, ch: u.ch, bot: false, rating: this.store.ratingOf(uid, 'domino') } : null; },
@@ -109,7 +115,7 @@ export class Hub {
     this.ticker = setInterval(() => {
       this.matchmake(); this.sweep();
       try { this.tourney.tick(); } catch (e) { console.error('[tourney]', (e as Error).message); }
-      if (++this.ticks % 60 === 0) this.weeklyPrizes();
+      if (++this.ticks % 60 === 0) { this.weeklyPrizes(); try { this.monthlyTitles(); } catch (e) { console.error('[titles]', (e as Error).message); } }
     }, 1000);
   }
 
@@ -125,6 +131,41 @@ export class Hub {
       this.opts.onWeeklyPrize?.(p.uid, p.rank, p.coins);
     }
     return paid;
+  }
+
+  /** When a month ends, the best player of each game (with enough games) is "<game> player of the month" for
+   *  the whole next month (once per month). */
+  monthlyTitles(now = Date.now()): { uid: string; game: string; title: string; month: string }[] {
+    const cfg = this.opts.settings?.value.titles ?? { monthly: true, minGames: 10 };
+    const [y, mo] = seasonOf(now).split('-').map(Number);
+    const prev = mo === 1 ? `${y - 1}-12` : `${y}-${String(mo - 1).padStart(2, '0')}`;
+    if (this.store.metaGet('potm_' + prev)) return [];
+    this.store.metaSet('potm_' + prev, String(now));
+    if (!cfg.monthly) return [];
+    const until = seasonEndsAt(now), won: { uid: string; game: string; title: string; month: string }[] = [];
+    for (const game of GAMES) {
+      const t = this.titles.monthlyFor(game); if (!t) continue;
+      const top = this.store.monthlyBoard(game, prev, 1, cfg.minGames)[0]; if (!top) continue;
+      this.store.grantTitle(top.id, t.id, until, prev);
+      won.push({ uid: top.id, game, title: t.id, month: prev });
+      console.log(`[titles] ${prev} ${game}: ${top.name}`);
+      this.byUser.get(top.id)?.conn.send({ t: 'titleWon', id: t.id, month: prev });
+      this.titleToTable(top.id); this.sendUser(top.id);
+      this.opts.push?.([top.id], ['مبروك! 🏅', `انت ${t.ar} — اللقب بتاعك الشهر ده كله`], ['Congratulations! 🏅', `You are ${t.en}: the title is yours all month`]);
+    }
+    this.store.metaSet('potm_winners_' + prev, JSON.stringify(won.map(w => ({ ...w, name: this.store.get(w.uid)?.name ?? '' }))));
+    return won;
+  }
+
+  /** This month's race for a game's title, as one player sees it. */
+  private monthRace(uid: string, game: GameId, now = Date.now()) {
+    const t = this.titles.monthlyFor(game); if (!t) return undefined;
+    const cfg = this.opts.settings?.value.titles ?? { monthly: true, minGames: 10 };
+    const month = seasonOf(now), top = this.store.monthlyBoard(game, month, 50, 0);
+    const lead = top.find(r => r.games >= cfg.minGames) ?? null;
+    const i = top.findIndex(r => r.id === uid);
+    const holder = this.store.titleHolders(t.id, 1, now)[0]?.name ?? null;
+    return { title: t.id, on: cfg.monthly, leader: lead?.name ?? null, leaderPoints: lead?.points ?? 0, place: i + 1, points: i >= 0 ? top[i].points : 0, endsAt: seasonEndsAt(now), minGames: cfg.minGames, holder };
   }
 
   stop() { this.stopping = true; clearInterval(this.ticker); this.tables.forEach(t => t.close()); }
@@ -504,7 +545,7 @@ export class Hub {
         }
         const game: GameId = m.game && (GAMES as string[]).includes(m.game) ? m.game as GameId : 'domino';
         const lb = this.store.leaderboard(uid, game);
-        return s.conn.send({ t: 'lb', game, rows: lb.rows, me: lb.me });
+        return s.conn.send({ t: 'lb', game, rows: lb.rows, me: lb.me, month: this.monthRace(uid, game) });
       }
       case 'gift': {
         if (!table) return err('no_table');
@@ -536,6 +577,13 @@ export class Hub {
         return;
       }
       case 'cashouts': return this.sendCashouts(uid);
+      case 'wearTitle': {
+        const id = typeof m.id === 'string' && m.id ? m.id : null;
+        if (id && !this.titles.get(id)) return err('bad_title');
+        if (!this.store.wearTitle(uid, id)) return err('bad_title');
+        if (table) table.setTitle(uid, id ?? undefined);
+        return this.sendUser(uid);
+      }
       case 'practiceDone': {
         // a game against the computer on the phone: a little experience (limited, so it can't be farmed)
         if (!this.practiceLimiter.allow(uid)) return;
@@ -604,7 +652,7 @@ export class Hub {
     const st = u ? this.store.playerStats(u.id) : null;
     if (!u || !st) return null;
     const t = this.userTable.get(u.id);
-    return { pid, name: u.name, ch: u.ch, ...st, online: this.byUser.has(u.id), playing: !!t && !t.closed && t.phase !== 'lobby',
+    return { pid, name: u.name, ch: u.ch, title: this.store.wornTitle(u.id), ...st, online: this.byUser.has(u.id), playing: !!t && !t.closed && t.phase !== 'lobby',
       me: viewer === u.id, friend: viewer && viewer !== u.id ? this.store.friendStatus(viewer, u.id) : null };
   }
 
@@ -677,6 +725,7 @@ export class Hub {
     const st = this.opts.settings?.value;
     if (st?.notice.text && st.notice.until > Date.now()) s.conn.send({ t: 'notice', text: st.notice.text });
     if (st?.maintenance.on) s.conn.send({ t: 'notice', text: st.maintenance.message });
+    s.conn.send({ t: 'titles', list: this.titles.list });
   }
 
   private attach(s: Session, u: UserRow) {
@@ -743,8 +792,11 @@ export class Hub {
     const u = this.store.get(uid), ss = this.byUser.get(uid);
     if (!u || !ss) return;
     if (u.banned) { ss.conn.send({ t: 'err', code: 'banned', reason: u.ban_reason ?? '' }); this.detach(ss); ss.conn.close(4003, 'banned'); return; }
+    this.titleToTable(uid);
     this.sendUser(uid);
   }
+  /** The title a player wears, onto their seat at the table (when it changed from outside the game). */
+  private titleToTable(uid: string) { const t = this.userTable.get(uid); if (t && !t.closed) t.setTitle(uid, this.store.wornTitle(uid) ?? undefined); }
 
   private sendUser(uid: string) {
     const u = this.store.get(uid); const s = this.byUser.get(uid);
@@ -758,7 +810,7 @@ export class Hub {
     const u = this.store.get(uid)!;
     const eq = parseEquip(u.equip), owned = this.store.skinsOf(uid);
     return { uid, name: u.name, ch: u.ch, bot: false, rating: this.store.ratingOf(uid, game),
-      hat: skinFor('hat', eq, owned), drink: skinFor('drink', eq, owned), muted: (u.muted_until ?? 0) > Date.now() };
+      hat: skinFor('hat', eq, owned), drink: skinFor('drink', eq, owned), muted: (u.muted_until ?? 0) > Date.now(), title: this.store.wornTitle(uid) ?? undefined };
   }
 
   /** Computer players in matchmade games and the tournament get people's names and a rating near the table's. */
@@ -973,6 +1025,7 @@ export class Hub {
   private afterGame(uid: string, game: GameId, won: boolean, online: boolean, sp: number) {
     const conn = this.byUser.get(uid)?.conn;
     for (const id of this.store.missionProgress(uid, game, won, online)) conn?.send({ t: 'missionDone', id });
+    if (online) this.store.addMonthly(uid, game, won, seasonOf(Date.now()));   // the race for player of the month
     const tier = this.store.addSeasonSp(uid, sp);
     if (tier.to > tier.from) conn?.send({ t: 'seasonTier', tier: tier.to });
     this.payReferral(uid);

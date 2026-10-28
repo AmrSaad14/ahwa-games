@@ -116,6 +116,10 @@ public class GameUi : MonoBehaviour
     readonly Text[] seatTags = new Text[4];
     readonly Image[] seatTagBg = new Image[4];
     readonly RawImage[] seatCpu = new RawImage[4];
+    // each player's title, under their name tag
+    readonly RectTransform[] seatTitle = new RectTransform[4];
+    readonly string[] seatTitleId = new string[4];
+    readonly int[] seatTitleVer = new int[4];
     // the end of a match: play again with new people, the same people (rematch), or the tournament
     GameObject againButton, homeButton, rematchButton, shareButton; Text againText, rematchText;
     string rematchFor = ""; bool rematchGone; int rematchVotes, rematchNeed; bool rematchMine;
@@ -899,6 +903,14 @@ public class GameUi : MonoBehaviour
             else if (!s.bot && s.away) extra = "  ·  " + Loc.T("الكمبيوتر بيلعب مكانه");
             seatTags[pos].Set((v.Board ? NameOf(v, seat) + (v.clocks != null ? "  ·  " + Clock(v, seat) : "") : NameOf(v, seat) + "  ·  " + s.count) + extra);
             seatCpu[pos].gameObject.SetActive(s.bot);
+            string tid = s.bot ? null : s.title;
+            if (tid != seatTitleId[pos] || seatTitleVer[pos] != Titles.Version || (seatTitle[pos] == null && !string.IsNullOrEmpty(tid)))
+            {
+                if (seatTitle[pos] != null) Destroy(seatTitle[pos].gameObject);
+                seatTitleId[pos] = tid; seatTitleVer[pos] = Titles.Version;
+                seatTitle[pos] = Titles.Badge(seatTagBg[pos].transform, tid, 10);
+                if (seatTitle[pos] != null) seatTitle[pos].Place(new Vector2(0.5f, 0), new Vector2(0.5f, 1), seatTitle[pos].sizeDelta, new Vector2(0, -3));
+            }
             bool active = v.phase == "play" && v.turn == seat;
             seatTagBg[pos].color = active ? new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.95f) : new Color(0.1f, 0.06f, 0.04f, 0.8f);
             seatTags[pos].color = active ? Ui.Ink : Color.white;

@@ -9,6 +9,9 @@ import type { Settings } from './settings';
 import { SKINS } from '../shared/skins';
 import { TIERS, SEASON_PASS } from '../shared/season';
 import { Limiter } from './auth';
+import { TITLE_ICONS, TITLE_EFFECTS } from '../shared/titles';
+import { GAMES } from '../shared/engine';
+import { seasonOf } from '../shared/season';
 
 export interface AdminCtx {
   store: Store; hub: Hub; settings: Settings;
@@ -79,7 +82,7 @@ export function adminApi(ctx: AdminCtx) {
         tourney: { state: hub.tourney.state, startsAt: hub.tourney.startsAt, game: hub.tourney.def.game, registered: store.tourneyRegs(hub.tourney.event).length, enabled: st.tourney.enabled },
         flags: { cashout: st.cashout.enabled, maintenance: st.maintenance.on, notice: st.notice.until > Date.now() ? st.notice.text : '', push: ctx.pushOn() } };
     }
-    if (p === '/catalog') return { skins: SKINS, tiers: TIERS, pass: SEASON_PASS };
+    if (p === '/catalog') return { skins: SKINS, tiers: TIERS, pass: SEASON_PASS, titles: hub.titles.list, icons: TITLE_ICONS };
 
     // ---- players
     if (p === '/players' && m === 'GET') {
@@ -121,6 +124,14 @@ export function adminApi(ctx: AdminCtx) {
           const title = String(b.title || '').slice(0, 80), body = String(b.text || '').slice(0, 300); if (!body) fail(400, 'empty');
           ctx.push([id], [title || 'بورد باتلز', body], [title || 'Board Battles', body]); log(req, 'notify', id, { title, body }); return { ok: true };
         }
+        case 'title': {
+          const t = hub.titles.get(String(b.title || '')) ?? fail(400, 'bad_title');
+          const days = Math.max(0, Math.min(3650, Number(b.days) || 0));
+          store.grantTitle(id, t.id, days ? Date.now() + days * 86_400_000 : 0, String(b.note || '').slice(0, 100) || null, b.wear !== false);
+          if (b.notify !== false) ctx.push([id], ['لقب جديد 🏅', `بقيت «${t.ar}»`], ['A new title 🏅', `You are now "${t.en}"`]);
+          log(req, 'title', id, { title: t.id, days }); hub.adminChanged(id); return { ok: true };
+        }
+        case 'untitle': store.revokeTitle(id, String(b.title || '')); log(req, 'untitle', id, { title: b.title }); hub.adminChanged(id); return { ok: true };
         case 'delete': store.deleteUser(id); log(req, 'delete', id, { name: u.name }); return { ok: true };
         default: fail(400, 'bad_action');
       }
@@ -182,6 +193,26 @@ export function adminApi(ctx: AdminCtx) {
 
     // ---- the season pass
     if (p === '/season' && m === 'GET') return { ...store.adminSeason(), settings: settings.value.season, skins: SKINS };
+
+    // ---- titles: the designs, who has them, the monthly race
+    if (p === '/titles' && m === 'GET') {
+      const month = seasonOf(Date.now()), cfg = settings.value.titles;
+      const winners = (store.metaLike('potm_winners_') as { k: string; v: string }[]).slice(0, 12).map(r => { try { return { month: r.k.slice('potm_winners_'.length), rows: JSON.parse(r.v) }; } catch { return null; } }).filter(Boolean);
+      return { list: hub.titles.list, counts: store.titleCounts(), icons: TITLE_ICONS, effects: TITLE_EFFECTS, settings: cfg, month,
+        race: Object.fromEntries(GAMES.map(g => [g, store.monthlyBoard(g, month, 5, 0)])), winners };
+    }
+    if (p === '/titles' && (m === 'PUT' || m === 'POST')) {
+      const b = await readBody(req);
+      const t = hub.titles.put(b) ?? fail(400, 'bad_title');
+      log(req, 'title_saved', null, t); return t;
+    }
+    const tm = p.match(/^\/titles\/([a-z0-9_]{2,32})(\/holders)?$/);
+    if (tm && m === 'GET') return { rows: store.titleHolders(tm[1], 300) };
+    if (tm && m === 'DELETE') {
+      if (!hub.titles.remove(tm[1])) fail(400, 'cant_remove');
+      store.dropTitle(tm[1]); for (const uid of hub.onlineIds) hub.adminChanged(uid);
+      log(req, 'title_removed', null, { id: tm[1] }); return { ok: true };
+    }
 
     // ---- settings
     if (p === '/settings' && m === 'GET') return settings.value;

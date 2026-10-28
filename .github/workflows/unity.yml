@@ -115,6 +115,8 @@ jobs:
           PORT=8080 HOST=127.0.0.1 DB_PATH=/tmp/test.db BOT_FILL_SECONDS=2 ADMIN_KEY=test nohup node dist/server.cjs > logs/server.log 2>&1 &
           sleep 3
           curl -s -o /dev/null -w "server: %{http_code}\n" http://127.0.0.1:8080/ | tee -a logs/server-setup.txt
+          # the test player gets a title (as the dashboard would give it), to see titles in the screenshots
+          nohup node scripts/test-give-title.mjs > logs/titles.txt 2>&1 &
           true
 
       - name: Screenshots of the desktop build

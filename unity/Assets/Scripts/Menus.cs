@@ -182,6 +182,7 @@ public partial class Menus : MonoBehaviour
             case "lb":
                 lbRows = m.Arr("rows") ?? new List<object>(); lbMe = m.Obj("me");
                 if (m.Str("game") == "week") lbEndsAt = m.Num("endsAt");
+                lbMonth = m.Obj("month");
                 Debug.Log($"[menus] leaderboard {m.Str("game")}: {lbRows.Count} rows (showing {lbGame})");
                 if (m.Str("game") == lbGame) refreshOpen?.Invoke();
                 break;
@@ -245,6 +246,7 @@ public partial class Menus : MonoBehaviour
             case "mission_not_done": app.Toast(Loc.T("لسه المهمة مخلصتش")); return true;
             case "already_claimed": app.Toast(Loc.T("خدتها خلاص")); return true;
             case "tier_locked": app.Toast(Loc.T("لسه موصلتش للمستوى ده")); return true;
+            case "bad_title": app.Toast(Loc.T("اللقب ده مش عندك")); return true;
             case "not_premium": app.Toast(Loc.T("افتح الموسم المميز الأول")); return true;
             case "already_premium": app.Toast(Loc.T("الموسم المميز مفتوح عندك")); return true;
             case "tourney_started": app.Toast(Loc.T("البطولة بدأت خلاص")); return true;
@@ -842,12 +844,13 @@ public partial class Menus : MonoBehaviour
     /// Your collection: every skin you have (the classic ones too), kind by kind, to wear with a tap.
     public void OpenCollection(int tab)
     {
-        invTab = Mathf.Clamp(tab, 0, 4);
+        invTab = Mathf.Clamp(tab, 0, 5);
         Panel(Loc.T("مجموعتي"), out var body, new Vector2(700, 372));
         refreshOpen = () =>
         {
             foreach (Transform c in body) Destroy(c.gameObject);
-            var area = Tabs(body, new[] { "ترابيزات", "قطع", "زهر", "طربوش", "مشروب" }, invTab, i => { invTab = i; refreshOpen(); });
+            var area = Tabs(body, new[] { "ترابيزات", "قطع", "زهر", "طربوش", "مشروب", "ألقاب" }, invTab, i => { invTab = i; refreshOpen(); });
+            if (invTab == 5) { DrawMyTitles(area); return; }
             var row = Ui.Rect("Cards", area); row.anchorMin = Vector2.zero; row.anchorMax = Vector2.one; row.offsetMin = new Vector2(0, 22); row.offsetMax = Vector2.zero;
             if (invTab <= 1) row = GameSwitch(row, invGame, g => { invGame = g; refreshOpen(); });
             string cat = CatOf(invTab, invGame);
@@ -862,6 +865,56 @@ public partial class Menus : MonoBehaviour
             ((RectTransform)shop.transform).Place(new Vector2(Loc.En ? 1 : 0, 0), new Vector2(Loc.En ? 1 : 0, 0), new Vector2(110, 24), new Vector2(Loc.En ? -60 : 60, -4));
         };
         refreshOpen();
+    }
+
+    /// Your titles: wear one (it shows under your name for everyone), or none.
+    void DrawMyTitles(RectTransform area)
+    {
+        var mine = user?.Arr("titles") ?? new List<object>();
+        string worn = user?.Str("title");
+        var how = Ui.Label(area, "", 11, new Color(1, 1, 1, 0.6f), TextAnchor.MiddleCenter);
+        how.Set(Loc.T("الألقاب بتيجي من البطولات والإدارة، وأحسن لاعب في كل لعبة كل شهر بياخد لقب «لاعب الشهر»"));
+        how.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(640, 18), new Vector2(0, -4));
+        var listArea = Ui.Rect("List", area); listArea.anchorMin = Vector2.zero; listArea.anchorMax = Vector2.one; listArea.offsetMin = new Vector2(0, 20); listArea.offsetMax = Vector2.zero;
+        var have = new List<Dictionary<string, object>>();
+        foreach (var o in mine) if (o is Dictionary<string, object> d && Titles.Get(d.Str("id")) != null) have.Add(d);
+        if (have.Count == 0)
+        {
+            Ui.Label(listArea, "لسه معندكش ألقاب", 15, Ui.GoldLight).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(600, 30), new Vector2(0, -40));
+            // what the monthly titles look like: something to play for
+            int k = 0;
+            foreach (var t in Titles.List)
+            {
+                if (string.IsNullOrEmpty(t.monthly)) continue;
+                var b = Titles.Badge(listArea, t.id, 12);
+                b.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), b.sizeDelta, new Vector2(((k % 2) - 0.5f) * 250, -100 - (k / 2) * 40));
+                k++;
+            }
+            return;
+        }
+        var list = Scroll(listArea, 4);
+        foreach (var d in have)
+        {
+            string id = d.Str("id");
+            bool on = id == worn;
+            var row = Row(list, 44, on ? new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.18f) : Card);
+            var b = Titles.Badge(row, id, 13);
+            At(b, 12, b.sizeDelta.x, b.sizeDelta.y);
+            double until = d.Num("until");
+            if (until > 0)
+            {
+                var u = DateTimeOffset.FromUnixTimeMilliseconds((long)until).ToLocalTime();
+                var ul = Ui.Label(row, "", 11, new Color(1, 1, 1, 0.55f), StartAlign);
+                ul.Set(Loc.T("لحد") + " " + u.ToString("dd/MM/yyyy"));
+                At(ul.rectTransform, 24 + b.sizeDelta.x, 140, 28);
+            }
+            var btn = Ui.Button(row, on ? "اقلعه" : "البسه", on ? new Color(1, 1, 1, 0.1f) : Ui.Gold, on ? Ui.GoldLight : Ui.Ink, 13, () =>
+            {
+                Sfx.Tap();
+                app.Send(new Dictionary<string, object> { ["t"] = "wearTitle", ["id"] = on ? null : id });
+            });
+            ((RectTransform)btn.transform).Place(new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(110, 32), new Vector2(Loc.En ? -8 : 8, 0));
+        }
     }
 
     /// Dominoes · tawla · chess, above the cards; returns the space left for them.
@@ -960,10 +1013,11 @@ public partial class Menus : MonoBehaviour
     static readonly string[] GameIds = { "domino", "tawla", "chess", "ludo", "week" };
     static readonly long[] WeeklyPrizes = { 1_000_000, 500_000, 300_000, 200_000, 150_000, 100_000, 75_000, 50_000, 40_000, 30_000 };
     double lbEndsAt;
+    Dictionary<string, object> lbMonth;   // this month's race for the game's "player of the month" title
 
     public void OpenLeaders(int tab)
     {
-        lbTab = tab; lbGame = GameIds[tab]; lbRows = null; lbMe = null;
+        lbTab = tab; lbGame = GameIds[tab]; lbRows = null; lbMe = null; lbMonth = null;
         app.Send(new Dictionary<string, object> { ["t"] = "lb", ["game"] = lbGame });
         StartCoroutine(AskAgain(lbGame));
         Panel(Loc.T("المتصدرين"), out var body, new Vector2(600, 340));
@@ -983,6 +1037,21 @@ public partial class Menus : MonoBehaviour
                 info.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(560, 20), Vector2.zero);
                 top = 22;
             }
+            else if (lbMonth != null && lbMonth.Bool("on") && Titles.Get(lbMonth.Str("title")) != null)
+            {
+                // the race for this game's title this month: the title, who leads, where you are
+                var race = Ui.Box(area, "Month", new Color(1, 1, 1, 0.05f)).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(560, 30), Vector2.zero);
+                var b = Titles.Badge(race, lbMonth.Str("title"), 10);
+                b.Place(new Vector2(Loc.En ? 0 : 1, 0.5f), new Vector2(Loc.En ? 0 : 1, 0.5f), b.sizeDelta, new Vector2(Loc.En ? 6 : -6, 0));
+                string lead = lbMonth.Str("leader");
+                int place = (int)lbMonth.Num("place");
+                string line = Loc.T("لأعلى نقط الشهر") + "  ·  " + (string.IsNullOrEmpty(lead) ? Loc.T("مفيش متصدر لسه") : Loc.T("المتصدر") + ": " + lead + " (" + (int)lbMonth.Num("leaderPoints") + ")")
+                    + (place > 0 ? "  ·  " + Loc.T("مركزك") + " " + place + " (" + (int)lbMonth.Num("points") + ")" : "");
+                var txt = Ui.Label(race, "", 11, Ui.GoldLight, StartAlign, Ui.Bold); txt.Set(line);
+                txt.rectTransform.Place(new Vector2(Loc.En ? 0 : 1, 0.5f), new Vector2(Loc.En ? 0 : 1, 0.5f), new Vector2(548 - b.sizeDelta.x - 18, 28), new Vector2(Loc.En ? b.sizeDelta.x + 14 : -(b.sizeDelta.x + 14), 0));
+                txt.horizontalOverflow = HorizontalWrapMode.Wrap; txt.resizeTextForBestFit = true; txt.resizeTextMinSize = 8; txt.resizeTextMaxSize = 11;
+                top = 34;
+            }
             // the column heads
             var head = Ui.Rect("Head", area).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(560, 22), new Vector2(0, -top));
             LbCells(head, Loc.T("الترتيب"), "", Loc.T(week ? "نقط" : "التقييم"), Loc.T(week ? "الجايزة" : "مكسب"), new Color(1, 1, 1, 0.5f), 12);
@@ -1001,7 +1070,10 @@ public partial class Menus : MonoBehaviour
                 var row = Row(list, 32, me ? new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.22f) : Card);
                 string lvl = r.Num("level") > 0 ? "  ·  " + Loc.T("مستوى") + " " + (int)r.Num("level") : "";
                 string last = week ? (rank <= WeeklyPrizes.Length ? Loc.Short(WeeklyPrizes[rank - 1]) : "—") : ((int)r.Num("wins")).ToString();
-                LbCells(row, rank.ToString(), r.Str("name") + lvl, ((int)r.Num("rating")).ToString(), last, rank == 1 ? Ui.Gold : Color.white, 14);
+                var nameCell = LbCells(row, rank.ToString(), r.Str("name") + lvl, ((int)r.Num("rating")).ToString(), last, rank == 1 ? Ui.Gold : Color.white, 14);
+                // their title, after the name
+                var tb = Titles.Badge(row, r.Str("title"), 9);
+                if (tb != null) { float nx = 66 + Mathf.Min(nameCell.preferredWidth, 280 - tb.sizeDelta.x - 6) + 6; At(tb, nx, tb.sizeDelta.x, tb.sizeDelta.y); }
                 // tap a row: the player's card
                 string rpid = r.Str("pid"), rname = r.Str("name"); int rch = (int)r.Num("ch");
                 if (!string.IsNullOrEmpty(rpid)) { var hit = row.gameObject.AddComponent<Button>(); hit.transition = Selectable.Transition.None; hit.onClick.AddListener(() => { Sfx.Tap(); OpenCard(rpid, rname, rch); }); }
@@ -1024,12 +1096,14 @@ public partial class Menus : MonoBehaviour
         if (lbRows == null && lbGame == game && open != null) { Debug.Log("[menus] asking for the leaderboard again"); app.Send(new Dictionary<string, object> { ["t"] = "lb", ["game"] = game }); }
     }
 
-    static void LbCells(RectTransform row, string rank, string name, string rating, string wins, Color c, int size)
+    static Text LbCells(RectTransform row, string rank, string name, string rating, string wins, Color c, int size)
     {
         At(Ui.Label(row, rank, size, c, TextAnchor.MiddleCenter, Ui.Bold).rectTransform, 6, 50, 30);
-        At(Ui.Label(row, name, size, c, StartAlign, Ui.Bold).rectTransform, 66, 280, 30);
+        var n = Ui.Label(row, name, size, c, StartAlign, Ui.Bold);
+        At(n.rectTransform, 66, 280, 30);
         At(Ui.Label(row, rating, size, c, TextAnchor.MiddleCenter, Ui.Bold).rectTransform, 360, 90, 30);
         At(Ui.Label(row, wins, size, c, TextAnchor.MiddleCenter, Ui.Bold).rectTransform, 460, 90, 30);
+        return n;
     }
 
     /* ---------- how to play ---------- */

@@ -54,7 +54,8 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--gold2);outline-o
 input[type=number]{width:150px}
 td:first-child,td:nth-child(2){white-space:nowrap}
 label.f{display:grid;gap:4px;font-size:12px;color:var(--muted)}
-label.f input,label.f select,label.f textarea{color:var(--text);font-size:14px}
+label.f input,label.f select,label.f textarea{color:var(--text);font-size:14px;width:100%;min-width:0}
+label.f input[type=color]{width:52px}
 .form{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
 .switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
 .switch input{width:38px;height:22px;appearance:none;background:var(--line);border-radius:99px;position:relative;cursor:pointer;padding:0;border:0}
@@ -81,6 +82,21 @@ label.f input,label.f select,label.f textarea{color:var(--text);font-size:14px}
 .match{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:6px 8px;font-size:12px}
 .match div{display:flex;justify-content:space-between}
 .match .w{color:var(--gold);font-weight:700}
+.ttl{--b:#fff;display:inline-flex;align-items:center;gap:6px;padding:3px 13px 3px 9px;border-radius:99px;border:1.5px solid var(--b);font-weight:800;font-size:13px;line-height:1.4;position:relative;overflow:hidden;white-space:nowrap;vertical-align:middle}
+.ttl svg{width:16px;height:16px;flex:none}
+.ttl.big{font-size:17px;padding:6px 18px 6px 12px}.ttl.big svg{width:21px;height:21px}
+.ttl.fx-shine::after{content:"";position:absolute;inset:0;background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.55) 50%,transparent 65%);transform:translateX(-120%);animation:ttlshine 2.6s ease-in-out infinite}
+@keyframes ttlshine{0%{transform:translateX(-120%)}60%,100%{transform:translateX(120%)}}
+.ttl.fx-glow{animation:ttlglow 2s ease-in-out infinite}
+@keyframes ttlglow{0%,100%{box-shadow:0 0 0 0 transparent}50%{box-shadow:0 0 12px 1px var(--b)}}
+.ttl.fx-pulse{animation:ttlpulse 1.6s ease-in-out infinite}
+@keyframes ttlpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+.tgrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(290px,1fr))}
+.tcard{display:grid;gap:10px;align-content:start}
+.tcard .pv{display:grid;gap:8px;justify-items:center;padding:14px 8px;background:#0d0805;border-radius:10px}
+.iconpick{display:flex;flex-wrap:wrap;gap:6px}.iconpick button{width:38px;height:38px;border-radius:9px;border:1px solid var(--line);background:#0d0805;color:var(--text);cursor:pointer;display:grid;place-items:center}
+.iconpick button.on{border-color:var(--gold);background:var(--panel2)}.iconpick svg{width:20px;height:20px}
+input[type=color]{width:52px;height:36px;padding:2px;cursor:pointer}
 .login{max-width:360px;margin:12vh auto;padding:26px}
 .empty{padding:22px;text-align:center;color:var(--muted)}
 .tierrow td{padding:5px 8px}
@@ -113,6 +129,15 @@ async function api(path, opts = {}) {
 function toast(msg, err) { const t = document.createElement('div'); t.className = 'toast' + (err ? ' err' : ''); t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), err ? 4500 : 2400); }
 async function act(fn, ok) { try { const r = await fn(); if (ok) toast(ok); return r; } catch (e) { if (e.message !== 'Signed out') toast(e.message, true); throw e; } }
 
+/* ---------------- titles: drawn the same way as in the game ---------------- */
+function iconSvg(name) { const d = (state.catalog?.icons || {})[name]; return d ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="' + d + '"/></svg>' : ''; }
+function badge(t, lang, big) {
+  if (!t) return '';
+  const s = t.style;
+  return '<span class="ttl fx-' + esc(s.effect) + (big ? ' big' : '') + '" style="--b:' + esc(s.border) + ';background:linear-gradient(90deg,' + esc(s.bg[0]) + ',' + esc(s.bg[1]) + ');color:' + esc(s.fg) + '"' + (lang === 'ar' ? ' dir="rtl"' : '') + '>' + iconSvg(s.icon) + esc(lang === 'en' ? t.en : t.ar) + '</span>';
+}
+const titleById = id => (state.catalog?.titles || []).find(t => t.id === id);
+
 /* ---------------- sign in ---------------- */
 function showLogin() {
   $('#root').innerHTML = '<div class="card login"><h1>Control room</h1><p class="sub">Board Battles · enter the server\'s ADMIN_KEY</p>' +
@@ -129,7 +154,7 @@ function showLogin() {
 /* ---------------- the frame ---------------- */
 const VIEWS = [
   ['overview', 'Overview'], ['cashouts', 'Prize requests'], ['players', 'Players'], ['rewards', 'Rewards & notices'],
-  ['tourney', 'Tournaments'], ['season', 'Season pass'], ['settings', 'Game settings'], ['reports', 'Reports & support'],
+  ['tourney', 'Tournaments'], ['season', 'Season pass'], ['titles', 'Titles'], ['settings', 'Game settings'], ['reports', 'Reports & support'],
   ['purchases', 'Purchases'], ['log', 'Activity log'],
 ];
 function frame() {
@@ -140,6 +165,7 @@ function frame() {
 }
 function setPending(n) { state.pending = n; const p = $('#pendpill'); if (p) { p.hidden = !n; p.textContent = n; } }
 async function go() {
+  closeDrawer();
   const v = (location.hash.slice(1) || 'overview').split('/')[0];
   state.view = VIEWS.some(x => x[0] === v) ? v : 'overview';
   document.querySelectorAll('nav.side a[data-v]').forEach(a => a.classList.toggle('on', a.dataset.v === state.view));
@@ -263,7 +289,7 @@ async function openPlayer(id) {
     const d = await api('/players/' + encodeURIComponent(id));
     const u = d.user, s = d.stats || {}, r = d.row;
     const skins = state.catalog.skins.filter(k => !k.free && !d.skins.includes(k.id));
-    dr.innerHTML = '<button class="btn sm x" id="cx">Close ✕</button><h1>' + esc(u.name) + '</h1>' +
+    dr.innerHTML = '<button class="btn sm x" id="cx">Close ✕</button><h1>' + esc(u.name) + '</h1>' + (d.title ? '<div style="margin:4px 0 6px">' + badge(titleById(d.title), 'en') + '</div>' : '') +
       '<div class="sub mono">' + esc(u.id) + ' · code ' + esc(r.code || '—') + ' · ' + r.login + (r.contact ? ' · ' + esc(r.contact) : '') + '</div>' +
       '<div class="flags">' + (d.online ? '<span class="flag on">online</span>' : '<span class="flag off">last seen ' + ago(u.seen) + '</span>') + (r.banned ? '<span class="flag warn">banned: ' + esc(u.ban_reason || '') + '</span>' : '') + (r.muted ? '<span class="flag warn">muted</span>' : '') + (d.season.premium ? '<span class="flag on">season premium</span>' : '') + '</div>' +
       '<div class="grid">' +
@@ -287,6 +313,8 @@ async function openPlayer(id) {
       '<h2>Prize requests</h2>' + (d.cashouts.length ? '<table><tbody>' + d.cashouts.map(c => '<tr><td>#' + c.id + '</td><td>' + when(c.ts) + '</td><td class="mono">' + esc(c.phone) + '</td><td class="num">' + num(c.egp) + ' EGP</td><td><span class="tag ' + c.status + '">' + c.status + '</span></td></tr>').join('') + '</tbody></table>' : '<div class="card empty">None</div>') +
       '<h2>Purchases</h2>' + (d.purchases.length ? '<table><tbody>' + d.purchases.map(p => '<tr><td>' + when(p.ts) + '</td><td>' + esc(p.product) + '</td><td class="mono">' + esc(p.order_id || '') + '</td></tr>').join('') + '</tbody></table>' : '<div class="card empty">None</div>') +
       '<h2>Skins (' + d.skins.length + ')</h2><div class="card">' + (d.skins.map(k => '<span class="tag" style="margin:2px">' + esc(k) + ' <a href="#" data-unskin="' + esc(k) + '" title="Take back">✕</a></span>').join('') || '<span class="muted">Only the free ones</span>') + '</div>' +
+      '<h2>Titles</h2><div class="card" style="display:grid;gap:10px">' + (d.titles.length ? '<div class="row">' + d.titles.map(t => '<span>' + badge(titleById(t.id), 'en') + (d.title === t.id ? ' <span class="tag on">wearing</span>' : '') + (t.until ? ' <span class="sub">until ' + when(t.until) + '</span>' : '') + ' <a href="#" data-untitle="' + esc(t.id) + '" title="Take back">✕</a></span>').join('') + '</div>' : '<span class="muted">No titles</span>') +
+        '<div class="row"><select id="pti"><option value="">Give a title…</option>' + state.catalog.titles.filter(t => !t.monthly).map(t => '<option value="' + t.id + '">' + esc(t.en + ' · ' + t.ar) + '</option>').join('') + '</select><select id="ptd"><option value="0">for good</option><option value="7">7 days</option><option value="30">30 days</option><option value="90">90 days</option></select><button class="btn" id="bti">Give title</button></div></div>' +
       '<h2>Reports about this player (' + d.reportsAbout.length + ')</h2>' + (d.reportsAbout.length ? '<table><tbody>' + d.reportsAbout.map(x => '<tr><td>' + when(x.ts) + '</td><td>' + esc(x.reason) + '</td><td>by ' + esc(x.from_name || x.from_id) + '</td></tr>').join('') + '</tbody></table>' : '<div class="card empty">None</div>');
     const post = (body, ok) => act(() => api('/players/' + encodeURIComponent(id), { body }), ok).then(render);
     $('#cx', dr).onclick = closeDrawer;
@@ -301,6 +329,8 @@ async function openPlayer(id) {
     if ($('#bub', dr)) $('#bub', dr).onclick = () => post({ action: 'unban' }, 'Unbanned');
     $('#bx', dr).onclick = () => { const t = $('#px', dr).value; if (t) post({ action: 'notify', title: $('#pt', dr).value, text: t }, 'Sent'); };
     $('#bd', dr).onclick = () => { if (prompt('Type DELETE to delete ' + u.name + ' for good') === 'DELETE') act(() => api('/players/' + encodeURIComponent(id), { body: { action: 'delete' } }), 'Deleted').then(() => { closeDrawer(); go(); }); };
+    $('#bti', dr).onclick = () => { const k = $('#pti', dr).value; if (k) post({ action: 'title', title: k, days: Number($('#ptd', dr).value) }, 'Title given'); };
+    dr.querySelectorAll('[data-untitle]').forEach(a => a.onclick = e => { e.preventDefault(); if (confirm('Take back this title?')) post({ action: 'untitle', title: a.dataset.untitle }, 'Title taken back'); });
     dr.querySelectorAll('[data-unskin]').forEach(a => a.onclick = e => { e.preventDefault(); if (confirm('Take back ' + a.dataset.unskin + '?')) post({ action: 'unskin', skin: a.dataset.unskin }, 'Skin taken back'); });
   };
   try { await render(); } catch (e) { dr.innerHTML = '<button class="btn sm x" onclick="closeDrawer()">Close ✕</button><div class="card">' + esc(e.message) + '</div>'; }
@@ -393,6 +423,117 @@ RENDER.season = async main => {
     await act(() => api('/settings', { method: 'PUT', body: { season: { passCoins: Number($('#sc').value), passEgp: Number($('#se').value), tiers } } }), 'Season pass saved'); go();
   };
 };
+
+/* ---------------- titles ---------------- */
+const GNAME = { domino: 'Dominoes', tawla: 'Backgammon', chess: 'Chess', ludo: 'Ludo' };
+RENDER.titles = async main => {
+  const d = await api('/titles');
+  state.catalog.titles = d.list; state.catalog.icons = d.icons;
+  const cfg = d.settings;
+  const monthName = m => { const [y, mo] = m.split('-').map(Number); return new Date(Date.UTC(y, mo - 1, 15)).toLocaleString('en', { month: 'long', year: 'numeric' }); };
+  main.innerHTML = '<h1>Titles</h1><div class="sub">A title shows under the player\'s name: on their card, at their seat at the table and on the leaderboard. Players pick which of theirs to wear in Collection → Titles.</div>' +
+    '<h2>Player of the month</h2><div class="card"><div class="form">' +
+      '<label class="f">Given by itself<span class="switch"><input type="checkbox" id="mo"' + (cfg.monthly ? ' checked' : '') + '> on the 1st of each month</span></label>' +
+      '<label class="f">Online games needed in the month<input id="mg" type="number" min="0" value="' + cfg.minGames + '"></label></div>' +
+      '<div class="sub" style="margin:10px 0">When a month ends, the player with the most points in each game (3 a win, 1 a game, online games only) gets that game\'s title for the whole next month.</div>' +
+      '<button class="btn gold" id="ms">Save</button></div>' +
+    '<h2>The race this month · ' + esc(monthName(d.month)) + '</h2><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr))">' +
+      Object.entries(d.race).map(([g, rows]) => '<div class="card"><div style="margin-bottom:8px">' + badge(d.list.find(t => t.monthly === g), 'en') + '</div>' +
+        (rows.length ? '<table><tbody>' + rows.map((r, i) => '<tr><td>#' + (i + 1) + '</td><td><a href="#players/' + esc(r.id) + '">' + esc(r.name) + '</a>' + (r.games < cfg.minGames ? ' <span class="muted">(needs ' + (cfg.minGames - r.games) + ' more games)</span>' : '') + '</td><td class="num">' + r.points + ' pts</td></tr>').join('') + '</tbody></table>' : '<div class="muted">No games yet this month</div>') + '</div>').join('') + '</div>' +
+    (d.winners.length ? '<h2>Past winners</h2><table><thead><tr><th>Month</th>' + Object.keys(GNAME).map(g => '<th>' + GNAME[g] + '</th>').join('') + '</tr></thead><tbody>' +
+      d.winners.map(w => '<tr><td>' + esc(monthName(w.month)) + '</td>' + Object.keys(GNAME).map(g => { const x = w.rows.find(r => r.game === g); return '<td>' + (x ? '<a href="#players/' + esc(x.uid) + '">' + esc(x.name) + '</a>' : '<span class="muted">—</span>') + '</td>'; }).join('') + '</tr>').join('') + '</tbody></table>' : '') +
+    '<h2 class="row" style="justify-content:space-between">All titles (' + d.list.length + ')<button class="btn gold" id="tn">+ New title</button></h2>' +
+    '<div class="tgrid">' + d.list.map(t => '<div class="card tcard"><div class="pv">' + badge(t, 'ar', true) + badge(t, 'en') + '</div>' +
+      '<div class="sub">' + (t.monthly ? 'Given each month to the best ' + GNAME[t.monthly] + ' player · ' : '') + (d.counts[t.id] || 0) + ((d.counts[t.id] || 0) === 1 ? ' player has' : ' players have') + ' it now · effect: ' + esc(t.style.effect) + '</div>' +
+      '<div class="row"><button class="btn sm" data-edit="' + t.id + '">Edit design</button>' + (t.monthly ? '' : '<button class="btn sm gold" data-give="' + t.id + '">Give to a player</button>') +
+      '<button class="btn sm" data-hold="' + t.id + '">Who has it</button>' + (t.monthly ? '' : '<button class="btn sm bad" data-del="' + t.id + '">Delete</button>') + '</div></div>').join('') + '</div>';
+  $('#ms').onclick = async () => { await act(() => api('/settings', { method: 'PUT', body: { titles: { monthly: $('#mo').checked, minGames: Number($('#mg').value) } } }), 'Saved'); go(); };
+  $('#tn').onclick = () => titleEditor(null);
+  main.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => titleEditor(d.list.find(t => t.id === b.dataset.edit)));
+  main.querySelectorAll('[data-give]').forEach(b => b.onclick = () => titleGive(d.list.find(t => t.id === b.dataset.give)));
+  main.querySelectorAll('[data-hold]').forEach(b => b.onclick = () => titleHolders(d.list.find(t => t.id === b.dataset.hold)));
+  main.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { const t = d.list.find(x => x.id === b.dataset.del); if (confirm('Delete "' + t.en + '"? Everyone who has it loses it.')) { await act(() => api('/titles/' + t.id, { method: 'DELETE' }), 'Deleted'); go(); } });
+};
+
+function drawer() {
+  closeDrawer();
+  const sh = document.createElement('div'); sh.className = 'shade'; sh.onclick = closeDrawer;
+  const dr = document.createElement('div'); dr.className = 'drawer';
+  document.body.append(sh, dr);
+  return dr;
+}
+
+function titleEditor(t) {
+  const isNew = !t;
+  const cur = t ? structuredClone(t) : { id: '', ar: '', en: '', style: { bg: ['#f3cd62', '#b8862b'], fg: '#2a1a05', border: '#fff3c4', icon: 'crown', effect: 'shine' } };
+  const dr = drawer();
+  const icons = Object.keys(state.catalog.icons);
+  dr.innerHTML = '<button class="btn sm x" id="cx">Close ✕</button><h1>' + (isNew ? 'New title' : 'Edit title') + '</h1>' +
+    '<div class="card" style="display:grid;gap:12px;justify-items:center;padding:26px;margin:14px 0;background:#0d0805"><div id="pv1"></div><div id="pv2"></div><div class="sub">Preview: what players see</div></div>' +
+    '<div class="form">' +
+      (isNew ? '<label class="f">Id (english letters, no spaces)<input id="ti" placeholder="e.g. night_owl" maxlength="32"></label>' : '') +
+      '<label class="f">Arabic name<input id="tar" dir="rtl" maxlength="30" value="' + esc(cur.ar) + '"></label>' +
+      '<label class="f">English name<input id="ten" maxlength="30" value="' + esc(cur.en) + '"></label>' +
+    '</div><h2>Design</h2><div class="form">' +
+      '<label class="f">Background (start)<input type="color" id="b0" value="' + cur.style.bg[0] + '"></label>' +
+      '<label class="f">Background (end)<input type="color" id="b1" value="' + cur.style.bg[1] + '"></label>' +
+      '<label class="f">Text and icon<input type="color" id="fg" value="' + cur.style.fg + '"></label>' +
+      '<label class="f">Border<input type="color" id="bd" value="' + cur.style.border + '"></label>' +
+      '<label class="f">Effect<select id="fx">' + [['none', 'None'], ['shine', 'Shine: a light sweeps across'], ['glow', 'Glow: the border breathes'], ['pulse', 'Pulse: beats gently']].map(([k, l]) => '<option value="' + k + '"' + (k === cur.style.effect ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label>' +
+    '</div><div class="sub" style="margin:12px 0 6px">Icon</div><div class="iconpick">' + icons.map(k => '<button type="button" data-ic="' + k + '" title="' + k + '" class="' + (k === cur.style.icon ? 'on' : '') + '">' + (k === 'none' ? '∅' : iconSvg(k)) + '</button>').join('') + '</div>' +
+    '<div class="sub" style="margin:14px 0 6px">Quick looks</div><div class="row" id="presets"></div>' +
+    '<div class="row" style="margin-top:18px"><button class="btn gold" id="tsv">' + (isNew ? 'Create title' : 'Save') + '</button></div>';
+  const PRESETS = [['Gold', '#ffe08a', '#b8862b', '#2a1a05', '#fff6d6'], ['Emerald', '#11804f', '#063b25', '#ffd76a', '#ffd76a'], ['Royal', '#2c4bb0', '#0e1a4a', '#ffd76a', '#ffd76a'], ['Ruby', '#9c2430', '#4a0d14', '#ffd76a', '#ffd76a'],
+    ['Night', '#2b2b2b', '#0d0d0d', '#f3cd62', '#f3cd62'], ['Ice', '#18c3d6', '#0a5d8f', '#ffffff', '#c9f7ff'], ['Sunset', '#ff7a59', '#c2185b', '#ffffff', '#ffd1c2'], ['Wood', '#4a3526', '#1b120c', '#f4e6c8', '#c9a25a']];
+  $('#presets', dr).innerHTML = PRESETS.map((p, i) => '<button class="btn sm" data-pre="' + i + '" style="background:linear-gradient(90deg,' + p[1] + ',' + p[2] + ');color:' + p[3] + ';border-color:' + p[4] + '">' + p[0] + '</button>').join('');
+  const read = () => ({ id: isNew ? $('#ti', dr).value.trim().toLowerCase() : cur.id, ar: $('#tar', dr).value, en: $('#ten', dr).value,
+    style: { bg: [$('#b0', dr).value, $('#b1', dr).value], fg: $('#fg', dr).value, border: $('#bd', dr).value, icon: cur.style.icon, effect: $('#fx', dr).value } });
+  const draw = () => { const v = read(); $('#pv1', dr).innerHTML = badge({ ...v, ar: v.ar || 'اسم اللقب' }, 'ar', true); $('#pv2', dr).innerHTML = badge({ ...v, en: v.en || 'Title name' }, 'en'); };
+  dr.querySelectorAll('input,select').forEach(i => i.oninput = draw);
+  dr.querySelectorAll('[data-ic]').forEach(b => b.onclick = () => { cur.style.icon = b.dataset.ic; dr.querySelectorAll('[data-ic]').forEach(x => x.classList.toggle('on', x === b)); draw(); });
+  dr.querySelectorAll('[data-pre]').forEach(b => b.onclick = () => { const p = PRESETS[b.dataset.pre]; $('#b0', dr).value = p[1]; $('#b1', dr).value = p[2]; $('#fg', dr).value = p[3]; $('#bd', dr).value = p[4]; draw(); });
+  $('#cx', dr).onclick = closeDrawer;
+  $('#tsv', dr).onclick = async () => {
+    const v = read();
+    if (!/^[a-z0-9_]{2,32}$/.test(v.id)) return toast('The id needs 2+ english letters, numbers or _', true);
+    if (!v.ar.trim() || !v.en.trim()) return toast('Write both names', true);
+    if (isNew && state.catalog.titles.some(t => t.id === v.id)) return toast('That id is taken', true);
+    await act(() => api('/titles', { method: 'PUT', body: v }), 'Saved · players see it at once'); closeDrawer(); go();
+  };
+  draw();
+}
+
+function titleGive(t, presetPlayer) {
+  const dr = drawer();
+  dr.innerHTML = '<button class="btn sm x" id="cx">Close ✕</button><h1>Give a title</h1><div style="margin:10px 0 16px">' + badge(t, 'ar', true) + ' ' + badge(t, 'en') + '</div>' +
+    '<div class="form"><label class="f">For how long<select id="gd"><option value="0">For good</option><option value="7">7 days</option><option value="30">30 days</option><option value="90">90 days</option><option value="365">A year</option></select></label>' +
+    '<label class="f">Note (only here)<input id="gn" maxlength="100" placeholder="why"></label></div>' +
+    '<label class="switch" style="margin:10px 0"><input type="checkbox" id="gp" checked> Tell the player (push notification)</label>' +
+    '<form id="gs" class="row" style="margin:10px 0"><input id="gq" placeholder="Find a player: name, code, e-mail, phone" style="flex:1"><button class="btn">Search</button></form><div id="gr"></div>';
+  $('#cx', dr).onclick = closeDrawer;
+  const give = async (id, name) => {
+    if (!confirm('Give "' + t.en + '" to ' + name + '?')) return;
+    await act(() => api('/players/' + encodeURIComponent(id), { body: { action: 'title', title: t.id, days: Number($('#gd', dr).value), note: $('#gn', dr).value, notify: $('#gp', dr).checked } }), name + ' has the title now');
+  };
+  $('#gs', dr).onsubmit = async e => {
+    e.preventDefault();
+    const r = await api('/players?q=' + encodeURIComponent($('#gq', dr).value));
+    $('#gr', dr).innerHTML = r.rows.length ? '<table><tbody>' + r.rows.slice(0, 20).map(u => '<tr><td><b>' + esc(u.name) + '</b><div class="sub mono">' + esc(u.code || u.id) + '</div></td><td>' + esc(u.contact) + '</td><td><button class="btn sm gold" data-g="' + esc(u.id) + '" data-n="' + esc(u.name) + '">Give</button></td></tr>').join('') + '</tbody></table>' : '<div class="card empty">Nobody found</div>';
+    $('#gr', dr).querySelectorAll('[data-g]').forEach(b => b.onclick = () => give(b.dataset.g, b.dataset.n));
+  };
+}
+
+async function titleHolders(t) {
+  const dr = drawer();
+  const draw = async () => {
+    const r = await api('/titles/' + t.id + '/holders');
+    dr.innerHTML = '<button class="btn sm x" id="cx">Close ✕</button><h1>Who has it</h1><div style="margin:10px 0 16px">' + badge(t, 'en', true) + '</div>' +
+      (r.rows.length ? '<table><thead><tr><th>Player</th><th>Since</th><th>Until</th><th>Note</th><th></th></tr></thead><tbody>' + r.rows.map(h => '<tr><td><a href="#players/' + esc(h.id) + '">' + esc(h.name) + '</a></td><td>' + when(h.ts) + '</td><td>' + (h.until ? when(h.until) : 'for good') + '</td><td>' + esc(h.note || '') + '</td><td><button class="btn sm bad" data-rm="' + esc(h.id) + '">Take back</button></td></tr>').join('') + '</tbody></table>' : '<div class="card empty">Nobody has it now</div>');
+    $('#cx', dr).onclick = closeDrawer;
+    dr.querySelectorAll('[data-rm]').forEach(b => b.onclick = async () => { await act(() => api('/players/' + encodeURIComponent(b.dataset.rm), { body: { action: 'untitle', title: t.id } }), 'Taken back'); draw(); });
+  };
+  await draw();
+}
 
 /* ---------------- game settings ---------------- */
 RENDER.settings = async main => {

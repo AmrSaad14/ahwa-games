@@ -94,3 +94,35 @@ test('admin: maintenance blocks new games', async () => {
   assert.equal((await adm('GET', '/overview')).json.flags.maintenance, true);
   await adm('PUT', '/settings', { maintenance: { on: false } });
 });
+
+test('titles: the designs, giving one, wearing it, and player of the month', async () => {
+  const t = await adm('GET', '/titles');
+  assert.ok(t.json.list.length >= 16);
+  assert.ok(t.json.list.some((x: { id: string; monthly?: string }) => x.id === 'potm_domino' && x.monthly === 'domino'));
+  // a new design from the dashboard (bad colours keep the defaults)
+  const made = await adm('PUT', '/titles', { id: 'night_owl', ar: 'بومة الليل', en: 'Night Owl', style: { bg: ['#101030', 'nope'], fg: '#ffffff', border: '#8888ff', icon: 'star', effect: 'glow' } });
+  assert.equal(made.json.id, 'night_owl');
+  assert.match(made.json.style.bg[1], /^#[0-9a-f]{6}$/);
+  const g = await guest('Title Holder');
+  assert.equal((await adm('POST', '/players/' + g.user.id, { action: 'title', title: 'night_owl', days: 30, notify: false })).status, 200);
+  const me = await fetch(base + '/api/v1/me', { headers: { Authorization: 'Bearer ' + g.token } }).then(r => r.json()) as { title: string; titles: { id: string; until: number }[] };
+  assert.equal(me.title, 'night_owl');
+  assert.ok(me.titles[0].until > Date.now() + 29 * 86_400_000);
+  assert.equal((await adm('GET', '/titles/night_owl/holders')).json.rows.length, 1);
+  // the monthly ones can't be removed; the others can, and are taken from players
+  assert.equal((await adm('DELETE', '/titles/potm_domino')).status, 400);
+  assert.equal((await adm('DELETE', '/titles/night_owl')).status, 200);
+  assert.equal(app.store.wornTitle(g.user.id), null);
+  // last month's best domino player (enough games) gets the title for this month
+  const { seasonOf } = await import('../shared/season');
+  const [y, mo] = seasonOf(Date.now()).split('-').map(Number);
+  const prev = mo === 1 ? `${y - 1}-12` : `${y}-${String(mo - 1).padStart(2, '0')}`;
+  app.store.metaSet('potm_' + prev, '');   // not given yet
+  const a = await guest('Domino Ace'), b = await guest('Few Games');
+  for (let i = 0; i < 12; i++) app.store.addMonthly(a.user.id, 'domino', i % 2 === 0, prev);
+  for (let i = 0; i < 5; i++) app.store.addMonthly(b.user.id, 'domino', true, prev);   // more points a game, but too few games
+  const won = app.hub.monthlyTitles();
+  assert.deepEqual(won.map(w => [w.uid, w.title]), [[a.user.id, 'potm_domino']]);
+  assert.equal(app.store.wornTitle(a.user.id), 'potm_domino');
+  assert.deepEqual(app.hub.monthlyTitles(), [], 'once a month');
+});

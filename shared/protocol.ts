@@ -1,5 +1,6 @@
 import type { End, GameId, Line, Mode } from './engine';
 import type { GiftKind } from './gifts';
+import type { TitleDef } from './titles';
 import type { BoardAction, BoardEvent, BoardGameId, ChessView, GameEnd, LudoView, TawlaView } from './games/defs';
 export type { BoardAction } from './games/defs';
 
@@ -19,6 +20,7 @@ export interface SeatView {
   hat?: string;        // their look: the hat on their character and the drink by their place
   drink?: string;
   muted?: boolean;     // their chat is switched off for a while (reported by several players)
+  title?: string;      // the title they wear (an id in the titles catalog)
 }
 
 export interface LastAction {
@@ -142,7 +144,9 @@ export interface PublicUser {
   google: string | null;  // signed-in Google account (its email)
   apple?: string | null;  // signed in with Apple (its e-mail, or "Apple")
   adsLeft: number;        // rewarded ads that still pay out today
-  adFreeUntil: number;    // ad-free plan paid until (ms since 1970); 0 = shows ads
+  adFreeUntil: number;    // no full-screen ads until (ms since 1970); 0 = shows ads
+  titles?: { id: string; until: number; note: string | null }[];   // the titles you have (until 0: for good)
+  title?: string | null;  // the one you wear
   skins: string[];        // skins bought in the shop (the free classic ones aren't listed)
   equip: Partial<Record<'tiles' | 'dice' | 'tawla' | 'chess' | 'ludo', string>>;   // the skin chosen for each kind
   ratings: Partial<Record<GameId, { rating: number; games: number; wins: number }>>;
@@ -177,11 +181,11 @@ export interface TourneyView {
   now: number;
 }
 
-export interface LeaderRow { rank: number; name: string; ch: number; rating: number; games: number; wins: number; me: boolean; level?: number; pid?: string }
+export interface LeaderRow { rank: number; name: string; ch: number; rating: number; games: number; wins: number; me: boolean; level?: number; pid?: string; title?: string | null }
 
 /** A player's card: who they are, how they play, and where you stand with them. */
 export interface PlayerCard {
-  pid: string; name: string; ch: number; level: number; xp: number; since: number;
+  pid: string; name: string; ch: number; level: number; xp: number; since: number; title?: string | null;
   games: number; wins: number; losses: number; winRate: number;
   coinsWon: number; coinsLost: number; net: number; bestWin: number; tourneyCoins: number; weeklyCoins: number;
   perGame: Record<string, { rating: number; games: number; wins: number; losses: number }>;
@@ -257,6 +261,7 @@ export type C2S =
   /** Cash out: every 1,000,000 coins pays 10 EGP to a Vodafone Cash number, paid by hand within one working day. */
   | { t: 'cashout'; phone: string; millions: number }
   | { t: 'cashouts' }
+  | { t: 'wearTitle'; id: string | null }
   /** A practice game (played on the phone) finished: a little experience. */
   | { t: 'practiceDone'; game: GameId; won: boolean }
   /** A message to the team from "Contact support". */
@@ -289,7 +294,12 @@ export type S2C =
   | { t: 'table'; view: AnyView }
   | { t: 'left' }
   | { t: 'emote'; seat: number; k: Emote }
-  | { t: 'lb'; game: GameId | 'week'; rows: LeaderRow[]; me: LeaderRow | null; week?: string; endsAt?: number; prizes?: number[] }
+  | { t: 'lb'; game: GameId | 'week'; rows: LeaderRow[]; me: LeaderRow | null; week?: string; endsAt?: number; prizes?: number[];
+      /** this month's race for "<game> player of the month": the title, the leader, your place and points, when it ends */
+      month?: { title: string; on: boolean; leader: string | null; leaderPoints: number; place: number; points: number; endsAt: number; minGames: number; holder: string | null } }
+  | { t: 'titles'; list: TitleDef[] }
+  | { t: 'titleWon'; id: string; month: string }
+  | { t: 'notice'; text: string }
   | { t: 'cashouts'; rows: CashoutRow[]; rate: { coins: number; egp: number }; maxMillions: number }
   | { t: 'cashoutDone'; id: number; egp: number; coins: number; phone: string }
   | { t: 'supportSent'; id: number }

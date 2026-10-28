@@ -19,7 +19,7 @@ export interface UserRow {
   coins: number; gifts: number; bonus_day: string | null; ad_free_until: number; equip: string | null;
   phone: string | null; google_sub: string | null; google_email: string | null; apple_sub?: string | null; apple_email?: string | null;
   pg_id: string | null; friend_code: string | null; streak?: number; xp?: number;
-  ref_by?: string | null; ref_paid?: number; muted_until?: number; pid?: string | null; banned?: number; ban_reason?: string | null;
+  ref_by?: string | null; ref_paid?: number; muted_until?: number; pid?: string | null; banned?: number; ban_reason?: string | null; title?: string | null;
 }
 
 export class Store {
@@ -89,6 +89,14 @@ export class Store {
     this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_pid ON users(pid) WHERE pid IS NOT NULL');
     // the dashboard: banned players, and a log of what the team did
     if (!cols.has('banned')) this.db.exec('ALTER TABLE users ADD COLUMN banned INTEGER NOT NULL DEFAULT 0; ALTER TABLE users ADD COLUMN ban_reason TEXT');
+    // titles: the ones a player has (some until a date), the one they wear, and each game's monthly standings
+    if (!cols.has('title')) this.db.exec('ALTER TABLE users ADD COLUMN title TEXT');
+    this.db.exec(`CREATE TABLE IF NOT EXISTS user_titles (user_id TEXT NOT NULL, title TEXT NOT NULL, ts INTEGER NOT NULL, until INTEGER NOT NULL DEFAULT 0,
+        note TEXT, PRIMARY KEY (user_id, title));
+      CREATE INDEX IF NOT EXISTS user_titles_title ON user_titles(title);
+      CREATE TABLE IF NOT EXISTS monthly (month TEXT NOT NULL, game TEXT NOT NULL, user_id TEXT NOT NULL, points INTEGER NOT NULL DEFAULT 0,
+        games INTEGER NOT NULL DEFAULT 0, wins INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (month, game, user_id));
+      CREATE INDEX IF NOT EXISTS monthly_rank ON monthly(month, game, points DESC)`);
     this.db.exec(`CREATE TABLE IF NOT EXISTS admin_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, who TEXT NOT NULL, action TEXT NOT NULL, target TEXT, detail TEXT);
       CREATE INDEX IF NOT EXISTS users_seen ON users(seen); CREATE INDEX IF NOT EXISTS users_created ON users(created);
       CREATE INDEX IF NOT EXISTS coin_log_kind ON coin_log(kind, ts)`);
@@ -286,7 +294,7 @@ export class Store {
   weeklyBoard(meId: string | null, week = weekKey(), limit = 50): { rows: LeaderRow[]; me: LeaderRow | null } {
     const rows = this.db.prepare(`SELECT u.id, u.pid, u.name, u.ch, u.xp, w.points, w.games, w.wins FROM weekly w JOIN users u ON u.id = w.user_id
       WHERE w.week = ? ORDER BY w.points DESC, w.wins DESC, w.games ASC LIMIT ?`).all(week, limit) as { id: string; pid: string; name: string; ch: number; xp: number; points: number; games: number; wins: number }[];
-    const out = rows.map((r, i) => ({ rank: i + 1, name: r.name, ch: r.ch, rating: r.points, games: r.games, wins: r.wins, me: r.id === meId, level: levelOf(r.xp), pid: r.pid }));
+    const out = rows.map((r, i) => ({ rank: i + 1, name: r.name, ch: r.ch, rating: r.points, games: r.games, wins: r.wins, me: r.id === meId, level: levelOf(r.xp), pid: r.pid, title: this.wornTitle(r.id) }));
     let me: LeaderRow | null = null;
     const mine = meId ? this.db.prepare('SELECT points, games, wins FROM weekly WHERE week = ? AND user_id = ?').get(week, meId) as { points: number; games: number; wins: number } | undefined : undefined;
     const u = meId ? this.get(meId) : undefined;
@@ -402,7 +410,7 @@ export class Store {
     const rows = this.db.prepare(`SELECT u.id, u.pid, u.xp, u.name, u.ch, r.rating, r.games, r.wins FROM ratings r JOIN users u ON u.id = r.user_id
       WHERE r.game = ? AND r.games >= 3 ORDER BY r.rating DESC, r.wins DESC LIMIT ?`)
       .all(game, limit) as unknown as (Pick<UserRow, 'id' | 'name' | 'ch' | 'rating' | 'games' | 'wins' | 'xp'> & { pid: string })[];
-    const out = rows.map((r, i) => ({ rank: i + 1, name: r.name, ch: r.ch, rating: r.rating, games: r.games, wins: r.wins, me: r.id === meId, level: levelOf(r.xp ?? 0), pid: r.pid }));
+    const out = rows.map((r, i) => ({ rank: i + 1, name: r.name, ch: r.ch, rating: r.rating, games: r.games, wins: r.wins, me: r.id === meId, level: levelOf(r.xp ?? 0), pid: r.pid, title: this.wornTitle(r.id) }));
     let me: LeaderRow | null = null;
     const u = meId ? this.get(meId) : undefined;
     const mine = meId ? this.db.prepare('SELECT rating, games, wins FROM ratings WHERE user_id = ? AND game = ?').get(meId, game) as { rating: number; games: number; wins: number } | undefined : undefined;
@@ -417,7 +425,7 @@ export class Store {
     const now = Date.now(), season = this.seasonState(u.id);
     // no full-screen ads: with the season pass, until the season ends
     const adFreeUntil = Math.max(u.ad_free_until ?? 0, season.premium ? season.endsAt : 0);
-    return { ...toPublic(u), adFreeUntil, xp: u.xp ?? 0, level: levelOf(u.xp ?? 0), streak: u.streak ?? 0, daily: this.dailyState(u), code: this.friendCode(u.id), ratings: this.ratingsOf(u.id),
+    return { ...toPublic(u), adFreeUntil, titles: this.titlesOf(u.id, now), title: this.wornTitle(u.id, now), xp: u.xp ?? 0, level: levelOf(u.xp ?? 0), streak: u.streak ?? 0, daily: this.dailyState(u), code: this.friendCode(u.id), ratings: this.ratingsOf(u.id),
       adsLeft: Math.max(0, ECONOMY.adsPerDay - this.adsToday(u.id)), skins: this.skinsOf(u.id),
       missions: this.missions(u.id), missionsAt: nextCairoDay(now), season,
       canRefer: !u.ref_by && now - u.created < REFER_DAYS * 86_400_000, referred: !!u.ref_by, muted: (u.muted_until ?? 0) > now ? u.muted_until : 0 };
@@ -608,6 +616,8 @@ export class Store {
   }
   pushTokensOf(uid: string): { token: string; lang: string }[] { return this.db.prepare('SELECT token, lang FROM push_tokens WHERE user_id = ?').all(uid) as { token: string; lang: string }[]; }
   metaGet(k: string): string | null { return (this.db.prepare('SELECT v FROM meta WHERE k = ?').get(k) as { v: string } | undefined)?.v ?? null; }
+  /** Meta rows whose key starts with `prefix`, newest key first. */
+  metaLike(prefix: string) { return this.db.prepare("SELECT k, v FROM meta WHERE k LIKE ? || '%' ORDER BY k DESC").all(prefix) as { k: string; v: string }[]; }
   metaSet(k: string, v: string) { this.db.prepare('INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v').run(k, v); }
 
   /* ---------- cash out (Vodafone Cash, paid by hand) ---------- */
@@ -711,6 +721,7 @@ export class Store {
       reportsAbout: this.db.prepare('SELECT r.*, u.name AS from_name FROM reports r LEFT JOIN users u ON u.id = r.from_id WHERE about_id = ? ORDER BY ts DESC LIMIT 50').all(id),
       reportsBy: this.n('SELECT COUNT(*) AS n FROM reports WHERE from_id = ?', id),
       season: this.seasonState(id), friends: this.friendCount(id), referredBy: u.ref_by ?? null,
+      titles: this.titlesOf(id), title: this.wornTitle(id),
     };
   }
 
@@ -784,6 +795,59 @@ export class Store {
     this.db.prepare('INSERT INTO admin_log (ts, who, action, target, detail) VALUES (?, ?, ?, ?, ?)').run(Date.now(), who, action, target, detail === undefined ? null : JSON.stringify(detail).slice(0, 2000));
   }
   adminLogAll(limit = 300) { return this.db.prepare('SELECT * FROM admin_log ORDER BY id DESC LIMIT ?').all(limit); }
+
+  /* ---------- titles ---------- */
+
+  /** The titles a player has now (expired ones left out). */
+  titlesOf(uid: string, now = Date.now()): { id: string; until: number; note: string | null }[] {
+    return (this.db.prepare('SELECT title AS id, until, note FROM user_titles WHERE user_id = ? AND (until = 0 OR until > ?) ORDER BY ts DESC').all(uid, now) as { id: string; until: number; note: string | null }[]);
+  }
+  /** The title a player wears (null if none, or it ran out). */
+  wornTitle(uid: string, now = Date.now()): string | null {
+    const r = this.db.prepare('SELECT u.title FROM users u JOIN user_titles t ON t.user_id = u.id AND t.title = u.title WHERE u.id = ? AND (t.until = 0 OR t.until > ?)').get(uid, now) as { title: string } | undefined;
+    return r?.title ?? null;
+  }
+  /** Wear one of your titles (null: none). */
+  wearTitle(uid: string, id: string | null): boolean {
+    if (id && !this.titlesOf(uid).some(t => t.id === id)) return false;
+    this.db.prepare('UPDATE users SET title = ? WHERE id = ?').run(id, uid);
+    return true;
+  }
+  /** Gives a title (until a date, or 0 for good); a new one is worn at once. */
+  grantTitle(uid: string, id: string, until = 0, note: string | null = null, wear = true) {
+    this.db.prepare(`INSERT INTO user_titles (user_id, title, ts, until, note) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(user_id, title) DO UPDATE SET ts = excluded.ts, until = excluded.until, note = excluded.note`).run(uid, id, Date.now(), until, note);
+    if (wear) this.db.prepare('UPDATE users SET title = ? WHERE id = ?').run(id, uid);
+  }
+  revokeTitle(uid: string, id: string) {
+    this.db.prepare('DELETE FROM user_titles WHERE user_id = ? AND title = ?').run(uid, id);
+    this.db.prepare('UPDATE users SET title = NULL WHERE id = ? AND title = ?').run(uid, id);
+  }
+  /** A title taken out of the catalog: nobody has it any more. */
+  dropTitle(id: string) { this.db.prepare('DELETE FROM user_titles WHERE title = ?').run(id); this.db.prepare('UPDATE users SET title = NULL WHERE title = ?').run(id); }
+  /** How many players have each title now. */
+  titleCounts(now = Date.now()): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const r of this.db.prepare('SELECT title, COUNT(*) AS n FROM user_titles WHERE until = 0 OR until > ? GROUP BY title').all(now) as { title: string; n: number }[]) out[r.title] = Number(r.n);
+    return out;
+  }
+  titleHolders(id: string, limit = 100, now = Date.now()) {
+    return this.db.prepare(`SELECT t.user_id AS id, u.name, u.pid, t.ts, t.until, t.note FROM user_titles t JOIN users u ON u.id = t.user_id
+      WHERE t.title = ? AND (t.until = 0 OR t.until > ?) ORDER BY t.ts DESC LIMIT ?`).all(id, now, limit) as { id: string; name: string; pid: string; ts: number; until: number; note: string | null }[];
+  }
+
+  /** A finished online game counts for the month's standings in its game: 3 points a win, 1 for playing. */
+  addMonthly(uid: string, game: string, won: boolean, month: string) {
+    this.db.prepare(`INSERT INTO monthly (month, game, user_id, points, games, wins) VALUES (?, ?, ?, ?, 1, ?)
+      ON CONFLICT(month, game, user_id) DO UPDATE SET points = points + excluded.points, games = games + 1, wins = wins + excluded.wins`)
+      .run(month, game, uid, won ? 3 : 1, won ? 1 : 0);
+  }
+  /** The month's standings in one game (players with at least `minGames` games). */
+  monthlyBoard(game: string, month: string, limit = 10, minGames = 0) {
+    return this.db.prepare(`SELECT m.user_id AS id, u.name, u.pid, u.ch, m.points, m.games, m.wins FROM monthly m JOIN users u ON u.id = m.user_id
+      WHERE m.month = ? AND m.game = ? AND m.games >= ? AND u.banned = 0 ORDER BY m.points DESC, m.wins DESC, m.games ASC LIMIT ?`)
+      .all(month, game, minGames, limit) as { id: string; name: string; pid: string; ch: number; points: number; games: number; wins: number }[];
+  }
 
   /* ---------- support messages ---------- */
 

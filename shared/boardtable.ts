@@ -80,7 +80,7 @@ export class BoardTable {
 
   join(p: Player): number | string {
     const cur = this.seatOf(p.uid);
-    if (cur >= 0) { const s = this.seats[cur]!; s.online = true; s.offAt = undefined; s.name = p.name; s.ch = p.ch; s.hat = p.hat; s.drink = p.drink; s.muted = p.muted; this.bump(); return cur; }
+    if (cur >= 0) { const s = this.seats[cur]!; s.online = true; s.offAt = undefined; s.name = p.name; s.ch = p.ch; s.hat = p.hat; s.drink = p.drink; s.muted = p.muted; s.title = p.title; this.bump(); return cur; }
     if (this.phase !== 'lobby') return 'in_progress';
     const i = this.seats.findIndex(s => !s);
     if (i < 0) return 'room_full';
@@ -98,6 +98,9 @@ export class BoardTable {
     if (!this.hasOnlineHuman()) return this.close();
     this.bump();
   }
+
+  /** A player changed the title they wear. */
+  setTitle(uid: string, title: string | undefined) { const i = this.seatOf(uid); if (i >= 0) { this.seats[i]!.title = title; this.bump(); } }
 
   setOnline(uid: string, online: boolean) {
     const i = this.seatOf(uid); if (i < 0) return;
@@ -354,7 +357,7 @@ export class BoardTable {
         name: s.name, ch: s.ch, bot: s.bot, away: s.away, online: s.online, count: 0, team: i, host: s.uid === this.hostUid,
         rating: s.rating, mic: !!s.mic && s.online, pid: s.bot ? '' : publicId(s.uid),
         back: this.inGrace(s) && this.phase !== 'lobby' ? s.offAt! + this.opts.offlineGraceMs : undefined,
-        hat: s.hat, drink: s.drink, muted: s.muted || undefined,
+        hat: s.hat, drink: s.drink, muted: s.muted || undefined, title: s.title || undefined,
       }),
       turn, turnEndsAt: this.turnEndsAt, turnMs: this.clocks ? this.clockMs() : this.opts.turnMs, clocks,
       round: this.round, scores: this.scores.slice(), last: this.last, result: this.result, match: this.match,

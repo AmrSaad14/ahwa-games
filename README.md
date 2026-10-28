@@ -185,6 +185,11 @@ password and sign in with it (the session lasts 12 hours). Everything done there
 - **Rewards & notices:** coins for everyone (or everyone who played lately), a notice shown in the game.
 - **Tournaments:** day, hour, game and prizes; start now or skip; the bracket and past results.
 - **Season pass:** how far players got, the price, every tier's free and premium reward.
+- **Titles:** design titles (two-colour gradient, border, icon, effect: shine, glow or pulse) with a live preview,
+  give them to players (for good or for some days), take them back. Players wear one of theirs (Collection →
+  Titles); it shows on their card, at their seat and on the leaderboard. **Player of the month:** when a month
+  ends, the player with the most points in each game (3 a win, 1 a game, online games, at least 10 games) gets
+  "Domino / Tawla / Chess / Ludo Player of the Month" for the whole next month.
 - **Game settings:** cash-out rules, starting coins, daily streak, ads, weekly prizes, turn time, computer players,
   maintenance mode (no new games start).
 

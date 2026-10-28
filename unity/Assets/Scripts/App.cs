@@ -111,7 +111,7 @@ public class App : MonoBehaviour
         BuildHome();
         menus = gameObject.AddComponent<Menus>();
         menus.Build(this, homeGroup.GetComponent<RectTransform>());
-        Loc.Changed += () => { SetStatus(net != null && net.Online); Redraw(); SendPushToken(); };
+        Loc.Changed += () => { SetStatus(net != null && net.Online); Redraw(); SendPushToken(); myTitleId = null; ShowMyTitle(); };
         game = gameObject.AddComponent<GameUi>();
         game.Build(this);
 
@@ -249,6 +249,7 @@ public class App : MonoBehaviour
                     nameText.Set(user.Str("name"));
                     coinsText.text = ((long)user.Num("coins")).ToString("N0");
                     if (user.Num("level") > 0) { levelBox.SetActive(true); levelText.Set(Loc.T("مستوى") + " " + (int)user.Num("level")); }
+                    ShowMyTitle();
                     menus?.OnUser(user);
                     Debug.Log($"[app] signed in as {user.Str("name")} with {user.Num("coins")} coins");
                 }
@@ -297,6 +298,18 @@ public class App : MonoBehaviour
             case "buyFailed":
                 Billing.OnFailed(m);
                 break;
+            case "titles":
+                // the titles catalog (designs), from the server; the dashboard can change it any time
+                Titles.Set(m.Arr("list"));
+                myTitleId = null; ShowMyTitle();
+                break;
+            case "titleWon":
+            {
+                var t = Titles.Get(m.Str("id"));
+                if (t != null) Toast(Loc.T("مبروك! بقيت") + " «" + t.Name + "» " + Loc.T("الشهر ده كله"), 8f);
+                Sfx.Coins();
+                break;
+            }
             case "notice":
                 // a message from the team (the dashboard): a notice, a gift, maintenance
                 Toast(m.Str("text"), 7f);
@@ -581,6 +594,22 @@ public class App : MonoBehaviour
         if (who != null && who.gameObject.activeInHierarchy) { if (k == "gg" || k == "clap" || k == "love" || k == "fire") who.Win(); else who.Gesture(who.transform.position + who.Forward * 2f + Vector3.up * 3f); }
     }
 
+    /// The title you wear, under your level on the home screen.
+    RectTransform myTitle, homeRoot; string myTitleId;
+    void ShowMyTitle()
+    {
+        string id = user?.Str("title");
+        if (id == myTitleId && myTitle != null) return;
+        if (myTitle != null) Destroy(myTitle.gameObject);
+        myTitle = null; myTitleId = id;
+        if (string.IsNullOrEmpty(id) || homeRoot == null) return;
+        myTitle = Titles.Badge(homeRoot, id, 11);
+        if (myTitle == null) { myTitleId = null; return; }
+        myTitle.Place(new Vector2(1, 1), new Vector2(1, 1), myTitle.sizeDelta, new Vector2(-14, -80));
+        myTitle.gameObject.AddComponent<Button>().onClick.AddListener(() => { Sfx.Tap(); menus?.OpenCollection(5); });
+        myTitle.Find("Edge").GetComponent<Image>().raycastTarget = true;
+    }
+
     public void Toast(string s) => Toast(s, 2.6f);
     public void Toast(string s, float seconds)
     {
@@ -592,6 +621,7 @@ public class App : MonoBehaviour
     {
         ui = Ui.MakeCanvas("Home", 10);
         var root = Ui.Rect("Home", ui.transform).Fill();
+        homeRoot = root;
         homeGroup = root.gameObject.AddComponent<CanvasGroup>();
         homeGroup.alpha = 0;
 
@@ -722,6 +752,7 @@ public class App : MonoBehaviour
             menus.OpenFriends(); yield return new WaitForSeconds(1.2f); Still("x3-friends.png");
             menus.OpenTourney(); yield return new WaitForSeconds(1.2f); Still("x4-tourney.png");
             menus.OpenMyCard(); yield return new WaitForSeconds(1.2f); Still("x5-card.png");
+            menus.OpenCollection(5); yield return new WaitForSeconds(0.8f); Still("x13-titles.png");
             menus.ShopGame = 1; menus.OpenShop(1); yield return new WaitForSeconds(0.8f); Still("x6-shop-boards-tawla.png");
             menus.ShopGame = 2; menus.OpenShop(1); yield return new WaitForSeconds(0.8f); Still("x7-shop-boards-chess.png");
             menus.ShopGame = 1; menus.OpenShop(2); yield return new WaitForSeconds(0.8f); Still("x8-shop-checkers.png");
@@ -739,6 +770,7 @@ public class App : MonoBehaviour
             menus.WatchAd(); yield return new WaitForSeconds(1.5f); Still("m6-ad.png");
             yield return new WaitForSeconds(5f); Still("m7-ad-reward.png");
             Loc.Set(true); yield return new WaitForSeconds(0.8f); Still("m8-home-en.png");
+            menus.OpenMyCard(); yield return new WaitForSeconds(1.2f); Still("x14-card-en.png");
             menus.OpenShop(1); yield return new WaitForSeconds(0.8f); Still("m9-shop-en.png");
             menus.OpenHowTo(0); yield return new WaitForSeconds(0.8f); Still("m10-howto-en.png");
             menus.OpenSettings(); yield return new WaitForSeconds(0.8f); Still("m11-settings-en.png"); menus.OpenSupport(); yield return new WaitForSeconds(0.8f); Still("m12-support-en.png");
