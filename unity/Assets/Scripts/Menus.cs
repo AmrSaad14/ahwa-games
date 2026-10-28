@@ -812,7 +812,7 @@ public partial class Menus : MonoBehaviour
 
     public void OpenShop(int tab)
     {
-        shopTab = tab;
+        shopTab = tab; Track("shop_open");
         Panel(Loc.T("المتجر"), out var body, new Vector2(700, 372));
         refreshOpen = () =>
         {

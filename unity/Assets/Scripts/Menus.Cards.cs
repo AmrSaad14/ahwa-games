@@ -100,11 +100,14 @@ public partial class Menus
         l.Set(Loc.T("أول مرة هنا؟ العب دور دومينو سهل ضد الكمبيوتر وإحنا هنقولك تعمل إيه خطوة بخطوة") + "\n" + Loc.T("وفي الآخر خد") + " " + Loc.Short((long)(user?.Num("tutorialCoins", 10000) ?? 10000)) + " " + Loc.T("كوين هدية"));
         l.horizontalOverflow = HorizontalWrapMode.Wrap;
         l.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(470, 84), new Vector2(0, -104));
-        var go = Ui.Button(body, "يلا نلعب", Ui.Gold, Ui.Ink, 17, () => { Sfx.Tap(); Close(); app.StartGuide(); });
+        var go = Ui.Button(body, "يلا نلعب", Ui.Gold, Ui.Ink, 17, () => { Sfx.Tap(); Close(); Track("guide_start"); app.StartGuide(); });
         ((RectTransform)go.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(170, 44), new Vector2(Loc.En ? 90 : -90, 0));
-        var later = Ui.Button(body, "بعدين", new Color(1, 1, 1, 0.1f), Ui.GoldLight, 15, () => { Sfx.Tap(); Close(); });
+        var later = Ui.Button(body, "بعدين", new Color(1, 1, 1, 0.1f), Ui.GoldLight, 15, () => { Sfx.Tap(); Close(); Track("guide_skip"); });
         ((RectTransform)later.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(130, 44), new Vector2(Loc.En ? -90 : 90, 0));
     }
+
+    /// Something worth counting in the dashboard's analytics (only a few names are kept).
+    void Track(string name) { if (app.net != null && app.net.Online) app.Send(new Dictionary<string, object> { ["t"] = "track", ["name"] = name }); }
 
     static IEnumerator Bounce(RectTransform r)
     {

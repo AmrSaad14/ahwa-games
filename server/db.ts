@@ -99,6 +99,11 @@ export class Store {
     this.db.exec(`CREATE TABLE IF NOT EXISTS groups (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, code TEXT NOT NULL UNIQUE, owner TEXT NOT NULL, created INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS group_members (group_id INTEGER NOT NULL, user_id TEXT NOT NULL, joined INTEGER NOT NULL, PRIMARY KEY (group_id, user_id));
       CREATE INDEX IF NOT EXISTS group_members_user ON group_members(user_id)`);
+    // analytics: the days each player came, and what new players did (for retention and where they drop off)
+    this.db.exec(`CREATE TABLE IF NOT EXISTS user_days (user_id TEXT NOT NULL, day TEXT NOT NULL, PRIMARY KEY (user_id, day));
+      CREATE INDEX IF NOT EXISTS user_days_day ON user_days(day);
+      CREATE TABLE IF NOT EXISTS track (user_id TEXT NOT NULL, name TEXT NOT NULL, ts INTEGER NOT NULL, game TEXT, PRIMARY KEY (user_id, name, ts));
+      CREATE INDEX IF NOT EXISTS track_name ON track(name, ts)`);
     this.db.exec('CREATE TABLE IF NOT EXISTS event_games (event TEXT NOT NULL, user_id TEXT NOT NULL, games INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (event, user_id))');
     this.db.exec('CREATE TABLE IF NOT EXISTS chest (week TEXT NOT NULL, user_id TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0, opened TEXT NOT NULL DEFAULT \'[]\', PRIMARY KEY (week, user_id))');
     this.db.exec(`CREATE TABLE IF NOT EXISTS user_titles (user_id TEXT NOT NULL, title TEXT NOT NULL, ts INTEGER NOT NULL, until INTEGER NOT NULL DEFAULT 0,
@@ -247,7 +252,15 @@ export class Store {
   }
   friendRemove(a: string, b: string) { this.db.prepare('DELETE FROM friends WHERE (a = ? AND b = ?) OR (a = ? AND b = ?)').run(a, b, b, a); }
 
-  touch(id: string) { this.db.prepare('UPDATE users SET seen = ? WHERE id = ?').run(Date.now(), id); }
+  touch(id: string) {
+    const now = Date.now();
+    this.db.prepare('UPDATE users SET seen = ? WHERE id = ?').run(now, id);
+    this.db.prepare('INSERT OR IGNORE INTO user_days (user_id, day) VALUES (?, ?)').run(id, cairoDay(now));   // for retention
+  }
+  /** Something a player did, for the dashboard's analytics. */
+  track(uid: string, name: string, game: string | null = null, now = Date.now()) {
+    this.db.prepare('INSERT OR IGNORE INTO track (user_id, name, ts, game) VALUES (?, ?, ?, ?)').run(uid, name, now, game);
+  }
   setProfile(id: string, name: string, ch: number) { this.db.prepare('UPDATE users SET name = ?, ch = ? WHERE id = ?').run(name, ch, id); }
   setCredentials(id: string, email: string, pw: string) { this.db.prepare('UPDATE users SET email = ?, pw = ? WHERE id = ?').run(email, pw, id); }
 
@@ -698,6 +711,50 @@ export class Store {
     return Number(this.db.prepare("UPDATE prizes SET status = 'expired', done_ts = ? WHERE status = 'unclaimed' AND ts < ?").run(now, now - days * 86_400_000).changes);
   }
   prizeGet(id: number) { return this.db.prepare('SELECT * FROM prizes WHERE id = ?').get(id) as PrizeDb | undefined; }
+
+  /* ---------- analytics (the dashboard) ---------- */
+
+  /** New players day by day, and how many of them came back 1, 3 and 7 days later. */
+  retention(days = 21, now = Date.now()) {
+    const out: { day: string; joined: number; d1: number; d3: number; d7: number; d1Ready: boolean; d3Ready: boolean; d7Ready: boolean }[] = [];
+    const today = cairoDay(now);
+    const plus = (day: string, n: number) => cairoDay(Date.parse(day + 'T12:00:00Z') + n * 86_400_000);
+    for (let i = days; i >= 1; i--) {
+      const end = nextCairoDay(now - i * 86_400_000), start = end - 86_400_000, day = cairoDay(start + 3_600_000);
+      const joined = this.n('SELECT COUNT(*) AS n FROM users WHERE created >= ? AND created < ?', start, end);
+      const back = (k: number) => this.n(`SELECT COUNT(*) AS n FROM users u JOIN user_days d ON d.user_id = u.id AND d.day = ? WHERE u.created >= ? AND u.created < ?`, plus(day, k), start, end);
+      out.push({ day, joined, d1: back(1), d3: back(3), d7: back(7), d1Ready: plus(day, 1) < today, d3Ready: plus(day, 3) < today, d7Ready: plus(day, 7) < today });
+    }
+    return out;
+  }
+  /** What new players (joined in the last `days` days) went on to do: where they drop off. */
+  funnel(days = 30, now = Date.now()) {
+    const since = now - days * 86_400_000;
+    const did = (name: string) => this.n('SELECT COUNT(DISTINCT t.user_id) AS n FROM track t JOIN users u ON u.id = t.user_id WHERE u.created >= ? AND t.name = ?', since, name);
+    return [
+      { step: 'Opened the game', n: this.n('SELECT COUNT(*) AS n FROM users WHERE created >= ?', since) },
+      { step: 'Started the first-game guide', n: did('guide_start') },
+      { step: 'Finished a game against the computer', n: did('practice') },
+      { step: 'Played an online game', n: did('online') },
+      { step: 'Came back another day', n: this.n('SELECT COUNT(*) AS n FROM users u WHERE u.created >= ? AND (SELECT COUNT(*) FROM user_days d WHERE d.user_id = u.id) >= 2', since) },
+      { step: 'Signed in (Google, Apple or phone)', n: this.n('SELECT COUNT(*) AS n FROM users WHERE created >= ? AND (google_sub IS NOT NULL OR apple_sub IS NOT NULL OR phone IS NOT NULL OR email IS NOT NULL)', since) },
+      { step: 'Played 10+ online games', n: this.n('SELECT COUNT(*) AS n FROM users WHERE created >= ? AND games >= 10', since) },
+    ];
+  }
+  /** Games per game in the last `days` days: online (finished matches) and against the computer. */
+  gamesByGame(days = 7, now = Date.now()) {
+    const since = now - days * 86_400_000;
+    const online = this.db.prepare('SELECT mode, COUNT(*) AS n FROM matches WHERE ended >= ? GROUP BY mode').all(since) as { mode: string; n: number }[];
+    const practice = this.db.prepare("SELECT game, COUNT(*) AS n FROM track WHERE name = 'practice' AND ts >= ? GROUP BY game").all(since) as { game: string; n: number }[];
+    return { online, practice };
+  }
+  /** When people play: online games by hour of the day (Cairo), last `days` days. */
+  byHour(days = 14, now = Date.now()) {
+    const rows = this.db.prepare('SELECT ended FROM matches WHERE ended >= ?').all(now - days * 86_400_000) as { ended: number }[];
+    const hours = Array.from({ length: 24 }, () => 0);
+    for (const r of rows) hours[new Date(r.ended + 3 * 3_600_000).getUTCHours()]++;
+    return hours;
+  }
 
   /* ---------- the dashboard (/admin) ---------- */
 

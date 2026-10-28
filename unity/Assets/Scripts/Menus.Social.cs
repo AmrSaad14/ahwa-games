@@ -209,7 +209,7 @@ public partial class Menus
         refreshOpen = () =>
         {
             foreach (Transform c in body) Destroy(c.gameObject);
-            var area = Tabs(body, new[] { "صحابك", "قهوة الشلة" }, friendsTab, i => { friendsTab = i; if (i == 0) groupOpen = null; refreshOpen(); });
+            var area = Tabs(body, new[] { "صحابك", "قهوة الشلة" }, friendsTab, i => { friendsTab = i; if (i == 0) groupOpen = null; else Track("groups_open"); refreshOpen(); });
             if (friendsTab == 1) DrawGroups(area); else DrawFriends(area);
         };
         refreshOpen();

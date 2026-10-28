@@ -153,7 +153,7 @@ function showLogin() {
 
 /* ---------------- the frame ---------------- */
 const VIEWS = [
-  ['overview', 'Overview'], ['prizes', 'Monthly prizes'], ['players', 'Players'], ['rewards', 'Rewards & notices'],
+  ['overview', 'Overview'], ['analytics', 'Analytics'], ['prizes', 'Monthly prizes'], ['players', 'Players'], ['rewards', 'Rewards & notices'],
   ['tourney', 'Tournaments'], ['season', 'Season pass'], ['titles', 'Titles'], ['events', 'Events'], ['settings', 'Game settings'], ['reports', 'Reports & support'],
   ['purchases', 'Purchases'], ['log', 'Activity log'],
 ];
@@ -226,6 +226,44 @@ RENDER.overview = async main => {
     '</div>' +
     '<h2>Next tournament</h2><div class="card row" style="justify-content:space-between"><div><b>' + esc(GAMES[t.game] || t.game) + '</b> · ' + esc(t.state) + ' · ' + when(t.startsAt) + '<div class="sub">' + num(t.registered) + ' signed up</div></div><a class="btn" href="#tourney">Manage</a></div>' +
     (o.flags.notice ? '<h2>Notice showing</h2><div class="card">' + esc(o.flags.notice) + '</div>' : '');
+};
+
+/* ---------------- analytics ---------------- */
+const MODE_GAME = m => /^(ffa|team)/.test(m) ? 'domino' : /^chess/.test(m) ? 'chess' : /^ludo/.test(m) ? 'ludo' : 'tawla';
+RENDER.analytics = async main => {
+  const days = Number((location.hash.split('/')[1])) || 30;
+  const d = await api('/analytics?days=' + days);
+  const pct = (a, b) => b ? Math.round(a / b * 100) + '%' : '—';
+  const cell = (n, of, ready) => !ready ? '<td class="num muted">…</td>' : '<td class="num" style="background:rgba(201,162,90,' + (of ? (n / of * 0.8).toFixed(2) : 0) + ')">' + pct(n, of) + '<div class="sub">' + n + '</div></td>';
+  // totals over the cohorts that are old enough
+  const sum = (k, r) => d.retention.filter(x => x[r]).reduce((a, x) => a + x[k], 0);
+  const joinedFor = r => d.retention.filter(x => x[r]).reduce((a, x) => a + x.joined, 0);
+  const games = { domino: [0, 0], tawla: [0, 0], chess: [0, 0], ludo: [0, 0] };
+  d.games.online.forEach(r => games[MODE_GAME(r.mode)][0] += r.n);
+  d.games.practice.forEach(r => { if (games[r.game]) games[r.game][1] += r.n; });
+  const top = Math.max(1, ...d.funnel.map(f => f.n));
+  const hmax = Math.max(1, ...d.hours);
+  main.innerHTML = '<h1>Analytics</h1><div class="sub">Who comes back, where new players drop off, what is played and when. Cairo time.</div>' +
+    '<div class="grid" style="margin-top:12px">' +
+      '<div class="card kpi"><div class="v">' + pct(sum('d1', 'd1Ready'), joinedFor('d1Ready')) + '</div><div class="l">Come back the next day (day 1)</div></div>' +
+      '<div class="card kpi"><div class="v">' + pct(sum('d3', 'd3Ready'), joinedFor('d3Ready')) + '</div><div class="l">Come back on day 3</div></div>' +
+      '<div class="card kpi"><div class="v">' + pct(sum('d7', 'd7Ready'), joinedFor('d7Ready')) + '</div><div class="l">Come back on day 7</div></div>' +
+      '<div class="card kpi"><div class="v">' + num(d.retention.reduce((a, x) => a + x.joined, 0)) + '</div><div class="l">New players, last 21 days</div></div>' +
+    '</div>' +
+    '<h2>New players: where they drop off</h2><div class="tabs">' + [7, 30, 90].map(n => '<button data-days="' + n + '" class="' + (n === d.days ? 'on' : '') + '">Last ' + n + ' days</button>').join('') + '</div>' +
+    '<div class="card">' + d.funnel.map((f, i) => '<div style="display:grid;grid-template-columns:260px 1fr 110px;gap:10px;align-items:center;margin:6px 0"><div>' + esc(f.step) + '</div>' +
+      '<div style="background:var(--panel2);border-radius:6px;height:22px;overflow:hidden"><div style="height:100%;width:' + (f.n / top * 100).toFixed(1) + '%;background:linear-gradient(90deg,#c9a25a,#f3cd62)"></div></div>' +
+      '<div class="num"><b>' + num(f.n) + '</b> <span class="sub">' + (i ? pct(f.n, d.funnel[0].n) : '') + '</span></div></div>').join('') + '</div>' +
+    '<h2>Coming back, day by day</h2><div class="sub" style="margin-bottom:8px">Each row: the players who started that day, and how many opened the game again 1, 3 and 7 days later.</div>' +
+    '<div class="tablewrap"><table><thead><tr><th>Started</th><th class="num">Players</th><th class="num">Day 1</th><th class="num">Day 3</th><th class="num">Day 7</th></tr></thead><tbody>' +
+      d.retention.slice().reverse().map(r => '<tr><td>' + esc(r.day) + '</td><td class="num">' + num(r.joined) + '</td>' + cell(r.d1, r.joined, r.d1Ready) + cell(r.d3, r.joined, r.d3Ready) + cell(r.d7, r.joined, r.d7Ready) + '</tr>').join('') + '</tbody></table></div>' +
+    '<h2>What is played (last ' + Math.min(d.days, 30) + ' days)</h2><div class="grid">' + Object.entries(games).map(([g, [on, pr]]) => '<div class="card kpi"><div class="v">' + num(on) + '</div><div class="l">' + ({ domino: 'Dominoes', tawla: 'Backgammon', chess: 'Chess', ludo: 'Ludo' })[g] + ' online · ' + num(pr) + ' vs the computer</div></div>').join('') + '</div>' +
+    '<div class="tablewrap" style="margin-top:10px"><table><thead><tr><th>Way to play</th><th class="num">Online games</th></tr></thead><tbody>' + d.games.online.sort((a, b) => b.n - a.n).map(r => '<tr><td>' + esc(r.mode) + '</td><td class="num">' + num(r.n) + '</td></tr>').join('') + '</tbody></table></div>' +
+    '<h2>When people play (online games by hour, last 14 days)</h2><div class="card"><svg class="chart" viewBox="0 0 640 160" style="max-height:220px">' +
+      d.hours.map((n, h) => { const bh = Math.round(n / hmax * 110), x = 14 + h * 26; return '<rect x="' + x + '" y="' + (130 - bh) + '" width="20" height="' + Math.max(1, bh) + '" rx="3" fill="#c9a25a"><title>' + h + ':00 · ' + n + '</title></rect>' + (h % 3 === 0 ? '<text x="' + (x + 10) + '" y="148" fill="#b9a88a" font-size="11" text-anchor="middle">' + h + '</text>' : ''); }).join('') + '</svg>' +
+      '<div class="sub">Busiest hour: ' + d.hours.indexOf(Math.max(...d.hours)) + ':00. A good time for the weekly tournament.</div></div>' +
+    '<h2>Players who played, last 30 days</h2><div class="card" style="max-width:760px">' + bars(d.daily, 'active', 'Players who played', '#c9a25a') + '</div>';
+  main.querySelectorAll('[data-days]').forEach(b => b.onclick = () => { location.hash = 'analytics/' + b.dataset.days; });
 };
 
 /* ---------------- prize requests ---------------- */

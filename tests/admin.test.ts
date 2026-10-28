@@ -211,3 +211,16 @@ test('events: dates from the dashboard, double season points, limited skins only
   assert.equal(app.store.buySkin(g.user.id, 'dice_ramadan'), 'not_on_sale', 'after Ramadan: not on sale');
   assert.ok(app.store.skinsOf(g.user.id).includes('felt_ramadan'), 'but kept by who bought it');
 });
+
+test('analytics: retention by day, the new-player funnel, games by game and by hour', async () => {
+  const g = await guest('Analytics Player');
+  app.store.track(g.user.id, 'guide_start');
+  app.store.track(g.user.id, 'practice', 'domino');
+  const a = (await adm('GET', '/analytics?days=7')).json;
+  assert.equal(a.retention.length, 21);
+  assert.equal(a.funnel[0].step, 'Opened the game');
+  assert.ok(a.funnel[0].n >= 1);
+  assert.ok(a.funnel.find((f: { step: string }) => f.step.startsWith('Started the first-game guide')).n >= 1);
+  assert.ok(a.games.practice.some((r: { game: string; n: number }) => r.game === 'domino' && r.n >= 1));
+  assert.equal(a.hours.length, 24);
+});

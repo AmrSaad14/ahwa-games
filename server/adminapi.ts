@@ -216,6 +216,12 @@ export function adminApi(ctx: AdminCtx) {
       log(req, 'title_removed', null, { id: tm[1] }); return { ok: true };
     }
 
+    // ---- analytics: who comes back, where new players drop off, what is played and when
+    if (p === '/analytics') {
+      const days = Math.max(7, Math.min(90, Number(url.searchParams.get('days')) || 30));
+      return { retention: store.retention(21), funnel: store.funnel(days), games: store.gamesByGame(Math.min(days, 30)), hours: store.byHour(14), daily: store.adminDaily(30), days };
+    }
+
     // ---- events (Ramadan, Eid…): the list lives in the settings; here with how many took part
     if (p === '/events' && m === 'GET') {
       const list = settings.value.events;

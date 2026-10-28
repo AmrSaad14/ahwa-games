@@ -235,6 +235,7 @@ public partial class Menus
     public void OpenSeason(int scrollTo = -1)
     {
         if (!SeasonOn) { app.Toast(Loc.T("الموسم مش متاح دلوقتي")); return; }
+        Track("season_open");
         Panel(Loc.T("الموسم"), out var body, new Vector2(720, 350));
         refreshOpen = () =>
         {

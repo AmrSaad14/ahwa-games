@@ -619,6 +619,7 @@ export class Hub {
         const r = this.store.addXp(uid, m.won ? XP.practiceWin : XP.practiceLoss);
         s.conn.send({ t: 'xp', ...r });
         const game: GameId = (GAMES as string[]).includes(m.game) ? m.game as GameId : 'domino';
+        this.store.track(uid, 'practice', game);
         this.afterGame(uid, game, !!m.won, false, m.won ? SP.practiceWin : SP.practiceLoss);
         return this.sendUser(uid);
       }
@@ -682,6 +683,12 @@ export class Hub {
         return e ? err(e) : undefined;
       }
       case 'unwatch': return this.unwatch(uid, true);
+      case 'track': {
+        // a few things only the app knows, for the dashboard's analytics
+        const name = String(m.name || '');
+        if (['guide_start', 'guide_skip', 'shop_open', 'season_open', 'groups_open'].includes(name)) this.store.track(uid, name);
+        return;
+      }
       case 'tutorialDone': {
         // the first-game guide: its reward, once
         const coins = this.store.tutorialDone(uid, ECONOMY.tutorialCoins);
@@ -1170,7 +1177,7 @@ export class Hub {
   private afterGame(uid: string, game: GameId, won: boolean, online: boolean, sp: number, extra: { friend?: boolean; stake?: number } = {}) {
     const conn = this.byUser.get(uid)?.conn;
     for (const id of this.store.missionProgress(uid, { type: 'game', game, won, online, ...extra })) conn?.send({ t: 'missionDone', id });
-    if (online) this.store.addMonthly(uid, game, won, seasonOf(Date.now()));   // the race for player of the month
+    if (online) { this.store.addMonthly(uid, game, won, seasonOf(Date.now())); this.store.track(uid, 'online', game); }   // the race for player of the month
     // an event on: its title for playing enough online games during it
     const ev = activeEvent();
     if (online && ev) {
