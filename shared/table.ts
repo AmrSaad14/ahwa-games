@@ -7,7 +7,7 @@ import {
 import type { Action, Emote, LastAction, MatchResult, RoundResult, TableView } from './protocol';
 import { EMOTES } from './protocol';
 
-export interface Player { uid: string; name: string; ch: number; bot: boolean; rating: number; hat?: string; drink?: string; muted?: boolean; title?: string }
+export interface Player { uid: string; name: string; ch: number; bot: boolean; rating: number; hat?: string; drink?: string; muted?: boolean; title?: string; win?: string }
 interface Seat extends Player { online: boolean; away: boolean; timeouts: number; lastEmote: number; mic?: boolean; offAt?: number }
 /** A computer player's name and looks when it fills a seat (matchmaking gives them people's names). */
 export type BotMaker = (seat: number, usedCh: number[]) => { name: string; ch: number; rating: number };
@@ -96,7 +96,7 @@ export class Table {
 
   join(p: Player): number | string {
     const cur = this.seatOf(p.uid);
-    if (cur >= 0) { const s = this.seats[cur]!; s.online = true; s.offAt = undefined; s.name = p.name; s.ch = p.ch; s.hat = p.hat; s.drink = p.drink; s.muted = p.muted; s.title = p.title; this.bump(); return cur; }
+    if (cur >= 0) { const s = this.seats[cur]!; s.online = true; s.offAt = undefined; s.name = p.name; s.ch = p.ch; s.hat = p.hat; s.drink = p.drink; s.muted = p.muted; s.title = p.title; s.win = p.win; this.bump(); return cur; }
     if (this.phase !== 'lobby') return 'in_progress';
     const i = this.seats.findIndex(s => !s);
     if (i < 0) return 'room_full';
@@ -453,7 +453,7 @@ export class Table {
         name: s.name, ch: s.ch, bot: s.bot, away: s.away, online: s.online, count: this.hands[i]?.length ?? 0,
         team: teamOf(this.mode, i), host: s.uid === this.hostUid, rating: s.rating, mic: !!s.mic && s.online, pid: s.bot ? '' : publicId(s.uid),
         back: this.inGrace(s) && this.phase !== 'lobby' ? s.offAt! + this.opts.offlineGraceMs : undefined,
-        hat: s.hat, drink: s.drink, muted: s.muted || undefined, title: s.title || undefined,
+        hat: s.hat, drink: s.drink, muted: s.muted || undefined, title: s.title || undefined, win: s.win || undefined,
       }),
       hand: you >= 0 && this.hands[you] ? this.hands[you].slice() : [],
       line: this.line, yard: this.block ? 0 : this.yard.length, block: this.block || undefined, open: this.line.f === null ? this.opening : null, turn: this.turn, turnEndsAt: this.turnEndsAt, turnMs: this.opts.turnMs,

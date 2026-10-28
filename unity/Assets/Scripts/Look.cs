@@ -17,6 +17,7 @@ public static class Look
         ["hat_fez_red"] = new Color(0.62f, 0.05f, 0.08f), ["hat_fez_black"] = new Color(0.07f, 0.07f, 0.08f),
         ["hat_fez_green"] = new Color(0.08f, 0.36f, 0.18f), ["hat_fez_navy"] = new Color(0.09f, 0.13f, 0.34f),
         ["hat_fez_white"] = new Color(0.93f, 0.91f, 0.86f), ["hat_fez_gold"] = new Color(0.86f, 0.64f, 0.18f),
+        ["hat_fez_ramadan"] = new Color(0.33f, 0.12f, 0.5f), ["hat_fez_eid"] = new Color(0.1f, 0.6f, 0.55f),
     };
     public static Color HatColor(string id) => id != null && HatColors.TryGetValue(id, out var c) ? c : new Color(0.62f, 0.05f, 0.08f);
     static bool Man(int ch) => ch == 0 || ch == 1 || ch == 2 || ch == 5;
@@ -90,7 +91,8 @@ public static class Look
         t = new Texture2D(S, S, TextureFormat.RGB24, true) { wrapMode = TextureWrapMode.Clamp, anisoLevel = 4 };
         var px = new Color[S * S];
         Color baseC = id == "felt_green" ? new Color(0.07f, 0.3f, 0.16f) : id == "felt_red" ? new Color(0.42f, 0.05f, 0.07f)
-            : id == "felt_blue" ? new Color(0.07f, 0.16f, 0.36f) : id == "felt_royal" ? new Color(0.3f, 0.03f, 0.08f) : new Color(0.55f, 0.16f, 0.1f);
+            : id == "felt_blue" ? new Color(0.07f, 0.16f, 0.36f) : id == "felt_royal" ? new Color(0.3f, 0.03f, 0.08f)
+            : id == "felt_ramadan" ? new Color(0.09f, 0.07f, 0.24f) : id == "felt_eid" ? new Color(0.05f, 0.42f, 0.42f) : new Color(0.55f, 0.16f, 0.1f);
         var gold = new Color(0.86f, 0.66f, 0.26f);
         for (int y = 0; y < S; y++)
             for (int x = 0; x < S; x++)
@@ -113,6 +115,28 @@ public static class Look
                     bool diamond = Mathf.Abs(cx) + Mathf.Abs(cy) < 11, inner = Mathf.Abs(cx) + Mathf.Abs(cy) < 5;
                     c = (inner ? pal[(band + 2) % 4] : diamond ? pal[(band + 1) % 4] : pal[band]) * (1 + n);
                     if (e < 8) c = pal[3] * (1 + n);
+                }
+                else if (id == "felt_ramadan")
+                {
+                    // the night sky: gold crescents and stars in a lattice, a double gold border
+                    if (e >= 8 && e < 12 || e >= 15 && e < 17) c = gold * (0.95f + n);
+                    else if (e > 22)
+                    {
+                        int cx = (x + ((y / 48) % 2) * 24) % 48 - 24, cy = y % 48 - 24;
+                        float r1 = Mathf.Sqrt(cx * cx + cy * cy), r2 = Mathf.Sqrt((cx - 4) * (cx - 4) + (cy + 3) * (cy + 3));
+                        if (r1 < 9 && r2 >= 8) c = gold * (0.95f + n);                       // a crescent
+                        else if (Hash(x / 2, y / 2) > 0.995f) c = Color.Lerp(c, Color.white, 0.8f); // stars
+                    }
+                }
+                else if (id == "felt_eid")
+                {
+                    // teal with bright confetti and a white border
+                    if (e >= 6 && e < 10) c = new Color(0.97f, 0.95f, 0.9f);
+                    else if (e > 14)
+                    {
+                        float h = Hash(x / 6, y / 6);
+                        if (h > 0.93f && (x % 6) < 4 && (y % 6) < 3) c = h > 0.98f ? new Color(0.98f, 0.4f, 0.5f) : h > 0.96f ? new Color(1f, 0.8f, 0.25f) : new Color(0.95f, 0.95f, 0.95f);
+                    }
                 }
                 else if (id == "felt_marble")
                 {
@@ -151,6 +175,7 @@ public static class Look
     {
         ["drink_tea"] = new Color(0.55f, 0.16f, 0.03f), ["drink_mint"] = new Color(0.55f, 0.5f, 0.12f), ["drink_coffee"] = new Color(0.16f, 0.08f, 0.04f),
         ["drink_karkade"] = new Color(0.5f, 0.02f, 0.08f), ["drink_sahlab"] = new Color(0.94f, 0.89f, 0.78f), ["drink_qasab"] = new Color(0.68f, 0.7f, 0.28f),
+        ["drink_qamar"] = new Color(0.95f, 0.5f, 0.1f), ["drink_sobia"] = new Color(0.97f, 0.95f, 0.88f),
     };
     public static Color DrinkColor(string id) => id != null && DrinkColors.TryGetValue(id, out var c) ? c : DrinkColors["drink_tea"];
 

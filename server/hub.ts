@@ -9,6 +9,7 @@ import { botIdentity } from '../shared/botnames';
 import { missionById } from '../shared/missions';
 import { SP, SEASON_PASS, seasonOf, seasonEndsAt } from '../shared/season';
 import { Titles } from './titles';
+import { activeEvent } from '../shared/events';
 import { skinFor } from '../shared/skins';
 import { Tourney, Entrant, TOURNEY } from './tourney';
 import type { Settings, GameSettings } from './settings';
@@ -160,6 +161,12 @@ export class Hub {
     }
     this.store.metaSet('potm_winners_' + prev, JSON.stringify(won.map(w => ({ ...w, name: this.store.get(w.uid)?.name ?? '' }))));
     return won;
+  }
+
+  /** The event on now, as a player sees it (or null). */
+  private eventFor(uid: string) {
+    const ev = activeEvent(); if (!ev) return null;
+    return { id: ev.id, kind: ev.kind, ar: ev.ar, en: ev.en, to: ev.to, spMult: ev.spMult, missionMult: ev.missionMult, titleId: ev.titleId, titleGames: ev.titleGames, games: this.store.eventGames(ev.id, uid) };
   }
 
   /** Players away for a few days get one push: we miss you, and a gift is waiting (hourly). */
@@ -854,7 +861,8 @@ export class Hub {
     const c = this.prizeCfg;
     return { ...this.store.publicUser(u), prizes: this.store.prizesOf(u.id), prize: { on: c.enabled, egp: c.egp, claimDays: c.claimDays }, adReward: ECONOMY.adReward, tutorialCoins: ECONOMY.tutorialCoins,
       // what the dashboard switched on: the tournament section and the season pass
-      features: { tourney: TOURNEY.enabled !== false, season: SEASON_PASS.enabled } };
+      features: { tourney: TOURNEY.enabled !== false, season: SEASON_PASS.enabled },
+      event: this.eventFor(u.id) };
   }
   /** How long matchmaking waits for people, and a turn's length (dashboard). */
   setTiming(botFillMs: number, turnMs: number) { this.opts.botFillMs = botFillMs; this.opts.turnMs = turnMs; }
@@ -885,7 +893,7 @@ export class Hub {
     const u = this.store.get(uid)!;
     const eq = parseEquip(u.equip), owned = this.store.skinsOf(uid);
     return { uid, name: u.name, ch: u.ch, bot: false, rating: this.store.ratingOf(uid, game),
-      hat: skinFor('hat', eq, owned), drink: skinFor('drink', eq, owned), muted: (u.muted_until ?? 0) > Date.now(), title: this.store.wornTitle(uid) ?? undefined };
+      hat: skinFor('hat', eq, owned), drink: skinFor('drink', eq, owned), muted: (u.muted_until ?? 0) > Date.now(), title: this.store.wornTitle(uid) ?? undefined, win: skinFor('win', eq, owned) };
   }
 
   /** Computer players in matchmade games and the tournament get people's names and a rating near the table's. */
@@ -1163,6 +1171,18 @@ export class Hub {
     const conn = this.byUser.get(uid)?.conn;
     for (const id of this.store.missionProgress(uid, { type: 'game', game, won, online, ...extra })) conn?.send({ t: 'missionDone', id });
     if (online) this.store.addMonthly(uid, game, won, seasonOf(Date.now()));   // the race for player of the month
+    // an event on: its title for playing enough online games during it
+    const ev = activeEvent();
+    if (online && ev) {
+      const n = this.store.eventGame(ev.id, uid);
+      const t = this.titles.get(ev.titleId);
+      if (t && ev.titleGames > 0 && n === ev.titleGames) {
+        this.store.grantTitle(uid, t.id, ev.to + 30 * 86_400_000, ev.id);
+        conn?.send({ t: 'titleWon', id: t.id, month: ev.id });
+        this.titleToTable(uid);
+        this.opts.push?.([uid], ['لقب جديد 🏅', `بقيت «${t.ar}»`], ['A new title 🏅', `You are now "${t.en}"`]);
+      }
+    }
     const tier = this.store.addSeasonSp(uid, sp);
     if (tier.to > tier.from) conn?.send({ t: 'seasonTier', tier: tier.to });
     this.payReferral(uid);

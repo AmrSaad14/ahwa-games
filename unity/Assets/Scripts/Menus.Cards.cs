@@ -54,6 +54,41 @@ public partial class Menus
         Sfx.Chime();
     }
 
+    /// The event on now: what's special, how far you are toward its title, its offers in the shop.
+    public void OpenEvent()
+    {
+        var ev = user?.Obj("event"); if (ev == null) return;
+        string name = Loc.En ? ev.Str("en") : ev.Str("ar");
+        Panel(name, out var body, new Vector2(540, 330));
+        double left = ev.Num("to") - App.LocalMs();
+        int days = Mathf.Max(0, (int)(left / 86_400_000)), hours = Mathf.Max(0, (int)(left % 86_400_000 / 3_600_000));
+        var lines = new List<string>();
+        if (ev.Num("spMult", 1) > 1) lines.Add(Loc.T("نقط الموسم") + " ×" + ev.Num("spMult"));
+        if (ev.Num("missionMult", 1) > 1) lines.Add(Loc.T("كوينز المهام") + " ×" + ev.Num("missionMult"));
+        lines.Add(Loc.T("سكينز مخصوص في المتجر لحد آخر الحدث"));
+        var l = Ui.Label(body, "", 16, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
+        l.Set(string.Join("\n", lines) + "\n" + Loc.T("فاضل") + " " + days + Loc.T("ي") + " " + hours + Loc.T("س"));
+        l.horizontalOverflow = HorizontalWrapMode.Wrap;
+        l.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(500, 110), new Vector2(0, -2));
+        // the title for taking part
+        var t = Titles.Get(ev.Str("titleId"));
+        int need = (int)ev.Num("titleGames"), have = (int)ev.Num("games");
+        if (t != null && need > 0)
+        {
+            var b = Titles.Badge(body, t.id, 15);
+            b.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), b.sizeDelta, new Vector2(0, -136));
+            var p = Ui.Label(body, "", 13, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Bold);
+            p.Set(have >= need ? Loc.T("اللقب بتاعك!") : Loc.T("العب") + " " + need + " " + Loc.T("ماتش أونلاين وخد اللقب") + "  ·  " + Mathf.Min(have, need) + " / " + need);
+            p.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(500, 22), new Vector2(0, -164));
+            var track = Ui.Box(body, "Track", new Color(1, 1, 1, 0.1f)).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 10), new Vector2(0, -188));
+            var fill = Ui.Box(track, "Fill", Ui.Gold).rectTransform;
+            float k = Mathf.Clamp01(have / (float)need);
+            fill.anchorMin = new Vector2(Loc.En ? 0 : 1 - k, 0); fill.anchorMax = new Vector2(Loc.En ? k : 1, 1); fill.offsetMin = fill.offsetMax = Vector2.zero;
+        }
+        var shop = Ui.Button(body, "عروض المتجر", Ui.Gold, Ui.Ink, 16, () => { Sfx.Tap(); Close(); OpenShop(1); });
+        ((RectTransform)shop.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(180, 42), Vector2.zero);
+    }
+
     /// New here? An easy first game of dominoes with hints, and a gift at the end.
     void OfferGuide()
     {

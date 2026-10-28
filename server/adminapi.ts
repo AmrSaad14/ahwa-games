@@ -216,6 +216,13 @@ export function adminApi(ctx: AdminCtx) {
       log(req, 'title_removed', null, { id: tm[1] }); return { ok: true };
     }
 
+    // ---- events (Ramadan, Eid…): the list lives in the settings; here with how many took part
+    if (p === '/events' && m === 'GET') {
+      const list = settings.value.events;
+      return { events: list.map(e => ({ ...e, stats: store.eventStats(e.id) })), titles: hub.titles.list.map(t => ({ id: t.id, ar: t.ar, en: t.en })),
+        limited: SKINS.filter(s => s.event) };
+    }
+
     // ---- settings
     if (p === '/settings' && m === 'GET') return settings.value;
     if (p === '/settings' && (m === 'PUT' || m === 'POST')) {

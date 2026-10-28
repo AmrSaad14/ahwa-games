@@ -6,6 +6,7 @@ import { ECONOMY, STREAK, WEEKLY_PRIZES } from '../shared/gifts';
 import { SEASON_PASS, TIERS, SEASON_TIERS, type Reward } from '../shared/season';
 import { skinById } from '../shared/skins';
 import { TOURNEY } from './tourney';
+import { EVENTS, cleanEvent, type EventDef } from '../shared/events';
 
 export type TourneyGame = 'rotate' | 'domino' | 'tawla' | 'chess' | 'ludo';
 
@@ -25,6 +26,8 @@ export interface GameSettings {
   notice: { text: string; until: number };
   /** "<game> player of the month": given by itself when a month ends, to the best of each game with enough games. */
   titles: { monthly: boolean; minGames: number };
+  /** Ramadan, Eid and other events, with their dates (see shared/events.ts). */
+  events: EventDef[];
 }
 
 /** The settings the game ships with (read once, before anything is changed). */
@@ -38,6 +41,7 @@ function defaults(): GameSettings {
     maintenance: { on: false, message: 'السيرفر في صيانة دلوقتي، ارجع كمان شوية · Maintenance, back soon' },
     notice: { text: '', until: 0 },
     titles: { monthly: true, minGames: 10 },
+    events: [],
   };
 }
 const SHIPPED = defaults();
@@ -100,6 +104,7 @@ export function sanitize(input: unknown, cur: GameSettings): GameSettings {
     maintenance: { on: bool(m.on, cur.maintenance.on), message: text(m.message, 300, cur.maintenance.message) },
     notice: { text: text(n.text, 400, cur.notice.text), until: int(n.until, 0, 4_102_444_800_000, cur.notice.until) },
     titles: { monthly: bool(ti.monthly, curTi.monthly), minGames: int(ti.minGames, 0, 10_000, curTi.minGames) },
+    events: Array.isArray((input as { events?: unknown })?.events) ? ((input as { events: unknown[] }).events.map(e => cleanEvent(e)).filter((e): e is EventDef => !!e).slice(0, 20)) : (cur.events ?? []),
   };
 }
 
@@ -112,6 +117,7 @@ function apply(s: GameSettings) {
   ECONOMY.tutorialCoins = s.economy.tutorialCoins; ECONOMY.comebackCoins = s.economy.comebackCoins; ECONOMY.comebackDays = s.economy.comebackDays;
   STREAK.splice(0, STREAK.length, ...s.economy.streak);
   WEEKLY_PRIZES.splice(0, WEEKLY_PRIZES.length, ...s.economy.weeklyPrizes);
+  EVENTS.splice(0, EVENTS.length, ...s.events);
 }
 
 export interface SettingsStore { metaGet(k: string): string | null; metaSet(k: string, v: string): void }

@@ -7,10 +7,11 @@
 
 // Boards: 'felt' (the domino table), 'tawla', 'chess', 'ludo'. Pieces: 'tiles' (dominoes), 'checkers' (tawla),
 // 'pieces' (chess). Then the dice, and your own look: 'hat' and 'drink'.
-export type SkinCat = 'tiles' | 'checkers' | 'pieces' | 'dice' | 'tawla' | 'chess' | 'ludo' | 'hat' | 'felt' | 'drink';
-export const SKIN_CATS: SkinCat[] = ['tiles', 'checkers', 'pieces', 'dice', 'tawla', 'chess', 'ludo', 'hat', 'felt', 'drink'];
+export type SkinCat = 'tiles' | 'checkers' | 'pieces' | 'dice' | 'tawla' | 'chess' | 'ludo' | 'hat' | 'felt' | 'drink' | 'win';
+export const SKIN_CATS: SkinCat[] = ['tiles', 'checkers', 'pieces', 'dice', 'tawla', 'chess', 'ludo', 'hat', 'felt', 'drink', 'win'];
 
-export interface Skin { id: string; cat: SkinCat; price: number; pass?: boolean }
+/** event: a limited skin, sold only while an event of that kind is on (see shared/events.ts). */
+export interface Skin { id: string; cat: SkinCat; price: number; pass?: boolean; event?: 'ramadan' | 'eid' }
 
 export const SKINS: Skin[] = [
   // domino tiles
@@ -82,6 +83,24 @@ export const SKINS: Skin[] = [
   { id: 'drink_karkade', cat: 'drink', price: 120_000 },
   { id: 'drink_sahlab', cat: 'drink', price: 0, pass: true },
   { id: 'drink_qasab', cat: 'drink', price: 0, pass: true },
+  // how you celebrate a win (everyone at the table sees it)
+  { id: 'win_coins', cat: 'win', price: 0 },
+  { id: 'win_confetti', cat: 'win', price: 150_000 },
+  { id: 'win_stars', cat: 'win', price: 250_000 },
+  { id: 'win_fireworks', cat: 'win', price: 450_000 },
+  // Ramadan: only while a Ramadan event is on
+  { id: 'felt_ramadan', cat: 'felt', price: 200_000, event: 'ramadan' },
+  { id: 'dice_ramadan', cat: 'dice', price: 120_000, event: 'ramadan' },
+  { id: 'tawla_ramadan', cat: 'tawla', price: 300_000, event: 'ramadan' },
+  { id: 'hat_fez_ramadan', cat: 'hat', price: 150_000, event: 'ramadan' },
+  { id: 'drink_qamar', cat: 'drink', price: 90_000, event: 'ramadan' },
+  { id: 'win_lanterns', cat: 'win', price: 250_000, event: 'ramadan' },
+  // Eid: only while an Eid event is on
+  { id: 'felt_eid', cat: 'felt', price: 200_000, event: 'eid' },
+  { id: 'dice_eid', cat: 'dice', price: 120_000, event: 'eid' },
+  { id: 'hat_fez_eid', cat: 'hat', price: 150_000, event: 'eid' },
+  { id: 'drink_sobia', cat: 'drink', price: 90_000, event: 'eid' },
+  { id: 'win_balloons', cat: 'win', price: 250_000, event: 'eid' },
 ];
 
 export const skinById = (id: string) => SKINS.find(s => s.id === id);

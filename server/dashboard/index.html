@@ -154,7 +154,7 @@ function showLogin() {
 /* ---------------- the frame ---------------- */
 const VIEWS = [
   ['overview', 'Overview'], ['prizes', 'Monthly prizes'], ['players', 'Players'], ['rewards', 'Rewards & notices'],
-  ['tourney', 'Tournaments'], ['season', 'Season pass'], ['titles', 'Titles'], ['settings', 'Game settings'], ['reports', 'Reports & support'],
+  ['tourney', 'Tournaments'], ['season', 'Season pass'], ['titles', 'Titles'], ['events', 'Events'], ['settings', 'Game settings'], ['reports', 'Reports & support'],
   ['purchases', 'Purchases'], ['log', 'Activity log'],
 ];
 function frame() {
@@ -539,6 +539,57 @@ async function titleHolders(t) {
   };
   await draw();
 }
+
+/* ---------------- events: Ramadan, Eid and others ---------------- */
+const EKIND = { ramadan: 'Ramadan', eid: 'Eid', custom: 'Other' };
+// rough dates: check them against the moon sighting before the event
+const EPRESETS = [
+  { id: 'ramadan_2027', kind: 'ramadan', ar: 'رمضان كريم', en: 'Ramadan Kareem', from: '2027-02-07T18:00', to: '2027-03-09T18:00', spMult: 2, missionMult: 1.5, titleId: 'ramadan_lantern', titleGames: 30 },
+  { id: 'eid_fitr_2027', kind: 'eid', ar: 'عيد الفطر', en: 'Eid al-Fitr', from: '2027-03-09T18:00', to: '2027-03-13T00:00', spMult: 2, missionMult: 2, titleId: 'eid_joy', titleGames: 10 },
+  { id: 'eid_adha_2027', kind: 'eid', ar: 'عيد الأضحى', en: 'Eid al-Adha', from: '2027-05-15T18:00', to: '2027-05-20T00:00', spMult: 2, missionMult: 2, titleId: 'eid_joy', titleGames: 10 },
+];
+const toLocal = ms => { const d = new Date(ms + 3 * 3600_000); return d.toISOString().slice(0, 16); };      // Cairo (UTC+3) for the inputs
+const fromLocal = s => Date.parse(s + ':00Z') - 3 * 3600_000;
+RENDER.events = async main => {
+  const d = await api('/events'), now = Date.now();
+  const status = e => e.from <= now && now < e.to ? '<span class="tag on">on now</span>' : now < e.from ? '<span class="tag pending">coming</span>' : '<span class="tag">over</span>';
+  main.innerHTML = '<h1>Events</h1><div class="sub">Ramadan, Eid or anything else. While an event is on: season points and mission coins can be multiplied, players who play enough online games get its title, and its limited skins are in the shop (only then). The game shows a banner with what\'s on. Times are Cairo time.</div>' +
+    '<h2 class="row" style="justify-content:space-between">Events (' + d.events.length + ')<span class="row">' + EPRESETS.map((p, i) => '<button class="btn sm" data-pre="' + i + '">+ ' + esc(p.en) + ' 2027</button>').join('') + '<button class="btn gold sm" id="enew">+ New event</button></span></h2>' +
+    (d.events.length ? '<table><thead><tr><th>Event</th><th>When (Cairo)</th><th>Season points</th><th>Mission coins</th><th>Title</th><th class="num">Played</th><th></th></tr></thead><tbody>' +
+      d.events.map((e, i) => '<tr><td><b>' + esc(e.en) + '</b> · ' + esc(e.ar) + '<div class="sub">' + EKIND[e.kind] + ' · ' + status(e) + '</div></td><td>' + when(e.from) + '<br>→ ' + when(e.to) + '</td><td>×' + e.spMult + '</td><td>×' + e.missionMult + '</td><td>' + (e.titleId ? badge(titleById(e.titleId), 'en') + '<div class="sub">after ' + e.titleGames + ' games</div>' : '—') + '</td><td class="num">' + num(e.stats.players) + ' players<div class="sub">' + num(e.stats.games) + ' games</div></td>' +
+        '<td><div class="row"><button class="btn sm" data-edit="' + i + '">Edit</button><button class="btn sm bad" data-del="' + i + '">Delete</button></div></td></tr>').join('') + '</tbody></table>' : '<div class="card empty">No events yet. Add Ramadan with one click above.</div>') +
+    '<h2>Limited skins</h2><div class="card"><div class="sub" style="margin-bottom:8px">On sale only while an event of their kind is on; players keep them after.</div>' +
+      ['ramadan', 'eid'].map(k => '<div style="margin:6px 0"><b>' + EKIND[k] + ':</b> ' + d.limited.filter(s => s.event === k).map(s => '<span class="tag" style="margin:2px">' + esc(s.id) + ' · ' + short(s.price) + '</span>').join('') + '</div>').join('') + '</div>';
+  const save = async list => { await act(() => api('/settings', { method: 'PUT', body: { events: list } }), 'Saved · the game shows it at once'); closeDrawer(); go(); };
+  const editor = (ev, idx) => {
+    const dr = drawer();
+    const e = ev ? { ...ev } : { id: '', kind: 'custom', ar: '', en: '', from: now, to: now + 7 * 86_400_000, spMult: 2, missionMult: 1, titleId: '', titleGames: 10 };
+    dr.innerHTML = '<button class="btn sm x" id="cx">Close ✕</button><h1>' + (idx >= 0 ? 'Edit event' : 'New event') + '</h1><div class="form" style="margin-top:12px">' +
+      '<label class="f">Id (english, no spaces)<input id="ei" value="' + esc(e.id) + '"' + (idx >= 0 ? ' disabled' : '') + '></label>' +
+      '<label class="f">Kind<select id="ek">' + Object.entries(EKIND).map(([k, l]) => '<option value="' + k + '"' + (k === e.kind ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label>' +
+      '<label class="f">Arabic name<input id="ea" dir="rtl" value="' + esc(e.ar) + '"></label><label class="f">English name<input id="ee" value="' + esc(e.en) + '"></label>' +
+      '<label class="f">Starts (Cairo)<input id="ef" type="datetime-local" value="' + toLocal(e.from) + '"></label><label class="f">Ends (Cairo)<input id="et" type="datetime-local" value="' + toLocal(e.to) + '"></label>' +
+      '<label class="f">Season points ×<input id="es" type="number" step="0.5" min="1" max="5" value="' + e.spMult + '"></label><label class="f">Mission coins ×<input id="em" type="number" step="0.5" min="1" max="5" value="' + e.missionMult + '"></label>' +
+      '<label class="f">Title for taking part<select id="eti"><option value="">none</option>' + d.titles.map(t => '<option value="' + t.id + '"' + (t.id === e.titleId ? ' selected' : '') + '>' + esc(t.en + ' · ' + t.ar) + '</option>').join('') + '</select></label>' +
+      '<label class="f">…after this many online games<input id="eg" type="number" min="0" value="' + e.titleGames + '"></label>' +
+      '</div><div class="sub" style="margin-top:10px">Ramadan and Eid dates move with the moon: check them before the event.</div><button class="btn gold" id="esv" style="margin-top:14px">Save event</button>';
+    $('#cx', dr).onclick = closeDrawer;
+    $('#esv', dr).onclick = () => {
+      const v = { id: $('#ei', dr).value.trim().toLowerCase(), kind: $('#ek', dr).value, ar: $('#ea', dr).value, en: $('#ee', dr).value, from: fromLocal($('#ef', dr).value), to: fromLocal($('#et', dr).value),
+        spMult: Number($('#es', dr).value), missionMult: Number($('#em', dr).value), titleId: $('#eti', dr).value, titleGames: Number($('#eg', dr).value) };
+      if (!/^[a-z0-9_]{2,32}$/.test(v.id)) return toast('The id needs 2+ english letters, numbers or _', true);
+      if (!v.ar.trim() || !v.en.trim()) return toast('Write both names', true);
+      if (!(v.to > v.from)) return toast('The end must be after the start', true);
+      const list = d.events.map(({ stats, ...x }) => x);
+      if (idx >= 0) list[idx] = v; else { if (list.some(x => x.id === v.id)) return toast('That id is taken', true); list.push(v); }
+      save(list);
+    };
+  };
+  $('#enew').onclick = () => editor(null, -1);
+  main.querySelectorAll('[data-pre]').forEach(b => b.onclick = () => { const p = EPRESETS[b.dataset.pre]; editor({ ...p, from: fromLocal(p.from), to: fromLocal(p.to) }, -1); });
+  main.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => editor(d.events[b.dataset.edit], Number(b.dataset.edit)));
+  main.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { const e = d.events[b.dataset.del]; if (confirm('Delete "' + e.en + '"?')) save(d.events.filter((_, i) => i !== Number(b.dataset.del)).map(({ stats, ...x }) => x)); });
+};
 
 /* ---------------- game settings ---------------- */
 RENDER.settings = async main => {

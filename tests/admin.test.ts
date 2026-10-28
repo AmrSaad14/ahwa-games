@@ -189,3 +189,25 @@ test('retention: new missions count, the weekly chest, the first-game guide, the
   assert.equal(app.store.comebackGift({ ...u, seen: Date.now() - 86_400_000, created: Date.now() - 30 * 86_400_000 }, 3, 30_000), 0);
   assert.equal(app.store.comebackGift({ ...u, seen: Date.now() - 5 * 86_400_000, created: Date.now() - 30 * 86_400_000 }, 3, 30_000), 30_000);
 });
+
+test('events: dates from the dashboard, double season points, limited skins only during them, the event title', async () => {
+  const { activeEvent } = await import('../shared/events');
+  const now = Date.now();
+  const s = await adm('PUT', '/settings', { events: [
+    { id: 'ramadan_test', kind: 'ramadan', ar: 'رمضان كريم', en: 'Ramadan Kareem', from: now - 86_400_000, to: now + 86_400_000, spMult: 2, missionMult: 1.5, titleId: 'ramadan_lantern', titleGames: 2 },
+    { id: 'bad', kind: 'eid', ar: 'x', en: 'x', from: now, to: now - 1 },
+  ] });
+  assert.equal(s.json.events.length, 1, 'an event that ends before it starts is dropped');
+  assert.equal(activeEvent()?.id, 'ramadan_test');
+  const g = await guest('Event Player');
+  app.store.addCoins(g.user.id, 1_000_000);
+  const sp = app.store.seasonState(g.user.id).sp;
+  app.store.addSeasonSp(g.user.id, 10);
+  assert.equal(app.store.seasonState(g.user.id).sp, sp + 20, 'season points ×2');
+  assert.equal(app.store.buySkin(g.user.id, 'felt_ramadan'), null, 'the Ramadan cloth is on sale');
+  assert.equal(app.store.buySkin(g.user.id, 'felt_eid'), 'not_on_sale', 'not the Eid one');
+  await adm('PUT', '/settings', { events: [] });
+  assert.equal(activeEvent(), null);
+  assert.equal(app.store.buySkin(g.user.id, 'dice_ramadan'), 'not_on_sale', 'after Ramadan: not on sale');
+  assert.ok(app.store.skinsOf(g.user.id).includes('felt_ramadan'), 'but kept by who bought it');
+});

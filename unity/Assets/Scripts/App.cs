@@ -631,7 +631,7 @@ public class App : MonoBehaviour
         myTitle = Titles.Badge(homeRoot, id, 11);
         if (myTitle == null) { myTitleId = null; return; }
         myTitle.Place(new Vector2(1, 1), new Vector2(1, 1), myTitle.sizeDelta, new Vector2(-14, -80));
-        myTitle.gameObject.AddComponent<Button>().onClick.AddListener(() => { Sfx.Tap(); menus?.OpenCollection(5); });
+        myTitle.gameObject.AddComponent<Button>().onClick.AddListener(() => { Sfx.Tap(); menus?.OpenCollection(6); });
         myTitle.Find("Edge").GetComponent<Image>().raycastTarget = true;
     }
 
@@ -777,7 +777,9 @@ public class App : MonoBehaviour
             menus.OpenFriends(); yield return new WaitForSeconds(1.2f); Still("x3-friends.png");
             menus.OpenTourney(); yield return new WaitForSeconds(1.2f); Still("x4-tourney.png");
             menus.OpenMyCard(); yield return new WaitForSeconds(1.2f); Still("x5-card.png");
-            menus.OpenCollection(5); yield return new WaitForSeconds(0.8f); Still("x13-titles.png");
+            menus.OpenCollection(6); yield return new WaitForSeconds(0.8f); Still("x13-titles.png");
+            menus.OpenShop(6); yield return new WaitForSeconds(0.8f); Still("x15-shop-win.png");
+            game.Celebrate(30, "win_fireworks"); yield return new WaitForSeconds(0.9f); Still("x16-fireworks.png");
             menus.ShopGame = 1; menus.OpenShop(1); yield return new WaitForSeconds(0.8f); Still("x6-shop-boards-tawla.png");
             menus.ShopGame = 2; menus.OpenShop(1); yield return new WaitForSeconds(0.8f); Still("x7-shop-boards-chess.png");
             menus.ShopGame = 1; menus.OpenShop(2); yield return new WaitForSeconds(0.8f); Still("x8-shop-checkers.png");

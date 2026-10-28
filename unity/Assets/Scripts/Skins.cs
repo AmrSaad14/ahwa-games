@@ -7,8 +7,9 @@ using UnityEngine;
 
 public static class Skins
 {
-    public class Def { public string id, cat, name; public long price; public bool pass; }
-    static Def D(string id, string cat, string name, long price, bool pass = false) => new Def { id = id, cat = cat, name = name, price = price, pass = pass };
+    /// ev: a limited skin, sold only while an event of that kind (ramadan, eid) is on.
+    public class Def { public string id, cat, name, ev; public long price; public bool pass; }
+    static Def D(string id, string cat, string name, long price, bool pass = false, string ev = null) => new Def { id = id, cat = cat, name = name, price = price, pass = pass, ev = ev };
 
     /// Everything, in shop order (prices in coins; pass: from the season track only).
     public static readonly Def[] All =
@@ -35,7 +36,19 @@ public static class Skins
         D("hat_fez_green", "hat", "طربوش أخضر", 220_000), D("hat_fez_navy", "hat", "طربوش كحلي", 260_000), D("hat_fez_white", "hat", "طربوش أبيض", 0, true), D("hat_fez_gold", "hat", "طربوش دهبي", 0, true),
         D("drink_tea", "drink", "شاي", 0), D("drink_mint", "drink", "شاي بالنعناع", 80_000), D("drink_coffee", "drink", "قهوة", 80_000),
         D("drink_karkade", "drink", "كركديه", 120_000), D("drink_sahlab", "drink", "سحلب", 0, true), D("drink_qasab", "drink", "قصب", 0, true),
+        // how you celebrate a win (everyone at the table sees it)
+        D("win_coins", "win", "مطر كوينز", 0), D("win_confetti", "win", "ورق ملوّن", 150_000), D("win_stars", "win", "نجوم دهب", 250_000), D("win_fireworks", "win", "صواريخ", 450_000),
+        // Ramadan and Eid: on sale only while the event is on
+        D("felt_ramadan", "felt", "ليالي رمضان", 200_000, false, "ramadan"), D("dice_ramadan", "dice", "زهر رمضان", 120_000, false, "ramadan"),
+        D("tawla_ramadan", "tawla", "طاولة رمضان", 300_000, false, "ramadan"), D("hat_fez_ramadan", "hat", "طربوش بنفسجي", 150_000, false, "ramadan"),
+        D("drink_qamar", "drink", "قمر الدين", 90_000, false, "ramadan"), D("win_lanterns", "win", "فوانيس", 250_000, false, "ramadan"),
+        D("felt_eid", "felt", "فرحة العيد", 200_000, false, "eid"), D("dice_eid", "dice", "زهر العيد", 120_000, false, "eid"),
+        D("hat_fez_eid", "hat", "طربوش العيد", 150_000, false, "eid"), D("drink_sobia", "drink", "سوبيا", 90_000, false, "eid"), D("win_balloons", "win", "بلالين", 250_000, false, "eid"),
     };
+    /// The event on now ("ramadan", "eid" or null), from the server: its limited skins are on sale.
+    public static string EventKind;
+    /// In the shop: everything, but a limited skin only during its event (or if you have it).
+    public static bool OnSale(Def d) => d.ev == null || d.ev == EventKind || owned.Contains(d.id);
     public static Def Get(string id) { foreach (var d in All) if (d.id == id) return d; return null; }
     public static bool IsFree(Def d) => d.price == 0 && !d.pass;
     public static IEnumerable<Def> Of(string cat) { foreach (var d in All) if (d.cat == cat) yield return d; }
@@ -70,6 +83,8 @@ public static class Skins
             case "dice_turquoise": return (H("#2aa194"), Color.white);
             case "dice_gold": return (H("#e2b04a"), H("#3a2208"));
             case "dice_pharaoh": return (H("#2a52a0"), H("#f3cd62"));
+            case "dice_ramadan": return (H("#241a5c"), H("#f3cd62"));
+            case "dice_eid": return (H("#fff7ec"), H("#e0306b"));
             default: return (H("#f6efe0"), H("#1a0f0a"));
         }
     }
@@ -85,6 +100,7 @@ public static class Skins
             case "tawla_ebony": return new TawlaLook { box = W("#100c0a", "#050302", "#241c18"), field = W("#2a2420", "#16110e", "#3e3530"), ptA = W("#efe6d2", "#cfc2a6", "#fff8ea"), ptB = W("#a8322a", "#701c16", "#c8483c"), tray = H("#3a0a0e"), pearl = H("#c9a25a"), line = H("#c9a25a") };
             case "tawla_pearl": return new TawlaLook { box = W("#2a1d14", "#120b06", "#463020"), field = W("#f2eee6", "#d8d2c6", "#ffffff"), ptA = W("#1d1d24", "#0a0a0e", "#3a3a44"), ptB = W("#1f8f86", "#0f5a54", "#3ab0a6"), tray = H("#13403c"), pearl = H("#efe8dc"), line = H("#c9a25a") };
             case "tawla_royal": return new TawlaLook { box = W("#120c0a", "#050302", "#2a1c16"), field = W("#145a45", "#0b3a2c", "#1f7a5e"), ptA = W("#e3b75a", "#a7792a", "#f6d58c"), ptB = W("#18110f", "#060303", "#30241f"), tray = H("#3a070c"), pearl = H("#f3cd62"), line = H("#f3cd62") };
+            case "tawla_ramadan": return new TawlaLook { box = W("#241a5c", "#120c34", "#3a2c80"), field = W("#efe3c4", "#d8c8a0", "#fbf3dc"), ptA = W("#3a2c80", "#1e1650", "#5a48a8"), ptB = W("#c99a30", "#8a6418", "#f0c862"), tray = H("#1e1650"), pearl = H("#f3cd62"), line = H("#f3cd62") };
             case "tawla_pharaoh": return new TawlaLook { box = W("#1f3f7a", "#10234a", "#2f5aa0"), field = W("#e2c98a", "#c4a462", "#f2dca6"), ptA = W("#1f4e9a", "#12306a", "#3a6ac0"), ptB = W("#2f8a7a", "#1a5a4e", "#46aa98"), tray = H("#12306a"), pearl = H("#f3cd62"), line = H("#f3cd62") };
             default: return new TawlaLook { box = W("#6b3a1e", "#3d1f0e", "#8c5530"), field = W("#c9a46c", "#a7834f", "#dcbd88"), ptA = W("#3b2414", "#24140a", "#5a3a22"), ptB = W("#8e2a1c", "#5e180e", "#b0402c"), tray = H("#1e3b26"), pearl = H("#bdb3a2"), line = H("#e7d3a8") };
         }
@@ -164,6 +180,18 @@ public static class Skins
         var d = Get(id); if (d == null) return Menus.Icon("coin");
         if (d.cat == "hat") { tint = id == "hat_classic" ? new Color(1, 1, 1, 0.5f) : Look.HatColor(id); return Menus.Icon("fez"); }
         if (d.cat == "drink") { tint = Look.DrinkColor(id); tint.a = 1; return Menus.Icon("glass"); }
+        if (d.cat == "win")
+        {
+            switch (id)
+            {
+                case "win_confetti": tint = new Color(0.95f, 0.45f, 0.6f); return Menus.Icon("t_star");
+                case "win_stars": tint = Ui.Gold; return Menus.Icon("t_star");
+                case "win_fireworks": tint = new Color(1f, 0.55f, 0.25f); return Menus.Icon("t_flame");
+                case "win_lanterns": tint = Ui.Gold; return Menus.Icon("t_lantern");
+                case "win_balloons": tint = new Color(0.95f, 0.35f, 0.5f); return GameUi.Disc.texture;
+                default: return Menus.Icon("coin");
+            }
+        }
         if (d.cat == "felt") return id == "felt_wood" ? Art.WoodTex(96, 96, H("#8a5a32"), H("#5a3418"), H("#a8743e")) : Look.FeltTexture(id);
         if (d.cat == "tiles") return TileArt.Preview(id);
         if (pics.TryGetValue(id, out var t) && t != null) return t;

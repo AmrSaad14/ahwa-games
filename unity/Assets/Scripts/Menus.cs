@@ -22,6 +22,7 @@ public partial class Menus : MonoBehaviour
     // the monthly prizes: what a winner gets, and the chip that shows when you won one
     int prizeEgp = 500; bool prizeOn = true;
     GameObject prizeChip; Text prizeChipText;
+    RectTransform eventChip; RawImage eventIcon; Text eventText;
     InputField walletField;
 
     // the leaderboard currently asked for
@@ -58,6 +59,14 @@ public partial class Menus : MonoBehaviour
         // the monthly prize: shown when you won one (to give your Vodafone Cash number), or one is on its way
         var prize = Chip(home, "trophy", "جايزتك", new Vector2(-252, -56), 128, new Color32(0xc0, 0x1f, 0x2a, 0xf0), Color.white, () => { Sfx.Tap(); OpenPrizes(); });
         prizeChip = prize.gameObject; prizeChipText = prize.GetComponentInChildren<Text>(); prizeChip.SetActive(false);
+        // an event on (Ramadan, Eid…): a banner at the top with what's special
+        var evb = Ui.Button(home, "", new Color32(0x3a, 0x1c, 0x66, 0xf0), Ui.Gold, 13, () => { Sfx.Tap(); OpenEvent(); });
+        eventChip = ((RectTransform)evb.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 38), new Vector2(0, -64));
+        evb.gameObject.AddComponent<Outline>().effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.6f);
+        eventIcon = Ui.Picture(eventChip, "Icon", Icon("t_lantern")); eventIcon.color = Ui.Gold;
+        eventIcon.rectTransform.Place(new Vector2(Loc.En ? 0 : 1, 0.5f), new Vector2(Loc.En ? 0 : 1, 0.5f), new Vector2(24, 24), new Vector2(Loc.En ? 10 : -10, 0));
+        eventText = evb.GetComponentInChildren<Text>(); eventText.rectTransform.offsetMin = new Vector2(30, 0); eventText.rectTransform.offsetMax = new Vector2(-30, 0);
+        eventChip.gameObject.SetActive(false);
 
         // along the top, left of your name and coins: watch an ad, sign in, language
         var ad = Chip(home, "video", "+2K", new Vector2(-252, -10), 98, new Color32(0x2f, 0x6b, 0x3a, 0xf0), Color.white, WatchAd);
@@ -146,6 +155,16 @@ public partial class Menus : MonoBehaviour
         bool signed = !string.IsNullOrEmpty(u.Str("google")) || !string.IsNullOrEmpty(u.Str("apple")) || !string.IsNullOrEmpty(u.Str("phone")) || !string.IsNullOrEmpty(u.Str("email"));
         signChip.SetActive(!signed);
         ApplyFeatures(u.Obj("features"));
+        // the event on now: its limited skins in the shop, and the banner
+        var ev = u.Obj("event");
+        Skins.EventKind = ev?.Str("kind");
+        eventChip.gameObject.SetActive(ev != null);
+        if (ev != null)
+        {
+            eventIcon.texture = Icon(ev.Str("kind") == "eid" ? "t_crescent" : "t_lantern");
+            double sp = ev.Num("spMult", 1);
+            eventText.Set((Loc.En ? ev.Str("en") : ev.Str("ar")) + (sp > 1 ? "  ·  " + Loc.T("نقط الموسم") + " ×" + sp : ""));
+        }
         var pz = u.Obj("prize");
         if (pz != null) { prizeOn = pz.Bool("on"); prizeEgp = (int)pz.Num("egp", prizeEgp); }
         // a prize to claim (or one on its way): the red chip on the home screen
@@ -789,7 +808,7 @@ public partial class Menus : MonoBehaviour
     static readonly string[] BoardCats = { "felt", "tawla", "chess" }, PieceCats = { "tiles", "checkers", "pieces" };
     int shopGame, invTab, invGame;
     public int ShopGame { set => shopGame = value; }
-    static string CatOf(int tab, int game) => tab == 0 ? BoardCats[game] : tab == 1 ? PieceCats[game] : tab == 2 ? "dice" : tab == 3 ? "hat" : "drink";
+    static string CatOf(int tab, int game) => tab == 0 ? BoardCats[game] : tab == 1 ? PieceCats[game] : tab == 2 ? "dice" : tab == 3 ? "hat" : tab == 4 ? "drink" : "win";
 
     public void OpenShop(int tab)
     {
@@ -798,11 +817,11 @@ public partial class Menus : MonoBehaviour
         refreshOpen = () =>
         {
             foreach (Transform c in body) Destroy(c.gameObject);
-            var area = Tabs(body, new[] { "كوينز ببلاش", "ترابيزات", "قطع", "زهر", "طربوش", "مشروب", "الموسم المميز" }, shopTab, i => { shopTab = i; refreshOpen(); });
+            var area = Tabs(body, new[] { "كوينز ببلاش", "ترابيزات", "قطع", "زهر", "طربوش", "مشروب", "احتفال", "الموسم المميز" }, shopTab, i => { shopTab = i; refreshOpen(); });
             // your coins, bottom corner; your collection, the other corner
             var have = Ui.Label(area, Loc.T("رصيدك") + ": " + ((long)(user?.Num("coins") ?? 0)).ToString("N0"), 13, Ui.GoldLight, StartAlign, Ui.Bold);
             have.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(640, 20), new Vector2(0, -6));
-            var mine = Ui.Button(area, Loc.T("مجموعتي"), new Color(1, 1, 1, 0.08f), Ui.Gold, 12, () => { Sfx.Tap(); Close(); OpenCollection(shopTab >= 1 && shopTab <= 5 ? shopTab - 1 : 0); });
+            var mine = Ui.Button(area, Loc.T("مجموعتي"), new Color(1, 1, 1, 0.08f), Ui.Gold, 12, () => { Sfx.Tap(); Close(); OpenCollection(shopTab >= 1 && shopTab <= 6 ? shopTab - 1 : 0); });
             ((RectTransform)mine.transform).Place(new Vector2(Loc.En ? 1 : 0, 0), new Vector2(Loc.En ? 1 : 0, 0), new Vector2(110, 24), new Vector2(Loc.En ? -60 : 60, -4));
             var row = Ui.Rect("Cards", area); row.anchorMin = Vector2.zero; row.anchorMax = Vector2.one; row.offsetMin = new Vector2(0, 22); row.offsetMax = Vector2.zero;
             if (shopTab == 0)
@@ -816,12 +835,12 @@ public partial class Menus : MonoBehaviour
                 Ui.Label(c, Loc.T("فاضلك النهارده") + ": " + left, 12, Ui.GoldLight, TextAnchor.MiddleCenter).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 20), new Vector2(0, -96));
                 BuyButton(c, left > 0 ? Loc.T("شوف الإعلان") : Loc.T("خلصت إعلانات النهارده"), left > 0 ? Ui.Gold : new Color(1, 1, 1, 0.1f), left > 0 ? Ui.Ink : Ui.GoldLight, () => { if (left > 0) WatchAd(); else app.Toast(Loc.T("خلصت إعلانات النهارده، تعالى بكرة")); });
             }
-            else if (shopTab <= 5)
+            else if (shopTab <= 6)
             {
                 int t = shopTab - 1;
                 if (t <= 1) row = GameSwitch(row, shopGame, g => { shopGame = g; refreshOpen(); });
                 string cat = CatOf(t, shopGame);
-                var items = new List<Skins.Def>(Skins.Of(cat));
+                var items = new List<Skins.Def>(Skins.Of(cat)).FindAll(Skins.OnSale);
                 for (int i = 0; i < items.Count; i++) SkinCard(ShopCard(row, i, items.Count), items[i], false);
                 var note = Ui.Label(area, Loc.T(Note(cat)), 11, new Color(1, 1, 1, 0.55f));
                 note.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(460, 16), new Vector2(0, 14));
@@ -852,13 +871,13 @@ public partial class Menus : MonoBehaviour
     /// Your collection: every skin you have (the classic ones too), kind by kind, to wear with a tap.
     public void OpenCollection(int tab)
     {
-        invTab = Mathf.Clamp(tab, 0, 5);
+        invTab = Mathf.Clamp(tab, 0, 6);
         Panel(Loc.T("مجموعتي"), out var body, new Vector2(700, 372));
         refreshOpen = () =>
         {
             foreach (Transform c in body) Destroy(c.gameObject);
-            var area = Tabs(body, new[] { "ترابيزات", "قطع", "زهر", "طربوش", "مشروب", "ألقاب" }, invTab, i => { invTab = i; refreshOpen(); });
-            if (invTab == 5) { DrawMyTitles(area); return; }
+            var area = Tabs(body, new[] { "ترابيزات", "قطع", "زهر", "طربوش", "مشروب", "احتفال", "ألقاب" }, invTab, i => { invTab = i; refreshOpen(); });
+            if (invTab == 6) { DrawMyTitles(area); return; }
             var row = Ui.Rect("Cards", area); row.anchorMin = Vector2.zero; row.anchorMax = Vector2.one; row.offsetMin = new Vector2(0, 22); row.offsetMax = Vector2.zero;
             if (invTab <= 1) row = GameSwitch(row, invGame, g => { invGame = g; refreshOpen(); });
             string cat = CatOf(invTab, invGame);
@@ -869,7 +888,7 @@ public partial class Menus : MonoBehaviour
             int total = 0, mineAll = 0; foreach (var d in Skins.All) { total++; if (Skins.Owns(d.id)) mineAll++; }
             var count = Ui.Label(area, Loc.T("عندك") + " " + have.Count + " / " + all.Count + "   ·   " + Loc.T("كل مجموعتك") + " " + mineAll + " / " + total, 13, Ui.GoldLight, StartAlign, Ui.Bold);
             count.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(640, 20), new Vector2(0, -6));
-            var shop = Ui.Button(area, Loc.T("المتجر"), Ui.Gold, Ui.Ink, 12, () => { Sfx.Tap(); Close(); shopGame = invGame; OpenShop(invTab + 1); });
+            var shop = Ui.Button(area, Loc.T("المتجر"), Ui.Gold, Ui.Ink, 12, () => { Sfx.Tap(); Close(); shopGame = invGame; OpenShop(invTab <= 5 ? invTab + 1 : 0); });
             ((RectTransform)shop.transform).Place(new Vector2(Loc.En ? 1 : 0, 0), new Vector2(Loc.En ? 1 : 0, 0), new Vector2(110, 24), new Vector2(Loc.En ? -60 : 60, -4));
         };
         refreshOpen();
@@ -940,7 +959,7 @@ public partial class Menus : MonoBehaviour
 
     static string Note(string cat) => cat == "felt" ? "ترابيزة الدومينو بتبان ليك وانت بتلعب" : cat == "tawla" ? "الطاولة بتبان ليك وانت بتلعب" : cat == "chess" ? "رقعة الشطرنج بتبان ليك وانت بتلعب"
         : cat == "tiles" ? "قطع الدومينو اللي في إيدك وعلى الترابيزة" : cat == "checkers" ? "قشاط الطاولة بتاعك" : cat == "pieces" ? "عساكر الشطرنج بتاعتك"
-        : cat == "dice" ? "الزهر في الطاولة واللودو" : cat == "hat" ? "الطربوش بيبان لكل اللي على الترابيزة (للرجالة)" : "المشروب بيبان قدامك لكل اللي على الترابيزة";
+        : cat == "dice" ? "الزهر في الطاولة واللودو" : cat == "win" ? "احتفالك بيظهر لكل اللي على الترابيزة لما تكسب" : cat == "hat" ? "الطربوش بيبان لكل اللي على الترابيزة (للرجالة)" : "المشروب بيبان قدامك لكل اللي على الترابيزة";
 
     /// One skin's card: its picture and name, and wear / worn / buy / from the season.
     void SkinCard(RectTransform c, Skins.Def s, bool collection)
@@ -952,6 +971,11 @@ public partial class Menus : MonoBehaviour
         var nm = Ui.Label(c, Loc.T(s.name), 13, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
         nm.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(w - 4, 36), new Vector2(0, -96));
         nm.horizontalOverflow = HorizontalWrapMode.Wrap;
+        if (s.ev != null)
+        {
+            var tag = Ui.Label(c, Loc.T(s.ev == "ramadan" ? "عرض رمضان" : "عرض العيد"), 10, new Color(1f, 0.75f, 0.35f), TextAnchor.MiddleCenter, Ui.Bold);
+            tag.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(w - 8, 14), new Vector2(0, -2));
+        }
         if (s.pass)
         {
             var tag = Ui.Label(c, Loc.T("الموسم"), 10, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold);

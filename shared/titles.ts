@@ -18,6 +18,8 @@ export const TITLE_ICONS: Record<string, string> = {
   dice: 'M5.5 2.5h13a3 3 0 0 1 3 3v13a3 3 0 0 1-3 3h-13a3 3 0 0 1-3-3v-13a3 3 0 0 1 3-3zM8 6.3a1.7 1.7 0 1 0 0 3.4 1.7 1.7 0 0 0 0-3.4zm4 4a1.7 1.7 0 1 0 0 3.4 1.7 1.7 0 0 0 0-3.4zm4 4a1.7 1.7 0 1 0 0 3.4 1.7 1.7 0 0 0 0-3.4z',
   knight: 'M7 22h11.5v-2.6c0-3.4-1.3-5.6-1.3-9.2C17.2 5.4 14 2 9.6 2L8.5 4 6.4 5.2 4 9.6l1.7 1.9 2.9-.8 1.8-.9c-.6 2.6-3.4 4.2-3.4 7.6V19H7z',
   fez: 'M8.2 4.5h7.6l2.7 15h-13zM15.8 4.5c1.6.4 2.6 1.6 3 3.6l-1.3.5c-.3-1.4-1-2.3-2-2.6z',
+  lantern: 'M11 1h2v2h2.5l1 2.5H7.5l1-2.5H11zM7 7h10l1.5 3v6L17 19H7l-1.5-3v-6zm2.5 2.5v6h1.6v-6zm3.4 0v6h1.6v-6zM8.5 20h7L14 23h-4z',
+  crescent: 'M14.5 2.5A9.5 9.5 0 1 0 21.5 17 7.5 7.5 0 0 1 14.5 2.5zM19 4l.8 1.7 1.8.3-1.3 1.3.3 1.8-1.6-.9-1.6.9.3-1.8L16.4 6l1.8-.3z',
 };
 export const TITLE_EFFECTS = ['none', 'shine', 'glow', 'pulse'] as const;
 export type TitleEffect = typeof TITLE_EFFECTS[number];
@@ -59,6 +61,8 @@ export const DEFAULT_TITLES: TitleDef[] = [
   { id: 'golden_hands', ar: 'إيده تتلف في حرير', en: 'Golden Hands', style: st('#ff7a59', '#c2185b', '#ffffff', '#ffd1c2', 'flame', 'pulse') },
   { id: 'cafe_master', ar: 'معلّم القهوة', en: 'Café Master', style: st('#4a3526', '#1b120c', '#f4e6c8', '#c9a25a', 'fez', 'none') },
   { id: 'early', ar: 'من الأوائل', en: 'Early Player', style: st('#b0743f', '#5e3519', '#ffe7cc', '#d9a066', 'medal', 'none') },
+  { id: 'ramadan_lantern', ar: 'فانوس رمضان', en: 'Ramadan Lantern', style: st('#4b1f7a', '#1c0b33', '#ffd76a', '#ffd76a', 'lantern', 'glow') },
+  { id: 'eid_joy', ar: 'فرحة العيد', en: 'Eid Joy', style: st('#ff8a3d', '#e0306b', '#ffffff', '#ffe0a8', 'crescent', 'pulse') },
   { id: 'team', ar: 'فريق بورد باتلز', en: 'Board Battles Team', style: st('#d4574a', '#8f1d1d', '#ffffff', '#ffb3a8', 'shield', 'glow') },
 ];
 

@@ -591,7 +591,11 @@ public class GameUi : MonoBehaviour
         if (celebrated != v.id + ":match")
         {
             celebrated = v.id + ":match";
-            if (won) { Celebrate(40); Growth.Won(); }
+            // the winner's own celebration (a 'win' skin), seen by everyone at the table
+            string style = null;
+            if (v.match != null) for (int s = 0; s < v.seats.Count; s++) if (v.seats[s] != null && !v.seats[s].bot && v.TeamOf(s) == v.match.team) { style = v.seats[s].win; if (s == v.you) break; }
+            if (won) { Celebrate(40, style); Growth.Won(); }
+            else if (!string.IsNullOrEmpty(style) && style != "win_coins") Celebrate(26, style);
         }
     }
 
@@ -631,34 +635,73 @@ public class GameUi : MonoBehaviour
     }
 
     /// Coins raining down: a handful for a round, a shower for a match, more for a big win.
-    public void Celebrate(int n)
+    public void Celebrate(int n, string style = null)
     {
         if (Perf.Saver) n = Mathf.Min(n, 14);
-        Sfx.Coins();
+        style = string.IsNullOrEmpty(style) ? "win_coins" : style;
+        if (style == "win_coins") Sfx.Coins(); else Sfx.Chime();
         var layer = Ui.Rect("Coins", root).Fill();
         layer.SetAsLastSibling();
-        StartCoroutine(Rain(layer, n));
+        StartCoroutine(Rain(layer, n, style));
     }
 
-    System.Collections.IEnumerator Rain(RectTransform layer, int n)
+    // one bit of a celebration: where it is, how it moves, how long it lives
+    class Bit { public RectTransform r; public Graphic g; public Vector2 p, v; public float gravity, spin, delay, life, sway, phase; }
+
+    /// A celebration: coins rain (the classic), confetti flutters, gold stars fall, fireworks burst, lanterns or balloons rise.
+    System.Collections.IEnumerator Rain(RectTransform layer, int n, string style)
     {
         float W = root.rect.width, H = root.rect.height;
-        var coins = new List<(RectTransform r, Vector2 v, float spin, float delay)>();
-        for (int i = 0; i < n; i++)
+        var bits = new List<Bit>();
+        Color[] party = { new Color(0.95f, 0.3f, 0.35f), new Color(0.3f, 0.75f, 0.45f), new Color(0.35f, 0.55f, 0.95f), Ui.Gold, new Color(0.9f, 0.45f, 0.85f), new Color(1f, 0.6f, 0.2f) };
+        Bit Add(Texture tex, Color c, float size, bool round = true)
         {
-            var c = Ui.Picture(layer, "Coin", Menus.Icon("coin"));
-            float s = UnityEngine.Random.Range(18f, 30f);
-            c.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(s, s), new Vector2(UnityEngine.Random.Range(-W / 2, W / 2), H / 2 + 30));
-            coins.Add((c.rectTransform, new Vector2(UnityEngine.Random.Range(-40f, 40f), UnityEngine.Random.Range(-60f, 20f)), UnityEngine.Random.Range(6f, 14f), UnityEngine.Random.Range(0f, 0.9f)));
+            Graphic g;
+            if (tex != null) { var pi = Ui.Picture(layer, "Bit", tex); pi.color = c; g = pi; }
+            else { var bx = Ui.Box(layer, "Bit", c, round); bx.raycastTarget = false; g = bx; }
+            g.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(size, size), new Vector2(0, H));
+            var b = new Bit { r = g.rectTransform, g = g, life = 3.2f, phase = UnityEngine.Random.value * 6f };
+            bits.Add(b); return b;
         }
-        for (float t = 0; t < 3.2f && layer != null; t += Time.deltaTime)
+        float R(float a, float b) => UnityEngine.Random.Range(a, b);
+        switch (style)
         {
-            for (int i = 0; i < coins.Count; i++)
+            case "win_confetti":
+                for (int i = 0; i < n * 2; i++) { var b = Add(null, party[i % party.Length], R(7, 12), false); b.p = new Vector2(R(-W / 2, W / 2), H / 2 + 20); b.v = new Vector2(R(-30, 30), R(-60, 0)); b.gravity = 160; b.spin = R(4, 9); b.delay = R(0, 1.2f); b.sway = R(30, 70); b.life = 4f; }
+                break;
+            case "win_stars":
+                for (int i = 0; i < n; i++) { var b = Add(Menus.Icon("t_star"), Color.Lerp(Ui.Gold, Color.white, R(0, 0.4f)), R(16, 30)); b.p = new Vector2(R(-W / 2, W / 2), H / 2 + 20); b.v = new Vector2(R(-20, 20), R(-40, 0)); b.gravity = 260; b.spin = R(1, 3); b.delay = R(0, 1f); }
+                break;
+            case "win_fireworks":
+                for (int burst = 0; burst < 5; burst++)
+                {
+                    var at = new Vector2(R(-W * 0.35f, W * 0.35f), R(0, H * 0.3f)); var c = party[burst % party.Length]; float d = burst * 0.45f;
+                    for (int i = 0; i < Mathf.Max(10, n / 3); i++) { float ang = i * Mathf.PI * 2 / Mathf.Max(10, n / 3); var b = Add(Menus.Icon("t_star"), c, R(8, 13)); b.p = at; b.v = new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * R(140, 220); b.gravity = 120; b.delay = d; b.life = d + 1.6f; }
+                }
+                break;
+            case "win_lanterns":
+                for (int i = 0; i < Mathf.Max(8, n / 3); i++) { var b = Add(Menus.Icon("t_lantern"), party[(i * 2 + 3) % party.Length], R(26, 40)); b.p = new Vector2(R(-W / 2, W / 2), -H / 2 - 30); b.v = new Vector2(0, R(90, 150)); b.gravity = 0; b.sway = R(15, 30); b.delay = R(0, 1.4f); b.life = 4.5f; }
+                break;
+            case "win_balloons":
+                for (int i = 0; i < Mathf.Max(10, n / 2); i++) { var b = Add(GameUi.Disc.texture, party[i % party.Length], R(26, 38)); b.r.sizeDelta = new Vector2(b.r.sizeDelta.x, b.r.sizeDelta.x * 1.2f); b.p = new Vector2(R(-W / 2, W / 2), -H / 2 - 30); b.v = new Vector2(0, R(110, 170)); b.sway = R(10, 25); b.delay = R(0, 1.2f); b.life = 4.2f; }
+                break;
+            default:   // coins
+                for (int i = 0; i < n; i++) { var b = Add(Menus.Icon("coin"), Color.white, R(18, 30)); b.p = new Vector2(R(-W / 2, W / 2), H / 2 + 30); b.v = new Vector2(R(-40, 40), R(-60, 20)); b.gravity = 900; b.spin = R(6, 14); b.delay = R(0, 0.9f); b.life = 3.2f; }
+                break;
+        }
+        foreach (var b in bits) b.r.anchoredPosition = new Vector2(0, H * 2);   // out of sight until its turn
+        float end = 0; foreach (var b in bits) end = Mathf.Max(end, b.life);
+        for (float t = 0; t < end && layer != null; t += Time.deltaTime)
+        {
+            foreach (var b in bits)
             {
-                var (r, v0, spin, delay) = coins[i];
-                float k = t - delay; if (k < 0 || r == null) continue;
-                r.anchoredPosition = new Vector2(r.anchoredPosition.x + v0.x * Time.deltaTime, H / 2 + 30 + v0.y * k - 0.5f * 900f * k * k);
-                r.localScale = new Vector3(Mathf.Cos(k * spin), 1, 1);
+                float k = t - b.delay; if (k < 0 || b.r == null) continue;
+                var pos = b.p + b.v * k + new Vector2(0, -0.5f * b.gravity * k * k);
+                if (b.sway > 0) pos.x += Mathf.Sin(k * 2.2f + b.phase) * b.sway;
+                b.r.anchoredPosition = pos;
+                if (b.spin > 0) b.r.localScale = new Vector3(Mathf.Cos(k * b.spin), 1, 1);
+                float fade = Mathf.Clamp01((b.life - t) / 0.6f);
+                var c = b.g.color; c.a = fade; b.g.color = c;
             }
             yield return null;
         }

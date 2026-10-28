@@ -21,6 +21,7 @@ export interface SeatView {
   drink?: string;
   muted?: boolean;     // their chat is switched off for a while (reported by several players)
   title?: string;      // the title they wear (an id in the titles catalog)
+  win?: string;        // how they celebrate a win (a 'win' skin)
 }
 
 export interface LastAction {

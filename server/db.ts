@@ -7,6 +7,7 @@ import type { PrizeRow, CoinRow, LeaderRow, PublicUser } from '../shared/protoco
 import type { GameId } from '../shared/engine';
 import { ECONOMY, WEEKLY_PRIZES, cairoDay, levelOf, nextCairoDay, streakBonus, weekKey } from '../shared/gifts';
 import { Equipped, isFree, skinById } from '../shared/skins';
+import { activeEvent } from '../shared/events';
 import { CHEST, MISSION_SP, counts, missionById, missionsFor, type MissionEvent } from '../shared/missions';
 import { SEASON_PASS, SEASON_TIERS, SP, TIERS, seasonEndsAt, seasonOf, tierOf } from '../shared/season';
 import type { GameId as Game } from '../shared/engine';
@@ -98,6 +99,7 @@ export class Store {
     this.db.exec(`CREATE TABLE IF NOT EXISTS groups (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, code TEXT NOT NULL UNIQUE, owner TEXT NOT NULL, created INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS group_members (group_id INTEGER NOT NULL, user_id TEXT NOT NULL, joined INTEGER NOT NULL, PRIMARY KEY (group_id, user_id));
       CREATE INDEX IF NOT EXISTS group_members_user ON group_members(user_id)`);
+    this.db.exec('CREATE TABLE IF NOT EXISTS event_games (event TEXT NOT NULL, user_id TEXT NOT NULL, games INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (event, user_id))');
     this.db.exec('CREATE TABLE IF NOT EXISTS chest (week TEXT NOT NULL, user_id TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0, opened TEXT NOT NULL DEFAULT \'[]\', PRIMARY KEY (week, user_id))');
     this.db.exec(`CREATE TABLE IF NOT EXISTS user_titles (user_id TEXT NOT NULL, title TEXT NOT NULL, ts INTEGER NOT NULL, until INTEGER NOT NULL DEFAULT 0,
         note TEXT, PRIMARY KEY (user_id, title));
@@ -478,11 +480,12 @@ export class Store {
     if (r.claimed) return 'already_claimed';
     const ch = this.db.prepare('UPDATE missions SET claimed = 1 WHERE user_id = ? AND day = ? AND id = ? AND claimed = 0').run(uid, day, id);
     if (!Number(ch.changes)) return 'already_claimed';
-    this.addCoins(uid, m.coins); this.logCoins(uid, 'mission', m.coins);
+    const ev = activeEvent(now), coins = ev && ev.missionMult > 1 ? Math.round(m.coins * ev.missionMult) : m.coins;   // an event: more coins
+    this.addCoins(uid, coins); this.logCoins(uid, 'mission', coins);
     this.addSeasonSp(uid, MISSION_SP, now);
     // one more for the weekly chest
     this.db.prepare('INSERT INTO chest (week, user_id, done) VALUES (?, ?, 1) ON CONFLICT(week, user_id) DO UPDATE SET done = done + 1').run(weekKey(now), uid);
-    return { coins: m.coins, xp: m.xp };
+    return { coins, xp: m.xp };
   }
 
   /** The weekly chest: how many missions were collected this week, and which steps were opened. */
@@ -517,6 +520,7 @@ export class Store {
   /** Season points; returns the tier before and after. */
   addSeasonSp(uid: string, n: number, now = Date.now()): { from: number; to: number } {
     const id = seasonOf(now), before = this.seasonRow(uid, id)?.sp ?? 0;
+    const ev = activeEvent(now); if (ev && ev.spMult > 1) n = Math.round(n * ev.spMult);   // an event: more season points
     if (!SEASON_PASS.enabled) return { from: tierOf(before), to: tierOf(before) };   // the season is switched off
     this.db.prepare('INSERT INTO season (user_id, season, sp) VALUES (?, ?, ?) ON CONFLICT(user_id, season) DO UPDATE SET sp = sp + excluded.sp').run(uid, id, n);
     return { from: tierOf(before), to: tierOf(before + n) };
@@ -600,6 +604,7 @@ export class Store {
     const s = skinById(skin);
     if (!s || s.price === 0 || s.pass) return 'bad_skin';
     if (this.skinsOf(id).includes(skin)) return null;
+    if (s.event && activeEvent()?.kind !== s.event) return 'not_on_sale';   // a limited skin: only during its event
     if (this.coinsOf(id) < s.price) return 'not_enough_coins';
     this.db.exec('BEGIN');
     try {
@@ -855,6 +860,18 @@ export class Store {
     const mark = this.db.prepare('UPDATE users SET nudged = ? WHERE id = ?');
     for (const id of ids) mark.run(now, id);
     return ids;
+  }
+
+  /* ---------- events ---------- */
+
+  /** One more online game during an event; returns the count. */
+  eventGame(event: string, uid: string): number {
+    this.db.prepare('INSERT INTO event_games (event, user_id, games) VALUES (?, ?, 1) ON CONFLICT(event, user_id) DO UPDATE SET games = games + 1').run(event, uid);
+    return this.eventGames(event, uid);
+  }
+  eventGames(event: string, uid: string): number { return (this.db.prepare('SELECT games FROM event_games WHERE event = ? AND user_id = ?').get(event, uid) as { games: number } | undefined)?.games ?? 0; }
+  eventStats(event: string) {
+    return this.db.prepare('SELECT COUNT(*) AS players, COALESCE(SUM(games), 0) AS games FROM event_games WHERE event = ?').get(event) as { players: number; games: number };
   }
 
   /* ---------- friends' café groups ---------- */
