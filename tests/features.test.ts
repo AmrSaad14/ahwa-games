@@ -77,7 +77,9 @@ test('missions: three a day, games move them on, the reward is collected once', 
   const ms = a.user().missions!;
   assert.equal(ms.length, 3);
   assert.deepEqual(ms.map(m => m.id), missionsFor(a.uid, cairoDay(Date.now())).map(m => m.id));
-  const easy = MISSIONS.find(m => m.id === ms[0].id)!;
+  // one that practice games can finish (not "online", not a gift or a friend one)
+  const easy = ms.map(x => MISSIONS.find(m => m.id === x.id)!).find(m => (m.kind === 'play' || m.kind === 'win') && !m.online);
+  if (!easy) { a.close(); return; }
   // a mission can't be collected before it's done
   a.send({ t: 'mission', id: easy.id });
   await a.until(() => a.last('err')?.code === 'mission_not_done');
@@ -287,4 +289,42 @@ test('tournament: sign up, the bracket fills with computer players, matches are 
   assert.equal(res.results[0].place, 1);
   assert.ok(res.results.length >= 4);
   assert.ok(res.rounds.every(r => r.every(m => m.winner !== null)));
+});
+
+test("friends' café groups: make one, join by code, the weekly ranking, a table for the group invites everyone", async () => {
+  const a = await new Client().open(), b = await new Client().open();
+  a.send({ t: 'groupCreate', name: 'قهوة الشلة' });
+  await a.until(() => !!a.last('group'));
+  const g = a.last('group')!.group;
+  assert.equal(g.name, 'قهوة الشلة'); assert.match(g.code, /^G[A-Z0-9]{5}$/); assert.equal(g.owner, true);
+  b.send({ t: 'groupJoin', code: g.code.toLowerCase() });
+  await b.until(() => b.last('group')?.group.members.length === 2);
+  await a.until(() => a.last('groups')?.rows[0]?.members === 2);
+  b.send({ t: 'groupJoin', code: 'GNOPE1' });
+  await b.until(() => b.last('err')?.code === 'group_not_found');
+  // a table for the group: b is invited
+  a.send({ t: 'groupPlay', id: g.id, mode: 'ffa2' });
+  await b.until(() => !!b.last('invited'));
+  assert.equal((b.last('invited') as { group?: string }).group, 'قهوة الشلة');
+  b.send({ t: 'groupLeave', id: g.id });
+  await b.until(() => b.last('groups')?.rows.length === 0);
+  a.close(); b.close();
+});
+
+test("watching a friend's game: the board without anyone's tiles, then back home", async () => {
+  const a = await new Client().open(), b = await new Client().open(), c = await new Client().open();
+  app.store.friendRequest(a.uid, b.uid); app.store.friendAccept(b.uid, a.uid);
+  a.send({ t: 'practice', mode: 'ffa2' });
+  await a.until(() => a.view?.phase === 'play');
+  const pid = a.view!.seats[a.view!.you]!.pid;
+  c.send({ t: 'watch', pid });
+  await c.until(() => c.last('err')?.code === 'not_friends');
+  b.send({ t: 'watch', pid });
+  await b.until(() => !!b.view && b.view.phase !== 'lobby');
+  assert.equal(b.view!.you, -1);
+  assert.deepEqual(b.view!.hand, []);
+  assert.equal((b.msgs.find(m => m.t === 'table') as { watch?: boolean }).watch, true);
+  b.send({ t: 'unwatch' });
+  await b.until(() => b.view === null);
+  a.close(); b.close(); c.close();
 });

@@ -129,6 +129,10 @@ export const EMOTES = ['hi', 'gg', 'nice', 'lol', 'wow', 'clap', 'fire', 'hurry'
 export type Emote = typeof EMOTES[number];
 
 /** A friend (or a friend request) in the friends list. */
+/** A friends' café group ("قهوة الشلة"): saved friends who play together, with their own weekly ranking. */
+export interface GroupRow { id: number; name: string; code: string; members: number; owner: boolean; online: number }
+export interface GroupView { id: number; name: string; code: string; owner: boolean; week: string; endsAt: number;
+  members: { pid: string; name: string; ch: number; online: boolean; playing: boolean; title: string | null; points: number; games: number; wins: number; rank: number; me: boolean }[] }
 export interface FriendRow { id: string; pid: string; name: string; ch: number; status: 'friend' | 'outgoing' | 'incoming'; online: boolean; playing: boolean }
 
 export interface PublicUser {
@@ -171,7 +175,7 @@ export interface SeasonState { id: string; endsAt: number; sp: number; tier: num
 
 /** The weekly tournament as one player sees it. */
 export interface TourneyEntrant { name: string; ch: number; bot: boolean; me: boolean }
-export interface TourneyMatch { a: TourneyEntrant | null; b: TourneyEntrant | null; winner: 0 | 1 | null; live: boolean }
+export interface TourneyMatch { a: TourneyEntrant | null; b: TourneyEntrant | null; winner: 0 | 1 | null; live: boolean; table?: string }
 export interface TourneyView {
   event: string; game: string; mode: string; startsAt: number;
   state: 'open' | 'running' | 'done';
@@ -262,6 +266,14 @@ export type C2S =
   /** Cash out: every 1,000,000 coins pays 10 EGP to a Vodafone Cash number, paid by hand within one working day. */
   | { t: 'prizeClaim'; id: number; phone: string }
   | { t: 'tutorialDone' }
+  | { t: 'watch'; pid?: string; table?: string }
+  | { t: 'unwatch' }
+  | { t: 'groups' }
+  | { t: 'groupCreate'; name: string }
+  | { t: 'groupJoin'; code: string }
+  | { t: 'groupLeave'; id: number }
+  | { t: 'groupView'; id: number }
+  | { t: 'groupPlay'; id: number; mode: Mode }
   | { t: 'chestOpen'; step: number }
   | { t: 'wearTitle'; id: string | null }
   /** A practice game (played on the phone) finished: a little experience. */
@@ -275,7 +287,7 @@ export type S2C =
   | { t: 'welcome'; user: PublicUser; token: string; now: number; ice: IceServer[]; login?: { google: boolean; apple?: boolean; phone: boolean; playGames?: string } }
   | { t: 'friends'; rows: FriendRow[] }
   | { t: 'friendNews'; kind: 'request' | 'accepted' | 'added' | 'sent'; name: string }
-  | { t: 'invited'; from: { id: string; name: string; ch: number }; code: string; mode: Mode; stake: number }
+  | { t: 'invited'; from: { id: string; name: string; ch: number }; code: string; mode: Mode; stake: number; group?: string }
   | { t: 'otp'; phone: string }
   | { t: 'signedIn'; via: 'phone' | 'google' | 'playgames' | 'apple'; fresh: boolean }
   | { t: 'bonus'; coins: number; streak?: number }
@@ -306,6 +318,8 @@ export type S2C =
   | { t: 'chestOpened'; step: number; coins: number; xp: number }
   | { t: 'comeback'; coins: number; days: number }
   | { t: 'tutorialReward'; coins: number }
+  | { t: 'groups'; rows: GroupRow[] }
+  | { t: 'group'; group: GroupView }
   | { t: 'prizeWon'; id: number; game: string; month: string; egp: number }
   | { t: 'supportSent'; id: number }
   | { t: 'rematch'; seats: number[]; need: number; gone: boolean }

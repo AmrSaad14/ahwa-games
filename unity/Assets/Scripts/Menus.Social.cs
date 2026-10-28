@@ -161,8 +161,9 @@ public partial class Menus
             bool m = IsMuted(pid);
             buttons.Add((m ? "إلغاء الكتم" : "كتم الشات", new Color(1, 1, 1, 0.1f), Ui.GoldLight, () => { SetMuted(pid, !IsMuted(pid)); app.Toast(Loc.T(IsMuted(pid) ? "مش هتشوف رسايله" : "هتشوف رسايله تاني")); refreshOpen?.Invoke(); }));
             buttons.Add(("بلاغ", new Color(1, 1, 1, 0.1f), new Color(1f, 0.65f, 0.55f), () => Report(pid)));
+            if (fr == "friend" && c0.Bool("playing") && cardSeat < 0) buttons.Insert(0, ("تفرّج", new Color32(0x2f, 0x6b, 0x3a, 0xff), Color.white, () => { Close(); app.Watch(pid); }));
         }
-        float bw = 168;
+        float bw = buttons.Count > 3 ? 132 : 168;
         for (int i = 0; i < buttons.Count; i++)
         {
             var b = buttons[i];
@@ -203,8 +204,14 @@ public partial class Menus
     {
         if (app.net == null || !app.net.Online) { app.Toast(Loc.T("مش متصل بالسيرفر لسه")); return; }
         app.Send(new Dictionary<string, object> { ["t"] = "friends" });
-        Panel(Loc.T("صحابك"), out var body, new Vector2(640, 344));
-        refreshOpen = () => DrawFriends(body);
+        app.Send(new Dictionary<string, object> { ["t"] = "groups" });
+        Panel(Loc.T("صحابك"), out var body, new Vector2(640, 372));
+        refreshOpen = () =>
+        {
+            foreach (Transform c in body) Destroy(c.gameObject);
+            var area = Tabs(body, new[] { "صحابك", "قهوة الشلة" }, friendsTab, i => { friendsTab = i; if (i == 0) groupOpen = null; refreshOpen(); });
+            if (friendsTab == 1) DrawGroups(area); else DrawFriends(area);
+        };
         refreshOpen();
     }
 
@@ -267,6 +274,12 @@ public partial class Menus
                     Close();
                 });
                 At((RectTransform)go.transform, 450, 126, 32);
+                // in a game now: watch it
+                if (playing)
+                {
+                    var w = Ui.Button(row, "تفرّج", new Color(1, 1, 1, 0.12f), Ui.GoldLight, 13, () => { Sfx.Tap(); Close(); app.Watch(pid); });
+                    At((RectTransform)w.transform, 340, 100, 32);
+                }
             }
         }
     }
@@ -297,6 +310,11 @@ public partial class Menus
         face.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(72, 90), new Vector2(0, 0));
         Ui.Label(body, from.Str("name") + " " + Loc.T("بيدعوك تلعب") + " " + Loc.T(App.GameNames[game]), 17, Color.white, TextAnchor.MiddleCenter, Ui.Bold).rectTransform
             .Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(420, 28), new Vector2(0, -96));
+        if (!string.IsNullOrEmpty(m.Str("group")))
+        {
+            var gl = Ui.Label(body, "", 13, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold); gl.Set("☕ " + m.Str("group"));
+            gl.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(420, 20), new Vector2(0, -144));
+        }
         long stake = (long)m.Num("stake");
         if (stake > 0) Ui.Label(body, Loc.T("رهان") + " " + Loc.Short(stake), 13, Ui.GoldLight).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(420, 20), new Vector2(0, -124));
         var yes = Ui.Button(body, "ادخل العب", Ui.Gold, Ui.Ink, 17, () => { Sfx.Tap(); Close(); app.JoinRoom(code); });

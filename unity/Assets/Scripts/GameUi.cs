@@ -577,7 +577,8 @@ public class GameUi : MonoBehaviour
     void MatchEnded(TableView v, bool won)
     {
         bool tourney = app.menus.IsTourneyTable(v.id);
-        bool canRematch = !app.Practicing && !v.isPrivate && !tourney;
+        bool canRematch = !app.Practicing && !v.isPrivate && !tourney && !app.Watching;
+        againButton.SetActive(!app.Watching);   // an onlooker can only go home
         if (rematchFor != v.id) { rematchFor = v.id; rematchGone = false; rematchMine = false; rematchVotes = 0; rematchNeed = 0; }
         againText.Set(Loc.T(tourney ? "البطولة" : canRematch ? "لاعبين جداد" : "العب تاني"));
         // three buttons when a rematch is possible: leave · the same people · new people
@@ -715,8 +716,28 @@ public class GameUi : MonoBehaviour
         return Loc.En ? CharEn[ch] : CharAr[ch];
     }
 
+    // watching someone else's game: a banner with the way out
+    RectTransform watchBanner;
+    void ShowWatching(TableView v)
+    {
+        if (watchBanner == null)
+        {
+            var bg = Ui.Box(hud, "Watching", new Color(0.1f, 0.06f, 0.04f, 0.88f));
+            watchBanner = bg.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 38), new Vector2(0, -60));
+            bg.gameObject.AddComponent<Outline>().effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.5f);
+            var eye = Ui.Picture(watchBanner, "Eye", Menus.Icon("view")); eye.color = Ui.Gold;
+            eye.rectTransform.Place(new Vector2(Loc.En ? 0 : 1, 0.5f), new Vector2(Loc.En ? 0 : 1, 0.5f), new Vector2(22, 22), new Vector2(Loc.En ? 10 : -10, 0));
+            var t = Ui.Label(watchBanner, "بتتفرج", 14, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold);
+            t.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(150, 34), new Vector2(Loc.En ? -20 : 20, 0));
+            var x = Ui.Button(watchBanner, "خروج", Ui.Gold, Ui.Ink, 13, () => { Sfx.Tap(); app.Leave(); });
+            ((RectTransform)x.transform).Place(new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(76, 30), new Vector2(Loc.En ? -4 : 4, 0));
+        }
+        watchBanner.gameObject.SetActive(app.Watching);
+    }
+
     public void Render(TableView v, int sel, List<char> choose)
     {
+        ShowWatching(v);
         lobby.gameObject.SetActive(v.phase == "lobby");
         if (v.phase == "lobby") { RenderLobby(v); turnText.Set(""); rollButton.SetActive(false); undoButton.SetActive(false); }
         if (v.Board) { RenderBoard(v); return; }
@@ -897,7 +918,7 @@ public class GameUi : MonoBehaviour
         for (int pos = 0; pos < 4; pos++)
         {
             int seat = table.posToSeat[pos];
-            bool show = pos > 0 && seat >= 0 && seat < v.seats.Count && v.seats[seat] != null;
+            bool show = (pos > 0 || v.you < 0) && seat >= 0 && seat < v.seats.Count && v.seats[seat] != null;
             seatTagBg[pos].gameObject.SetActive(show);
             if (!show) continue;
             var s = v.seats[seat];

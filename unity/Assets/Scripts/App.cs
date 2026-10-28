@@ -275,6 +275,7 @@ public class App : MonoBehaviour
                 if (vm == null) break;
                 var v = TableView.Parse(vm);
                 if (v.id == leftTableId) break;   // a late message from a table you just left: it doesn't pull you back in
+                Watching = m.Bool("watch");      // someone else's game, as an onlooker
                 // a table from the server (a tournament match, a friend's room) ends a practice game on the phone
                 if (!pumping && offline != null) { offline = null; view = null; }
                 if (view == null || view.id != v.id) Debug.Log($"[app] table {v.game} {v.mode} {v.phase} {v.id.Substring(0, Mathf.Min(6, v.id.Length))} (was {(view == null ? "none" : view.game + " " + view.id.Substring(0, Mathf.Min(6, view.id.Length)))})");
@@ -292,6 +293,7 @@ public class App : MonoBehaviour
                 break;
             case "left":
                 Debug.Log("[app] left the table" + (view != null ? " (" + view.game + " " + view.phase + ")" : ""));
+                if (Watching) { Watching = false; ExitGame(); break; }
                 if (view != null && view.phase == "mend") { view = null; break; }   // the result stays up until you choose
                 ExitGame();
                 break;
@@ -528,8 +530,18 @@ public class App : MonoBehaviour
         game.ShowQueue(null);
     }
 
+    /// Watching a friend's game or a tournament match (not playing in it).
+    public bool Watching { get; private set; }
+    public void Watch(string pid = null, string table = null)
+    {
+        var m = new Dictionary<string, object> { ["t"] = "watch" };
+        if (pid != null) m["pid"] = pid; if (table != null) m["table"] = table;
+        Send(m);
+    }
+
     public void Leave()
     {
+        if (Watching) { Watching = false; if (view != null) leftTableId = view.id; Send(new Dictionary<string, object> { ["t"] = "unwatch" }); ExitGame(); return; }
         if (view != null) leftTableId = view.id;
         if (view != null && view.phase != "mend") Send(new Dictionary<string, object> { ["t"] = "leave" });
         ExitGame();

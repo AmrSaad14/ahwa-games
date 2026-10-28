@@ -216,6 +216,7 @@ export class Hub {
     const table = this.userTable.get(uid);
     // maintenance (dashboard): no new games start; games already on finish
     if (this.opts.settings?.value.maintenance.on && ['quick', 'create', 'join', 'tourneyJoin', 'rematch'].includes(m.t)) return err('maintenance');
+    if (['quick', 'create', 'join', 'practice', 'tourneyGo', 'groupPlay'].includes(m.t)) this.unwatch(uid);   // off to play: stop watching
     switch (m.t) {
       case 'daily': {
         const d = this.store.claimDaily(uid);
@@ -502,6 +503,7 @@ export class Hub {
       }
       case 'leave': {
         this.dequeue(uid);
+        this.unwatch(uid);
         if (table) this.leaveTable(uid);
         return s.conn.send({ t: 'left' });
       }
@@ -622,6 +624,57 @@ export class Hub {
         const id = this.opts.support({ uid, name: u?.name ?? '', contact, text, app: String(m.app || '').slice(0, 80) });
         return s.conn.send({ t: 'supportSent', id });
       }
+      case 'groups': return this.sendGroups(uid);
+      case 'groupCreate': {
+        if (!this.groupLimiter.allow(uid)) return err('slow_down');
+        const r = this.store.groupCreate(uid, String(m.name || ''));
+        if (typeof r === 'string') return err(r);
+        this.sendGroups(uid); return this.sendGroup(uid, r);
+      }
+      case 'groupJoin': {
+        if (!this.groupLimiter.allow(uid)) return err('slow_down');
+        const r = this.store.groupJoin(uid, String(m.code || ''));
+        if (typeof r === 'string') return err(r);
+        this.sendGroups(uid); this.sendGroup(uid, r);
+        for (const o of this.store.groupMembers(r)) if (o !== uid && this.byUser.has(o)) { this.sendGroups(o); }
+        return;
+      }
+      case 'groupLeave': {
+        const id = Number(m.id); if (!this.store.groupMembers(id).includes(uid)) return err('not_member');
+        this.store.groupLeave(uid, id); return this.sendGroups(uid);
+      }
+      case 'groupView': {
+        const id = Number(m.id); if (!this.store.groupMembers(id).includes(uid)) return err('not_member');
+        return this.sendGroup(uid, id);
+      }
+      case 'groupPlay': {
+        // a room for the group: everyone in it who is online gets an invite
+        const id = Number(m.id), g = this.store.groupGet(id), members = this.store.groupMembers(id);
+        if (!g || !members.includes(uid)) return err('not_member');
+        if (!MODES.includes(m.mode)) return err('bad_mode');
+        if (!this.inviteLimiter.allow(uid)) return err('slow_down');
+        this.dequeue(uid);
+        if (table) this.leaveTable(uid);
+        const room = this.newTable(m.mode, defaultTarget(m.mode), true, 0);
+        room.join(this.player(uid, gameOf(m.mode)));
+        this.userTable.set(uid, room);
+        this.pushView(room, uid);
+        const me = this.store.get(uid)!;
+        let n = 0;
+        for (const o of members) {
+          if (o === uid) continue;
+          const to = this.byUser.get(o); if (!to) continue;
+          to.conn.send({ t: 'invited', from: { id: uid, name: me.name, ch: me.ch }, code: room.code!, mode: room.mode, stake: 0, group: g.name });
+          n++;
+        }
+        this.opts.push?.(members.filter(o => o !== uid && !this.byUser.has(o)), [g.name + ' ☕', `${me.name} فاتح ترابيزة للشلة، تعالى العب`], [g.name + ' ☕', `${me.name} opened a table for the group: come and play`]);
+        return s.conn.send({ t: 'notice', text: n ? `✓ ${n}` : '✓' });
+      }
+      case 'watch': {
+        const e = this.watch(uid, { pid: typeof m.pid === 'string' ? m.pid : undefined, table: typeof m.table === 'string' ? m.table : undefined });
+        return e ? err(e) : undefined;
+      }
+      case 'unwatch': return this.unwatch(uid, true);
       case 'tutorialDone': {
         // the first-game guide: its reward, once
         const coins = this.store.tutorialDone(uid, ECONOMY.tutorialCoins);
@@ -775,6 +828,7 @@ export class Hub {
     if (!s.uid) return;
     const uid = s.uid;
     this.dequeue(uid);
+    this.unwatch(uid);
     if (this.userTable.has(uid)) this.leaveTable(uid);
     this.byUser.delete(uid);
     s.uid = null;
@@ -998,7 +1052,66 @@ export class Hub {
 
   private broadcast(t: Room) {
     for (const seat of t.seats) if (seat && !seat.bot) this.pushView(t, seat.uid);
+    // people watching (a friend's game, a tournament match): the table as an onlooker sees it
+    for (const w of this.watchers.get(t.id) ?? []) this.byUser.get(w)?.conn.send({ t: 'table', view: t.view(w), watch: true });
   }
+
+  /* ---------------- friends' café groups ---------------- */
+
+  private readonly groupLimiter = new Limiter(10, 60_000);
+  private sendGroups(uid: string) {
+    const rows = this.store.groupsOf(uid).map(g => ({ id: g.id, name: g.name, code: g.code, members: g.members, owner: g.owner === uid,
+      online: this.store.groupMembers(g.id).filter(o => this.byUser.has(o)).length }));
+    this.byUser.get(uid)?.conn.send({ t: 'groups', rows });
+  }
+  private sendGroup(uid: string, id: number) {
+    const g = this.store.groupGet(id); if (!g) return;
+    const week = weekKey();
+    const members = this.store.groupWeekly(id, week).map((r, i) => {
+      const t = this.userTable.get(r.id);
+      return { pid: r.pid, name: r.name, ch: r.ch, online: this.byUser.has(r.id), playing: !!t && !t.closed && t.phase !== 'lobby', title: this.store.wornTitle(r.id),
+        points: r.points, games: r.games, wins: r.wins, rank: i + 1, me: r.id === uid };
+    });
+    this.byUser.get(uid)?.conn.send({ t: 'group', group: { id, name: g.name, code: g.code, owner: g.owner === uid, week, endsAt: weekEndsAt(), members } });
+  }
+
+  /* ---------------- watching a game ---------------- */
+
+  /** Who watches which table (table id → user ids), and the other way round. */
+  private readonly watchers = new Map<string, Set<string>>();
+  private readonly watching = new Map<string, string>();
+
+  /** Watch a friend's game (by their public id) or a tournament match (by table id). */
+  private watch(uid: string, target: { pid?: string; table?: string }): string | null {
+    let t: Room | undefined;
+    if (target.pid) {
+      const f = this.store.byPid(target.pid); if (!f) return 'player_not_found';
+      if (this.store.friendStatus(uid, f.id) !== 'friend' && !this.store.shareGroup(uid, f.id)) return 'not_friends';
+      t = this.userTable.get(f.id);
+    } else if (target.table) {
+      if (!this.tourneyTables.has(target.table)) return 'not_watchable';
+      t = this.tables.get(target.table);
+    }
+    if (!t || t.closed || t.phase === 'lobby') return 'not_playing';
+    if (t.seatOf(uid) >= 0) return 'not_watchable';
+    const mine = this.userTable.get(uid);
+    if (mine && !mine.closed && mine.phase !== 'lobby' && mine.seatOf(uid) >= 0) return 'in_game';
+    this.dequeue(uid);
+    if (mine) this.leaveTable(uid);
+    this.unwatch(uid);
+    if (!this.watchers.has(t.id)) this.watchers.set(t.id, new Set());
+    this.watchers.get(t.id)!.add(uid); this.watching.set(uid, t.id);
+    this.byUser.get(uid)?.conn.send({ t: 'table', view: t.view(uid), watch: true });
+    return null;
+  }
+  private unwatch(uid: string, tell = false) {
+    const id = this.watching.get(uid); if (!id) return;
+    this.watching.delete(uid);
+    const set = this.watchers.get(id); set?.delete(uid); if (set && !set.size) this.watchers.delete(id);
+    if (tell) this.byUser.get(uid)?.conn.send({ t: 'left' });
+  }
+  /** How many are watching a table. */
+  watchCount(tableId: string) { return this.watchers.get(tableId)?.size ?? 0; }
 
   private emote(t: Room, seat: number, k: Emote) {
     for (const s of t.seats) if (s && !s.bot && this.userTable.get(s.uid) === t) this.byUser.get(s.uid)?.conn.send({ t: 'emote', seat, k });
@@ -1067,6 +1180,7 @@ export class Hub {
 
   private onClosed(t: Room) {
     this.rematch.delete(t.id);
+    for (const w of [...(this.watchers.get(t.id) ?? [])]) this.unwatch(w, true);
     const tt = this.tourneyTables.get(t.id);
     if (tt) {
       this.tourneyTables.delete(t.id);

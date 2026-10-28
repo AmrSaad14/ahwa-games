@@ -94,6 +94,10 @@ export class Store {
     if (!cols.has('title')) this.db.exec('ALTER TABLE users ADD COLUMN title TEXT');
     // the first-game guide done (its reward paid once), and when a player who stayed away was last nudged
     if (!cols.has('tutorial')) this.db.exec('ALTER TABLE users ADD COLUMN tutorial INTEGER NOT NULL DEFAULT 0; ALTER TABLE users ADD COLUMN nudged INTEGER NOT NULL DEFAULT 0');
+    // friends' café groups ("قهوة الشلة")
+    this.db.exec(`CREATE TABLE IF NOT EXISTS groups (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, code TEXT NOT NULL UNIQUE, owner TEXT NOT NULL, created INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS group_members (group_id INTEGER NOT NULL, user_id TEXT NOT NULL, joined INTEGER NOT NULL, PRIMARY KEY (group_id, user_id));
+      CREATE INDEX IF NOT EXISTS group_members_user ON group_members(user_id)`);
     this.db.exec('CREATE TABLE IF NOT EXISTS chest (week TEXT NOT NULL, user_id TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0, opened TEXT NOT NULL DEFAULT \'[]\', PRIMARY KEY (week, user_id))');
     this.db.exec(`CREATE TABLE IF NOT EXISTS user_titles (user_id TEXT NOT NULL, title TEXT NOT NULL, ts INTEGER NOT NULL, until INTEGER NOT NULL DEFAULT 0,
         note TEXT, PRIMARY KEY (user_id, title));
@@ -851,6 +855,57 @@ export class Store {
     const mark = this.db.prepare('UPDATE users SET nudged = ? WHERE id = ?');
     for (const id of ids) mark.run(now, id);
     return ids;
+  }
+
+  /* ---------- friends' café groups ---------- */
+
+  static readonly GROUP_MAX = 30;      // members in a group
+  static readonly GROUPS_EACH = 5;     // groups a player can be in
+
+  groupsOf(uid: string) {
+    return this.db.prepare(`SELECT g.id, g.name, g.code, g.owner, (SELECT COUNT(*) FROM group_members x WHERE x.group_id = g.id) AS members
+      FROM groups g JOIN group_members m ON m.group_id = g.id WHERE m.user_id = ? ORDER BY m.joined`).all(uid) as { id: number; name: string; code: string; owner: string; members: number }[];
+  }
+  /** Are two players in a group together? */
+  shareGroup(a: string, b: string): boolean { return !!this.db.prepare('SELECT 1 FROM group_members x JOIN group_members y ON y.group_id = x.group_id WHERE x.user_id = ? AND y.user_id = ?').get(a, b); }
+  groupGet(id: number) { return this.db.prepare('SELECT * FROM groups WHERE id = ?').get(id) as { id: number; name: string; code: string; owner: string; created: number } | undefined; }
+  groupMembers(id: number): string[] { return (this.db.prepare('SELECT user_id FROM group_members WHERE group_id = ? ORDER BY joined').all(id) as { user_id: string }[]).map(r => r.user_id); }
+  /** A new group (you're in it). Returns its id, or an error code. */
+  groupCreate(uid: string, name: string, now = Date.now()): number | string {
+    name = name.trim().replace(/\s+/g, ' ').slice(0, 24);
+    if (name.length < 2) return 'bad_name';
+    if (this.groupsOf(uid).length >= Store.GROUPS_EACH) return 'too_many_groups';
+    const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    do { code = 'G' + Array.from({ length: 5 }, () => ALPHA[Math.floor(Math.random() * ALPHA.length)]).join(''); } while (this.db.prepare('SELECT 1 FROM groups WHERE code = ?').get(code));
+    const r = this.db.prepare('INSERT INTO groups (name, code, owner, created) VALUES (?, ?, ?, ?)').run(name, code, uid, now);
+    const id = Number(r.lastInsertRowid);
+    this.db.prepare('INSERT INTO group_members (group_id, user_id, joined) VALUES (?, ?, ?)').run(id, uid, now);
+    return id;
+  }
+  /** Join by the group's code. Returns its id, or an error code. */
+  groupJoin(uid: string, code: string, now = Date.now()): number | string {
+    const g = this.db.prepare('SELECT * FROM groups WHERE code = ?').get(code.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')) as { id: number } | undefined;
+    if (!g) return 'group_not_found';
+    const members = this.groupMembers(g.id);
+    if (members.includes(uid)) return g.id;
+    if (members.length >= Store.GROUP_MAX) return 'group_full';
+    if (this.groupsOf(uid).length >= Store.GROUPS_EACH) return 'too_many_groups';
+    this.db.prepare('INSERT INTO group_members (group_id, user_id, joined) VALUES (?, ?, ?)').run(g.id, uid, now);
+    return g.id;
+  }
+  /** Leave a group (the last one out closes it; the owner leaving hands it to the longest member). */
+  groupLeave(uid: string, id: number) {
+    this.db.prepare('DELETE FROM group_members WHERE group_id = ? AND user_id = ?').run(id, uid);
+    const left = this.groupMembers(id);
+    if (!left.length) this.db.prepare('DELETE FROM groups WHERE id = ?').run(id);
+    else if (this.groupGet(id)?.owner === uid) this.db.prepare('UPDATE groups SET owner = ? WHERE id = ?').run(left[0], id);
+  }
+  /** The group's members with their points this week (the global weekly points: 3 a win, 1 a game). */
+  groupWeekly(id: number, week = weekKey()) {
+    return this.db.prepare(`SELECT u.id, u.pid, u.name, u.ch, COALESCE(w.points, 0) AS points, COALESCE(w.games, 0) AS games, COALESCE(w.wins, 0) AS wins
+      FROM group_members m JOIN users u ON u.id = m.user_id LEFT JOIN weekly w ON w.user_id = m.user_id AND w.week = ?
+      WHERE m.group_id = ? ORDER BY points DESC, wins DESC, u.name`).all(week, id) as { id: string; pid: string; name: string; ch: number; points: number; games: number; wins: number }[];
   }
 
   /* ---------- titles ---------- */

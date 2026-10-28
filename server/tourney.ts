@@ -248,7 +248,7 @@ export class Tourney {
       event: this.event, game: this.def.game, mode: this.def.mode, startsAt: this.startsAt, state: this.state,
       registered: reg, count: this.state === 'open' ? this.host.regs(this.event).length : this.rounds[0]?.length * 2 || 0,
       prizes: [...TOURNEY.prizes],
-      rounds: this.rounds.map(r => r.map(m => ({ a: me(m.a), b: me(m.b), winner: m.winner, live: m.started && m.winner === null }))),
+      rounds: this.rounds.map(r => r.map(m => ({ a: me(m.a), b: me(m.b), winner: m.winner, live: m.started && m.winner === null, table: m.started && m.winner === null ? m.table ?? undefined : undefined }))),
       you, results: this.results.map(x => ({ place: x.place, name: x.name, coins: x.coins, me: !!uid && x.uid === uid })),
       now: Date.now(),
     };

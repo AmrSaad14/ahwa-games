@@ -276,6 +276,13 @@ public partial class Menus : MonoBehaviour
             case "tier_locked": app.Toast(Loc.T("لسه موصلتش للمستوى ده")); return true;
             case "season_off": app.Toast(Loc.T("الموسم مش متاح دلوقتي")); return true;
             case "tourney_off": app.Toast(Loc.T("البطولات مش متاحة دلوقتي")); return true;
+            case "not_playing": app.Toast(Loc.T("مش بيلعب دلوقتي")); return true;
+            case "not_watchable": app.Toast(Loc.T("الماتش ده مينفعش تتفرج عليه")); return true;
+            case "in_game": app.Toast(Loc.T("إنت في ماتش دلوقتي")); return true;
+            case "group_not_found": app.Toast(Loc.T("الشلة مش موجودة")); return true;
+            case "group_full": app.Toast(Loc.T("الشلة مليانة")); return true;
+            case "too_many_groups": app.Toast(Loc.T("إنت في ٥ شلل خلاص")); return true;
+            case "not_member": app.Toast(Loc.T("مش في الشلة دي")); return true;
             case "bad_title": app.Toast(Loc.T("اللقب ده مش عندك")); return true;
             case "not_premium": app.Toast(Loc.T("افتح الموسم المميز الأول")); return true;
             case "already_premium": app.Toast(Loc.T("الموسم المميز مفتوح عندك")); return true;

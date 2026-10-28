@@ -31,6 +31,7 @@ public partial class Menus
 
     void OnMessageMore(Dictionary<string, object> m)
     {
+        OnGroupMessage(m);
         switch (m.Str("t"))
         {
             case "welcome":
@@ -434,6 +435,16 @@ public partial class Menus
                 box.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), new Vector2(colW - 8, bh), new Vector2(x, y));
                 EntrantLine(box, m.Obj("a"), w == 0, w == 1, true, bh);
                 EntrantLine(box, m.Obj("b"), w == 1, w == 0, false, bh);
+                // a match being played: tap it to watch
+                string tbl = m.Str("table");
+                if (live && !string.IsNullOrEmpty(tbl))
+                {
+                    var hit = box.gameObject.AddComponent<Button>(); hit.transition = Selectable.Transition.None;
+                    box.GetComponent<Image>().raycastTarget = true;
+                    hit.onClick.AddListener(() => { Sfx.Tap(); Close(); app.Watch(null, tbl); });
+                    var eye = Ui.Picture(box, "Watch", Icon("view")); eye.color = Ui.Gold;
+                    eye.rectTransform.Place(new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(16, 16), new Vector2(Loc.En ? -4 : 4, 0));
+                }
             }
         }
         var you = t.Obj("you");
