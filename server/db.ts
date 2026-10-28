@@ -19,7 +19,7 @@ export interface UserRow {
   coins: number; gifts: number; bonus_day: string | null; ad_free_until: number; equip: string | null;
   phone: string | null; google_sub: string | null; google_email: string | null; apple_sub?: string | null; apple_email?: string | null;
   pg_id: string | null; friend_code: string | null; streak?: number; xp?: number;
-  ref_by?: string | null; ref_paid?: number; muted_until?: number; pid?: string | null;
+  ref_by?: string | null; ref_paid?: number; muted_until?: number; pid?: string | null; banned?: number; ban_reason?: string | null;
 }
 
 export class Store {
@@ -87,6 +87,11 @@ export class Store {
       for (const u of all) set.run(publicId(u.id), u.id);
     }
     this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_pid ON users(pid) WHERE pid IS NOT NULL');
+    // the dashboard: banned players, and a log of what the team did
+    if (!cols.has('banned')) this.db.exec('ALTER TABLE users ADD COLUMN banned INTEGER NOT NULL DEFAULT 0; ALTER TABLE users ADD COLUMN ban_reason TEXT');
+    this.db.exec(`CREATE TABLE IF NOT EXISTS admin_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, who TEXT NOT NULL, action TEXT NOT NULL, target TEXT, detail TEXT);
+      CREATE INDEX IF NOT EXISTS users_seen ON users(seen); CREATE INDEX IF NOT EXISTS users_created ON users(created);
+      CREATE INDEX IF NOT EXISTS coin_log_kind ON coin_log(kind, ts)`);
     // daily missions (progress per player per Cairo day), the season pass, the weekly tournament's sign-ups
     this.db.exec(`CREATE TABLE IF NOT EXISTS missions (user_id TEXT NOT NULL, day TEXT NOT NULL, id TEXT NOT NULL, have INTEGER NOT NULL DEFAULT 0,
         claimed INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day, id));
@@ -634,6 +639,149 @@ export class Store {
     if (!paid) { this.addCoins(c.user_id, c.coins); this.logCoins(c.user_id, 'cashout_refund', c.coins); }
     return c;
   }
+
+  /* ---------- the dashboard (/admin) ---------- */
+
+  private one<T>(sql: string, ...a: (string | number | null)[]): T { return this.db.prepare(sql).get(...a) as T; }
+  private n(sql: string, ...a: (string | number | null)[]): number { return Number((this.db.prepare(sql).get(...a) as { n: number | null }).n ?? 0); }
+
+  /** The numbers on the dashboard's front page. */
+  adminOverview(now = Date.now()) {
+    const day = nextCairoDay(now) - 86_400_000, week = now - 7 * 86_400_000;
+    const season = seasonOf(now);
+    return {
+      players: this.n('SELECT COUNT(*) AS n FROM users'),
+      signedIn: this.n('SELECT COUNT(*) AS n FROM users WHERE google_sub IS NOT NULL OR apple_sub IS NOT NULL OR phone IS NOT NULL OR email IS NOT NULL'),
+      newToday: this.n('SELECT COUNT(*) AS n FROM users WHERE created >= ?', day),
+      activeToday: this.n('SELECT COUNT(*) AS n FROM users WHERE seen >= ?', day),
+      activeWeek: this.n('SELECT COUNT(*) AS n FROM users WHERE seen >= ?', week),
+      gamesToday: this.n('SELECT COUNT(*) AS n FROM matches WHERE ended >= ?', day),
+      coinsHeld: this.n('SELECT SUM(coins) AS n FROM users'),
+      houseFeesToday: this.n("SELECT SUM(fee) AS n FROM coin_log WHERE ts >= ?", day),
+      purchasesToday: this.n('SELECT COUNT(*) AS n FROM purchases WHERE ts >= ?', day),
+      purchasesWeek: this.n('SELECT COUNT(*) AS n FROM purchases WHERE ts >= ?', week),
+      seasonPremium: this.n('SELECT COUNT(*) AS n FROM season WHERE season = ? AND premium = 1', season),
+      cashoutPending: this.n("SELECT COUNT(*) AS n FROM cashouts WHERE status = 'pending'"),
+      cashoutPendingEgp: this.n("SELECT SUM(egp) AS n FROM cashouts WHERE status = 'pending'"),
+      cashoutPaidEgp: this.n("SELECT SUM(egp) AS n FROM cashouts WHERE status = 'paid'"),
+      reportsWeek: this.n('SELECT COUNT(*) AS n FROM reports WHERE ts >= ?', week),
+      support: this.n('SELECT COUNT(*) AS n FROM support WHERE ts >= ?', week),
+      banned: this.n('SELECT COUNT(*) AS n FROM users WHERE banned = 1'),
+    };
+  }
+
+  /** Day by day for the last `days` Cairo days: new players, active players, games, purchases, cash-outs. */
+  adminDaily(days = 14, now = Date.now()) {
+    const out: { day: string; newPlayers: number; active: number; games: number; purchases: number; cashoutEgp: number }[] = [];
+    let end = nextCairoDay(now);
+    for (let i = 0; i < days; i++) {
+      const start = end - 86_400_000;
+      out.unshift({
+        day: cairoDay(start + 3_600_000),
+        newPlayers: this.n('SELECT COUNT(*) AS n FROM users WHERE created >= ? AND created < ?', start, end),
+        active: this.n("SELECT COUNT(DISTINCT user_id) AS n FROM coin_log WHERE ts >= ? AND ts < ?", start, end),
+        games: this.n('SELECT COUNT(*) AS n FROM matches WHERE ended >= ? AND ended < ?', start, end),
+        purchases: this.n('SELECT COUNT(*) AS n FROM purchases WHERE ts >= ? AND ts < ?', start, end),
+        cashoutEgp: this.n("SELECT SUM(egp) AS n FROM cashouts WHERE ts >= ? AND ts < ? AND status != 'rejected'", start, end),
+      });
+      end = start;
+    }
+    return out;
+  }
+
+  /** Players by id, public id, friend code, name, e-mail or phone. */
+  adminSearch(q: string, limit = 50, offset = 0): UserRow[] {
+    q = q.trim();
+    if (!q) return this.db.prepare('SELECT * FROM users ORDER BY seen DESC LIMIT ? OFFSET ?').all(limit, offset) as unknown as UserRow[];
+    const like = '%' + q.replace(/[%_]/g, '') + '%', digits = q.replace(/\D/g, '');
+    return this.db.prepare(`SELECT * FROM users WHERE id = ? OR pid = ? OR friend_code = ? OR name LIKE ? OR email LIKE ? OR google_email LIKE ? OR apple_email LIKE ?
+      OR (? != '' AND phone LIKE ?) ORDER BY seen DESC LIMIT ? OFFSET ?`)
+      .all(q, q, q.toUpperCase(), like, like, like, like, digits, '%' + digits.slice(-9) + '%', limit, offset) as unknown as UserRow[];
+  }
+
+  /** Everything about one player, for the dashboard. */
+  adminPlayer(id: string) {
+    const u = this.get(id); if (!u) return null;
+    return {
+      user: u, pub: this.publicUser(u), stats: this.playerStats(id), skins: this.skinsOf(id), coins: this.coinHistory(id, 80),
+      purchases: this.db.prepare('SELECT product, order_id, ts, coins, until FROM purchases WHERE user_id = ? ORDER BY ts DESC LIMIT 50').all(id),
+      cashouts: this.db.prepare('SELECT * FROM cashouts WHERE user_id = ? ORDER BY id DESC LIMIT 50').all(id),
+      reportsAbout: this.db.prepare('SELECT r.*, u.name AS from_name FROM reports r LEFT JOIN users u ON u.id = r.from_id WHERE about_id = ? ORDER BY ts DESC LIMIT 50').all(id),
+      reportsBy: this.n('SELECT COUNT(*) AS n FROM reports WHERE from_id = ?', id),
+      season: this.seasonState(id), friends: this.friendCount(id), referredBy: u.ref_by ?? null,
+    };
+  }
+
+  /** Coins added (or taken, when negative) by the team. */
+  adminCoins(id: string, delta: number, kind = 'admin'): number | null {
+    const u = this.get(id); if (!u) return null;
+    const d = Math.max(-u.coins, Math.round(delta));
+    this.addCoins(id, d); this.logCoins(id, kind, d);
+    return u.coins + d;
+  }
+  adminGiveSkin(id: string, skin: string, give: boolean): boolean {
+    if (!skinById(skin) || !this.get(id)) return false;
+    if (give) this.db.prepare('INSERT OR IGNORE INTO user_skins (user_id, skin, ts) VALUES (?, ?, ?)').run(id, skin, Date.now());
+    else this.db.prepare('DELETE FROM user_skins WHERE user_id = ? AND skin = ?').run(id, skin);
+    return true;
+  }
+  adminBan(id: string, on: boolean, reason: string) { this.db.prepare('UPDATE users SET banned = ?, ban_reason = ? WHERE id = ?').run(on ? 1 : 0, on ? reason.slice(0, 200) : null, id); }
+  adminRename(id: string, name: string) { this.db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name.slice(0, 24), id); }
+  adminUnmute(id: string) { this.db.prepare('UPDATE users SET muted_until = 0 WHERE id = ?').run(id); }
+  adminSeasonPremium(id: string, on: boolean, now = Date.now()) {
+    const sid = seasonOf(now);
+    this.db.prepare('INSERT INTO season (user_id, season, premium) VALUES (?, ?, ?) ON CONFLICT(user_id, season) DO UPDATE SET premium = excluded.premium').run(id, sid, on ? 1 : 0);
+  }
+  adminSeasonSp(id: string, sp: number, now = Date.now()) {
+    const sid = seasonOf(now);
+    this.db.prepare('INSERT INTO season (user_id, season, sp) VALUES (?, ?, ?) ON CONFLICT(user_id, season) DO UPDATE SET sp = excluded.sp').run(id, sid, Math.max(0, Math.round(sp)));
+  }
+
+  /** Coins for every player (or those seen in the last `activeDays` days). Returns how many got them. */
+  adminCoinsToAll(coins: number, activeDays: number, kind = 'gift_all', now = Date.now()): number {
+    const since = activeDays > 0 ? now - activeDays * 86_400_000 : 0;
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare('UPDATE users SET coins = coins + ? WHERE seen >= ? AND banned = 0').run(coins, since);
+      const r = this.db.prepare('INSERT INTO coin_log (user_id, ts, kind, delta, balance) SELECT id, ?, ?, ?, coins FROM users WHERE seen >= ? AND banned = 0').run(now, kind, coins, since);
+      this.db.exec('COMMIT');
+      return Number(r.changes);
+    } catch (e) { this.db.exec('ROLLBACK'); throw e; }
+  }
+  adminIdsSeenSince(since: number): string[] { return (this.db.prepare('SELECT id FROM users WHERE seen >= ? AND banned = 0').all(since) as { id: string }[]).map(r => r.id); }
+
+  /** The season pass this month: how many bought it, and how far players have got. */
+  adminSeason(now = Date.now()) {
+    const sid = seasonOf(now);
+    const rows = this.db.prepare('SELECT sp, premium FROM season WHERE season = ?').all(sid) as { sp: number; premium: number }[];
+    const tiers = Array.from({ length: SEASON_TIERS + 1 }, () => 0);
+    for (const r of rows) tiers[tierOf(r.sp)]++;
+    return { season: sid, endsAt: seasonEndsAt(now), players: rows.length, premium: rows.filter(r => r.premium).length,
+      paidPlay: this.n("SELECT COUNT(*) AS n FROM purchases WHERE product = 'season_pass' AND ts >= ?", now - 40 * 86_400_000), tiers };
+  }
+
+  purchasesAll(limit = 200) {
+    return this.db.prepare('SELECT p.*, u.name FROM purchases p LEFT JOIN users u ON u.id = p.user_id ORDER BY p.ts DESC LIMIT ?').all(limit);
+  }
+  reportsFull(limit = 200) {
+    return this.db.prepare(`SELECT r.*, a.name AS from_name, b.name AS about_name, b.muted_until, b.banned FROM reports r
+      LEFT JOIN users a ON a.id = r.from_id LEFT JOIN users b ON b.id = r.about_id ORDER BY r.ts DESC LIMIT ?`).all(limit);
+  }
+  tourneyHistory(limit = 20) {
+    return (this.db.prepare("SELECT k, v FROM meta WHERE k LIKE 'tourney_results_%' ORDER BY k DESC LIMIT ?").all(limit) as { k: string; v: string }[])
+      .map(r => { try { return { event: r.k.slice('tourney_results_'.length), ...JSON.parse(r.v) }; } catch { return null; } }).filter(Boolean);
+  }
+  cashoutGet(id: number): CashoutDb | undefined { return this.db.prepare('SELECT * FROM cashouts WHERE id = ?').get(id) as CashoutDb | undefined; }
+  /** How many online games a player has finished, and how old the account is (cash-out rules). */
+  cashoutCheck(id: string): { games: number; ageDays: number } {
+    const u = this.get(id);
+    return { games: u?.games ?? 0, ageDays: u ? (Date.now() - u.created) / 86_400_000 : 0 };
+  }
+
+  adminLog(who: string, action: string, target: string | null, detail: unknown) {
+    this.db.prepare('INSERT INTO admin_log (ts, who, action, target, detail) VALUES (?, ?, ?, ?, ?)').run(Date.now(), who, action, target, detail === undefined ? null : JSON.stringify(detail).slice(0, 2000));
+  }
+  adminLogAll(limit = 300) { return this.db.prepare('SELECT * FROM admin_log ORDER BY id DESC LIMIT ?').all(limit); }
 
   /* ---------- support messages ---------- */
 

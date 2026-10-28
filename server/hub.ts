@@ -10,6 +10,7 @@ import { missionById } from '../shared/missions';
 import { SP, SEASON_PASS } from '../shared/season';
 import { skinFor } from '../shared/skins';
 import { Tourney, Entrant } from './tourney';
+import type { Settings, GameSettings } from './settings';
 import { parseEquip } from './db';
 import { BoardTable } from '../shared/boardtable';
 import type { BoardAction } from '../shared/games/defs';
@@ -40,12 +41,16 @@ export interface HubOptions {
   phones?: PhoneCodes; google?: GoogleSignIn; apple?: AppleSignIn; defaultCountry?: string;
   adsSsv?: boolean;
   billing?: PlayBilling;
+  /** A cash-out request came in (the dashboard can be told). */
+  onCashout?: (id: number, egp: number) => void;
   /** A player won a weekly prize (the server sends them a push). */
   onWeeklyPrize?: (uid: string, rank: number, coins: number) => void;
   /** A push to players' phones (the tournament's reminders, a referral bonus). */
   push?: (uids: string[], ar: [string, string], en: [string, string]) => void;
   /** How long a player who dropped out has to come back before the computer plays for them (default 30 s). */
   graceMs?: number;
+  /** The live settings from the dashboard (cash-out, maintenance, notice, how play runs). */
+  settings?: Settings;
   /** Files a support message (and e-mails it); the server sets it up (server/support.ts). */
   support?: (m: { uid: string | null; name: string; contact: string; text: string; app: string }) => number;
 }
@@ -154,6 +159,8 @@ export class Hub {
     const uid = s.uid;
     const err = (code: string) => s.conn.send({ t: 'err', code });
     const table = this.userTable.get(uid);
+    // maintenance (dashboard): no new games start; games already on finish
+    if (this.opts.settings?.value.maintenance.on && ['quick', 'create', 'join', 'tourneyJoin', 'rematch'].includes(m.t)) return err('maintenance');
     switch (m.t) {
       case 'daily': {
         const d = this.store.claimDaily(uid);
@@ -547,21 +554,26 @@ export class Hub {
         return s.conn.send({ t: 'supportSent', id });
       }
       case 'cashout': {
-        if (!CASHOUT.enabled) return err('cashout_off');   // not offered for now (CASHOUT_ENABLED=1 turns it on)
+        const cs = this.cash;
+        if (!cs.enabled) return err('cashout_off');
         const u = this.store.get(uid);
         if (!u) return;
-        // paid to a real wallet: only for accounts that can be got back (Google, mobile number or e-mail)
-        if (!u.google_sub && !u.phone && !u.email) return err('sign_in_first');
-        const phone = walletNumber(String(m.phone || ''));
+        // paid to a real wallet: only for accounts that can be got back (Google, Apple, mobile number or e-mail)
+        if (!u.google_sub && !u.apple_sub && !u.phone && !u.email) return err('sign_in_first');
+        const check = this.store.cashoutCheck(uid);
+        if (check.games < cs.minGames) return err('cashout_games');
+        if (check.ageDays < cs.minAccountDays) return err('cashout_new_account');
+        const phone = walletNumber(String(m.phone || ''), cs.prefixes);
         if (!phone) return err('bad_wallet');
-        const millions = Math.floor(Number(m.millions));
-        if (!(millions >= 1 && millions <= CASHOUT.maxMillions)) return err('bad_amount');
+        const units = Math.floor(Number(m.millions));
+        if (!(units >= 1 && units <= cs.maxUnits)) return err('bad_amount');
         if (!this.cashLimiter.allow(uid)) return err('slow_down');
-        const coins = millions * CASHOUT.coins, egp = millions * CASHOUT.egp;
+        const coins = units * cs.coins, egp = units * cs.egp;
         const r = this.store.requestCashout(uid, coins, egp, phone);
         if (r === 'pending') return err('cashout_pending');
         if (r === null) return err('not_enough_coins');
         console.log(`[cashout] #${r} ${egp} EGP for ${coins} coins`);
+        this.opts.onCashout?.(r, egp);
         s.conn.send({ t: 'cashoutDone', id: r, egp, coins, phone });
         this.sendUser(uid); this.sendCashouts(uid);
         return;
@@ -658,7 +670,12 @@ export class Hub {
     if (s.uid) return;
     const id = this.tokens.verify(token);
     const u = (id && this.store.get(id)) || this.newGuest();
+    if (u.banned) { s.conn.send({ t: 'err', code: 'banned', reason: u.ban_reason ?? '' }); s.conn.close(4003, 'banned'); return; }
     this.attach(s, u);
+    // the dashboard's notice and maintenance message
+    const st = this.opts.settings?.value;
+    if (st?.notice.text && st.notice.until > Date.now()) s.conn.send({ t: 'notice', text: st.notice.text });
+    if (st?.maintenance.on) s.conn.send({ t: 'notice', text: st.maintenance.message });
   }
 
   private attach(s: Session, u: UserRow) {
@@ -670,7 +687,7 @@ export class Hub {
     // the daily reward: newer phones show the track and the player collects it; older ones get it at once
     const daily = (s.v ?? 1) < 2 ? this.store.claimDaily(u.id) : { coins: 0, streak: 0 };
     const fresh = this.store.get(u.id) ?? u;
-    s.conn.send({ t: 'welcome', user: this.store.publicUser(fresh), token: this.tokens.issue(u.id), now: Date.now(), ice: this.iceFor(u.id),
+    s.conn.send({ t: 'welcome', user: this.pub(fresh), token: this.tokens.issue(u.id), now: Date.now(), ice: this.iceFor(u.id),
       login: { google: !!this.opts.google?.enabled, apple: !!this.opts.apple?.enabled, phone: !!this.opts.phones?.enabled, playGames: this.opts.google?.playGamesEnabled ? this.opts.google.clientId : undefined } });
     this.friendsChanged(u.id);
     if (daily.coins) s.conn.send({ t: 'bonus', coins: daily.coins, streak: daily.streak });
@@ -700,15 +717,37 @@ export class Hub {
   }
 
   private sendCashouts(uid: string) {
-    this.byUser.get(uid)?.conn.send({ t: 'cashouts', rows: this.store.cashoutsOf(uid), rate: { coins: CASHOUT.coins, egp: CASHOUT.egp }, maxMillions: CASHOUT.maxMillions });
+    const cs = this.cash;
+    this.byUser.get(uid)?.conn.send({ t: 'cashouts', rows: this.store.cashoutsOf(uid), rate: { coins: cs.coins, egp: cs.egp }, maxMillions: cs.maxUnits });
   }
 
   /** Lets the player know (cash-out paid or turned down), if they're connected. */
   refreshPlayer(uid: string) { this.sendUser(uid); this.sendCashouts(uid); }
 
+  /** The live cash-out rules. */
+  private get cash(): GameSettings['cashout'] { return this.opts.settings?.value.cashout ?? CASHOUT; }
+  /** A player as the app sees them, with what the cash-out offers right now. */
+  private pub(u: UserRow) {
+    const c = this.cash;
+    return { ...this.store.publicUser(u), cashout: { on: c.enabled, coins: c.coins, egp: c.egp, maxUnits: c.maxUnits, minGames: c.minGames } };
+  }
+  /** How long matchmaking waits for people, and a turn's length (dashboard). */
+  setTiming(botFillMs: number, turnMs: number) { this.opts.botFillMs = botFillMs; this.opts.turnMs = turnMs; }
+  /** Players online now. */
+  get onlineIds(): string[] { return [...this.byUser.keys()]; }
+  /** A message on every open app (the dashboard's notice). */
+  noticeAll(text: string) { for (const ss of this.byUser.values()) ss.conn.send({ t: 'notice', text }); }
+  /** Someone's account changed from the dashboard: their app updates (or, banned, they are sent away). */
+  adminChanged(uid: string) {
+    const u = this.store.get(uid), ss = this.byUser.get(uid);
+    if (!u || !ss) return;
+    if (u.banned) { ss.conn.send({ t: 'err', code: 'banned', reason: u.ban_reason ?? '' }); this.detach(ss); ss.conn.close(4003, 'banned'); return; }
+    this.sendUser(uid);
+  }
+
   private sendUser(uid: string) {
     const u = this.store.get(uid); const s = this.byUser.get(uid);
-    if (u && s) s.conn.send({ t: 'user', user: this.store.publicUser(u) });
+    if (u && s) s.conn.send({ t: 'user', user: this.pub(u) });
   }
 
   /* ---------------- tables ---------------- */
@@ -1057,15 +1096,16 @@ export class Hub {
 }
 
 /** Cash out: every 1,000,000 coins is 10 EGP on Vodafone Cash, paid by hand (see /admin/cashouts). */
-export const CASHOUT = { coins: 1_000_000, egp: 10, maxMillions: 10, enabled: process.env.CASHOUT_ENABLED === '1' };
+/** (Without the dashboard's settings: off, 1,000,000 coins = 5 EGP.) */
+export const CASHOUT: GameSettings['cashout'] = { enabled: false, coins: 1_000_000, egp: 5, maxUnits: 10, minGames: 0, minAccountDays: 0, prefixes: ['010'] };
 
 /** A Vodafone Cash number as 010xxxxxxxx (accepts +20 / 0020, spaces and Arabic digits), or null. */
-export function walletNumber(raw: string): string | null {
+export function walletNumber(raw: string, prefixes: string[] = ['010']): string | null {
   let d = raw.replace(/[\u0660-\u0669]/g, c => String(c.charCodeAt(0) - 0x0660)).replace(/[\u06F0-\u06F9]/g, c => String(c.charCodeAt(0) - 0x06F0)).replace(/\D/g, '');
   if (d.startsWith('0020')) d = '0' + d.slice(4);
   else if (d.startsWith('20') && d.length === 12) d = '0' + d.slice(2);
-  else if (d.length === 10 && d.startsWith('10')) d = '0' + d;
-  return /^010\d{8}$/.test(d) ? d : null;
+  else if (d.length === 10 && d.startsWith('1')) d = '0' + d;
+  return /^01\d{9}$/.test(d) && prefixes.includes(d.slice(0, 3)) ? d : null;
 }
 
 /** When this week's leaderboard closes (next Monday 00:00 UTC). */

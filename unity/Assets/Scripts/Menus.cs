@@ -20,7 +20,8 @@ public partial class Menus : MonoBehaviour
     bool googleOn = true, appleOn;
     string pendingTicket;
     // cash out: your requests and the rate, from the server
-    List<object> cashRows; long cashCoins = 1_000_000; int cashEgp = 10, cashMax = 10, cashMillions = 1;
+    List<object> cashRows; long cashCoins = 1_000_000; int cashEgp = 5, cashMax = 10, cashMillions = 1, cashMinGames = 0;
+    GameObject cashChip;
     InputField walletField;
 
     // the leaderboard currently asked for
@@ -54,7 +55,9 @@ public partial class Menus : MonoBehaviour
         TopButton(top, 1, "trophy", "المتصدرين", () => OpenLeaders(0));
         TopButton(top, 2, "help", "طريقة اللعب", () => OpenHowTo(0));
         TopButton(top, 3, "settings", "الإعدادات", OpenSettings);
-        // (cash out to Vodafone Cash: OpenCashout, switched off for now)
+        // prizes: coins to Vodafone Cash (shown only while the server has cash-out on, from the dashboard)
+        var cash = Chip(home, "coin", "اسحب فلوسك", new Vector2(-252, -56), 128, new Color32(0xc0, 0x1f, 0x2a, 0xf0), Color.white, () => { Sfx.Tap(); OpenCashout(); });
+        cashChip = cash.gameObject; cashChip.SetActive(false);
 
         // along the top, left of your name and coins: watch an ad, sign in, language
         var ad = Chip(home, "video", "+5K", new Vector2(-252, -10), 98, new Color32(0x2f, 0x6b, 0x3a, 0xf0), Color.white, WatchAd);
@@ -123,6 +126,9 @@ public partial class Menus : MonoBehaviour
         user = u;
         bool signed = !string.IsNullOrEmpty(u.Str("google")) || !string.IsNullOrEmpty(u.Str("apple")) || !string.IsNullOrEmpty(u.Str("phone")) || !string.IsNullOrEmpty(u.Str("email"));
         signChip.SetActive(!signed);
+        var co = u.Obj("cashout");
+        cashChip.SetActive(co != null && co.Bool("on"));
+        if (co != null) { cashCoins = (long)co.Num("coins", cashCoins); cashEgp = (int)co.Num("egp", cashEgp); cashMax = (int)co.Num("maxUnits", cashMax); cashMinGames = (int)co.Num("minGames", 0); }
         int left = (int)u.Num("adsLeft");
         adText.Set(left > 0 ? "+5K" : "0");
         var eq = u.Obj("equip");
@@ -227,6 +233,9 @@ public partial class Menus : MonoBehaviour
             case "ticket_expired": app.Toast(Loc.T("تسجيل الدخول بجوجل مش متاح على السيرفر ده")); return true;
             case "sign_in_first": app.Toast(Loc.T("سجّل دخول الأول عشان تقدر تسحب")); return true;
             case "bad_wallet": app.Toast(Loc.T("اكتب رقم فودافون صحيح يبدأ بـ 010")); return true;
+            case "cashout_off": app.Toast(Loc.T("السحب مقفول دلوقتي")); cashChip.SetActive(false); return true;
+            case "cashout_games": app.Toast(Loc.T("العب ماتشات أونلاين أكتر الأول عشان تقدر تسحب")); return true;
+            case "cashout_new_account": app.Toast(Loc.T("حسابك لسه جديد، جرّب السحب بعد كام يوم")); return true;
             case "cashout_pending": app.Toast(Loc.T("عندك طلب لسه بيتحول، استنى لما يخلص")); return true;
             case "bad_amount": app.Toast(Loc.T("المبلغ مش مظبوط")); return true;
             case "slow_down": app.Toast(Loc.T("استنى شوية وجرّب تاني")); return true;
@@ -658,7 +667,8 @@ public partial class Menus : MonoBehaviour
             long coins = (long)(user?.Num("coins") ?? 0);
             int canMillions = (int)Math.Min(cashMax, coins / Math.Max(1, cashCoins));
             cashMillions = Mathf.Clamp(cashMillions, 1, Math.Max(1, canMillions));
-            bool signed = user != null && (!string.IsNullOrEmpty(user.Str("google")) || !string.IsNullOrEmpty(user.Str("phone")) || !string.IsNullOrEmpty(user.Str("email")));
+            bool signed = user != null && (!string.IsNullOrEmpty(user.Str("google")) || !string.IsNullOrEmpty(user.Str("apple")) || !string.IsNullOrEmpty(user.Str("phone")) || !string.IsNullOrEmpty(user.Str("email")));
+            int gamesLeft = Math.Max(0, cashMinGames - (int)(user?.Num("games") ?? 0));
 
             // the rate and your balance
             var top = Ui.Box(body, "Rate", Card).rectTransform;
@@ -678,6 +688,13 @@ public partial class Menus : MonoBehaviour
                 var b = Ui.Button(form, "تسجيل الدخول بجوجل", Color.white, Ui.Ink, 15, SignIn);
                 var br = ((RectTransform)b.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(250, 40), new Vector2(0, -50));
                 var gi = Ui.Picture(br, "G", Icon("google")); gi.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(22, 22), new Vector2(10, 0));
+            }
+            else if (gamesLeft > 0)
+            {
+                Ui.Label(form, Loc.T("العب") + " " + gamesLeft + " " + Loc.T("ماتش أونلاين كمان وتقدر تسحب"), 17, Color.white, TextAnchor.MiddleCenter, Ui.Bold).rectTransform
+                    .Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(580, 34), new Vector2(0, -14));
+                Ui.Label(form, "السحب للي عندهم ١٨ سنة وساكنين في مصر", 13, Ui.GoldLight, TextAnchor.MiddleCenter).rectTransform
+                    .Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(580, 26), new Vector2(0, -56));
             }
             else if (coins < cashCoins)
             {

@@ -14,7 +14,10 @@ import { verifySsv } from './ads';
 import { GitHubBackup } from './backup';
 import { PlayBilling } from './billing';
 import { Push } from './push';
-import { cashoutPage, supportPage, invitePage, referPage } from './admin';
+import { supportPage, invitePage, referPage } from './admin';
+import { Settings } from './settings';
+import { adminApi } from './adminapi';
+import { dashboardPage } from './dashboard';
 import { supportDesk } from './support';
 import { api } from './api';
 import type { S2C } from '../shared/protocol';
@@ -33,11 +36,21 @@ export function createServer(opts = config) {
   const apple = new AppleSignIn({ serviceId: l.appleServiceId ?? '', teamId: l.appleTeamId ?? '', keyId: l.appleKeyId ?? '', privateKey: l.applePrivateKey ?? '', publicUrl: l.publicUrl, appScheme: l.appScheme });
   const billing = new PlayBilling(opts.billing);
   const desk = supportDesk(store, opts.support);
-  const hub = new Hub(store, tokens, { phones, google, apple, billing, support: m => desk.file(m),
+  // the live settings the dashboard changes (cash-out, tournament, season pass, economy, maintenance, notice)
+  const settings = new Settings(store, { botFillSeconds: Math.round(opts.botFillMs / 1000), turnSeconds: Math.round(opts.turnMs / 1000) });
+  const hub = new Hub(store, tokens, { phones, google, apple, billing, support: m => desk.file(m), settings,
     push: (uids, ar, en) => { for (const u of uids) push.toUser(u, ar, en).catch(() => {}); },
     onWeeklyPrize: (uid, rank, coins) => { push.toUser(uid, ['مبروك! 🏆', `جيت المركز ${rank} الأسبوع ده وكسبت ${coins.toLocaleString('en')} كوين`], ['Congratulations! 🏆', `You finished #${rank} this week and won ${coins.toLocaleString('en')} coins`]).catch(() => {}); }, defaultCountry: opts.login.defaultCountry, adsSsv: opts.adsSsv, turnMs: opts.turnMs, botFillMs: opts.botFillMs, nextRoundMs: opts.nextRoundMs, botDelay: opts.botDelay, lobbyAfterMatchMs: opts.lobbyAfterMatchMs, msgsPer5s: (opts as { msgsPer5s?: number }).msgsPer5s, graceMs: (opts as { graceMs?: number }).graceMs,
     stunUrls: opts.stunUrls, turnUrls: opts.turnUrls, turnSecret: opts.turnSecret, autoMoveMs: opts.autoMoveMs, chessClockMs: opts.chessClockMs });
   const push = new Push(store, opts.push);
+  if (settings.saved) hub.setTiming(settings.value.play.botFillSeconds * 1000, settings.value.play.turnSeconds * 1000);
+  settings.onChange((now, before) => {
+    hub.setTiming(now.play.botFillSeconds * 1000, now.play.turnSeconds * 1000);
+    const t = now.tourney, b = before.tourney;
+    if (t.weekday !== b.weekday || t.hour !== b.hour || t.game !== b.game || t.enabled !== b.enabled) hub.tourney.reschedule();
+  });
+  const admin = adminApi({ store, hub, settings, adminKey: opts.adminKey, secret: store.secret(opts.secret), ip: req => clientIp(req), pushOn: () => push.enabled,
+    push: (uids, ar, en) => { for (const u of uids) push.toUser(u, ar, en).catch(() => {}); } });
   const pushTimer = setInterval(() => { push.tick().catch(e => console.error('[push]', (e as Error).message)); }, 60_000);
   const staticRoot = path.resolve(opts.staticDir);
   const perIp = new Map<string, number>();
@@ -54,6 +67,12 @@ export function createServer(opts = config) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
     // the HTTP API: /api/v1/… and its docs at /api/docs (server/api.ts)
+    // the dashboard: its page at /admin, its API at /api/admin/… (server/adminapi.ts)
+    if (admin(req, res, url)) return;
+    if (url.pathname === '/admin' || url.pathname === '/admin/') {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex', 'X-Frame-Options': 'DENY' });
+      return res.end(dashboardPage());
+    }
     restApi ??= api({ store, tokens, hub, support: m => desk.file(m), ip: clientIp });
     if (restApi(req, res, url)) return;
     if (url.pathname === '/healthz') {
@@ -63,8 +82,8 @@ export function createServer(opts = config) {
     // the privacy policy, the terms and the delete-account page (Google Play links to them)
     const legal = url.pathname === '/privacy' ? privacyPage : url.pathname === '/terms' ? termsPage : url.pathname === '/delete-account' ? deletePage : null;
     if (legal) {
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'max-age=3600' });
-      return res.end(legal());
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'max-age=300' });
+      return res.end(legal(settings.value.cashout));
     }
     if (url.pathname === '/api/leaderboard') {
       res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'max-age=30' });
@@ -129,35 +148,8 @@ export function createServer(opts = config) {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' });
       return res.end(supportPage(store.supportAll(300), desk.mailOn, opts.support.to));
     }
-    // cash-out requests: a page to see them and mark them paid (or turn them down: the coins go back)
-    if (url.pathname === '/admin/cashouts') {
-      if (req.method === 'POST') {
-        let raw = '';
-        req.on('data', c => { raw += c; if (raw.length > 4096) req.destroy(); });
-        req.on('end', () => {
-          const f = new URLSearchParams(raw);
-          const key = f.get('key') || '';
-          if (!isAdmin(key)) { res.writeHead(403); return res.end(); }
-          const id = Number(f.get('id')), paid = f.get('action') === 'paid';
-          const c = store.settleCashout(id, paid, f.get('note') || '');
-          if (c) {
-            console.log(`[cashout] #${id} ${paid ? 'paid' : 'rejected'}`);
-            hub.refreshPlayer(c.user_id);
-            push.toUser(c.user_id,
-              paid ? ['تم التحويل 💸', `اتحولك ${c.egp} جنيه على فودافون كاش`] : ['طلب السحب اترفض', 'رجعنالك الكوينز، كلمنا لو محتاج مساعدة'],
-              paid ? ['Paid 💸', `${c.egp} EGP was sent to your Vodafone Cash`] : ['Cash-out declined', 'Your coins are back in your balance']).catch(() => {});
-          }
-          res.writeHead(303, { Location: `/admin/cashouts?key=${encodeURIComponent(key)}`, 'Cache-Control': 'no-store' });
-          res.end();
-        });
-        return;
-      }
-      const key = url.searchParams.get('key') || '';
-      if (!isAdmin(key)) { res.writeHead(403, { 'Content-Type': 'text/plain' }); return res.end('forbidden'); }
-      const status = url.searchParams.get('status');
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex', 'Referrer-Policy': 'no-referrer' });
-      return res.end(cashoutPage(store.cashoutsAll(status === 'all' ? null : status || 'pending'), key, status || 'pending', push.enabled));
-    }
+    // cash-out requests are in the dashboard now
+    if (url.pathname === '/admin/cashouts') { res.writeHead(302, { Location: '/admin#cashouts' }); return res.end(); }
     // AdMob server-side verification: Google calls this after a player watched a rewarded ad
     if (url.pathname === '/ads/ssv') {
       const raw = (req.url || '').split('?')[1] || '';

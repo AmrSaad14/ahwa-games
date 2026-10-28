@@ -19,7 +19,7 @@ export const ECONOMY = {
 };
 
 /** The daily bonus grows for each day in a row you come back: day 1 … day 7 (and every day after). */
-export const STREAK = [5_000, 8_000, 12_000, 18_000, 25_000, 35_000, 50_000] as const;
+export const STREAK: number[] = [5_000, 8_000, 12_000, 18_000, 25_000, 35_000, 50_000];   // (the dashboard can change it)
 export const streakBonus = (day: number) => STREAK[Math.min(STREAK.length, Math.max(1, day)) - 1];
 
 /** Days for the daily reward run on Cairo time (midnight in Egypt): the date as YYYY-MM-DD. */
@@ -39,7 +39,7 @@ export const levelOf = (xp: number) => Math.max(1, Math.floor((1 + Math.sqrt(1 +
 export const xpForLevel = (level: number) => 50 * level * (level - 1);
 
 /** The week's top ten (most points: 3 a win, 1 a game, online only) share these prizes every Monday. */
-export const WEEKLY_PRIZES = [1_000_000, 500_000, 300_000, 200_000, 150_000, 100_000, 75_000, 50_000, 40_000, 30_000] as const;
+export const WEEKLY_PRIZES: number[] = [1_000_000, 500_000, 300_000, 200_000, 150_000, 100_000, 75_000, 50_000, 40_000, 30_000];
 /** The week a moment belongs to, as "2026-W43" (ISO weeks, Monday to Sunday, UTC). */
 export function weekKey(ms = Date.now()): string {
   const d = new Date(ms); d.setUTCHours(0, 0, 0, 0);

@@ -297,7 +297,19 @@ public class App : MonoBehaviour
             case "buyFailed":
                 Billing.OnFailed(m);
                 break;
+            case "notice":
+                // a message from the team (the dashboard): a notice, a gift, maintenance
+                Toast(m.Str("text"), 7f);
+                Sfx.Chime();
+                break;
             case "err":
+                if (m.Str("code") == "banned")
+                {
+                    var why = m.Str("reason");
+                    Toast(Loc.T("حسابك اتقفل") + (string.IsNullOrEmpty(why) ? "" : ": " + why), 12f);
+                    net?.Stop();   // no reconnecting
+                    break;
+                }
                 if (menus != null && menus.OnError(m.Str("code"))) break;
                 Toast(ErrorText(m.Str("code")));
                 break;
@@ -308,6 +320,7 @@ public class App : MonoBehaviour
     {
         switch (code)
         {
+            case "maintenance": return Loc.T("السيرفر في صيانة دلوقتي، ارجع كمان شوية");
             case "not_enough_coins": return Loc.T("رصيدك مش كفاية للرهان ده");
             case "not_your_turn": return Loc.T("مش دورك");
             case "room_not_found": return Loc.T("مفيش غرفة بالكود ده");
@@ -568,10 +581,11 @@ public class App : MonoBehaviour
         if (who != null && who.gameObject.activeInHierarchy) { if (k == "gg" || k == "clap" || k == "love" || k == "fire") who.Win(); else who.Gesture(who.transform.position + who.Forward * 2f + Vector3.up * 3f); }
     }
 
-    public void Toast(string s)
+    public void Toast(string s) => Toast(s, 2.6f);
+    public void Toast(string s, float seconds)
     {
         toastText.Set(s);
-        toastUntil = Time.time + 2.6f;
+        toastUntil = Time.time + seconds;
     }
 
     void BuildHome()

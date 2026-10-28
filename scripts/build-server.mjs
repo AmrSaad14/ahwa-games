@@ -1,6 +1,7 @@
 // Bundles the server (and the shared game logic) into dist/server.cjs. `ws` stays an npm dependency.
 import { build } from 'esbuild';
 import path from 'node:path';
+import './embed-dashboard.mjs';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 await build({

@@ -15,6 +15,7 @@ services:
       TURN_URLS: turn:${DOMAIN}:3478?transport=udp,turn:${DOMAIN}:3478?transport=tcp
       TURN_SECRET: ${TURN_SECRET:?Set TURN_SECRET in .env}
       ADMIN_KEY: ${ADMIN_KEY:-}
+      CASHOUT_ENABLED: ${CASHOUT_ENABLED:-0}
       # sign-in with Google and a mobile number (README → Sign-in)
       PUBLIC_URL: https://${DOMAIN}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}

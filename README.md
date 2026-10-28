@@ -174,18 +174,32 @@ E-mail through Gmail: turn on 2-step verification for the sending Google account
 (myaccount.google.com → Security → App passwords), then set on the server `SMTP_HOST=smtp.gmail.com`,
 `SMTP_PORT=465`, `SMTP_USER=that address`, `SMTP_PASS=the app password`.
 
-## Cash out to Vodafone Cash (switched off)
+## The dashboard (/admin)
 
-Not offered for now: the app has no cash-out button and the server refuses requests unless `CASHOUT_ENABLED=1`.
+`https://ahwa-games.a7medhussien.com/admin` is the team's control room. Set `ADMIN_KEY` on the server to a long random
+password and sign in with it (the session lasts 12 hours). Everything done there is in its **Activity log**.
 
-Players can turn every **1,000,000 coins into 10 EGP**, paid to a Vodafone Cash number (010…) within one working day.
-The coins are taken when the request is made; one request at a time, up to 10 million coins each, signed-in players
-only (Google, mobile number or e-mail).
+- **Overview:** players online, played today, new players, games, purchases, coins held, 14-day charts.
+- **Prize requests:** coins → Vodafone Cash requests. Send the money from your wallet, press **Paid** (add the
+  transaction number); **Reject** gives the coins back. The player gets a notification either way.
+- **Players:** search by name, friend code, id, e-mail or phone; give or take coins, give skins, season premium and
+  points, rename, mute, ban, send a push, delete; coin history, purchases, reports.
+- **Rewards & notices:** coins for everyone (or everyone who played lately), a notice shown in the game.
+- **Tournaments:** day, hour, game and prizes; start now or skip; the bracket and past results.
+- **Season pass:** how far players got, the price, every tier's free and premium reward.
+- **Game settings:** cash-out rules, starting coins, daily streak, ads, weekly prizes, turn time, computer players,
+  maintenance mode (no new games start).
 
-Pay them by hand from the admin page: `https://YOUR-SERVER/admin/cashouts?key=ADMIN_KEY` (set `ADMIN_KEY` on the
-server to a long random password). Send the money from your Vodafone Cash wallet, then press **تم الدفع** (you can add
-the transaction number); **رفض** turns a request down and gives the coins back. The player gets a notification
-either way.
+Changes reach the running game at once, no restart.
+
+## Cash out to Vodafone Cash
+
+Off until you switch it on in the dashboard (**Game settings → Prizes**), or with `CASHOUT_ENABLED=1` before the
+first change there. While it is on, the app shows a **Cash out** button and the terms page describes it.
+
+Default rules: every **1,000,000 coins = 5 EGP**, up to 10 units a request, one request at a time, players signed in
+(Google, Apple or phone) with 20 online games and an account 3 days old, Vodafone numbers (010). The coins are taken
+when the request is made and come back if you reject it.
 
 ## The game server's address
 
@@ -246,7 +260,7 @@ Settings worth knowing (Render → Environment):
 
 | Variable | What it does |
 |---|---|
-| `ADMIN_KEY` | Password for the admin pages: `/admin/support`, `/admin/tourney`, `/api/admin/reports` |
+| `ADMIN_KEY` | Password for the dashboard at `/admin` (and `/admin/support`, `/admin/tourney`) |
 | `FIREBASE_SERVICE_ACCOUNT` | Push reminders and notifications (tournament, referrals, prizes) |
 | `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` | Support messages by e-mail |
 | `PUSH_TIMES` | Reminder times, default `14:00,20:00` (Cairo) |

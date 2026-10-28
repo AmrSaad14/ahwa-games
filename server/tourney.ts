@@ -11,6 +11,8 @@ import type { TourneyView, TourneyEntrant, S2C } from '../shared/protocol';
 const num = (v: string | undefined, d: number) => (v !== undefined && v !== '' && !Number.isNaN(Number(v)) ? Number(v) : d);
 
 export const TOURNEY = {
+  enabled: true,                                        // (the dashboard turns it off and on)
+  game: 'rotate' as 'rotate' | 'domino' | 'tawla' | 'chess' | 'ludo',   // this week's game: in turn, or always one
   weekday: num(process.env.TOURNEY_WEEKDAY, 4),        // 0 Sunday … 4 Thursday … 6 Saturday
   hour: num(process.env.TOURNEY_HOUR, 21),              // Cairo time
   prizes: [1_000_000, 500_000, 250_000, 250_000, 100_000, 100_000, 100_000, 100_000],
@@ -45,7 +47,7 @@ export function nextTourneyAt(from: number): number {
 }
 /** The tournament's id: the Cairo date it starts on. */
 export const eventOf = (startsAt: number) => cairoDay(startsAt);
-export const gameFor = (startsAt: number) => TOURNEY_GAMES[Math.floor(startsAt / (7 * 86_400_000)) % TOURNEY_GAMES.length];
+export const gameFor = (startsAt: number) => TOURNEY.game !== 'rotate' ? TOURNEY_GAMES.find(g => g.game === TOURNEY.game)! : TOURNEY_GAMES[Math.floor(startsAt / (7 * 86_400_000)) % TOURNEY_GAMES.length];
 
 export interface Entrant { uid: string | null; name: string; ch: number; bot: boolean; rating: number }
 interface Match { a: Entrant | null; b: Entrant | null; winner: 0 | 1 | null; table: string | null; started: boolean }
@@ -90,7 +92,20 @@ export class Tourney {
   /** Starts the tournament now (for testing: /admin/tourney?start=1). */
   startNow(now = Date.now()) { if (this.state === 'open') { this.startsAt = now; this.reminded = true; this.tick(now); } }
 
+  /** The day, hour or game changed (dashboard): a tournament not started yet moves to the new time. */
+  reschedule(now = Date.now()) {
+    if (this.state !== 'open') return;
+    this.startsAt = nextTourneyAt(now + 1);
+    this.event = eventOf(this.startsAt); this.def = gameFor(this.startsAt); this.reminded = false;
+  }
+  /** Stops a running tournament (dashboard): no more rounds, nobody is paid; the next one opens. */
+  cancel(now = Date.now()) {
+    if (this.state === 'running') this.host.metaSet('tourney_done_' + this.event, 'cancelled');
+    this.state = 'done'; this.doneAt = 0; this.reset(now);
+  }
+
   tick(now = Date.now()) {
+    if (this.state === 'open' && !TOURNEY.enabled) return;   // switched off: nothing starts
     if (this.state === 'open') {
       if (!this.reminded && now >= this.startsAt - TOURNEY.remindMs) {
         this.reminded = true;
@@ -206,6 +221,7 @@ export class Tourney {
     for (const res of this.results) if (res.uid && res.coins) this.host.pay(res.uid, res.coins, res.place);
     for (const uid of this.played) if (!this.results.some(x => x.uid === uid && x.coins)) this.host.pay(uid, TOURNEY.played, null);
     this.host.metaSet('tourney_done_' + this.event, 'done');
+    this.host.metaSet('tourney_results_' + this.event, JSON.stringify({ game: this.def.game, size: this.rounds[0]?.length * 2 || 0, people: this.played.size, results: this.results }));
     console.log(`[tourney] ${this.event}: won by ${this.results[0]?.name ?? '—'}`);
     this.broadcast();
   }

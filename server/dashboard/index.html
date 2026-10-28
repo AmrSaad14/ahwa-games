@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Board Battles · Control room</title>
+<style>
+:root{--bg:#120c08;--panel:#1c130d;--panel2:#241810;--line:#3a2a1e;--gold:#f3cd62;--gold2:#c9a25a;--text:#f4e6c8;--muted:#b9a88a;--ok:#4fae6a;--bad:#d4574a;--warn:#e0a03a;--ink:#1b120c}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif}
+a{color:var(--gold)}
+button,input,select,textarea{font:inherit;color:inherit}
+.app{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+nav.side{background:#0d0805;border-right:1px solid var(--line);padding:16px 10px;position:sticky;top:0;height:100vh;overflow:auto}
+.brand{display:block;padding:4px 10px 16px;color:var(--gold);font-weight:800;font-size:16px}
+.brand small{display:block;color:var(--muted);font-weight:500;font-size:11px}
+nav.side a{display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-radius:9px;color:var(--text);text-decoration:none;margin-bottom:2px}
+nav.side a:hover{background:var(--panel)}
+nav.side a.on{background:var(--gold);color:var(--ink);font-weight:700}
+.pill{background:var(--bad);color:#fff;border-radius:99px;font-size:11px;padding:0 7px;font-weight:700}
+nav.side a.on .pill{background:var(--ink);color:var(--gold)}
+main{padding:22px 26px 60px;min-width:0}
+h1{font-size:22px;margin:0 0 4px;color:var(--gold)}
+h2{font-size:16px;margin:22px 0 10px;color:var(--gold)}
+.sub{color:var(--muted);font-size:13px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+.kpi .v{font-size:24px;font-weight:800;color:#fff;letter-spacing:.2px}
+.kpi .l{color:var(--muted);font-size:12px}
+.kpi.alert{border-color:var(--warn)}
+.flags{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.flag{padding:4px 10px;border-radius:99px;font-size:12px;font-weight:700;background:var(--panel2);border:1px solid var(--line)}
+.flag.on{background:rgba(79,174,106,.15);border-color:var(--ok);color:#9fe0b0}
+.flag.off{color:var(--muted)}
+.flag.warn{background:rgba(224,160,58,.15);border-color:var(--warn);color:#ffd08a}
+table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+th,td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{color:var(--gold);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.4px;background:var(--panel2)}
+tr:last-child td{border-bottom:0}
+tr.click{cursor:pointer} tr.click:hover td{background:var(--panel2)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.tablewrap{overflow-x:auto}
+.btn{text-decoration:none;color:var(--text);border:1px solid var(--line);background:var(--panel2);border-radius:9px;padding:7px 12px;cursor:pointer;font-weight:600}
+.btn:hover{border-color:var(--gold2)}
+.btn.gold{background:var(--gold);color:var(--ink);border-color:var(--gold)}
+.btn.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.btn.bad{background:var(--bad);border-color:var(--bad);color:#fff}
+.btn.sm{padding:4px 9px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:default}
+input,select,textarea{background:#0d0805;border:1px solid var(--line);border-radius:9px;padding:7px 10px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--gold2);outline-offset:-1px}
+input[type=number]{width:150px}
+td:first-child,td:nth-child(2){white-space:nowrap}
+label.f{display:grid;gap:4px;font-size:12px;color:var(--muted)}
+label.f input,label.f select,label.f textarea{color:var(--text);font-size:14px}
+.form{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.switch input{width:38px;height:22px;appearance:none;background:var(--line);border-radius:99px;position:relative;cursor:pointer;padding:0;border:0}
+.switch input::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.15s}
+.switch input:checked{background:var(--ok)}
+.switch input:checked::after{left:19px}
+.tabs{display:flex;gap:6px;margin:10px 0 14px;flex-wrap:wrap}
+.tabs button{border:1px solid var(--line);background:var(--panel);border-radius:99px;padding:5px 14px;cursor:pointer}
+.tabs button.on{background:var(--gold);color:var(--ink);border-color:var(--gold);font-weight:700}
+.chart{display:block;width:100%;height:auto}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--gold);color:var(--ink);padding:10px 18px;border-radius:10px;font-weight:700;box-shadow:0 10px 30px rgba(0,0,0,.5);z-index:50}
+.toast.err{background:var(--bad);color:#fff}
+.drawer{position:fixed;inset:0 0 0 auto;width:min(720px,100%);background:var(--bg);border-left:1px solid var(--line);overflow:auto;padding:20px 22px;z-index:40;box-shadow:-20px 0 40px rgba(0,0,0,.5)}
+.shade{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:30}
+.x{float:right}
+.muted{color:var(--muted)}
+.tag{display:inline-block;padding:1px 8px;border-radius:99px;font-size:11px;font-weight:700;background:var(--panel2);border:1px solid var(--line)}
+.tag.paid,.tag.on,.tag.google,.tag.apple{color:#9fe0b0;border-color:var(--ok)}
+.tag.pending{color:#ffd08a;border-color:var(--warn)}
+.tag.rejected,.tag.banned{color:#ff9d92;border-color:var(--bad)}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+.bracket{display:flex;gap:18px;overflow-x:auto;padding-bottom:6px}
+.round{display:grid;gap:8px;align-content:center;min-width:170px}
+.match{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:6px 8px;font-size:12px}
+.match div{display:flex;justify-content:space-between}
+.match .w{color:var(--gold);font-weight:700}
+.login{max-width:360px;margin:12vh auto;padding:26px}
+.empty{padding:22px;text-align:center;color:var(--muted)}
+.tierrow td{padding:5px 8px}
+.tierrow select,.tierrow input{padding:4px 6px}
+@media (max-width:820px){.app{grid-template-columns:1fr}nav.side{position:static;height:auto;display:flex;overflow-x:auto;gap:4px;padding:8px}nav.side .brand{display:none}nav.side a{white-space:nowrap}main{padding:16px}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const num = n => Number(n || 0).toLocaleString('en');
+const short = n => { n = Number(n || 0); const a = Math.abs(n); return a >= 1e9 ? (n / 1e9).toFixed(a >= 1e10 ? 0 : 1) + 'B' : a >= 1e6 ? (n / 1e6).toFixed(a >= 1e7 ? 0 : 1) + 'M' : a >= 1e3 ? Math.round(n / 1e3) + 'K' : String(n); };
+const cairo = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo', dateStyle: 'medium', timeStyle: 'short' });
+const when = t => t ? cairo.format(new Date(t)) : '—';
+const ago = t => { if (!t) return '—'; const s = (Date.now() - t) / 1000; return s < 90 ? 'now' : s < 3600 ? Math.round(s / 60) + ' min ago' : s < 86400 ? Math.round(s / 3600) + ' h ago' : Math.round(s / 86400) + ' d ago'; };
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const GAMES = { rotate: 'Each week in turn', domino: 'Dominoes', tawla: 'Backgammon (tawla)', chess: 'Chess', ludo: 'Ludo' };
+let state = { view: 'overview', catalog: null, pending: 0 };
+
+async function api(path, opts = {}) {
+  const r = await fetch('/api/admin' + path, { method: opts.method || (opts.body ? 'POST' : 'GET'), headers: { 'Content-Type': 'application/json' }, body: opts.body ? JSON.stringify(opts.body) : undefined, credentials: 'same-origin' });
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401) { showLogin(); throw new Error('Signed out'); }
+  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
+}
+function toast(msg, err) { const t = document.createElement('div'); t.className = 'toast' + (err ? ' err' : ''); t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), err ? 4500 : 2400); }
+async function act(fn, ok) { try { const r = await fn(); if (ok) toast(ok); return r; } catch (e) { if (e.message !== 'Signed out') toast(e.message, true); throw e; } }
+
+/* ---------------- sign in ---------------- */
+function showLogin() {
+  $('#root').innerHTML = '<div class="card login"><h1>Control room</h1><p class="sub">Board Battles · enter the server\'s ADMIN_KEY</p>' +
+    '<form id="lf" class="row" style="display:grid;gap:10px"><input id="lk" type="password" placeholder="Admin key" autocomplete="current-password" required>' +
+    '<button class="btn gold">Sign in</button><div id="le" class="sub"></div></form></div>';
+  $('#lf').onsubmit = async e => {
+    e.preventDefault();
+    try { await api('/login', { body: { key: $('#lk').value } }); start(); }
+    catch (er) { $('#le').textContent = er.message === 'admin_off' ? 'The dashboard is off: set ADMIN_KEY on the server.' : er.message === 'wrong_key' ? 'Wrong key.' : er.message; }
+  };
+  $('#lk').focus();
+}
+
+/* ---------------- the frame ---------------- */
+const VIEWS = [
+  ['overview', 'Overview'], ['cashouts', 'Prize requests'], ['players', 'Players'], ['rewards', 'Rewards & notices'],
+  ['tourney', 'Tournaments'], ['season', 'Season pass'], ['settings', 'Game settings'], ['reports', 'Reports & support'],
+  ['purchases', 'Purchases'], ['log', 'Activity log'],
+];
+function frame() {
+  $('#root').innerHTML = '<div class="app"><nav class="side"><div class="brand">♛ Board Battles<small>Control room</small></div>' +
+    VIEWS.map(([k, l]) => '<a href="#' + k + '" data-v="' + k + '">' + l + (k === 'cashouts' ? '<span class="pill" id="pendpill" hidden></span>' : '') + '</a>').join('') +
+    '<a href="#" id="logout" style="margin-top:14px">Sign out</a></nav><main id="main"></main></div>';
+  $('#logout').onclick = async e => { e.preventDefault(); await api('/logout', { body: {} }).catch(() => {}); showLogin(); };
+}
+function setPending(n) { state.pending = n; const p = $('#pendpill'); if (p) { p.hidden = !n; p.textContent = n; } }
+async function go() {
+  const v = (location.hash.slice(1) || 'overview').split('/')[0];
+  state.view = VIEWS.some(x => x[0] === v) ? v : 'overview';
+  document.querySelectorAll('nav.side a[data-v]').forEach(a => a.classList.toggle('on', a.dataset.v === state.view));
+  const main = $('#main'); main.innerHTML = '<div class="empty">Loading…</div>';
+  try { await RENDER[state.view](main); } catch (e) { if (e.message !== 'Signed out') main.innerHTML = '<div class="card">Could not load: ' + esc(e.message) + '</div>'; }
+}
+async function start() {
+  frame();
+  try { state.catalog = await api('/catalog'); } catch { return; }
+  window.onhashchange = go;
+  go();
+  setInterval(async () => { try { const o = await api('/overview'); setPending(o.cashoutPending); } catch {} }, 60000);
+}
+
+/* ---------------- charts (plain SVG) ---------------- */
+function bars(rows, key, label, color) {
+  const W = 460, H = 150, P = 14, max = Math.max(1, ...rows.map(r => r[key]));
+  const bw = (W - P * 2) / rows.length;
+  let s = '<svg class="chart" viewBox="0 0 ' + W + ' ' + (H + 34) + '" role="img" aria-label="' + esc(label) + '">';
+  s += '<text x="0" y="14" fill="#b9a88a" font-size="14" font-weight="600">' + esc(label) + ' · last ' + rows.length + ' days</text>';
+  rows.forEach((r, i) => {
+    const h = Math.round((r[key] / max) * (H - 40)), x = P + i * bw + 3, y = H - h;
+    s += '<rect x="' + x + '" y="' + y + '" width="' + (bw - 6) + '" height="' + Math.max(1, h) + '" rx="3" fill="' + color + '"><title>' + esc(r.day) + ': ' + num(r[key]) + '</title></rect>';
+    if (r[key]) s += '<text x="' + (x + (bw - 6) / 2) + '" y="' + (y - 4) + '" fill="#f4e6c8" font-size="11" text-anchor="middle">' + short(r[key]) + '</text>';
+    if ((i % 3 === 0 && i < rows.length - 2) || i === rows.length - 1) s += '<text x="' + (x + (bw - 6) / 2) + '" y="' + (H + 18) + '" fill="#b9a88a" font-size="11" text-anchor="middle">' + esc(r.day.slice(5)) + '</text>';
+  });
+  return s + '<line x1="' + P + '" x2="' + (W - P) + '" y1="' + H + '" y2="' + H + '" stroke="#3a2a1e"/></svg>';
+}
+
+const RENDER = {};
+
+/* ---------------- overview ---------------- */
+RENDER.overview = async main => {
+  const o = await api('/overview');
+  setPending(o.cashoutPending);
+  const k = (v, l, alert) => '<div class="card kpi' + (alert ? ' alert' : '') + '"><div class="v">' + v + '</div><div class="l">' + l + '</div></div>';
+  const f = (on, l, warn) => '<span class="flag ' + (warn && on ? 'warn' : on ? 'on' : 'off') + '">' + l + ': ' + (on ? 'on' : 'off') + '</span>';
+  const t = o.tourney;
+  main.innerHTML = '<h1>Overview</h1><div class="sub">Cairo time · updated ' + when(Date.now()) + '</div>' +
+    '<div class="flags">' + f(o.flags.cashout, 'Cash-out') + f(o.flags.maintenance, 'Maintenance', true) + f(!!o.flags.notice, 'Notice') + f(t.enabled, 'Tournament') + f(o.flags.push, 'Push') + '</div>' +
+    '<div class="grid">' +
+      k(num(o.live.online), 'Online now · ' + num(o.live.tables) + ' tables · ' + num(o.live.queued) + ' waiting') +
+      k(num(o.activeToday), 'Played today · ' + num(o.activeWeek) + ' this week') +
+      k(num(o.players), 'Players · ' + num(o.signedIn) + ' signed in · ' + num(o.newToday) + ' new today') +
+      k(num(o.gamesToday), 'Games today · fees ' + short(o.houseFeesToday) + ' coins') +
+      k(o.cashoutPending ? num(o.cashoutPending) + ' · ' + num(o.cashoutPendingEgp) + ' EGP' : '0', 'Prize requests waiting · ' + num(o.cashoutPaidEgp) + ' EGP paid in all', o.cashoutPending > 0) +
+      k(num(o.seasonPremium), 'Season pass buyers this month') +
+      k(num(o.purchasesToday) + ' / ' + num(o.purchasesWeek), 'Store purchases today / this week') +
+      k(short(o.coinsHeld), 'Coins held by players') +
+      k(num(o.reportsWeek), 'Player reports this week · ' + num(o.support) + ' support messages', o.reportsWeek > 20) +
+      k(num(o.banned), 'Banned players') +
+    '</div>' +
+    '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(380px,1fr));margin-top:14px">' +
+      '<div class="card">' + bars(o.daily, 'active', 'Players who played', '#c9a25a') + '</div>' +
+      '<div class="card">' + bars(o.daily, 'games', 'Games finished', '#4fae6a') + '</div>' +
+      '<div class="card">' + bars(o.daily, 'newPlayers', 'New players', '#6f9fd8') + '</div>' +
+      '<div class="card">' + bars(o.daily, 'cashoutEgp', 'Prize requests (EGP)', '#e0a03a') + '</div>' +
+    '</div>' +
+    '<h2>Next tournament</h2><div class="card row" style="justify-content:space-between"><div><b>' + esc(GAMES[t.game] || t.game) + '</b> · ' + esc(t.state) + ' · ' + when(t.startsAt) + '<div class="sub">' + num(t.registered) + ' signed up</div></div><a class="btn" href="#tourney">Manage</a></div>' +
+    (o.flags.notice ? '<h2>Notice showing</h2><div class="card">' + esc(o.flags.notice) + '</div>' : '');
+};
+
+/* ---------------- prize requests ---------------- */
+RENDER.cashouts = async main => {
+  const status = (location.hash.split('/')[1]) || 'pending';
+  const d = await api('/cashouts?status=' + status);
+  const rules = d.rules;
+  const pend = d.rows.filter(r => r.status === 'pending');
+  if (status === 'pending') setPending(pend.length);
+  main.innerHTML = '<h1>Prize requests · Vodafone Cash</h1>' +
+    '<div class="sub">Every ' + num(rules.coins) + ' coins = ' + num(rules.egp) + ' EGP · up to ' + num(rules.maxUnits * rules.egp) + ' EGP a request · ' +
+      'needs ' + rules.minGames + ' online games and an account ' + rules.minAccountDays + ' days old · numbers ' + esc(rules.prefixes.join(', ')) + ' · cash-out is <b>' + (rules.enabled ? 'on' : 'off') + '</b> (<a href="#settings">change</a>)</div>' +
+    '<div class="tabs">' + ['pending', 'paid', 'rejected', 'all'].map(s => '<button data-s="' + s + '" class="' + (s === status ? 'on' : '') + '">' + s[0].toUpperCase() + s.slice(1) + '</button>').join('') + '</div>' +
+    (status === 'pending' && pend.length ? '<div class="card" style="margin-bottom:12px">To pay: <b>' + pend.length + '</b> requests · <b>' + num(pend.reduce((a, r) => a + r.egp, 0)) + ' EGP</b>. Send the money on Vodafone Cash, then press <b>Paid</b> (the player gets a notification). <b>Reject</b> gives the coins back.</div>' : '') +
+    (d.rows.length ? '<div class="tablewrap"><table><thead><tr><th>#</th><th>Asked</th><th>Player</th><th>Vodafone Cash</th><th class="num">Coins</th><th class="num">EGP</th><th>Status</th><th></th></tr></thead><tbody>' +
+      d.rows.map(r => '<tr><td class="mono">' + r.id + '</td><td>' + when(r.ts) + '</td><td><a href="#players/' + esc(r.user_id) + '" data-player="' + esc(r.user_id) + '">' + esc(r.name || '—') + '</a><div class="sub">balance now ' + short(r.coins_now) + '</div></td>' +
+        '<td><b class="mono" style="font-size:14px">' + esc(r.phone) + '</b> <button class="btn sm" data-copy="' + esc(r.phone) + '">Copy</button></td><td class="num">' + num(r.coins) + '</td><td class="num"><b>' + num(r.egp) + '</b></td>' +
+        '<td><span class="tag ' + r.status + '">' + r.status + '</span>' + (r.done_ts ? '<div class="sub">' + when(r.done_ts) + '</div>' : '') + (r.note ? '<div class="sub">' + esc(r.note) + '</div>' : '') + '</td>' +
+        '<td>' + (r.status === 'pending' ? '<div class="row"><button class="btn sm ok" data-pay="' + r.id + '" data-egp="' + r.egp + '" data-phone="' + esc(r.phone) + '">Paid</button><button class="btn sm bad" data-rej="' + r.id + '">Reject</button></div>' : '') + '</td></tr>').join('') +
+      '</tbody></table></div>' : '<div class="card empty">No ' + status + ' requests</div>');
+  main.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { location.hash = 'cashouts/' + b.dataset.s; });
+  main.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => { navigator.clipboard.writeText(b.dataset.copy); toast('Copied ' + b.dataset.copy); });
+  main.querySelectorAll('[data-pay]').forEach(b => b.onclick = async () => {
+    const note = prompt('Sent ' + b.dataset.egp + ' EGP to ' + b.dataset.phone + '?\nTransaction number (optional):', '');
+    if (note === null) return;
+    await act(() => api('/cashouts/' + b.dataset.pay, { body: { action: 'paid', note } }), 'Marked paid · the player was told'); go();
+  });
+  main.querySelectorAll('[data-rej]').forEach(b => b.onclick = async () => {
+    const note = prompt('Reject this request? The coins go back to the player.\nReason (the player sees it):', '');
+    if (note === null) return;
+    await act(() => api('/cashouts/' + b.dataset.rej, { body: { action: 'reject', note } }), 'Rejected · coins returned'); go();
+  });
+  main.querySelectorAll('[data-player]').forEach(a => a.onclick = e => { e.preventDefault(); openPlayer(a.dataset.player); });
+};
+
+/* ---------------- players ---------------- */
+RENDER.players = async main => {
+  const parts = location.hash.split('/'), open = parts[1];
+  main.innerHTML = '<h1>Players</h1><div class="sub">Search by name, friend code, player id, e-mail or phone</div>' +
+    '<form id="sf" class="row" style="margin:12px 0"><input id="sq" placeholder="Search players" style="min-width:280px" value="' + esc(state.q || '') + '"><button class="btn gold">Search</button></form><div id="pl"></div>';
+  const load = async () => {
+    const d = await api('/players?q=' + encodeURIComponent(state.q || ''));
+    $('#pl').innerHTML = d.rows.length ? '<div class="tablewrap"><table><thead><tr><th>Player</th><th>Sign-in</th><th class="num">Coins</th><th class="num">Games</th><th class="num">Win %</th><th>Joined</th><th>Last seen</th><th></th></tr></thead><tbody>' +
+      d.rows.map(u => '<tr class="click" data-id="' + esc(u.id) + '"><td><b>' + esc(u.name) + '</b>' + (u.online ? ' <span class="tag on">online</span>' : '') + (u.banned ? ' <span class="tag banned">banned</span>' : '') + (u.muted ? ' <span class="tag">muted</span>' : '') +
+        '<div class="sub mono">' + esc(u.code || u.pid || u.id) + '</div></td><td><span class="tag ' + u.login + '">' + u.login + '</span><div class="sub">' + esc(u.contact) + '</div></td>' +
+        '<td class="num">' + short(u.coins) + '</td><td class="num">' + num(u.games) + '</td><td class="num">' + (u.games ? Math.round(u.wins / u.games * 100) : 0) + '%</td><td>' + when(u.created) + '</td><td>' + ago(u.seen) + '</td><td>›</td></tr>').join('') +
+      '</tbody></table></div>' : '<div class="card empty">No players found</div>';
+    $('#pl').querySelectorAll('tr[data-id]').forEach(tr => tr.onclick = () => openPlayer(tr.dataset.id));
+  };
+  $('#sf').onsubmit = e => { e.preventDefault(); state.q = $('#sq').value; load(); };
+  await load();
+  if (open) openPlayer(open);
+};
+
+async function openPlayer(id) {
+  closeDrawer();
+  const sh = document.createElement('div'); sh.className = 'shade'; sh.onclick = closeDrawer;
+  const dr = document.createElement('div'); dr.className = 'drawer'; dr.innerHTML = '<div class="empty">Loading…</div>';
+  document.body.append(sh, dr);
+  const render = async () => {
+    const d = await api('/players/' + encodeURIComponent(id));
+    const u = d.user, s = d.stats || {}, r = d.row;
+    const skins = state.catalog.skins.filter(k => !k.free && !d.skins.includes(k.id));
+    dr.innerHTML = '<button class="btn sm x" id="cx">Close ✕</button><h1>' + esc(u.name) + '</h1>' +
+      '<div class="sub mono">' + esc(u.id) + ' · code ' + esc(r.code || '—') + ' · ' + r.login + (r.contact ? ' · ' + esc(r.contact) : '') + '</div>' +
+      '<div class="flags">' + (d.online ? '<span class="flag on">online</span>' : '<span class="flag off">last seen ' + ago(u.seen) + '</span>') + (r.banned ? '<span class="flag warn">banned: ' + esc(u.ban_reason || '') + '</span>' : '') + (r.muted ? '<span class="flag warn">muted</span>' : '') + (d.season.premium ? '<span class="flag on">season premium</span>' : '') + '</div>' +
+      '<div class="grid">' +
+        '<div class="card kpi"><div class="v">' + num(u.coins) + '</div><div class="l">Coins</div></div>' +
+        '<div class="card kpi"><div class="v">' + num(s.games) + '</div><div class="l">Games · ' + num(s.wins) + ' won · ' + (s.winRate || 0) + '%</div></div>' +
+        '<div class="card kpi"><div class="v">' + short(s.net) + '</div><div class="l">Net from games · won ' + short(s.coinsWon) + ' / lost ' + short(s.coinsLost) + '</div></div>' +
+        '<div class="card kpi"><div class="v">' + (s.level || 1) + '</div><div class="l">Level · season tier ' + d.season.tier + ' (' + d.season.sp + ' SP)</div></div>' +
+      '</div>' +
+      '<h2>Actions</h2><div class="card" style="display:grid;gap:10px">' +
+        '<div class="row"><input id="pc" type="number" placeholder="Coins (− takes)" style="width:170px"><input id="pr" placeholder="Reason (log)"><button class="btn gold" id="bc">Give / take coins</button></div>' +
+        '<div class="row"><select id="ps"><option value="">Give a skin…</option>' + skins.map(k => '<option value="' + k.id + '">' + esc(k.cat + ' · ' + k.id) + (k.pass ? ' (season)' : '') + '</option>').join('') + '</select><button class="btn" id="bs">Give skin</button>' +
+          '<button class="btn" id="bp">' + (d.season.premium ? 'Remove season premium' : 'Give season premium') + '</button><input id="psp" type="number" placeholder="Season points" value="' + d.season.sp + '"><button class="btn" id="bsp">Set SP</button></div>' +
+        '<div class="row"><input id="pn" placeholder="New name" value="' + esc(u.name) + '"><button class="btn" id="bn">Rename</button>' +
+          (r.muted ? '<button class="btn" id="bum">Unmute</button>' : '<button class="btn" id="bm">Mute 24 h</button>') +
+          (r.banned ? '<button class="btn ok" id="bub">Unban</button>' : '<button class="btn bad" id="bb">Ban</button>') + '</div>' +
+        '<div class="row"><input id="pt" placeholder="Push title" style="width:180px"><input id="px" placeholder="Push message to this player" style="flex:1;min-width:220px"><button class="btn" id="bx">Send</button></div>' +
+        '<div class="row"><button class="btn bad sm" id="bd">Delete account</button><span class="sub">Removes the player and everything they have. Can\'t be undone.</span></div>' +
+      '</div>' +
+      '<h2>Coin history</h2>' + (d.coins.length ? '<div class="tablewrap"><table><thead><tr><th>When</th><th>What</th><th class="num">Change</th><th class="num">Balance</th></tr></thead><tbody>' +
+        d.coins.map(c => '<tr><td>' + when(c.ts) + '</td><td>' + esc(c.kind) + (c.mode ? ' · ' + esc(c.mode) : '') + (c.stake ? ' · stake ' + short(c.stake) : '') + '</td><td class="num" style="color:' + (c.delta >= 0 ? '#9fe0b0' : '#ff9d92') + '">' + (c.delta >= 0 ? '+' : '') + num(c.delta) + '</td><td class="num">' + num(c.balance) + '</td></tr>').join('') + '</tbody></table></div>' : '<div class="card empty">None</div>') +
+      '<h2>Prize requests</h2>' + (d.cashouts.length ? '<table><tbody>' + d.cashouts.map(c => '<tr><td>#' + c.id + '</td><td>' + when(c.ts) + '</td><td class="mono">' + esc(c.phone) + '</td><td class="num">' + num(c.egp) + ' EGP</td><td><span class="tag ' + c.status + '">' + c.status + '</span></td></tr>').join('') + '</tbody></table>' : '<div class="card empty">None</div>') +
+      '<h2>Purchases</h2>' + (d.purchases.length ? '<table><tbody>' + d.purchases.map(p => '<tr><td>' + when(p.ts) + '</td><td>' + esc(p.product) + '</td><td class="mono">' + esc(p.order_id || '') + '</td></tr>').join('') + '</tbody></table>' : '<div class="card empty">None</div>') +
+      '<h2>Skins (' + d.skins.length + ')</h2><div class="card">' + (d.skins.map(k => '<span class="tag" style="margin:2px">' + esc(k) + ' <a href="#" data-unskin="' + esc(k) + '" title="Take back">✕</a></span>').join('') || '<span class="muted">Only the free ones</span>') + '</div>' +
+      '<h2>Reports about this player (' + d.reportsAbout.length + ')</h2>' + (d.reportsAbout.length ? '<table><tbody>' + d.reportsAbout.map(x => '<tr><td>' + when(x.ts) + '</td><td>' + esc(x.reason) + '</td><td>by ' + esc(x.from_name || x.from_id) + '</td></tr>').join('') + '</tbody></table>' : '<div class="card empty">None</div>');
+    const post = (body, ok) => act(() => api('/players/' + encodeURIComponent(id), { body }), ok).then(render);
+    $('#cx', dr).onclick = closeDrawer;
+    $('#bc', dr).onclick = () => { const a = Number($('#pc', dr).value); if (!a) return toast('Enter an amount', true); if (Math.abs(a) >= 10000000 && !confirm('That is ' + num(a) + ' coins. Sure?')) return; post({ action: 'coins', amount: a, reason: $('#pr', dr).value }, (a > 0 ? 'Gave ' : 'Took ') + num(Math.abs(a)) + ' coins'); };
+    $('#bs', dr).onclick = () => { const k = $('#ps', dr).value; if (k) post({ action: 'skin', skin: k }, 'Skin given'); };
+    $('#bp', dr).onclick = () => post({ action: d.season.premium ? 'unpremium' : 'premium' }, 'Season pass updated');
+    $('#bsp', dr).onclick = () => post({ action: 'sp', sp: Number($('#psp', dr).value) }, 'Season points set');
+    $('#bn', dr).onclick = () => post({ action: 'rename', name: $('#pn', dr).value }, 'Renamed');
+    if ($('#bm', dr)) $('#bm', dr).onclick = () => post({ action: 'mute', hours: 24 }, 'Muted for 24 h');
+    if ($('#bum', dr)) $('#bum', dr).onclick = () => post({ action: 'unmute' }, 'Unmuted');
+    if ($('#bb', dr)) $('#bb', dr).onclick = () => { const why = prompt('Ban ' + u.name + '? Reason (they see it):', ''); if (why !== null) post({ action: 'ban', reason: why }, 'Banned'); };
+    if ($('#bub', dr)) $('#bub', dr).onclick = () => post({ action: 'unban' }, 'Unbanned');
+    $('#bx', dr).onclick = () => { const t = $('#px', dr).value; if (t) post({ action: 'notify', title: $('#pt', dr).value, text: t }, 'Sent'); };
+    $('#bd', dr).onclick = () => { if (prompt('Type DELETE to delete ' + u.name + ' for good') === 'DELETE') act(() => api('/players/' + encodeURIComponent(id), { body: { action: 'delete' } }), 'Deleted').then(() => { closeDrawer(); go(); }); };
+    dr.querySelectorAll('[data-unskin]').forEach(a => a.onclick = e => { e.preventDefault(); if (confirm('Take back ' + a.dataset.unskin + '?')) post({ action: 'unskin', skin: a.dataset.unskin }, 'Skin taken back'); });
+  };
+  try { await render(); } catch (e) { dr.innerHTML = '<button class="btn sm x" onclick="closeDrawer()">Close ✕</button><div class="card">' + esc(e.message) + '</div>'; }
+}
+function closeDrawer() { document.querySelectorAll('.drawer,.shade').forEach(x => x.remove()); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+/* ---------------- rewards and notices ---------------- */
+RENDER.rewards = async main => {
+  const st = await api('/settings');
+  const live = st.notice.until > Date.now() && st.notice.text;
+  main.innerHTML = '<h1>Rewards & notices</h1>' +
+    '<h2>Coins for everyone</h2><div class="card"><div class="form">' +
+      '<label class="f">Coins each<input id="gc" type="number" min="1" placeholder="e.g. 50000"></label>' +
+      '<label class="f">Who<select id="ga"><option value="7">Played in the last 7 days</option><option value="30">Played in the last 30 days</option><option value="0">Every player</option></select></label>' +
+      '<label class="f" style="grid-column:1/-1">Message (shown in the game and as a push)<input id="gm" placeholder="هدية بمناسبة… · A gift for…"></label>' +
+    '</div><div class="row" style="margin-top:12px"><label class="switch"><input type="checkbox" id="gp" checked> Send a push notification</label><button class="btn gold" id="gb">Send the gift</button></div></div>' +
+    '<h2>Notice in the game</h2><div class="card"><div class="sub" style="margin-bottom:8px">Shown to every player when they open the game (and right away to those playing now). ' + (live ? 'Showing now until ' + when(st.notice.until) + '.' : 'Nothing showing.') + '</div>' +
+      '<div class="form"><label class="f" style="grid-column:1/-1">Text<textarea id="nt" rows="2" maxlength="400">' + esc(live ? st.notice.text : '') + '</textarea></label>' +
+      '<label class="f">Show for (hours)<input id="nh" type="number" value="24" min="1" max="720"></label></div>' +
+      '<div class="row" style="margin-top:12px"><label class="switch"><input type="checkbox" id="np"> Also a push to players of the last 30 days</label><button class="btn gold" id="nb">Show notice</button>' + (live ? '<button class="btn" id="nc">Take it down</button>' : '') + '</div></div>' +
+    '<h2>Daily reward, ads and weekly prizes</h2><div class="card"><div class="sub">Daily streak: ' + st.economy.streak.map(short).join(' · ') + ' · rewarded ad: ' + short(st.economy.adReward) + ' (' + st.economy.adsPerDay + ' a day) · weekly top ten: ' + st.economy.weeklyPrizes.map(short).join(' · ') + '</div><a class="btn" href="#settings" style="display:inline-block;margin-top:10px">Change them</a></div>';
+  $('#gb').onclick = async () => {
+    const c = Number($('#gc').value), days = Number($('#ga').value);
+    if (!(c > 0)) return toast('Enter the coins', true);
+    if (!confirm('Give ' + num(c) + ' coins to ' + (days ? 'everyone who played in the last ' + days + ' days' : 'every player') + '?')) return;
+    const r = await act(() => api('/rewards', { body: { coins: c, activeDays: days, message: $('#gm').value, push: $('#gp').checked } }));
+    toast('Sent to ' + num(r.players) + ' players');
+  };
+  $('#nb').onclick = async () => { await act(() => api('/notice', { body: { text: $('#nt').value, hours: Number($('#nh').value), push: $('#np').checked } }), 'Notice is showing'); go(); };
+  if ($('#nc')) $('#nc').onclick = async () => { await act(() => api('/notice', { body: { text: '' } }), 'Notice taken down'); go(); };
+};
+
+/* ---------------- tournaments ---------------- */
+RENDER.tourney = async main => {
+  const d = await api('/tourney'), v = d.view, t = d.settings;
+  const who = e => e ? esc(e.name) + (e.bot ? ' <span class="muted">(cpu)</span>' : '') : '<span class="muted">—</span>';
+  main.innerHTML = '<h1>Tournaments</h1>' +
+    '<div class="card row" style="justify-content:space-between"><div><b>' + esc(GAMES[v.game] || v.game) + '</b> · <span class="tag ' + (v.state === 'running' ? 'pending' : '') + '">' + v.state + '</span> · starts ' + when(v.startsAt) +
+      '<div class="sub">' + num(v.count) + (v.state === 'open' ? ' signed up' : ' places in the bracket') + ' · prizes ' + v.prizes.map(short).join(' · ') + '</div></div>' +
+      '<div class="row">' + (v.state === 'open' ? '<button class="btn gold" id="ts">Start now</button>' : '') + (v.state !== 'done' ? '<button class="btn bad" id="tc">' + (v.state === 'running' ? 'Stop' : 'Skip this one') + '</button>' : '') + '</div></div>' +
+    (v.rounds.length ? '<h2>Bracket</h2><div class="bracket">' + v.rounds.map((r, i) => '<div class="round"><div class="sub">' + (i === v.rounds.length - 1 ? 'Final' : i === v.rounds.length - 2 ? 'Semi-finals' : 'Round ' + (i + 1)) + '</div>' +
+      r.map(m => '<div class="match"><div class="' + (m.winner === 0 ? 'w' : '') + '">' + who(m.a) + '</div><div class="' + (m.winner === 1 ? 'w' : '') + '">' + who(m.b) + '</div>' + (m.live ? '<div class="sub">playing…</div>' : '') + '</div>').join('') + '</div>').join('') + '</div>' : '') +
+    (v.results.length ? '<h2>Results</h2><table><tbody>' + v.results.map(x => '<tr><td>#' + x.place + '</td><td>' + esc(x.name) + '</td><td class="num">' + num(x.coins) + '</td></tr>').join('') + '</tbody></table>' : '') +
+    '<h2>Settings</h2><div class="card"><div class="form">' +
+      '<label class="f">Tournament<span class="switch"><input type="checkbox" id="te"' + (t.enabled ? ' checked' : '') + '> on every week</span></label>' +
+      '<label class="f">Day (Cairo)<select id="tw">' + DAYS.map((x, i) => '<option value="' + i + '"' + (i === t.weekday ? ' selected' : '') + '>' + x + '</option>').join('') + '</select></label>' +
+      '<label class="f">Hour (0–23, Cairo)<input id="th" type="number" min="0" max="23" value="' + t.hour + '"></label>' +
+      '<label class="f">Game<select id="tg">' + Object.entries(GAMES).map(([k, l]) => '<option value="' + k + '"' + (k === t.game ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label>' +
+      t.prizes.map((p, i) => '<label class="f">Prize #' + (i + 1) + (i >= 4 ? ' (5th–8th)' : '') + '<input type="number" min="0" class="tp" value="' + p + '"></label>').join('') +
+      '<label class="f">Everyone who played<input id="tpl" type="number" min="0" value="' + t.played + '"></label>' +
+    '</div><button class="btn gold" id="tsv" style="margin-top:12px">Save tournament settings</button></div>' +
+    '<h2>Signed up (' + d.registered.length + ')</h2>' + (d.registered.length ? '<div class="card">' + d.registered.map(r => '<a href="#players/' + esc(r.id) + '" class="tag" style="margin:2px;text-decoration:none">' + esc(r.name) + (r.online ? ' ●' : '') + '</a>').join('') + '</div>' : '<div class="card empty">Nobody yet</div>') +
+    '<h2>Past tournaments</h2>' + (d.history.length ? '<table><thead><tr><th>Date</th><th>Game</th><th class="num">People</th><th>Winner</th><th>2nd</th></tr></thead><tbody>' +
+      d.history.map(h => '<tr><td>' + esc(h.event) + '</td><td>' + esc(GAMES[h.game] || h.game) + '</td><td class="num">' + num(h.people) + '</td><td>' + esc(h.results?.[0]?.name || '—') + '</td><td>' + esc(h.results?.[1]?.name || '—') + '</td></tr>').join('') + '</tbody></table>' : '<div class="card empty">None yet</div>');
+  if ($('#ts')) $('#ts').onclick = async () => { if (confirm('Start the tournament now with ' + v.count + ' players?')) { await act(() => api('/tourney', { body: { action: 'start' } }), 'Started'); go(); } };
+  if ($('#tc')) $('#tc').onclick = async () => { if (confirm(v.state === 'running' ? 'Stop the running tournament? Nobody is paid.' : 'Skip this tournament and open the next one?')) { await act(() => api('/tourney', { body: { action: 'cancel' } }), 'Done'); go(); } };
+  $('#tsv').onclick = async () => {
+    await act(() => api('/settings', { method: 'PUT', body: { tourney: { enabled: $('#te').checked, weekday: Number($('#tw').value), hour: Number($('#th').value), game: $('#tg').value,
+      prizes: [...main.querySelectorAll('.tp')].map(i => Number(i.value)), played: Number($('#tpl').value) } } }), 'Tournament settings saved'); go();
+  };
+};
+
+/* ---------------- season pass ---------------- */
+RENDER.season = async main => {
+  const d = await api('/season'), st = d.settings;
+  const skinOpts = sel => '<option value="">— coins —</option>' + d.skins.map(k => '<option value="' + k.id + '"' + (k.id === sel ? ' selected' : '') + '>' + esc(k.cat + ' · ' + k.id) + (k.pass ? ' ★' : '') + '</option>').join('');
+  const cell = (rw, track, i) => '<div class="row" style="gap:6px"><select class="rk" data-t="' + track + '" data-i="' + i + '">' + skinOpts(rw.skin) + '</select><input type="number" class="rc" data-t="' + track + '" data-i="' + i + '" value="' + (rw.coins ?? '') + '" placeholder="coins" style="width:110px' + (rw.skin ? ';display:none' : '') + '"></div>';
+  const max = Math.max(1, ...d.tiers);
+  main.innerHTML = '<h1>Season pass</h1><div class="sub">Season ' + esc(d.season) + ' · ends ' + when(d.endsAt) + '</div>' +
+    '<div class="grid" style="margin-top:12px">' +
+      '<div class="card kpi"><div class="v">' + num(d.players) + '</div><div class="l">Players on the track</div></div>' +
+      '<div class="card kpi"><div class="v">' + num(d.premium) + '</div><div class="l">With premium (' + (d.players ? Math.round(d.premium / d.players * 100) : 0) + '%)</div></div>' +
+      '<div class="card kpi"><div class="v">' + num(d.paidPlay) + '</div><div class="l">Bought on Google Play (40 days)</div></div>' +
+    '</div>' +
+    '<h2>How far players got</h2><div class="card"><svg class="chart" viewBox="0 0 640 140" style="max-height:200px">' + d.tiers.map((n, i) => { const h = Math.round(n / max * 100), x = 12 + i * 20; return '<rect x="' + x + '" y="' + (110 - h) + '" width="15" height="' + Math.max(1, h) + '" rx="2" fill="#c9a25a"><title>Tier ' + i + ': ' + n + '</title></rect>' + (i % 5 === 0 ? '<text x="' + (x + 7) + '" y="128" fill="#b9a88a" font-size="10" text-anchor="middle">' + i + '</text>' : ''); }).join('') + '</svg></div>' +
+    '<h2>Price</h2><div class="card"><div class="form"><label class="f">Premium with coins<input id="sc" type="number" value="' + st.passCoins + '"></label>' +
+      '<label class="f">Premium price shown (EGP)<input id="se" type="number" value="' + st.passEgp + '"></label></div>' +
+      '<div class="sub" style="margin-top:8px">The price players actually pay on Google Play is set in Play Console (product <span class="mono">season_pass</span>); keep the two the same.</div></div>' +
+    '<h2>Rewards per tier</h2><div class="sub">Pick a skin, or leave "coins" and set the amount. ★ = only from the season.</div>' +
+    '<div class="tablewrap"><table><thead><tr><th>Tier</th><th>Free track</th><th>Premium track</th></tr></thead><tbody>' +
+      st.tiers.map((t, i) => '<tr class="tierrow"><td><b>' + (i + 1) + '</b></td><td>' + cell(t.free, 'free', i) + '</td><td>' + cell(t.prem, 'prem', i) + '</td></tr>').join('') +
+    '</tbody></table></div><button class="btn gold" id="ssv" style="margin-top:12px">Save the season pass</button>';
+  main.querySelectorAll('.rk').forEach(s => s.onchange = () => { const c = main.querySelector('.rc[data-t="' + s.dataset.t + '"][data-i="' + s.dataset.i + '"]'); c.style.display = s.value ? 'none' : ''; });
+  $('#ssv').onclick = async () => {
+    const tiers = st.tiers.map((_, i) => {
+      const one = tr => { const k = main.querySelector('.rk[data-t="' + tr + '"][data-i="' + i + '"]').value; return k ? { skin: k } : { coins: Number(main.querySelector('.rc[data-t="' + tr + '"][data-i="' + i + '"]').value) || 0 }; };
+      return { free: one('free'), prem: one('prem') };
+    });
+    await act(() => api('/settings', { method: 'PUT', body: { season: { passCoins: Number($('#sc').value), passEgp: Number($('#se').value), tiers } } }), 'Season pass saved'); go();
+  };
+};
+
+/* ---------------- game settings ---------------- */
+RENDER.settings = async main => {
+  const s = await api('/settings');
+  const n = (id, label, v, extra) => '<label class="f">' + label + '<input id="' + id + '" type="number" value="' + v + '"' + (extra || '') + '></label>';
+  const list = (cls, label, arr) => arr.map((v, i) => '<label class="f">' + label + ' ' + (i + 1) + '<input type="number" class="' + cls + '" value="' + v + '"></label>').join('');
+  main.innerHTML = '<h1>Game settings</h1><div class="sub">Changes reach the game at once, without a restart. Every change is in the activity log.</div>' +
+    '<h2>Maintenance</h2><div class="card"><div class="form"><label class="f">Maintenance mode<span class="switch"><input type="checkbox" id="mo"' + (s.maintenance.on ? ' checked' : '') + '> no new games start</span></label>' +
+      '<label class="f" style="grid-column:span 2">Message players see<input id="mm" value="' + esc(s.maintenance.message) + '"></label></div></div>' +
+    '<h2>Prizes: coins to Vodafone Cash</h2><div class="card"><div class="form">' +
+      '<label class="f">Cash-out<span class="switch"><input type="checkbox" id="co"' + (s.cashout.enabled ? ' checked' : '') + '> players can ask for prizes</span></label>' +
+      n('cc', 'Coins in one unit', s.cashout.coins) + n('ce', 'EGP for one unit', s.cashout.egp) + n('cm', 'Most units in one request', s.cashout.maxUnits) +
+      n('cg', 'Online games needed first', s.cashout.minGames) + n('ca', 'Account age needed (days)', s.cashout.minAccountDays) +
+      '<label class="f">Accepted numbers (prefixes)<input id="cp" value="' + esc(s.cashout.prefixes.join(', ')) + '"></label>' +
+    '</div><div class="sub" style="margin-top:8px">Vodafone Cash works on Vodafone lines (010). Players must be signed in (Google, Apple or phone) and can have one request waiting at a time.</div></div>' +
+    '<h2>Economy</h2><div class="card"><div class="form">' + n('es', 'Coins for a new player', s.economy.startCoins) + n('ea', 'Coins for a rewarded ad', s.economy.adReward) + n('ed', 'Rewarded ads a day', s.economy.adsPerDay) + '</div>' +
+      '<div class="sub" style="margin:12px 0 6px">Daily reward, day by day (day 7 repeats after)</div><div class="form">' + list('ek', 'Day', s.economy.streak) + '</div>' +
+      '<div class="sub" style="margin:12px 0 6px">Weekly leaderboard prizes, places 1–10 (paid every Monday)</div><div class="form">' + list('ew', 'Place', s.economy.weeklyPrizes) + '</div></div>' +
+    '<h2>Play</h2><div class="card"><div class="form">' + n('pb', 'Seconds before computer players fill a table', s.play.botFillSeconds, ' min="2" max="120"') + n('pt', 'Seconds for a turn (dominoes)', s.play.turnSeconds, ' min="5" max="60"') + '</div></div>' +
+    '<div class="row" style="margin-top:16px"><button class="btn gold" id="sv">Save all settings</button><button class="btn" id="rs">Back to the defaults</button></div>';
+  $('#sv').onclick = async () => {
+    const vals = cls => [...main.querySelectorAll('.' + cls)].map(i => Number(i.value));
+    await act(() => api('/settings', { method: 'PUT', body: {
+      maintenance: { on: $('#mo').checked, message: $('#mm').value },
+      cashout: { enabled: $('#co').checked, coins: Number($('#cc').value), egp: Number($('#ce').value), maxUnits: Number($('#cm').value), minGames: Number($('#cg').value), minAccountDays: Number($('#ca').value), prefixes: $('#cp').value.split(/[ ,]+/).filter(Boolean) },
+      economy: { startCoins: Number($('#es').value), adReward: Number($('#ea').value), adsPerDay: Number($('#ed').value), streak: vals('ek'), weeklyPrizes: vals('ew') },
+      play: { botFillSeconds: Number($('#pb').value), turnSeconds: Number($('#pt').value) },
+    } }), 'Settings saved'); go();
+  };
+  $('#rs').onclick = async () => { if (confirm('Put every setting back to the defaults?')) { await act(() => api('/settings/reset', { body: {} }), 'Back to the defaults'); go(); } };
+};
+
+/* ---------------- reports and support ---------------- */
+RENDER.reports = async main => {
+  const [r, s] = await Promise.all([api('/reports'), api('/support')]);
+  main.innerHTML = '<h1>Reports & support</h1>' +
+    '<h2>Player reports (' + r.rows.length + ')</h2>' + (r.rows.length ? '<div class="tablewrap"><table><thead><tr><th>When</th><th>About</th><th>Reason</th><th>By</th><th></th></tr></thead><tbody>' +
+      r.rows.map(x => '<tr><td>' + when(x.ts) + '</td><td><a href="#players/' + esc(x.about_id) + '">' + esc(x.about_name || x.about_id) + '</a>' + (x.banned ? ' <span class="tag banned">banned</span>' : x.muted_until > Date.now() ? ' <span class="tag">muted</span>' : '') + '</td><td>' + esc(x.reason) + '</td><td>' + esc(x.from_name || x.from_id) + '</td><td><a class="btn sm" href="#players/' + esc(x.about_id) + '">Open</a></td></tr>').join('') +
+      '</tbody></table></div>' : '<div class="card empty">No reports</div>') +
+    '<h2>Support messages (' + s.rows.length + ')</h2>' + (s.rows.length ? s.rows.map(x => '<div class="card" style="margin-bottom:8px"><div class="sub">#' + x.id + ' · ' + when(x.ts) + ' · ' + esc(x.name || 'player') + (x.contact ? ' · <span class="mono">' + esc(x.contact) + '</span>' : '') + ' · ' + esc(x.app || '') + (x.user_id ? ' · <a href="#players/' + esc(x.user_id) + '">player</a>' : '') + '</div><div style="white-space:pre-wrap;margin-top:6px">' + esc(x.text) + '</div></div>').join('') : '<div class="card empty">No messages</div>');
+};
+
+/* ---------------- purchases ---------------- */
+RENDER.purchases = async main => {
+  const d = await api('/purchases');
+  const byProduct = {}; d.rows.forEach(p => byProduct[p.product] = (byProduct[p.product] || 0) + 1);
+  main.innerHTML = '<h1>Purchases</h1><div class="sub">Google Play purchases checked and credited by the server (the latest 300)</div>' +
+    '<div class="flags">' + Object.entries(byProduct).map(([k, v]) => '<span class="flag">' + esc(k) + ': ' + v + '</span>').join('') + '</div>' +
+    (d.rows.length ? '<div class="tablewrap"><table><thead><tr><th>When</th><th>Player</th><th>Product</th><th class="num">Coins</th><th>Order</th></tr></thead><tbody>' +
+      d.rows.map(p => '<tr><td>' + when(p.ts) + '</td><td><a href="#players/' + esc(p.user_id) + '">' + esc(p.name || p.user_id) + '</a></td><td>' + esc(p.product) + '</td><td class="num">' + (p.coins ? num(p.coins) : '') + '</td><td class="mono">' + esc(p.order_id || '') + '</td></tr>').join('') +
+      '</tbody></table></div>' : '<div class="card empty">No purchases yet</div>');
+};
+
+/* ---------------- activity log ---------------- */
+RENDER.log = async main => {
+  const d = await api('/log');
+  main.innerHTML = '<h1>Activity log</h1><div class="sub">What was done from this dashboard</div>' +
+    (d.rows.length ? '<div class="tablewrap" style="margin-top:12px"><table><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Player</th><th>Details</th></tr></thead><tbody>' +
+      d.rows.map(x => '<tr><td>' + when(x.ts) + '</td><td class="mono">' + esc(x.who) + '</td><td><b>' + esc(x.action) + '</b></td><td>' + (x.target ? '<a href="#players/' + esc(x.target) + '" class="mono">' + esc(x.target) + '</a>' : '') + '</td><td class="mono" style="max-width:420px;word-break:break-word">' + esc(x.detail || '') + '</td></tr>').join('') +
+      '</tbody></table></div>' : '<div class="card empty">Nothing yet</div>');
+};
+
+// players linked from anywhere (#players/ID) open in the drawer
+window.addEventListener('hashchange', () => { const p = location.hash.split('/'); if (p[0] === '#players' && p[1] && state.view !== 'players') {} });
+
+api('/overview').then(start).catch(e => { if (e.message !== 'Signed out') { $('#root').innerHTML = '<div class="card login">' + (e.message === 'admin_off' ? 'The dashboard is off: set <b>ADMIN_KEY</b> on the server, then reload.' : esc(e.message)) + '</div>'; } });
+</script>
+</body>
+</html>

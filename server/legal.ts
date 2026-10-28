@@ -16,9 +16,13 @@ function page(title: string, body: string): string {
 <nav><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/delete-account">Delete account</a></nav>${body}</main></body></html>`;
 }
 
-const UPDATED = '27 October 2026';
+const UPDATED = '28 October 2026';
 
-export function privacyPage(): string {
+/** What the cash-out offers right now (the dashboard's settings). */
+export interface CashoutTerms { enabled: boolean; coins: number; egp: number }
+const fmt = (n: number) => n.toLocaleString('en');
+
+export function privacyPage(c?: CashoutTerms): string {
   return page('Privacy policy', `
 <h1>Privacy policy</h1><div class="sub">Board Battles, by Qimma Labs · last updated ${UPDATED}</div>
 <h2>What we keep</h2><ul>
@@ -26,42 +30,45 @@ export function privacyPage(): string {
 <li><b>If you sign in:</b> with Google, your Google account id, name and e-mail; with Apple, your Apple id (and e-mail if you share it); with a mobile number, that number.</li>
 <li><b>Purchases:</b> what you bought on Google Play and its order number, to credit it once. We never see your card or payment details.</li>
 <li><b>Messages to support</b> and reports you send about other players, with your player id.</li>
-<li><b>Notifications:</b> your device's push token, if you allow reminders.</li></ul>
+<li><b>Notifications:</b> your device's push token, if you allow reminders.</li>
+${c?.enabled ? '<li><b>Prize requests:</b> the Vodafone Cash number you give us, the amount and the date, to pay you and keep a record.</li>' : ''}</ul>
 <h2>What we don't keep</h2><ul><li>Voice chat goes directly between the players' phones (or through our relay when a direct route is blocked); it is never recorded.</li>
 <li>Table chat is quick phrases and emojis, not stored after the game.</li><li>We don't sell your data and don't use it for anything but running the game.</li></ul>
 <h2>Services we use</h2><ul>
 <li><b>Google Play</b> (purchases, the install referrer for invite codes), <b>Google AdMob</b> (ads; AdMob may use your device's advertising id, see <a href="https://policies.google.com/technologies/ads">Google's ad policy</a>), <b>Firebase Cloud Messaging</b> (reminders).</li>
 <li><b>Google</b> and <b>Apple</b> sign-in, and an SMS provider for mobile-number codes, only when you choose them.</li></ul>
 <h2>How long</h2><p>As long as your account exists. Delete it any time: in the app, Settings → Delete my account, or on the <a href="/delete-account">delete-account page</a>. Everything above is removed; purchase records the law requires us to keep are kept for that time only.</p>
-<h2>Children</h2><p>The game is for players 13 and over. Coins can't be cashed out and there is no real-money gambling.</p>
+<h2>Children</h2><p>The game is for players 13 and over${c?.enabled ? '; prize requests are for adults (18+) living in Egypt' : '. Coins can\'t be cashed out'}.</p>
 <h2>Contact</h2><p>In the app: Settings → Contact support.</p>
 <div class="ar"><h1>سياسة الخصوصية</h1>
 <h2>بنحتفظ بإيه</h2><ul><li>حسابك في اللعبة: رقم اللاعب، الاسم والشخصية، الكوينز، المستوى، النتايج، السكينز، الصحاب، المهام والموسم.</li>
 <li>لو سجلت دخول: بجوجل (رقم الحساب والاسم والإيميل)، بأبل (رقم الحساب، والإيميل لو شاركته)، أو برقم الموبايل.</li>
 <li>المشتريات من Google Play ورقم الطلب، عشان تتحسب مرة واحدة. عمرنا ما بنشوف بيانات الكارت.</li>
-<li>رسايل الدعم والبلاغات، وتوكن الإشعارات لو سمحت بيها.</li></ul>
+<li>رسايل الدعم والبلاغات، وتوكن الإشعارات لو سمحت بيها.</li>${c?.enabled ? '<li>رقم فودافون كاش اللي بتكتبه في طلب الجايزة، عشان نحولك ونحتفظ بسجل.</li>' : ''}</ul>
 <h2>مش بنحتفظ بـ</h2><ul><li>الكلام الصوتي مش بيتسجل. شات الترابيزة مش بيتخزن. مش بنبيع بياناتك.</li></ul>
 <h2>خدمات بنستخدمها</h2><ul><li>Google Play، Google AdMob للإعلانات، Firebase للإشعارات، وتسجيل الدخول بجوجل أو أبل أو الموبايل لو اخترته.</li></ul>
 <h2>امسح حسابك</h2><p>من اللعبة: الإعدادات ← امسح حسابي، أو من <a href="/delete-account">صفحة مسح الحساب</a>.</p></div>`);
 }
 
-export function termsPage(): string {
+export function termsPage(c?: CashoutTerms): string {
   return page('Terms of use', `
 <h1>Terms of use</h1><div class="sub">Board Battles, by Qimma Labs · last updated ${UPDATED}</div>
-<ul><li>Board Battles is a game of skill and chance for fun. <b>Coins have no money value</b>: they can't be cashed out, sold or traded, and there is no real-money gambling.</li>
+<ul><li>Board Battles is a game for fun. Coins can't be sold or traded between players.</li>
+${c?.enabled ? `<li><b>Prizes:</b> players aged 18 or over who live in Egypt can ask to exchange coins for a Vodafone Cash transfer: every ${fmt(c.coins)} coins = ${fmt(c.egp)} EGP. Requests are checked by hand before paying (the account must be signed in and have played enough online games); we can refuse a request that breaks these terms, and the coins then go back. The rate and the rules can change.</li>` : `<li><b>Coins have no money value</b>: they can't be cashed out.</li>`}
 <li>Purchases (coin packs, the season pass, the ad-free month) are digital items for the game, sold through Google Play under its refund rules.</li>
 <li>Be decent: no cheating, no abuse in names or chat, no harassment. Players others report are muted automatically, and we may close accounts that break these rules.</li>
 <li>One account per player. Don't use bots or modified apps.</li>
 <li>The game is provided as it is; we do our best to keep it running but can't promise it never stops. We may change or end features and seasons.</li>
 <li>You must be 13 or over to play.</li></ul>
 <div class="ar"><h1>شروط الاستخدام</h1><ul>
-<li>بورد باتلز لعبة للتسلية. <b>الكوينز ملهاش قيمة فلوس</b>: مش بتتسحب ولا بتتباع ولا فيها قمار بفلوس حقيقية.</li>
+<li>بورد باتلز لعبة للتسلية. الكوينز مش بتتباع ولا بتتبادل بين اللاعيبة.</li>
+${c?.enabled ? `<li><b>الجوايز:</b> اللاعيبة من ١٨ سنة وساكنين في مصر يقدروا يطلبوا تحويل الكوينز لفودافون كاش: كل ${fmt(c.coins)} كوين = ${fmt(c.egp)} جنيه. الطلبات بتتراجع قبل الدفع (لازم الحساب يكون متسجل ولعبت ماتشات أونلاين كفاية)، وممكن نرفض الطلب اللي بيخالف الشروط وترجعلك الكوينز. السعر والقواعد ممكن يتغيروا.</li>` : `<li><b>الكوينز ملهاش قيمة فلوس</b>: مش بتتسحب.</li>`}
 <li>المشتريات (الكوينز، الموسم المميز، بدون إعلانات) حاجات رقمية جوه اللعبة، بتتباع من خلال Google Play وبقواعد الاسترجاع بتاعته.</li>
 <li>خليك محترم: ممنوع الغش والشتيمة والمضايقة. اللي بيتبلغ عنه بيتكتم، وممكن نقفل الحساب اللي بيكسر القواعد.</li>
 <li>حساب واحد لكل لاعب، وممنوع البوتات والنسخ المعدلة. لازم يكون عندك ١٣ سنة أو أكتر.</li></ul></div>`);
 }
 
-export function deletePage(): string {
+export function deletePage(_?: CashoutTerms): string {
   return page('Delete your account', `
 <h1>Delete your Board Battles account</h1>
 <p><b>Fastest, in the game:</b> Settings → <b>Delete my account</b>. It is deleted at once.</p>
