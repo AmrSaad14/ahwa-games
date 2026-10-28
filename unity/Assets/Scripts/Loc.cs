@@ -155,7 +155,7 @@ public static class Loc
         ["اترفضت"] = "Declined", ["انتهى وقتها"] = "Expired", ["اكتب رقمك"] = "Enter your number",
         ["سجّل دخول الأول عشان نقدر نحولك الجايزة"] = "Sign in first so we can send you the prize", ["ابعت الرقم"] = "Send number",
         ["لازم يكون عندك ١٨ سنة وساكن في مصر. اللعب ببلاش، ومفيش حاجة بتتشترى عشان تكسب"] = "You must be 18+ and live in Egypt. Playing is free; nothing is bought to win",
-        ["وصلنا رقمك! هنحولك الجايزة خلال يومين شغل"] = "Got your number! We'll send the prize within 2 working days", ["كسبت"] = "You won",
+        ["وصلنا رقمك! هنحولك الجايزة خلال ٧ أيام شغل"] = "Got your number! We'll send the prize within 7 working days", ["كسبت"] = "You won",
         ["الجايزة دي مش متاحة"] = "That prize isn't available", ["رقمك وصلنا، الجايزة في الطريق"] = "We have your number; the prize is on its way",
         ["الموسم مش متاح دلوقتي"] = "The season pass isn't available right now", ["البطولات مش متاحة دلوقتي"] = "Tournaments aren't available right now",
         ["ألقاب"] = "Titles", ["الألقاب بتيجي من البطولات والإدارة، وأحسن لاعب في كل لعبة كل شهر بياخد لقب «لاعب الشهر»"] = "Titles come from tournaments and the team, and each game's best player every month becomes \"Player of the Month\"",

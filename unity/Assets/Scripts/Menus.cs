@@ -57,11 +57,11 @@ public partial class Menus : MonoBehaviour
         topButtons.Add(TopButton(top, 2, "help", "طريقة اللعب", () => OpenHowTo(0)));
         topButtons.Add(TopButton(top, 3, "settings", "الإعدادات", OpenSettings));
         // the monthly prize: shown when you won one (to give your Vodafone Cash number), or one is on its way
-        var prize = Chip(home, "trophy", "جايزتك", new Vector2(-252, -56), 128, new Color32(0xc0, 0x1f, 0x2a, 0xf0), Color.white, () => { Sfx.Tap(); OpenPrizes(); });
+        var prize = Chip(home, "trophy", "جايزتك", new Vector2(-252, -62), 128, new Color32(0xc0, 0x1f, 0x2a, 0xf0), Color.white, () => { Sfx.Tap(); OpenPrizes(); });
         prizeChip = prize.gameObject; prizeChipText = prize.GetComponentInChildren<Text>(); prizeChip.SetActive(false);
         // an event on (Ramadan, Eid…): a banner at the top with what's special
         var evb = Ui.Button(home, "", new Color32(0x3a, 0x1c, 0x66, 0xf0), Ui.Gold, 13, () => { Sfx.Tap(); OpenEvent(); });
-        eventChip = ((RectTransform)evb.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 38), new Vector2(0, -64));
+        eventChip = ((RectTransform)evb.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 38), new Vector2(0, -112));
         evb.gameObject.AddComponent<Outline>().effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.6f);
         eventIcon = Ui.Picture(eventChip, "Icon", Icon("t_lantern")); eventIcon.color = Ui.Gold;
         eventIcon.rectTransform.Place(new Vector2(Loc.En ? 0 : 1, 0.5f), new Vector2(Loc.En ? 0 : 1, 0.5f), new Vector2(24, 24), new Vector2(Loc.En ? 10 : -10, 0));
@@ -71,9 +71,9 @@ public partial class Menus : MonoBehaviour
         // along the top, left of your name and coins: watch an ad, sign in, language
         var ad = Chip(home, "video", "+2K", new Vector2(-252, -10), 98, new Color32(0x2f, 0x6b, 0x3a, 0xf0), Color.white, WatchAd);
         adText = ad.GetComponentInChildren<Text>();
-        var lang = Chip(home, "globe", Loc.En ? "ع" : "EN", new Vector2(-358, -10), 70, Ui.Panel, Ui.GoldLight, () => { Sfx.Tap(); Loc.Set(!Loc.En); });
+        var lang = Chip(home, "globe", Loc.En ? "ع" : "EN", new Vector2(-488, -62), 66, Ui.Panel, Ui.GoldLight, () => { Sfx.Tap(); Loc.Set(!Loc.En); });
         langText = lang.GetComponentInChildren<Text>();
-        var sign = Chip(home, "google", "دخول", new Vector2(-436, -10), 92, new Color(1, 1, 1, 0.94f), Ui.Ink, SignIn);
+        var sign = Chip(home, "google", "دخول", new Vector2(-388, -62), 92, new Color(1, 1, 1, 0.94f), Ui.Ink, SignIn);
         signChip = sign.gameObject; signText = sign.GetComponentInChildren<Text>();
 
         Loc.Changed += () => { langText.Set(Loc.En ? "ع" : "EN"); refreshOpen?.Invoke(); };
@@ -256,7 +256,7 @@ public partial class Menus : MonoBehaviour
                 Sfx.Chime();
                 break;
             case "prizeClaimed":
-                app.Toast(Loc.T("وصلنا رقمك! هنحولك الجايزة خلال يومين شغل"), 6f);
+                app.Toast(Loc.T("وصلنا رقمك! هنحولك الجايزة خلال ٧ أيام شغل"), 6f);
                 Sfx.Coins(); Sfx.Buzz();
                 break;
             case "prizeWon":
@@ -366,7 +366,8 @@ public partial class Menus : MonoBehaviour
         {
             int k = Loc.En ? i : labels.Length - 1 - i;   // Arabic reads right to left: the first tab on the right
             int idx = i;
-            var b = Ui.Button(body, labels[i], i == sel ? Ui.Gold : new Color(1, 1, 1, 0.07f), i == sel ? Ui.Ink : Ui.GoldLight, 14, () => { Sfx.Tap(); pick(idx); });
+            var b = Ui.Button(body, labels[i], i == sel ? Ui.Gold : new Color(1, 1, 1, 0.07f), i == sel ? Ui.Ink : Ui.GoldLight, labels.Length >= 7 ? 12 : 14, () => { Sfx.Tap(); pick(idx); });
+            var bt = b.GetComponentInChildren<Text>(); bt.resizeTextForBestFit = true; bt.resizeTextMinSize = 9; bt.resizeTextMaxSize = labels.Length >= 7 ? 12 : 14; bt.rectTransform.offsetMin = new Vector2(4, 0); bt.rectTransform.offsetMax = new Vector2(-4, 0);
             ((RectTransform)b.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(w, 30), new Vector2((k - (labels.Length - 1) / 2f) * (w + 6), 0));
         }
         var area = Ui.Rect("Area", body);
