@@ -189,7 +189,10 @@ password and sign in with it (the session lasts 12 hours). Everything done there
   Titles); it shows on their card, at their seat and on the leaderboard. **Player of the month:** when a month
   ends, the player with the most points in each game (3 a win, 1 a game, online games, at least 10 games) gets
   "Domino / Tawla / Chess / Ludo Player of the Month" for the whole next month.
-- **Game settings:** cash-out rules, starting coins, daily streak, ads, weekly prizes, turn time, computer players,
+- **Analytics:** how many new players come back on day 1, 3 and 7, where new players drop off, what is played, busiest hours.
+- **Events:** Ramadan, Eid or anything else with dates: season points ×, mission coins ×, a title for taking part,
+  and limited skins on sale only during the event (presets for Ramadan and both Eids 2027).
+- **Game settings:** the monthly prizes, starting coins, daily streak, ads, weekly prizes, turn time, computer players,
   maintenance mode (no new games start).
 
 Changes reach the running game at once, no restart.
