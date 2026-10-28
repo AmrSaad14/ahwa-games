@@ -19,7 +19,7 @@ public partial class Menus
         bool m = false;
         foreach (var o in user.Arr("missions") ?? new List<object>()) if (o is Dictionary<string, object> d && !d.Bool("claimed") && d.Num("have") >= d.Num("need")) m = true;
         missionsDot.SetActive(m);
-        seasonDot.SetActive(SeasonClaimable() > 0);
+        seasonDot.SetActive(SeasonOn && SeasonClaimable() > 0);
         friendsDot.SetActive(incoming > 0);
         tourneyDot.SetActive(tourney != null && (tourney.Str("state") == "running" && tourney.Obj("you") != null && tourney.Obj("you").Bool("alive")));
     }
@@ -191,6 +191,7 @@ public partial class Menus
 
     public void OpenSeason(int scrollTo = -1)
     {
+        if (!SeasonOn) { app.Toast(Loc.T("الموسم مش متاح دلوقتي")); return; }
         Panel(Loc.T("الموسم"), out var body, new Vector2(720, 350));
         refreshOpen = () =>
         {
@@ -316,6 +317,7 @@ public partial class Menus
 
     public void OpenTourney()
     {
+        if (!TourneyOn) { app.Toast(Loc.T("البطولات مش متاحة دلوقتي")); return; }
         if (app.net == null || !app.net.Online) { app.Toast(Loc.T("مش متصل بالسيرفر لسه")); return; }
         app.Send(new Dictionary<string, object> { ["t"] = "tourney" });
         Panel(Loc.T("بطولة الأسبوع"), out var body, new Vector2(720, 350));

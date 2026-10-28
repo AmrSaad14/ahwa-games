@@ -128,6 +128,7 @@ public static class Loc
         ["سجّل دخول الأول عشان تقدر تسحب"] = "Sign in first to cash out", ["اكتب رقم فودافون صحيح يبدأ بـ 010"] = "Enter a valid Vodafone number starting with 010",
         ["عندك طلب لسه بيتحول، استنى لما يخلص"] = "You already have a payout in progress", ["المبلغ مش مظبوط"] = "That amount isn't right",
         ["استنى شوية وجرّب تاني"] = "Wait a bit and try again",
+        ["الموسم مش متاح دلوقتي"] = "The season pass isn't available right now", ["البطولات مش متاحة دلوقتي"] = "Tournaments aren't available right now",
         ["ألقاب"] = "Titles", ["الألقاب بتيجي من البطولات والإدارة، وأحسن لاعب في كل لعبة كل شهر بياخد لقب «لاعب الشهر»"] = "Titles come from tournaments and the team, and each game's best player every month becomes \"Player of the Month\"",
         ["لسه معندكش ألقاب"] = "No titles yet", ["لحد"] = "Until", ["اقلعه"] = "Take off", ["البسه"] = "Wear", ["اللقب ده مش عندك"] = "You don't have that title",
         ["لأعلى نقط الشهر"] = "Most points this month", ["مفيش متصدر لسه"] = "No leader yet", ["المتصدر"] = "Leader",

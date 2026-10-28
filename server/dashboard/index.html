@@ -205,7 +205,7 @@ RENDER.overview = async main => {
   const f = (on, l, warn) => '<span class="flag ' + (warn && on ? 'warn' : on ? 'on' : 'off') + '">' + l + ': ' + (on ? 'on' : 'off') + '</span>';
   const t = o.tourney;
   main.innerHTML = '<h1>Overview</h1><div class="sub">Cairo time · updated ' + when(Date.now()) + '</div>' +
-    '<div class="flags">' + f(o.flags.cashout, 'Cash-out') + f(o.flags.maintenance, 'Maintenance', true) + f(!!o.flags.notice, 'Notice') + f(t.enabled, 'Tournament') + f(o.flags.push, 'Push') + '</div>' +
+    '<div class="flags">' + f(o.flags.cashout, 'Cash-out') + f(o.flags.maintenance, 'Maintenance', true) + f(!!o.flags.notice, 'Notice') + f(t.enabled, 'Tournament') + f(o.flags.season, 'Season pass') + f(o.flags.push, 'Push') + '</div>' +
     '<div class="grid">' +
       k(num(o.live.online), 'Online now · ' + num(o.live.tables) + ' tables · ' + num(o.live.queued) + ' waiting') +
       k(num(o.activeToday), 'Played today · ' + num(o.activeWeek) + ' this week') +
@@ -376,7 +376,7 @@ RENDER.tourney = async main => {
       r.map(m => '<div class="match"><div class="' + (m.winner === 0 ? 'w' : '') + '">' + who(m.a) + '</div><div class="' + (m.winner === 1 ? 'w' : '') + '">' + who(m.b) + '</div>' + (m.live ? '<div class="sub">playing…</div>' : '') + '</div>').join('') + '</div>').join('') + '</div>' : '') +
     (v.results.length ? '<h2>Results</h2><table><tbody>' + v.results.map(x => '<tr><td>#' + x.place + '</td><td>' + esc(x.name) + '</td><td class="num">' + num(x.coins) + '</td></tr>').join('') + '</tbody></table>' : '') +
     '<h2>Settings</h2><div class="card"><div class="form">' +
-      '<label class="f">Tournament<span class="switch"><input type="checkbox" id="te"' + (t.enabled ? ' checked' : '') + '> on every week</span></label>' +
+      '<label class="f">Tournaments in the game<span class="switch"><input type="checkbox" id="te"' + (t.enabled ? ' checked' : '') + '> on (off: hidden in the game, none start)</span></label>' +
       '<label class="f">Day (Cairo)<select id="tw">' + DAYS.map((x, i) => '<option value="' + i + '"' + (i === t.weekday ? ' selected' : '') + '>' + x + '</option>').join('') + '</select></label>' +
       '<label class="f">Hour (0–23, Cairo)<input id="th" type="number" min="0" max="23" value="' + t.hour + '"></label>' +
       '<label class="f">Game<select id="tg">' + Object.entries(GAMES).map(([k, l]) => '<option value="' + k + '"' + (k === t.game ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label>' +
@@ -401,6 +401,8 @@ RENDER.season = async main => {
   const cell = (rw, track, i) => '<div class="row" style="gap:6px"><select class="rk" data-t="' + track + '" data-i="' + i + '">' + skinOpts(rw.skin, track === 'free') + '</select><input type="number" class="rc" data-t="' + track + '" data-i="' + i + '" value="' + (rw.coins ?? '') + '" placeholder="coins" style="width:110px' + (rw.skin || track === 'prem' ? ';display:none' : '') + '"></div>';
   const max = Math.max(1, ...d.tiers);
   main.innerHTML = '<h1>Season pass</h1><div class="sub">Season ' + esc(d.season) + ' · ends ' + when(d.endsAt) + '</div>' +
+    '<div class="card row" style="justify-content:space-between;margin-top:12px' + (st.enabled ? '' : ';border-color:var(--warn)') + '"><label class="switch"><input type="checkbox" id="sen"' + (st.enabled ? ' checked' : '') + '> <b>Season pass in the game</b></label>' +
+      '<span class="sub">' + (st.enabled ? 'On: players earn season points, collect rewards and can buy premium.' : 'Off: hidden in the game; no points, rewards or premium sales. Players who already bought premium keep it (and no ads).') + '</span></div>' +
     '<div class="grid" style="margin-top:12px">' +
       '<div class="card kpi"><div class="v">' + num(d.players) + '</div><div class="l">Players on the track</div></div>' +
       '<div class="card kpi"><div class="v">' + num(d.premium) + '</div><div class="l">With premium (' + (d.players ? Math.round(d.premium / d.players * 100) : 0) + '%)</div></div>' +
@@ -414,6 +416,11 @@ RENDER.season = async main => {
     '<div class="tablewrap"><table><thead><tr><th>Tier</th><th>Free track</th><th>Premium track</th></tr></thead><tbody>' +
       st.tiers.map((t, i) => '<tr class="tierrow"><td><b>' + (i + 1) + '</b></td><td>' + cell(t.free, 'free', i) + '</td><td>' + cell(t.prem, 'prem', i) + '</td></tr>').join('') +
     '</tbody></table></div><button class="btn gold" id="ssv" style="margin-top:12px">Save the season pass</button>';
+  $('#sen').onchange = async e => {
+    const on = e.target.checked;
+    if (!confirm(on ? 'Show the season pass in the game again?' : 'Switch the season pass off? It disappears from the game for everyone.')) { e.target.checked = !on; return; }
+    await act(() => api('/settings', { method: 'PUT', body: { season: { enabled: on } } }), on ? 'Season pass is on' : 'Season pass is off'); go();
+  };
   main.querySelectorAll('.rk').forEach(s => s.onchange = () => { const c = main.querySelector('.rc[data-t="' + s.dataset.t + '"][data-i="' + s.dataset.i + '"]'); c.style.display = s.value ? 'none' : ''; });
   $('#ssv').onclick = async () => {
     const tiers = st.tiers.map((_, i) => {

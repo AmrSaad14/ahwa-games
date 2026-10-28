@@ -4,6 +4,7 @@
 // Sign in: every request but a few public ones carries the player's token: "Authorization: Bearer <token>"
 // (the same token the game gets in its "welcome" message; POST /api/v1/auth/guest makes a new guest and returns one).
 // Answers are JSON: { ...data } with 200, or { error: "code" } with 4xx. The full list is at /api/docs.
+import { TOURNEY } from './tourney';
 import type http from 'node:http';
 import { Store, REFER_BONUS } from './db';
 import { Tokens, Limiter, checkPassword, hashPassword } from './auth';
@@ -140,6 +141,7 @@ export function api(ctx: ApiContext) {
 
     /* ---------- the weekly tournament ---------- */
     { method: 'POST', path: /^\/api\/v1\/tournament\/join$/, auth: true, run: ({ uid }) => {
+      if (!TOURNEY.enabled) fail(409, 'tourney_off');
       if (hub.tourney.state !== 'open') fail(409, 'tourney_started');
       store.tourneyJoin(hub.tourney.event, uid!); return hub.tourney.view(uid);
     } },

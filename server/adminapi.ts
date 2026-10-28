@@ -80,7 +80,7 @@ export function adminApi(ctx: AdminCtx) {
       const st = settings.value;
       return { ...store.adminOverview(), live: { ...hub.stats(), online: hub.onlineIds.length }, daily: store.adminDaily(14),
         tourney: { state: hub.tourney.state, startsAt: hub.tourney.startsAt, game: hub.tourney.def.game, registered: store.tourneyRegs(hub.tourney.event).length, enabled: st.tourney.enabled },
-        flags: { cashout: st.cashout.enabled, maintenance: st.maintenance.on, notice: st.notice.until > Date.now() ? st.notice.text : '', push: ctx.pushOn() } };
+        flags: { season: st.season.enabled, cashout: st.cashout.enabled, maintenance: st.maintenance.on, notice: st.notice.until > Date.now() ? st.notice.text : '', push: ctx.pushOn() } };
     }
     if (p === '/catalog') return { skins: SKINS, tiers: TIERS, pass: SEASON_PASS, titles: hub.titles.list, icons: TITLE_ICONS };
 

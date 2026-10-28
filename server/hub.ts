@@ -10,7 +10,7 @@ import { missionById } from '../shared/missions';
 import { SP, SEASON_PASS, seasonOf, seasonEndsAt } from '../shared/season';
 import { Titles } from './titles';
 import { skinFor } from '../shared/skins';
-import { Tourney, Entrant } from './tourney';
+import { Tourney, Entrant, TOURNEY } from './tourney';
 import type { Settings, GameSettings } from './settings';
 import { parseEquip } from './db';
 import { BoardTable } from '../shared/boardtable';
@@ -217,11 +217,13 @@ export class Hub {
         return this.sendUser(uid);
       }
       case 'seasonBuy': {
+        if (!SEASON_PASS.enabled) return err('season_off');
         const e = this.store.seasonPremium(uid, false);
         if (e) return err(e);
         return this.sendUser(uid);
       }
       case 'seasonClaim': {
+        if (!SEASON_PASS.enabled) return err('season_off');
         const track = m.track === 'prem' ? 'prem' : 'free';
         const r = this.store.seasonClaim(uid, Number(m.tier), track);
         if (typeof r === 'string') return err(r);
@@ -230,6 +232,7 @@ export class Hub {
       }
       case 'tourney': return s.conn.send({ t: 'tourney', view: this.tourney.view(uid) });
       case 'tourneyJoin': case 'tourneyLeave': {
+        if (m.t === 'tourneyJoin' && !TOURNEY.enabled) return err('tourney_off');
         if (this.tourney.state !== 'open') return err('tourney_started');
         if (m.t === 'tourneyJoin') this.store.tourneyJoin(this.tourney.event, uid); else this.store.tourneyLeave(this.tourney.event, uid);
         return s.conn.send({ t: 'tourney', view: this.tourney.view(uid) });
@@ -425,6 +428,7 @@ export class Hub {
         if (!this.buyLimiter.allow(uid)) return fail('slow_down');
         const billing = this.opts.billing;
         if (!billing?.enabled) return fail('purchases_off');
+        if (product === SEASON_PASS.id && !SEASON_PASS.enabled && !this.store.purchase(token)) return fail('season_off');
         if (product === NO_ADS.id) return fail('bad_product');   // no ad-free plan on its own: it comes with the season pass
         const seen = this.store.purchase(token);
         if (seen && seen.product !== NO_ADS.id) {
@@ -779,7 +783,9 @@ export class Hub {
   /** A player as the app sees them, with what the cash-out offers right now. */
   private pub(u: UserRow) {
     const c = this.cash;
-    return { ...this.store.publicUser(u), cashout: { on: c.enabled, coins: c.coins, egp: c.egp, maxUnits: c.maxUnits, minGames: c.minGames }, adReward: ECONOMY.adReward };
+    return { ...this.store.publicUser(u), cashout: { on: c.enabled, coins: c.coins, egp: c.egp, maxUnits: c.maxUnits, minGames: c.minGames }, adReward: ECONOMY.adReward,
+      // what the dashboard switched on: the tournament section and the season pass
+      features: { tourney: TOURNEY.enabled !== false, season: SEASON_PASS.enabled } };
   }
   /** How long matchmaking waits for people, and a turn's length (dashboard). */
   setTiming(botFillMs: number, turnMs: number) { this.opts.botFillMs = botFillMs; this.opts.turnMs = turnMs; }

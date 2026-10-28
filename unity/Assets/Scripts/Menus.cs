@@ -43,18 +43,18 @@ public partial class Menus : MonoBehaviour
 
         // down the left side: what's waiting for you today, your friends and the shop
         var rail = Ui.Rect("Rail", home).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(64, 290), new Vector2(10, -80));
-        dailyDot = Dot(RailButton(rail, 0, "gift", "يومي", OpenDaily));
-        missionsDot = Dot(RailButton(rail, 1, "target", "المهام", OpenMissions));
-        seasonDot = Dot(RailButton(rail, 2, "pass", "الموسم", () => OpenSeason()));
-        friendsDot = Dot(RailButton(rail, 3, "friends", "صحابك", OpenFriends));
-        RailButton(rail, 4, "shop", "المتجر", () => OpenShop(0));
-        RailButton(rail, 5, "chest", "مجموعتي", () => OpenCollection(0));
+        railButtons.Add(RailButton(rail, 0, "gift", "يومي", OpenDaily)); dailyDot = Dot(railButtons[0]);
+        railButtons.Add(RailButton(rail, 1, "target", "المهام", OpenMissions)); missionsDot = Dot(railButtons[1]);
+        railButtons.Add(seasonButton = RailButton(rail, 2, "pass", "الموسم", () => OpenSeason())); seasonDot = Dot(seasonButton);
+        railButtons.Add(RailButton(rail, 3, "friends", "صحابك", OpenFriends)); friendsDot = Dot(railButtons[3]);
+        railButtons.Add(RailButton(rail, 4, "shop", "المتجر", () => OpenShop(0)));
+        railButtons.Add(RailButton(rail, 5, "chest", "مجموعتي", () => OpenCollection(0)));
         // along the top, beside the logo: the tournament, the leaderboard, how to play, settings
         var top = Ui.Rect("Top", home).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(240, 54), new Vector2(82, -8));
-        tourneyDot = Dot(TopButton(top, 0, "cup", "البطولة", () => OpenTourney()));
-        TopButton(top, 1, "trophy", "المتصدرين", () => OpenLeaders(0));
-        TopButton(top, 2, "help", "طريقة اللعب", () => OpenHowTo(0));
-        TopButton(top, 3, "settings", "الإعدادات", OpenSettings);
+        topButtons.Add(tourneyButton = TopButton(top, 0, "cup", "البطولة", () => OpenTourney())); tourneyDot = Dot(tourneyButton);
+        topButtons.Add(TopButton(top, 1, "trophy", "المتصدرين", () => OpenLeaders(0)));
+        topButtons.Add(TopButton(top, 2, "help", "طريقة اللعب", () => OpenHowTo(0)));
+        topButtons.Add(TopButton(top, 3, "settings", "الإعدادات", OpenSettings));
         // prizes: coins to Vodafone Cash (shown only while the server has cash-out on, from the dashboard)
         var cash = Chip(home, "coin", "اسحب فلوسك", new Vector2(-252, -56), 128, new Color32(0xc0, 0x1f, 0x2a, 0xf0), Color.white, () => { Sfx.Tap(); OpenCashout(); });
         cashChip = cash.gameObject; cashChip.SetActive(false);
@@ -73,6 +73,25 @@ public partial class Menus : MonoBehaviour
     }
 
     /// A red dot in the corner of a button: something is waiting there.
+    // the home screen's buttons, so a section the dashboard switched off can be hidden and the rest close up
+    readonly List<RectTransform> railButtons = new List<RectTransform>(), topButtons = new List<RectTransform>();
+    RectTransform seasonButton, tourneyButton;
+    /// The tournament section and the season pass, as the server says (the dashboard switches them).
+    public bool TourneyOn { get; private set; } = true;
+    public bool SeasonOn { get; private set; } = true;
+
+    void ApplyFeatures(Dictionary<string, object> f)
+    {
+        TourneyOn = f == null || f.Bool("tourney");
+        SeasonOn = f == null || f.Bool("season");
+        seasonButton.gameObject.SetActive(SeasonOn);
+        tourneyButton.gameObject.SetActive(TourneyOn);
+        int k = 0;
+        foreach (var b in railButtons) if (b.gameObject.activeSelf) b.anchoredPosition = new Vector2(0, -(k++) * 48);
+        k = 0;
+        foreach (var b in topButtons) if (b.gameObject.activeSelf) b.anchoredPosition = new Vector2((k++) * 60, 0);
+    }
+
     static GameObject Dot(RectTransform b)
     {
         var dot = Ui.Picture(b, "Dot", GameUi.Disc.texture);
@@ -126,6 +145,7 @@ public partial class Menus : MonoBehaviour
         user = u;
         bool signed = !string.IsNullOrEmpty(u.Str("google")) || !string.IsNullOrEmpty(u.Str("apple")) || !string.IsNullOrEmpty(u.Str("phone")) || !string.IsNullOrEmpty(u.Str("email"));
         signChip.SetActive(!signed);
+        ApplyFeatures(u.Obj("features"));
         var co = u.Obj("cashout");
         cashChip.SetActive(co != null && co.Bool("on"));
         if (co != null) { cashCoins = (long)co.Num("coins", cashCoins); cashEgp = (int)co.Num("egp", cashEgp); cashMax = (int)co.Num("maxUnits", cashMax); cashMinGames = (int)co.Num("minGames", 0); }
@@ -246,6 +266,8 @@ public partial class Menus : MonoBehaviour
             case "mission_not_done": app.Toast(Loc.T("لسه المهمة مخلصتش")); return true;
             case "already_claimed": app.Toast(Loc.T("خدتها خلاص")); return true;
             case "tier_locked": app.Toast(Loc.T("لسه موصلتش للمستوى ده")); return true;
+            case "season_off": app.Toast(Loc.T("الموسم مش متاح دلوقتي")); return true;
+            case "tourney_off": app.Toast(Loc.T("البطولات مش متاحة دلوقتي")); return true;
             case "bad_title": app.Toast(Loc.T("اللقب ده مش عندك")); return true;
             case "not_premium": app.Toast(Loc.T("افتح الموسم المميز الأول")); return true;
             case "already_premium": app.Toast(Loc.T("الموسم المميز مفتوح عندك")); return true;
@@ -830,6 +852,11 @@ public partial class Menus : MonoBehaviour
                 // the season pass: a skin at every tier, and no ads until the season ends (there's no ad-free plan on its own)
                 var season = user?.Obj("season");
                 bool prem = season != null && season.Bool("premium");
+                if (!SeasonOn)
+                {
+                    Ui.Label(c, "الموسم مش متاح دلوقتي", 15, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Fill();
+                    return;
+                }
                 c.sizeDelta = new Vector2(340, c.sizeDelta.y);
                 var vi = Ui.Picture(c, "Icon", Icon("pass")); vi.color = Ui.Gold; vi.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(44, 44), new Vector2(0, -10));
                 Ui.Label(c, "الموسم المميز", 20, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(320, 28), new Vector2(0, -58));

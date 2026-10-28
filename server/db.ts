@@ -484,12 +484,14 @@ export class Store {
   /** Season points; returns the tier before and after. */
   addSeasonSp(uid: string, n: number, now = Date.now()): { from: number; to: number } {
     const id = seasonOf(now), before = this.seasonRow(uid, id)?.sp ?? 0;
+    if (!SEASON_PASS.enabled) return { from: tierOf(before), to: tierOf(before) };   // the season is switched off
     this.db.prepare('INSERT INTO season (user_id, season, sp) VALUES (?, ?, ?) ON CONFLICT(user_id, season) DO UPDATE SET sp = sp + excluded.sp').run(uid, id, n);
     return { from: tierOf(before), to: tierOf(before + n) };
   }
   /** Open the premium track for this season (paid with coins, or a store purchase when `paid`). */
   seasonPremium(uid: string, paid: boolean, now = Date.now()): string | null {
     const id = seasonOf(now);
+    if (!paid && !SEASON_PASS.enabled) return 'season_off';
     if (this.seasonRow(uid, id)?.premium) return 'already_premium';
     this.db.exec('BEGIN');
     try {
@@ -505,6 +507,7 @@ export class Store {
   }
   /** Collect a tier's reward on one track. */
   seasonClaim(uid: string, tier: number, track: 'free' | 'prem', now = Date.now()): { coins?: number; skin?: string } | string {
+    if (!SEASON_PASS.enabled) return 'season_off';
     const st = this.seasonState(uid, now);
     if (!Number.isInteger(tier) || tier < 1 || tier > SEASON_TIERS) return 'bad_tier';
     if (tier > st.tier) return 'tier_locked';

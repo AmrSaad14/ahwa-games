@@ -126,3 +126,22 @@ test('titles: the designs, giving one, wearing it, and player of the month', asy
   assert.equal(app.store.wornTitle(a.user.id), 'potm_domino');
   assert.deepEqual(app.hub.monthlyTitles(), [], 'once a month');
 });
+
+test('admin: the season pass and the tournament can be switched off', async () => {
+  const { SEASON_PASS } = await import('../shared/season');
+  const g = await guest('Switch Tester');
+  await adm('PUT', '/settings', { season: { enabled: false }, tourney: { enabled: false } });
+  assert.equal(SEASON_PASS.enabled, false);
+  assert.equal(TOURNEY.enabled, false);
+  assert.equal(app.store.seasonClaim(g.user.id, 1, 'free'), 'season_off');
+  assert.equal(app.store.seasonPremium(g.user.id, false), 'season_off');
+  const sp = app.store.seasonState(g.user.id).sp;
+  app.store.addSeasonSp(g.user.id, 50);
+  assert.equal(app.store.seasonState(g.user.id).sp, sp, 'no season points while it is off');
+  const j = await fetch(base + '/api/v1/tournament/join', { method: 'POST', headers: { Authorization: 'Bearer ' + g.token } });
+  assert.equal(j.status, 409);
+  assert.equal(((await j.json()) as { error: string }).error, 'tourney_off');
+  assert.equal((await adm('GET', '/overview')).json.flags.season, false);
+  await adm('PUT', '/settings', { season: { enabled: true }, tourney: { enabled: true } });
+  assert.equal(SEASON_PASS.enabled, true);
+});
