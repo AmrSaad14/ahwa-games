@@ -121,6 +121,7 @@ test('titles: the designs, giving one, wearing it, and player of the month', asy
   const a = await guest('Domino Ace'), b = await guest('Few Games');
   for (let i = 0; i < 12; i++) app.store.addMonthly(a.user.id, 'domino', i % 2 === 0, prev);
   for (let i = 0; i < 5; i++) app.store.addMonthly(b.user.id, 'domino', true, prev);   // more points a game, but too few games
+  await adm('PUT', '/settings', { prizes: { enabled: true } });   // prizes are off until switched on
   const won = app.hub.monthlyTitles();
   assert.deepEqual(won.map(w => [w.uid, w.title]), [[a.user.id, 'potm_domino']]);
   assert.equal(app.store.wornTitle(a.user.id), 'potm_domino');

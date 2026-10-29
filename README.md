@@ -197,7 +197,9 @@ password and sign in with it (the session lasts 12 hours). Everything done there
 
 Changes reach the running game at once, no restart.
 
-## Monthly prizes (Vodafone Cash)
+## Monthly prizes (Vodafone Cash) — off for now
+
+Switched off by default: turn them on in the dashboard (Game settings → Monthly prizes) when ready.
 
 Coins can't be bought, sold or turned into money. The money prizes are for the **monthly leaderboards**: when a
 month ends, the player with the most points in each game (3 a win, 1 a game, online games, at least 10 games)

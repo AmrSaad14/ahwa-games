@@ -89,6 +89,47 @@ public partial class Menus
         ((RectTransform)shop.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(180, 42), Vector2.zero);
     }
 
+    /// The season pass, shown when the game opens: a few of its skins, what it gives, its price.
+    public void ShowSeasonPromo()
+    {
+        var s = user?.Obj("season"); if (s == null) return;
+        Panel(Loc.T("الموسم المميز"), out var body, new Vector2(600, 340));
+        // a glow behind, and five of the season's own skins in a row
+        var glow = Ui.Picture(body, "Glow", Ui.Glow(256)); glow.color = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.3f);
+        glow.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), new Vector2(520, 200), new Vector2(0, -60));
+        var picks = new List<string>();
+        foreach (var o in s.Arr("tiers") ?? new List<object>())
+        {
+            var p = (o as Dictionary<string, object>)?.Obj("prem"); string id = p?.Str("skin");
+            var d = Skins.Get(id); if (d != null && d.pass && !picks.Contains(id)) picks.Add(id);
+        }
+        if (picks.Count > 5) picks = picks.GetRange(picks.Count - 5, 5);   // the best ones are at the end of the track
+        for (int i = 0; i < picks.Count; i++)
+        {
+            int k = Loc.En ? i : picks.Count - 1 - i;
+            var card = Ui.Box(body, "Skin", Card).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(96, 104), new Vector2((k - (picks.Count - 1) / 2f) * 104, -6));
+            var pic = Ui.Picture(card, "Look", Skins.Picture(picks[i], out var tint)); pic.color = tint;
+            pic.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(60, 60), new Vector2(0, -8));
+            var nm = Ui.Label(card, Skins.Name(picks[i]), 11, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
+            nm.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(92, 30), new Vector2(0, 4));
+            nm.horizontalOverflow = HorizontalWrapMode.Wrap;
+        }
+        var l = Ui.Label(body, "", 16, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
+        l.Set(Loc.T("سكين في كل مستوى (٣٠ سكين) + بدون إعلانات لآخر الموسم"));
+        l.horizontalOverflow = HorizontalWrapMode.Wrap;
+        l.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(540, 44), new Vector2(0, -122));
+        double left = s.Num("endsAt") - App.LocalMs();
+        var t = Ui.Label(body, "", 12, Ui.GoldLight, TextAnchor.MiddleCenter);
+        t.Set(Loc.T("الموسم بيخلص بعد") + " " + Mathf.Max(0, (int)(left / 86_400_000)) + " " + Loc.T("يوم"));
+        t.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(540, 20), new Vector2(0, -166));
+        var buy = Ui.Button(body, Loc.T("افتح المميز") + "  " + (int)s.Num("egp", 299) + " " + Loc.T("ج.م"), Ui.Gold, Ui.Ink, 17, () => { Sfx.Tap(); Close(); Billing.Buy("season_pass"); });
+        ((RectTransform)buy.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(230, 44), new Vector2(Loc.En ? 128 : -128, 0));
+        var see = Ui.Button(body, "شوف الموسم", new Color(1, 1, 1, 0.1f), Ui.GoldLight, 15, () => { Sfx.Tap(); Close(); OpenSeason(); });
+        ((RectTransform)see.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(150, 44), new Vector2(Loc.En ? -70 : 70, 0));
+        var later = Ui.Button(body, "بعدين", new Color(1, 1, 1, 0.06f), new Color(1, 1, 1, 0.6f), 14, () => { Sfx.Tap(); Close(); });
+        ((RectTransform)later.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(100, 44), new Vector2(Loc.En ? -210 : 210, 0));
+    }
+
     /// New here? An easy first game of dominoes with hints, and a gift at the end.
     void OfferGuide()
     {

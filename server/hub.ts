@@ -1315,7 +1315,7 @@ export class Hub {
 }
 
 /** The monthly prizes when the dashboard hasn't changed anything (see server/settings.ts). */
-export const PRIZES: GameSettings['prizes'] = { enabled: true, egp: 500, claimDays: 30, prefixes: ['010'] };
+export const PRIZES: GameSettings['prizes'] = { enabled: false, egp: 500, claimDays: 30, prefixes: ['010'] };
 
 /** A Vodafone Cash number in any common form (Arabic digits, +20…) as 010xxxxxxxx, or null if it isn't one. */
 export function walletNumber(raw: string, prefixes: string[] = ['010']): string | null {

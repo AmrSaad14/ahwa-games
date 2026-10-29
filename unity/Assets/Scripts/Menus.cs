@@ -23,6 +23,7 @@ public partial class Menus : MonoBehaviour
     int prizeEgp = 500; bool prizeOn = true;
     GameObject prizeChip; Text prizeChipText;
     RectTransform eventChip; RawImage eventIcon; Text eventText;
+    bool seasonPromoShown;
     InputField walletField;
 
     // the leaderboard currently asked for
@@ -186,7 +187,8 @@ public partial class Menus : MonoBehaviour
         UpdateDots();
         // a friend's invite code from Google Play (or a link) waiting: credit them, once the account is new
         // a new player: the first-game guide, offered once (an easy game of dominoes with hints, and a gift)
-        if (!u.Bool("tutorial") && u.Num("games") == 0 && PlayerPrefs.GetInt("guideOffered", 0) == 0 && !IsOpen && app.view == null && !App.Recording && !AdFilm.Any) { PlayerPrefs.SetInt("guideOffered", 1); OfferGuide(); }
+        // once a session, on the home screen with nothing else open: the season pass, for players who don't have it
+        if (!seasonPromoShown && SeasonOn && !(u.Obj("daily")?.Bool("ready") ?? false) && !IsOpen && app.view == null && !App.Recording && !AdFilm.Any && u.Obj("season") != null && !u.Obj("season").Bool("premium")) { seasonPromoShown = true; ShowSeasonPromo(); }
         if (Growth.PendingCode != null && u.Bool("canRefer")) { app.Send(new Dictionary<string, object> { ["t"] = "referral", ["code"] = Growth.PendingCode }); Growth.PendingCode = null; }
         // the first time today's reward is waiting, show the track by itself (on the home screen, nothing else open)
         if (ready && !dailyShown && app.view == null && !IsOpen && !App.Recording) { dailyShown = true; OpenDaily(); return; }

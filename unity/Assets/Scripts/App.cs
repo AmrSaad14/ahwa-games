@@ -448,7 +448,6 @@ public class App : MonoBehaviour
     {
         // the first practice game of each game starts with a short guide
         string g = Modes.GameOf(mode);
-        if (!Tutorial.Seen(g) && !Recording && !AdFilm.Any) { game.HidePicker(); Tutorial.Show(g, Loc.T(GameNames[g]), () => Practice(mode)); return; }
         lastMode = mode; lastStake = 0;
         if (view != null) Leave();
         if (searching) CancelQueue();
@@ -772,6 +771,7 @@ public class App : MonoBehaviour
             menus.OpenDaily(); yield return new WaitForSeconds(0.8f); Still("d1-daily.png");
             Send(new Dictionary<string, object> { ["t"] = "daily" }); yield return new WaitForSeconds(1.2f); Still("d2-daily-got.png");
             menus.Close();
+            menus.ShowSeasonPromo(); yield return new WaitForSeconds(0.8f); Still("x17-season-promo.png");
             menus.OpenMissions(); yield return new WaitForSeconds(0.8f); Still("x1-missions.png");
             menus.OpenSeason(); yield return new WaitForSeconds(0.8f); Still("x2-season.png");
             menus.OpenFriends(); yield return new WaitForSeconds(1.2f); Still("x3-friends.png");

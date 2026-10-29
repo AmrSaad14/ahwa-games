@@ -145,6 +145,7 @@ public static class Loc
         ["مش بيلعب دلوقتي"] = "Not playing right now", ["الماتش ده مينفعش تتفرج عليه"] = "You can't watch this game", ["إنت في ماتش دلوقتي"] = "You're in a game right now",
         ["الشلة مش موجودة"] = "No group with that code", ["الشلة مليانة"] = "The group is full", ["إنت في ٥ شلل خلاص"] = "You're already in 5 groups", ["مش في الشلة دي"] = "Not in this group",
         ["من غير سحب"] = "Block game (no drawing)", ["بالسحب"] = "Draw game", ["مفيش سحب في الغرفة دي"] = "No drawing in this room",
+        ["الموسم بيخلص بعد"] = "The season ends in", ["يوم"] = "days", ["شوف الموسم"] = "See the season",
         ["صندوق الأسبوع"] = "Weekly chest", ["مهام خلصت"] = "missions done", ["افتح"] = "Open", ["مهام"] = "missions", ["فتحت الصندوق!"] = "Chest opened!",
         ["وحشتنا!"] = "We missed you!", ["هدية رجوعك للقهوة"] = "A welcome-back gift", ["مبروك!"] = "Congratulations!", ["بقيت"] = "You are now",
         ["دوس على «جايزتك» واكتب رقم فودافون كاش"] = "Tap \"Your prize\" and enter your Vodafone Cash number", ["جيت المركز"] = "You finished", ["في ترتيب الأسبوع"] = "in this week's ranking",

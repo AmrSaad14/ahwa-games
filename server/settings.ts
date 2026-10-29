@@ -33,7 +33,7 @@ export interface GameSettings {
 /** The settings the game ships with (read once, before anything is changed). */
 function defaults(): GameSettings {
   return {
-    prizes: { enabled: true, egp: 500, claimDays: 30, prefixes: ['010'] },
+    prizes: { enabled: false, egp: 500, claimDays: 30, prefixes: ['010'] },   // off for now: switch on in the dashboard
     tourney: { enabled: true, weekday: TOURNEY.weekday, hour: TOURNEY.hour, game: 'rotate', prizes: [...TOURNEY.prizes], played: TOURNEY.played },
     season: { enabled: true, passCoins: SEASON_PASS.coins, passEgp: SEASON_PASS.egp, tiers: TIERS.map(t => ({ free: { ...t.free }, prem: { ...t.prem } })) },
     economy: { startCoins: ECONOMY.startCoins, adReward: ECONOMY.adReward, adsPerDay: ECONOMY.adsPerDay, tutorialCoins: ECONOMY.tutorialCoins, comebackCoins: ECONOMY.comebackCoins, comebackDays: ECONOMY.comebackDays, streak: [...STREAK], weeklyPrizes: [...WEEKLY_PRIZES] },
