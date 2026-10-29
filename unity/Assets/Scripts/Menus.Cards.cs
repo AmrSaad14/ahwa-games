@@ -120,7 +120,8 @@ public partial class Menus
         l.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(540, 44), new Vector2(0, -122));
         double left = s.Num("endsAt") - App.LocalMs();
         var t = Ui.Label(body, "", 12, Ui.GoldLight, TextAnchor.MiddleCenter);
-        t.Set(Loc.T("الموسم بيخلص بعد") + " " + Mathf.Max(0, (int)(left / 86_400_000)) + " " + Loc.T("يوم"));
+        int daysLeft = Mathf.Max(0, (int)(left / 86_400_000));
+        t.Set(Loc.En ? "The season ends in " + daysLeft + (daysLeft == 1 ? " day" : " days") : Loc.T("الموسم بيخلص بعد") + " " + daysLeft + " يوم");
         t.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(540, 20), new Vector2(0, -166));
         var buy = Ui.Button(body, Loc.T("افتح المميز") + "  " + (int)s.Num("egp", 299) + " " + Loc.T("ج.م"), Ui.Gold, Ui.Ink, 17, () => { Sfx.Tap(); Close(); Billing.Buy("season_pass"); });
         ((RectTransform)buy.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(230, 44), new Vector2(Loc.En ? 128 : -128, 0));

@@ -188,10 +188,11 @@ public partial class Menus : MonoBehaviour
         // a friend's invite code from Google Play (or a link) waiting: credit them, once the account is new
         // a new player: the first-game guide, offered once (an easy game of dominoes with hints, and a gift)
         // once a session, on the home screen with nothing else open: the season pass, for players who don't have it
-        if (!seasonPromoShown && SeasonOn && !(u.Obj("daily")?.Bool("ready") ?? false) && !IsOpen && app.view == null && !App.Recording && !AdFilm.Any && u.Obj("season") != null && !u.Obj("season").Bool("premium")) { seasonPromoShown = true; ShowSeasonPromo(); }
+        if (!seasonPromoShown && SeasonOn && dailyShown && !IsOpen && app.view == null && !App.Recording && !AdFilm.Any && u.Obj("season") != null && !u.Obj("season").Bool("premium")) { seasonPromoShown = true; ShowSeasonPromo(); }
         if (Growth.PendingCode != null && u.Bool("canRefer")) { app.Send(new Dictionary<string, object> { ["t"] = "referral", ["code"] = Growth.PendingCode }); Growth.PendingCode = null; }
-        // the first time today's reward is waiting, show the track by itself (on the home screen, nothing else open)
-        if (ready && !dailyShown && app.view == null && !IsOpen && !App.Recording) { dailyShown = true; OpenDaily(); return; }
+        // each time the game opens, the daily rewards first (collect today's, or see when tomorrow's comes),
+        // then the season pass card when it's closed
+        if (!dailyShown && app.view == null && !IsOpen && !App.Recording) { dailyShown = true; OpenDaily(); return; }
         refreshOpen?.Invoke();
     }
 
@@ -355,8 +356,11 @@ public partial class Menus : MonoBehaviour
 
     public void Close()
     {
+        // the daily rewards were up when the game opened: the season pass card comes next
+        bool afterDaily = refreshOpen != null && refreshOpen == refreshDaily && !seasonPromoShown;
         if (open != null) Destroy(open.gameObject);
         open = null; refreshOpen = null;
+        if (afterDaily && user != null) StartCoroutine(SeasonAfterDaily());
     }
     public bool IsOpen => open != null;
 
@@ -524,6 +528,13 @@ public partial class Menus : MonoBehaviour
     long dailyGot; int dailyGotDay;
     Action refreshDaily;
     Text dailyCountdown; long dailyNextAt;
+
+    IEnumerator SeasonAfterDaily()
+    {
+        yield return new WaitForSeconds(0.35f);
+        var s = user?.Obj("season");
+        if (!seasonPromoShown && SeasonOn && s != null && !s.Bool("premium") && !IsOpen && app.view == null && !App.Recording && !AdFilm.Any) { seasonPromoShown = true; ShowSeasonPromo(); }
+    }
 
     static long NowMs() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
