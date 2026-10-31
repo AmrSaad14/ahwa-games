@@ -89,7 +89,7 @@ public class App : MonoBehaviour
         // load the big pieces (the room, the table, the six regulars) in the background while the splash plays;
         // once loaded, the building below finds them at once instead of freezing the screen
         var loads = new List<ResourceRequest> { Resources.LoadAsync<GameObject>("Art/cafe"), Resources.LoadAsync<GameObject>("Art/MainTable") };
-        foreach (var n in DominoTable.CharNames) loads.Add(Resources.LoadAsync<GameObject>("People/" + n));
+        if (!Perf.Lowest) foreach (var n in DominoTable.CharNames) loads.Add(Resources.LoadAsync<GameObject>("People/" + n));   // the cheapest phones skip them
         var kept = new List<Object>();
         foreach (var r in loads) { while (!r.isDone) { splash.Progress(0.75f * Loaded(loads)); yield return null; } kept.Add(r.asset); }
         Debug.Log($"[app] assets loaded in {Time.realtimeSinceStartup - tBuild:0.0} s");

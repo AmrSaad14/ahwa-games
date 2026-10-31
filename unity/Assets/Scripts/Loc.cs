@@ -76,7 +76,7 @@ public static class Loc
         ["تعادل"] = "Draw", ["تعادل، محدش سجّل"] = "A draw. Nobody scores.", ["اللعبة مقفولة  ·"] = "Blocked game  ·",
         ["العب تاني"] = "Play again",
         // settings
-        ["الصوت"] = "Sound", ["الموسيقى"] = "Music", ["الموسيقى شغالة"] = "Music on", ["الموسيقى مقفولة"] = "Music off", ["الاهتزاز"] = "Vibration", ["اللغة"] = "Language",
+        ["الصوت"] = "Sound", ["الموسيقى"] = "Music", ["خففنا الرسوم عشان اللعب يبقى أنعم"] = "Lighter graphics for smoother play", ["الموسيقى شغالة"] = "Music on", ["الموسيقى مقفولة"] = "Music off", ["الاهتزاز"] = "Vibration", ["اللغة"] = "Language",
         ["العربية"] = "العربية", ["English"] = "English", ["الحساب"] = "Account", ["اسمك"] = "Your name", ["حفظ"] = "Save",
         ["تسجيل الدخول بجوجل"] = "Sign in with Google", ["تسجيل الخروج"] = "Sign out",
         ["بتلعب كضيف. سجّل عشان فلوسك وتقدمك يتحفظوا."] = "You're playing as a guest. Sign in to keep your coins and progress.",

@@ -142,10 +142,18 @@ public class Cafe : MonoBehaviour
         }
     }
 
+    /// The regulars in the background: all of them on good phones, fewer (or none) on cheap ones, none during a game.
+    public void Crowd()
+    {
+        int n = Perf.CrowdSize;
+        for (int i = 0; i < regulars.Count; i++) if (regulars[i] != null) regulars[i].SetActive(!inGame && i < n);
+    }
+
     System.Collections.Generic.IEnumerable<int> People(Transform room)
     {
         foreach (var (who, table, seat) in Seating)
         {
+            if (regulars.Count >= Perf.CrowdSize) yield break;   // cheap phones: fewer people, less memory
             if (!tables.TryGetValue(table, out var t)) continue;
             var chair = Find(t, "Seat_" + table + "_" + seat);
             if (chair == null) { Debug.LogWarning("[cafe] no chair for " + who); continue; }
@@ -211,7 +219,7 @@ public class Cafe : MonoBehaviour
     {
         inGame = on;
         if (lobby != null) lobby.gameObject.SetActive(!on);
-        foreach (var r in regulars) if (r != null) r.SetActive(!on);
+        Crowd();
         GameLight(on); ResetZoom();
         if (on) camPosTo = GameShot(out camLookTo); else Focus(focus);
     }
