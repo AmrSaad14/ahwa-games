@@ -1286,6 +1286,33 @@ public partial class Menus : MonoBehaviour
 
     /* ---------- Google sign-in ---------- */
 
+    /// Online games need an account: sign in with Google (or Apple), or play the computer for now.
+    public void AskSignIn(string mode)
+    {
+        Sfx.Tap();
+        Panel(Loc.T("سجّل دخولك عشان تلعب أونلاين"), out var body, new Vector2(440, appleOn ? 300 : 250));
+        refreshOpen = null;
+        var t = Ui.Label(body, "", 13, Ui.GoldLight); t.Set(Loc.T("اللعب أونلاين مع ناس حقيقية محتاج حساب، وكوينزك وصورتك وتقدمك بيتحفظوا"));
+        t.horizontalOverflow = HorizontalWrapMode.Wrap; t.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(400, 40), new Vector2(0, -2));
+        float y = -50;
+        var g = Ui.Button(body, "كمّل بجوجل", Color.white, Ui.Ink, 16, () => { Close(); SignInWith("google"); });
+        var gr = ((RectTransform)g.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 46), new Vector2(0, y));
+        var gi = Ui.Picture(gr, "G", Icon("google")); gi.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(24, 24), new Vector2(12, 0));
+        y -= 56;
+        if (appleOn)
+        {
+            var a = Ui.Button(body, "كمّل بأبل", Color.black, Color.white, 16, () => { Close(); SignInWith("apple"); });
+            ((RectTransform)a.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 46), new Vector2(0, y));
+            a.gameObject.AddComponent<Outline>().effectColor = new Color(1, 1, 1, 0.35f);
+            y -= 56;
+        }
+        if (!string.IsNullOrEmpty(mode))
+        {
+            var p = Ui.Button(body, "العب ضد الكمبيوتر دلوقتي", Ui.Panel, Ui.GoldLight, 14, () => { Sfx.Tap(); Close(); app.Practice(mode); });
+            ((RectTransform)p.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 40), new Vector2(0, y));
+        }
+    }
+
     /// The "Sign in" chip: Google straight away, or a choice of Google and Apple when the server has both.
     void SignIn()
     {

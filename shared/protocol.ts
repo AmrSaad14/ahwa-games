@@ -7,6 +7,7 @@ export type { BoardAction } from './games/defs';
 export interface SeatView {
   name: string;
   ch: number;          // character index
+  photo?: string | null; // the player's picture (Google), else the character's face
   bot: boolean;
   away: boolean;       // a computer is playing for this person
   online: boolean;
@@ -133,13 +134,14 @@ export type Emote = typeof EMOTES[number];
 /** A friends' café group ("قهوة الشلة"): saved friends who play together, with their own weekly ranking. */
 export interface GroupRow { id: number; name: string; code: string; members: number; owner: boolean; online: number }
 export interface GroupView { id: number; name: string; code: string; owner: boolean; week: string; endsAt: number;
-  members: { pid: string; name: string; ch: number; online: boolean; playing: boolean; title: string | null; points: number; games: number; wins: number; rank: number; me: boolean }[] }
-export interface FriendRow { id: string; pid: string; name: string; ch: number; status: 'friend' | 'outgoing' | 'incoming'; online: boolean; playing: boolean }
+  members: { pid: string; name: string; ch: number; photo?: string | null; online: boolean; playing: boolean; title: string | null; points: number; games: number; wins: number; rank: number; me: boolean }[] }
+export interface FriendRow { id: string; pid: string; name: string; ch: number; photo?: string | null; status: 'friend' | 'outgoing' | 'incoming'; online: boolean; playing: boolean }
 
 export interface PublicUser {
   id: string;
   name: string;
   ch: number;
+  photo?: string | null;   // the Google picture (Apple and guests: none, the character's face instead)
   email: string | null;
   rating: number;
   games: number;
@@ -187,11 +189,11 @@ export interface TourneyView {
   now: number;
 }
 
-export interface LeaderRow { rank: number; name: string; ch: number; rating: number; games: number; wins: number; me: boolean; level?: number; pid?: string; title?: string | null }
+export interface LeaderRow { rank: number; name: string; ch: number; photo?: string | null; rating: number; games: number; wins: number; me: boolean; level?: number; pid?: string; title?: string | null }
 
 /** A player's card: who they are, how they play, and where you stand with them. */
 export interface PlayerCard {
-  pid: string; name: string; ch: number; level: number; xp: number; since: number; title?: string | null;
+  pid: string; name: string; ch: number; photo?: string | null; level: number; xp: number; since: number; title?: string | null;
   games: number; wins: number; losses: number; winRate: number;
   coinsWon: number; coinsLost: number; net: number; bestWin: number; tourneyCoins: number; weeklyCoins: number;
   perGame: Record<string, { rating: number; games: number; wins: number; losses: number }>;
@@ -286,7 +288,7 @@ export type C2S =
 
 /** Server → client */
 export type S2C =
-  | { t: 'welcome'; user: PublicUser; token: string; now: number; ice: IceServer[]; login?: { google: boolean; apple?: boolean; phone: boolean; playGames?: string } }
+  | { t: 'welcome'; user: PublicUser; token: string; now: number; ice: IceServer[]; guestsOnline?: boolean; login?: { google: boolean; apple?: boolean; phone: boolean; playGames?: string } }
   | { t: 'friends'; rows: FriendRow[] }
   | { t: 'friendNews'; kind: 'request' | 'accepted' | 'added' | 'sent'; name: string }
   | { t: 'invited'; from: { id: string; name: string; ch: number }; code: string; mode: Mode; stake: number; group?: string }

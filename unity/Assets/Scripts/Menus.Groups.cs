@@ -104,7 +104,7 @@ public partial class Menus
         for (int i = 0; i < games.Length; i++)
         {
             string mode = GroupModes[i];
-            var b = Ui.Button(play, App.GameNames[games[i]], Ui.Gold, Ui.Ink, 13, () => { Sfx.Tap(); Close(); app.Send(new Dictionary<string, object> { ["t"] = "groupPlay", ["id"] = (double)id, ["mode"] = mode }); });
+            var b = Ui.Button(play, App.GameNames[games[i]], Ui.Gold, Ui.Ink, 13, () => { Sfx.Tap(); if (!app.CanPlayOnline(mode)) return; Close(); app.Send(new Dictionary<string, object> { ["t"] = "groupPlay", ["id"] = (double)id, ["mode"] = mode }); });
             At((RectTransform)b.transform, 120 + i * 120, 112, 30);
         }
         // the week's ranking among the group
@@ -121,6 +121,7 @@ public partial class Menus
             hit.onClick.AddListener(() => { Sfx.Tap(); OpenCard(pid, mname, ch); });
             At(Ui.Label(row, rank.ToString(), 15, rank == 1 ? Ui.Gold : Color.white, TextAnchor.MiddleCenter, Ui.Bold).rectTransform, 4, 30, 30);
             var face = Ui.Picture(row, "Face", Face(ch)); At(face.rectTransform, 36, 28, 34);
+            Photo.Into(face, mb.Str("photo"));
             var dot = Ui.Picture(row, "Dot", GameUi.Disc.texture); dot.color = on ? new Color(0.35f, 0.85f, 0.4f) : new Color(0.45f, 0.45f, 0.45f);
             At(dot.rectTransform, 60, 9, 9); dot.rectTransform.anchoredPosition += new Vector2(0, -12);
             var n = Ui.Label(row, "", 14, Color.white, StartAlign, Ui.Bold); n.Set(mname);

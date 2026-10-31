@@ -26,6 +26,9 @@ export const config = {
   // Rewarded ads: ADS_SSV=1 once AdMob's server-side verification calls PUBLIC_URL/ads/ssv (README → Ads)
   adsSsv: process.env.ADS_SSV === '1' || !!process.env.UNITY_ADS_SECRET,
   unityAdsSecret: process.env.UNITY_ADS_SECRET || '',
+  // online games (matchmaking, rooms, invitations, the tournament) need a signed-in account; guests play the
+  // computer on their phone. GUESTS_ONLINE=1 lets guests play online too (the default when not in production).
+  guestsOnline: process.env.GUESTS_ONLINE ? process.env.GUESTS_ONLINE === '1' : process.env.NODE_ENV !== 'production',
   // Shop: Google Play purchases are checked with Google (server/billing.ts)
   billing: {
     serviceAccount: process.env.GOOGLE_PLAY_SERVICE_ACCOUNT || '',

@@ -354,7 +354,7 @@ export class BoardTable {
     const v: BoardView = {
       game: this.game, id: this.id, code: this.code, mode: this.mode, target: this.target, private: this.isPrivate, stake: this.stake, phase: this.phase, you,
       seats: this.seats.map((s, i) => s && {
-        name: s.name, ch: s.ch, bot: s.bot, away: s.away, online: s.online, count: 0, team: i, host: s.uid === this.hostUid,
+        name: s.name, ch: s.ch, photo: s.photo ?? null, bot: s.bot, away: s.away, online: s.online, count: 0, team: i, host: s.uid === this.hostUid,
         rating: s.rating, mic: !!s.mic && s.online, pid: s.bot ? '' : publicId(s.uid),
         back: this.inGrace(s) && this.phase !== 'lobby' ? s.offAt! + this.opts.offlineGraceMs : undefined,
         hat: s.hat, drink: s.drink, muted: s.muted || undefined, title: s.title || undefined, win: s.win || undefined,

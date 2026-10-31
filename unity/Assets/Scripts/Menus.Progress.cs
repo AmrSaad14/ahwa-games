@@ -406,7 +406,7 @@ public partial class Menus
             bool reg = t.Bool("registered");
             var b = Ui.Button(bottom, reg ? "إنت مشترك  ·  انسحب" : "اشترك ببلاش", reg ? new Color(1, 1, 1, 0.1f) : Ui.Gold, reg ? Ui.GoldLight : Ui.Ink, 16, () =>
             {
-                Sfx.Tap(); app.Send(new Dictionary<string, object> { ["t"] = reg ? "tourneyLeave" : "tourneyJoin" });
+                Sfx.Tap(); if (!reg && !app.CanPlayOnline()) return; app.Send(new Dictionary<string, object> { ["t"] = reg ? "tourneyLeave" : "tourneyJoin" });
             });
             ((RectTransform)b.transform).Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(240, 40), Vector2.zero);
             if (!reg) StartCoroutine(Pulse((RectTransform)b.transform));

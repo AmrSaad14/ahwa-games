@@ -42,6 +42,8 @@ export interface HubOptions {
   autoMoveMs?: number; chessClockMs?: number;
   phones?: PhoneCodes; google?: GoogleSignIn; apple?: AppleSignIn; defaultCountry?: string;
   adsSsv?: boolean;
+  /** Guests may play online (false: matchmaking, rooms and the tournament need a signed-in account). */
+  guestsOnline?: boolean;
   billing?: PlayBilling;
   /** A winner gave their number: a prize to pay (e-mail the team). */
   onPrize?: (id: number, egp: number) => void;
@@ -63,6 +65,9 @@ const cleanName = (s: unknown) => String(s ?? '').replace(/[\u0000-\u001f\u007f-
 const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/;
 
 /** Everything live on the server: who is connected, the matchmaking queues and every table. */
+/** A real account: signed in with Google, Apple, a phone number, Play Games or an e-mail and password. */
+export const isSignedIn = (u: UserRow) => !!(u.google_sub || u.apple_sub || u.phone || u.pg_id || u.email);
+
 export class Hub {
   private sessions = new Set<Session>();
   private byUser = new Map<string, Session>();
@@ -220,6 +225,12 @@ export class Hub {
     if (!s.uid) return s.conn.send({ t: 'err', code: 'not_ready' });
     const uid = s.uid;
     const err = (code: string) => s.conn.send({ t: 'err', code });
+    // online play needs a signed-in account (Google, Apple, phone or Play Games) unless guests are allowed
+    const ONLINE = ['quick', 'create', 'join', 'invite', 'groupPlay', 'tourneyJoin'];
+    if (this.opts.guestsOnline === false && ONLINE.includes(m.t)) {
+      const me = this.store.get(uid);
+      if (me && !isSignedIn(me)) return err('sign_in_required');
+    }
     const table = this.userTable.get(uid);
     // maintenance (dashboard): no new games start; games already on finish
     if (this.opts.settings?.value.maintenance.on && ['quick', 'create', 'join', 'tourneyJoin', 'rematch'].includes(m.t)) return err('maintenance');
@@ -325,7 +336,7 @@ export class Hub {
       case 'ticket': {
         // a one-time ticket from the Google or the Apple sign-in page
         const p = this.opts.google?.take(m.ticket);
-        if (p) return this.signIn(s, 'google', p.sub, p.email, p.name);
+        if (p) return this.signIn(s, 'google', p.sub, p.email, p.name, p.picture ?? null);
         const a = this.opts.apple?.take(m.ticket);
         if (a) return this.signIn(s, 'apple', a.sub, a.email, a.name);
         return err('ticket_expired');
@@ -743,7 +754,7 @@ export class Hub {
     const st = u ? this.store.playerStats(u.id) : null;
     if (!u || !st) return null;
     const t = this.userTable.get(u.id);
-    return { pid, name: u.name, ch: u.ch, title: this.store.wornTitle(u.id), ...st, online: this.byUser.has(u.id), playing: !!t && !t.closed && t.phase !== 'lobby',
+    return { pid, name: u.name, ch: u.ch, photo: u.photo ?? null, title: this.store.wornTitle(u.id), ...st, online: this.byUser.has(u.id), playing: !!t && !t.closed && t.phase !== 'lobby',
       me: viewer === u.id, friend: viewer && viewer !== u.id ? this.store.friendStatus(viewer, u.id) : null };
   }
 
@@ -763,7 +774,7 @@ export class Hub {
     for (const l of this.store.friendLinks(uid)) {
       const u = this.store.get(l.other); if (!u) continue;
       const t = this.userTable.get(u.id);
-      rows.push({ id: u.id, pid: publicId(u.id), name: u.name, ch: u.ch, status: l.status, online: this.byUser.has(u.id), playing: !!t && !t.closed && t.phase !== 'lobby' });
+      rows.push({ id: u.id, pid: publicId(u.id), name: u.name, ch: u.ch, photo: u.photo ?? null, status: l.status, online: this.byUser.has(u.id), playing: !!t && !t.closed && t.phase !== 'lobby' });
     }
     rows.sort((a, b) => (a.status === 'incoming' ? 0 : 1) - (b.status === 'incoming' ? 0 : 1) || Number(b.online) - Number(a.online) || a.name.localeCompare(b.name));
     s.conn.send({ t: 'friends', rows });
@@ -782,15 +793,17 @@ export class Hub {
    * Signing in with a phone number or Google: an account that already uses it is opened (as with email);
    * otherwise it is added to the account in use, so a guest keeps their coins, ratings and name.
    */
-  private signIn(s: Session, via: 'phone' | 'google' | 'playgames' | 'apple', key: string, email: string | null, name: string | null) {
+  private signIn(s: Session, via: 'phone' | 'google' | 'playgames' | 'apple', key: string, email: string | null, name: string | null, photo: string | null = null) {
     const uid = s.uid; if (!uid) return;
     const existing = via === 'phone' ? this.store.byPhone(key) : via === 'google' ? this.store.byGoogle(key) : via === 'apple' ? this.store.byApple(key) : this.store.byPlayGames(key);
     if (existing) {
-      if (existing.id !== uid) { this.detach(s); this.attach(s, existing); }
+      if (photo) this.store.setPhoto(existing.id, photo);   // the picture follows the Google account
+      if (existing.id !== uid) { this.detach(s); this.attach(s, existing); } else if (photo) this.sendUser(uid);
       return s.conn.send({ t: 'signedIn', via, fresh: false });
     }
     const link = (id: string) => {
       if (via === 'phone') this.store.setPhone(id, key); else if (via === 'google') this.store.setGoogle(id, key, email); else if (via === 'apple') this.store.setApple(id, key, email); else this.store.setPlayGames(id, key);
+      if (photo) this.store.setPhoto(id, photo);
       const u = this.store.get(id)!;
       // a guest name like Player1234 becomes the Google first name
       const clean = cleanName(name);
@@ -830,7 +843,7 @@ export class Hub {
     // the daily reward: newer phones show the track and the player collects it; older ones get it at once
     const daily = (s.v ?? 1) < 2 ? this.store.claimDaily(u.id) : { coins: 0, streak: 0 };
     const fresh = this.store.get(u.id) ?? u;
-    s.conn.send({ t: 'welcome', user: this.pub(fresh), token: this.tokens.issue(u.id), now: Date.now(), ice: this.iceFor(u.id),
+    s.conn.send({ t: 'welcome', user: this.pub(fresh), token: this.tokens.issue(u.id), now: Date.now(), ice: this.iceFor(u.id), guestsOnline: this.opts.guestsOnline !== false,
       login: { google: !!this.opts.google?.enabled, apple: !!this.opts.apple?.enabled, phone: !!this.opts.phones?.enabled, playGames: this.opts.google?.playGamesEnabled ? this.opts.google.clientId : undefined } });
     this.friendsChanged(u.id);
     if (daily.coins) s.conn.send({ t: 'bonus', coins: daily.coins, streak: daily.streak });
@@ -900,7 +913,7 @@ export class Hub {
   private player(uid: string, game: GameId): Player {
     const u = this.store.get(uid)!;
     const eq = parseEquip(u.equip), owned = this.store.skinsOf(uid);
-    return { uid, name: u.name, ch: u.ch, bot: false, rating: this.store.ratingOf(uid, game),
+    return { uid, name: u.name, ch: u.ch, photo: u.photo ?? null, bot: false, rating: this.store.ratingOf(uid, game),
       hat: skinFor('hat', eq, owned), drink: skinFor('drink', eq, owned), muted: (u.muted_until ?? 0) > Date.now(), title: this.store.wornTitle(uid) ?? undefined, win: skinFor('win', eq, owned) };
   }
 
@@ -1085,7 +1098,7 @@ export class Hub {
     const week = weekKey();
     const members = this.store.groupWeekly(id, week).map((r, i) => {
       const t = this.userTable.get(r.id);
-      return { pid: r.pid, name: r.name, ch: r.ch, online: this.byUser.has(r.id), playing: !!t && !t.closed && t.phase !== 'lobby', title: this.store.wornTitle(r.id),
+      return { pid: r.pid, name: r.name, ch: r.ch, photo: r.photo ?? null, online: this.byUser.has(r.id), playing: !!t && !t.closed && t.phase !== 'lobby', title: this.store.wornTitle(r.id),
         points: r.points, games: r.games, wins: r.wins, rank: i + 1, me: r.id === uid };
     });
     this.byUser.get(uid)?.conn.send({ t: 'group', group: { id, name: g.name, code: g.code, owner: g.owner === uid, week, endsAt: weekEndsAt(), members } });

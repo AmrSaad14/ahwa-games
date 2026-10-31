@@ -17,7 +17,8 @@ public partial class Menus
         // you
         int ch = (int)(user?.Num("ch") ?? 0);
         var frame = Ui.Box(body, "Frame", new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.9f)).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(84, 104), new Vector2(0, 6));
-        Ui.Picture(frame, "Face", Face(ch)).rectTransform.Fill(3);
+        var myFace = Ui.Picture(frame, "Face", Face(ch)); myFace.rectTransform.Fill(3);
+        Photo.Into(myFace, user?.Str("photo"));
         var nm = Ui.Label(body, "", 15, Color.white, TextAnchor.MiddleCenter, Ui.Bold); nm.Set(user?.Str("name") ?? "");
         nm.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(400, 22), new Vector2(0, -102));
         float y = -128;

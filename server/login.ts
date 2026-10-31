@@ -114,7 +114,7 @@ const sha = (s: string) => crypto.createHash('sha256').update(s).digest('base64u
 
 /* ---------------- Google ---------------- */
 
-export interface GoogleProfile { sub: string; email: string | null; name: string | null }
+export interface GoogleProfile { sub: string; email: string | null; name: string | null; picture?: string | null }
 
 export class GoogleSignIn {
   private states = new Map<string, { to: 'app' | 'web'; exp: number }>();
@@ -156,6 +156,7 @@ export class GoogleSignIn {
     this.tickets.set(ticket, {
       sub: claims.sub, email: claims.email_verified ? String(claims.email ?? '') || null : null,
       name: typeof claims.given_name === 'string' ? claims.given_name : typeof claims.name === 'string' ? claims.name : null,
+      picture: typeof claims.picture === 'string' && /^https:\/\//.test(claims.picture) ? claims.picture : null,
       exp: Date.now() + 5 * 60_000,
     });
     return { to: st.to, ticket };
@@ -169,7 +170,7 @@ export class GoogleSignIn {
     const t = this.tickets.get(String(ticket ?? ''));
     if (!t) return null;
     this.tickets.delete(String(ticket));
-    return t.exp > Date.now() ? { sub: t.sub, email: t.email, name: t.name } : null;
+    return t.exp > Date.now() ? { sub: t.sub, email: t.email, name: t.name, picture: t.picture ?? null } : null;
   }
 
   /** Google Play Games works with the same Google project (its web client id and secret); no web address needed. */

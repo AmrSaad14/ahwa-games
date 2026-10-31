@@ -118,6 +118,8 @@ public class GameUi : MonoBehaviour
     readonly RawImage[] seatCpu = new RawImage[4];
     // each player's title, under their name tag
     readonly RectTransform[] seatTitle = new RectTransform[4];
+    readonly RawImage[] seatFace = new RawImage[4];
+    readonly string[] seatFaceKey = new string[4];
     readonly string[] seatTitleId = new string[4];
     readonly int[] seatTitleVer = new int[4];
     // the end of a match: play again with new people, the same people (rematch), or the tournament
@@ -448,6 +450,9 @@ public class GameUi : MonoBehaviour
             seatCpu[p] = Ui.Picture(bg.transform, "Cpu", Menus.Icon("cpu"));
             seatCpu[p].rectTransform.Place(new Vector2(0, 0.5f), new Vector2(1, 0.5f), new Vector2(18, 18), new Vector2(-3, 0));
             seatCpu[p].color = new Color(1, 1, 1, 0.8f);
+            // their photo (or their character's face) at the start of the name tag
+            seatFace[p] = Ui.Picture(bg.transform, "Face", Menus.Face(0));
+            seatFace[p].rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(30, 30), new Vector2(-17, 0));
             // tap a player: their card (stats, add friend, mute, report)
             int pos = p;
             bg.gameObject.AddComponent<Button>().onClick.AddListener(() => { int seat = app.dominoTable.posToSeat[pos]; if (seat >= 0) { Sfx.Tap(); app.menus.OpenCardSeat(seat); } });
@@ -990,6 +995,13 @@ public class GameUi : MonoBehaviour
             else if (!s.bot && s.away) extra = "  ·  " + Loc.T("الكمبيوتر بيلعب مكانه");
             seatTags[pos].Set((v.Board ? NameOf(v, seat) + (v.clocks != null ? "  ·  " + Clock(v, seat) : "") : NameOf(v, seat) + "  ·  " + s.count) + extra);
             seatCpu[pos].gameObject.SetActive(s.bot);
+            string fk = s.ch + "|" + s.photo;
+            if (fk != seatFaceKey[pos])
+            {
+                seatFaceKey[pos] = fk;
+                seatFace[pos].texture = Menus.Face(s.ch); seatFace[pos].uvRect = new Rect(0, 0, 1, 1);
+                Photo.Into(seatFace[pos], s.photo);
+            }
             string tid = s.bot ? null : s.title;
             if (tid != seatTitleId[pos] || seatTitleVer[pos] != Titles.Version || (seatTitle[pos] == null && !string.IsNullOrEmpty(tid)))
             {

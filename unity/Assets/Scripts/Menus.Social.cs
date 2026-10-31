@@ -78,6 +78,7 @@ public partial class Menus
         var side = Ui.Rect("Who", body).Place(new Vector2(Loc.En ? 0 : 1, 1), new Vector2(Loc.En ? 0 : 1, 1), new Vector2(170, 280), Vector2.zero);
         var frame = Ui.Box(side, "Frame", new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.85f)).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(124, 154), new Vector2(0, -2));
         var face = Ui.Picture(frame, "Face", Face(ch)); face.rectTransform.Fill(3);
+        Photo.Into(face, c0?.Str("photo"));
         if (c0 != null)
         {
             var dot = Ui.Picture(frame, "Online", GameUi.Disc.texture);
@@ -251,6 +252,7 @@ public partial class Menus
             var hit = row.gameObject.AddComponent<Button>(); hit.transition = Selectable.Transition.None;
             hit.onClick.AddListener(() => { Sfx.Tap(); OpenCard(pid, name, ch); });
             var face = Ui.Picture(row, "Face", Face(ch)); At(face.rectTransform, 6, 34, 40);
+            Photo.Into(face, f.Str("photo"));
             var dot = Ui.Picture(row, "Dot", GameUi.Disc.texture); dot.color = on ? new Color(0.35f, 0.85f, 0.4f) : new Color(0.45f, 0.45f, 0.45f);
             At(dot.rectTransform, 34, 10, 10); dot.rectTransform.anchoredPosition += new Vector2(0, -14);
             At(Ui.Label(row, name, 15, Color.white, StartAlign, Ui.Bold).rectTransform, 48, 200, 22).anchoredPosition += new Vector2(0, 9);

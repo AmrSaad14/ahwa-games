@@ -18,6 +18,7 @@ export interface UserRow {
   id: string; name: string; ch: number; email: string | null; pw: string | null;
   rating: number; games: number; wins: number; created: number; seen: number;
   coins: number; gifts: number; bonus_day: string | null; ad_free_until: number; equip: string | null;
+  photo?: string | null;
   phone: string | null; google_sub: string | null; google_email: string | null; apple_sub?: string | null; apple_email?: string | null;
   pg_id: string | null; friend_code: string | null; streak?: number; xp?: number;
   ref_by?: string | null; ref_paid?: number; muted_until?: number; pid?: string | null; banned?: number; ban_reason?: string | null; title?: string | null;
@@ -80,6 +81,7 @@ export class Store {
     if (!cols.has('ref_by')) this.db.exec('ALTER TABLE users ADD COLUMN ref_by TEXT; ALTER TABLE users ADD COLUMN ref_paid INTEGER NOT NULL DEFAULT 0');
     if (!cols.has('apple_sub')) this.db.exec('ALTER TABLE users ADD COLUMN apple_sub TEXT; ALTER TABLE users ADD COLUMN apple_email TEXT');
     this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_apple ON users(apple_sub) WHERE apple_sub IS NOT NULL');
+    if (!cols.has('photo')) this.db.exec('ALTER TABLE users ADD COLUMN photo TEXT');
     if (!cols.has('muted_until')) this.db.exec('ALTER TABLE users ADD COLUMN muted_until INTEGER NOT NULL DEFAULT 0');
     // the public id other players see (player cards, friends): filled in for everyone once
     if (!cols.has('pid')) {
@@ -211,6 +213,8 @@ export class Store {
   setPhone(id: string, phone: string) { this.db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(phone, id); }
   byApple(sub: string): UserRow | undefined { return this.db.prepare('SELECT * FROM users WHERE apple_sub = ?').get(sub) as UserRow | undefined; }
   setApple(id: string, sub: string, email: string | null) { this.db.prepare('UPDATE users SET apple_sub = ?, apple_email = ? WHERE id = ?').run(sub, email, id); }
+  /** The player's picture from Google (Apple gives none): https only. */
+  setPhoto(id: string, url: string | null) { this.db.prepare('UPDATE users SET photo = ? WHERE id = ?').run(url && /^https:\/\//.test(url) ? url.slice(0, 500) : null, id); }
   setGoogle(id: string, sub: string, email: string | null) { this.db.prepare('UPDATE users SET google_sub = ?, google_email = ? WHERE id = ?').run(sub, email, id); }
   byPlayGames(pid: string): UserRow | undefined { return this.db.prepare('SELECT * FROM users WHERE pg_id = ?').get(pid) as UserRow | undefined; }
   setPlayGames(id: string, pid: string) { this.db.prepare('UPDATE users SET pg_id = ? WHERE id = ?').run(pid, id); }
@@ -320,9 +324,9 @@ export class Store {
   }
 
   weeklyBoard(meId: string | null, week = weekKey(), limit = 50): { rows: LeaderRow[]; me: LeaderRow | null } {
-    const rows = this.db.prepare(`SELECT u.id, u.pid, u.name, u.ch, u.xp, w.points, w.games, w.wins FROM weekly w JOIN users u ON u.id = w.user_id
-      WHERE w.week = ? ORDER BY w.points DESC, w.wins DESC, w.games ASC LIMIT ?`).all(week, limit) as { id: string; pid: string; name: string; ch: number; xp: number; points: number; games: number; wins: number }[];
-    const out = rows.map((r, i) => ({ rank: i + 1, name: r.name, ch: r.ch, rating: r.points, games: r.games, wins: r.wins, me: r.id === meId, level: levelOf(r.xp), pid: r.pid, title: this.wornTitle(r.id) }));
+    const rows = this.db.prepare(`SELECT u.id, u.pid, u.name, u.ch, u.photo, u.xp, w.points, w.games, w.wins FROM weekly w JOIN users u ON u.id = w.user_id
+      WHERE w.week = ? ORDER BY w.points DESC, w.wins DESC, w.games ASC LIMIT ?`).all(week, limit) as { id: string; pid: string; name: string; ch: number; photo: string | null; xp: number; points: number; games: number; wins: number }[];
+    const out = rows.map((r, i) => ({ rank: i + 1, name: r.name, ch: r.ch, photo: r.photo ?? null, rating: r.points, games: r.games, wins: r.wins, me: r.id === meId, level: levelOf(r.xp), pid: r.pid, title: this.wornTitle(r.id) }));
     let me: LeaderRow | null = null;
     const mine = meId ? this.db.prepare('SELECT points, games, wins FROM weekly WHERE week = ? AND user_id = ?').get(week, meId) as { points: number; games: number; wins: number } | undefined : undefined;
     const u = meId ? this.get(meId) : undefined;
@@ -435,10 +439,10 @@ export class Store {
   }
 
   leaderboard(meId: string | null, game: GameId = 'domino', limit = 50): { rows: LeaderRow[]; me: LeaderRow | null } {
-    const rows = this.db.prepare(`SELECT u.id, u.pid, u.xp, u.name, u.ch, r.rating, r.games, r.wins FROM ratings r JOIN users u ON u.id = r.user_id
+    const rows = this.db.prepare(`SELECT u.id, u.pid, u.xp, u.name, u.ch, u.photo, r.rating, r.games, r.wins FROM ratings r JOIN users u ON u.id = r.user_id
       WHERE r.game = ? AND r.games >= 3 ORDER BY r.rating DESC, r.wins DESC LIMIT ?`)
-      .all(game, limit) as unknown as (Pick<UserRow, 'id' | 'name' | 'ch' | 'rating' | 'games' | 'wins' | 'xp'> & { pid: string })[];
-    const out = rows.map((r, i) => ({ rank: i + 1, name: r.name, ch: r.ch, rating: r.rating, games: r.games, wins: r.wins, me: r.id === meId, level: levelOf(r.xp ?? 0), pid: r.pid, title: this.wornTitle(r.id) }));
+      .all(game, limit) as unknown as (Pick<UserRow, 'id' | 'name' | 'ch' | 'rating' | 'games' | 'wins' | 'xp' | 'photo'> & { pid: string })[];
+    const out = rows.map((r, i) => ({ rank: i + 1, name: r.name, ch: r.ch, photo: r.photo ?? null, rating: r.rating, games: r.games, wins: r.wins, me: r.id === meId, level: levelOf(r.xp ?? 0), pid: r.pid, title: this.wornTitle(r.id) }));
     let me: LeaderRow | null = null;
     const u = meId ? this.get(meId) : undefined;
     const mine = meId ? this.db.prepare('SELECT rating, games, wins FROM ratings WHERE user_id = ? AND game = ?').get(meId, game) as { rating: number; games: number; wins: number } | undefined : undefined;
@@ -977,9 +981,9 @@ export class Store {
   }
   /** The group's members with their points this week (the global weekly points: 3 a win, 1 a game). */
   groupWeekly(id: number, week = weekKey()) {
-    return this.db.prepare(`SELECT u.id, u.pid, u.name, u.ch, COALESCE(w.points, 0) AS points, COALESCE(w.games, 0) AS games, COALESCE(w.wins, 0) AS wins
+    return this.db.prepare(`SELECT u.id, u.pid, u.name, u.ch, u.photo, COALESCE(w.points, 0) AS points, COALESCE(w.games, 0) AS games, COALESCE(w.wins, 0) AS wins
       FROM group_members m JOIN users u ON u.id = m.user_id LEFT JOIN weekly w ON w.user_id = m.user_id AND w.week = ?
-      WHERE m.group_id = ? ORDER BY points DESC, wins DESC, u.name`).all(week, id) as { id: string; pid: string; name: string; ch: number; points: number; games: number; wins: number }[];
+      WHERE m.group_id = ? ORDER BY points DESC, wins DESC, u.name`).all(week, id) as { id: string; pid: string; name: string; ch: number; photo: string | null; points: number; games: number; wins: number }[];
   }
 
   /* ---------- titles ---------- */
@@ -1055,7 +1059,7 @@ export class Store {
 export function parseEquip(raw: string | null | undefined): Equipped {
   try { const o = JSON.parse(raw || '{}'); return o && typeof o === 'object' ? o as Equipped : {}; } catch { return {}; }
 }
-export const toPublic = (u: UserRow): PublicUser => ({ id: u.id, name: u.name, ch: u.ch, email: u.email, rating: u.rating, games: u.games, wins: u.wins, coins: u.coins, gifts: u.gifts, ratings: {}, adsLeft: 0, adFreeUntil: u.ad_free_until ?? 0, skins: [], equip: parseEquip(u.equip),
+export const toPublic = (u: UserRow): PublicUser => ({ id: u.id, name: u.name, ch: u.ch, photo: u.photo ?? null, email: u.email, rating: u.rating, games: u.games, wins: u.wins, coins: u.coins, gifts: u.gifts, ratings: {}, adsLeft: 0, adFreeUntil: u.ad_free_until ?? 0, skins: [], equip: parseEquip(u.equip),
   phone: u.phone ? maskPhone(u.phone) : null, google: u.google_sub ? (u.google_email || 'Google') : null, apple: u.apple_sub ? (u.apple_email || 'Apple') : null, playGames: !!u.pg_id, code: u.friend_code ?? '', pid: u.pid ?? publicId(u.id) });
 
 /** Referrals: the bonus each side gets, how long a new player has to enter a code, and the most one inviter is paid for. */

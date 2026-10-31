@@ -43,7 +43,8 @@ export function createServer(opts = config) {
     // a monthly winner gave their Vodafone Cash number: tell the team (support inbox and e-mail)
     onPrize: (id, egp) => { desk.file({ uid: null, name: 'Monthly prize', contact: '', text: `Prize #${id}: ${egp} EGP to pay by Vodafone Cash. Open the dashboard → Prizes.`, app: 'prizes' }); },
     onWeeklyPrize: (uid, rank, coins) => { push.toUser(uid, ['مبروك! 🏆', `جيت المركز ${rank} الأسبوع ده وكسبت ${coins.toLocaleString('en')} كوين`], ['Congratulations! 🏆', `You finished #${rank} this week and won ${coins.toLocaleString('en')} coins`]).catch(() => {}); }, defaultCountry: opts.login.defaultCountry, adsSsv: opts.adsSsv, turnMs: opts.turnMs, botFillMs: opts.botFillMs, nextRoundMs: opts.nextRoundMs, botDelay: opts.botDelay, lobbyAfterMatchMs: opts.lobbyAfterMatchMs, msgsPer5s: (opts as { msgsPer5s?: number }).msgsPer5s, graceMs: (opts as { graceMs?: number }).graceMs,
-    stunUrls: opts.stunUrls, turnUrls: opts.turnUrls, turnSecret: opts.turnSecret, autoMoveMs: opts.autoMoveMs, chessClockMs: opts.chessClockMs });
+    stunUrls: opts.stunUrls, turnUrls: opts.turnUrls, turnSecret: opts.turnSecret, autoMoveMs: opts.autoMoveMs, chessClockMs: opts.chessClockMs,
+    guestsOnline: (opts as { guestsOnline?: boolean }).guestsOnline ?? true });
   const push = new Push(store, opts.push);
   if (settings.saved) hub.setTiming(settings.value.play.botFillSeconds * 1000, settings.value.play.turnSeconds * 1000);
   settings.onChange((now, before) => {

@@ -7,7 +7,7 @@ import {
 import type { Action, Emote, LastAction, MatchResult, RoundResult, TableView } from './protocol';
 import { EMOTES } from './protocol';
 
-export interface Player { uid: string; name: string; ch: number; bot: boolean; rating: number; hat?: string; drink?: string; muted?: boolean; title?: string; win?: string }
+export interface Player { uid: string; name: string; ch: number; photo?: string | null; bot: boolean; rating: number; hat?: string; drink?: string; muted?: boolean; title?: string; win?: string }
 interface Seat extends Player { online: boolean; away: boolean; timeouts: number; lastEmote: number; mic?: boolean; offAt?: number }
 /** A computer player's name and looks when it fills a seat (matchmaking gives them people's names). */
 export type BotMaker = (seat: number, usedCh: number[]) => { name: string; ch: number; rating: number };
@@ -450,7 +450,7 @@ export class Table {
     return {
       game: 'domino', id: this.id, code: this.code, mode: this.mode, target: this.target, private: this.isPrivate, stake: this.stake, phase: this.phase, you,
       seats: this.seats.map((s, i) => s && {
-        name: s.name, ch: s.ch, bot: s.bot, away: s.away, online: s.online, count: this.hands[i]?.length ?? 0,
+        name: s.name, ch: s.ch, photo: s.photo ?? null, bot: s.bot, away: s.away, online: s.online, count: this.hands[i]?.length ?? 0,
         team: teamOf(this.mode, i), host: s.uid === this.hostUid, rating: s.rating, mic: !!s.mic && s.online, pid: s.bot ? '' : publicId(s.uid),
         back: this.inGrace(s) && this.phase !== 'lobby' ? s.offAt! + this.opts.offlineGraceMs : undefined,
         hat: s.hat, drink: s.drink, muted: s.muted || undefined, title: s.title || undefined, win: s.win || undefined,

@@ -154,6 +154,7 @@ public class App : MonoBehaviour
     /// One tap from the friends list: a room for the two of you (in the game you play most) and an invitation.
     public void InviteFriend(string id)
     {
+        if (!CanPlayOnline()) return;
         if (net == null || !net.Online) { Toast(Loc.T("مش متصل بالسيرفر لسه")); return; }
         if (offline != null) StopPractice();
         string g = PlayerPrefs.GetString("lastGame", "domino");
@@ -258,6 +259,7 @@ public class App : MonoBehaviour
         switch (m.Str("t"))
         {
             case "welcome":
+                guestsOnline = m.Bool("guestsOnline");
                 voice.ice.Clear();
                 foreach (var o in m.Arr("ice") ?? new List<object>()) if (o is Dictionary<string, object> d) voice.ice.Add(d);
                 sentPushToken = null;   // (a new connection, maybe a different account)
@@ -346,6 +348,12 @@ public class App : MonoBehaviour
                     var why = m.Str("reason");
                     Toast(Loc.T("حسابك اتقفل") + (string.IsNullOrEmpty(why) ? "" : ": " + why), 12f);
                     net?.Stop();   // no reconnecting
+                    break;
+                }
+                if (m.Str("code") == "sign_in_required")
+                {
+                    if (searching) CancelQueue();
+                    menus?.AskSignIn(lastMode);
                     break;
                 }
                 if (menus != null && menus.OnError(m.Str("code"))) break;
@@ -444,8 +452,21 @@ public class App : MonoBehaviour
         game.ShowPicker(g, Loc.T(GameNames[g]));
     }
 
+    /// A real account (Google, Apple, phone or Play Games): online games need one; guests play the computer.
+    public bool SignedIn => user != null && (!string.IsNullOrEmpty(user.Str("google")) || !string.IsNullOrEmpty(user.Str("apple"))
+        || !string.IsNullOrEmpty(user.Str("phone")) || user.Bool("playGames") || !string.IsNullOrEmpty(user.Str("email")));
+    /// False (and asks the player to sign in) when online play needs an account they don't have yet.
+    bool guestsOnline;   // the server lets guests play online too (test servers)
+    public bool CanPlayOnline(string mode = null)
+    {
+        if (SignedIn || user == null || guestsOnline) return true;
+        menus?.AskSignIn(mode ?? lastMode);
+        return false;
+    }
+
     public void Quick(string mode, int stake)
     {
+        if (!CanPlayOnline(mode)) return;
         if (offline != null) { offline = null; if (view != null) ExitGame(); }
         if (net == null || !net.Online) { Toast(Loc.T("مش متصل بالسيرفر لسه")); return; }
         if (user != null && user.Num("coins") < stake) { Toast(Loc.T("رصيدك مش كفاية للرهان ده")); return; }
@@ -522,6 +543,7 @@ public class App : MonoBehaviour
     /// A room for friends: you get a code to send them; 0 is a friendly game with no stake.
     public void CreateRoom(string mode, int stake)
     {
+        if (!CanPlayOnline(mode)) return;
         if (offline != null) { offline = null; if (view != null) ExitGame(); }
         if (net == null || !net.Online) { Toast(Loc.T("مش متصل بالسيرفر لسه")); return; }
         if (stake > 0 && user != null && user.Num("coins") < stake) { Toast(Loc.T("رصيدك مش كفاية للرهان ده")); return; }
@@ -529,6 +551,7 @@ public class App : MonoBehaviour
     }
     public void JoinRoom(string code)
     {
+        if (!CanPlayOnline()) return;
         if (net == null || !net.Online) { Toast(Loc.T("مش متصل بالسيرفر لسه")); return; }
         Send(new Dictionary<string, object> { ["t"] = "join", ["code"] = code });
     }
@@ -710,7 +733,11 @@ public class App : MonoBehaviour
             Sfx.Tap();
             string g = PlayerPrefs.GetString("lastGame", "domino");
             var modes = GameUi.GameModes[g];
-            Practice(PlayerPrefs.GetString("mode." + g, modes[0].mode));
+            string mode = PlayerPrefs.GetString("mode." + g, modes[0].mode);
+            // signed in: straight into an online game (real people, the computer fills empty seats after a few
+            // seconds); a guest plays the computer on the phone
+            if ((SignedIn || guestsOnline) && net != null && net.Online) Quick(mode, GameUi.Stakes[Mathf.Clamp(PlayerPrefs.GetInt("ahwa.stake", 0), 0, GameUi.Stakes.Length - 1)]);
+            else Practice(mode);
         });
         ((RectTransform)now.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(230, 50), new Vector2(-30, 42));
         now.gameObject.AddComponent<Outline>().effectColor = new Color(0, 0, 0, 0.45f);
