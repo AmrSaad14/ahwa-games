@@ -5,6 +5,9 @@ services:
   domino:
     build: .
     restart: unless-stopped
+    env_file:
+      - path: .env          # every other setting (ads, push, payments…) passes straight through
+        required: false
     environment:
       SECRET: ${SECRET:-}
       TURN_SECONDS: ${TURN_SECONDS:-10}
@@ -61,6 +64,7 @@ services:
       - "443:443/udp"
     environment:
       DOMAIN: ${DOMAIN:?Set DOMAIN in .env}
+      SERVER_IP: ${SERVER_IP:-127.0.0.1}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

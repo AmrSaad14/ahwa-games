@@ -2,3 +2,8 @@
 	encode zstd gzip
 	reverse_proxy domino:8080
 }
+
+# the server's own address over plain http, for checking it before the domain points here
+http://{$SERVER_IP:127.0.0.1} {
+	reverse_proxy domino:8080
+}

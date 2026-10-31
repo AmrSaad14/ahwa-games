@@ -1,0 +1,61 @@
+# Puts the game server on our own server (a VPS) and keeps it updated: every push that changes the server
+# or the web game redeploys it (players in a game at that moment reconnect after ~30 seconds).
+# Run it by hand too: Actions → Deploy server → Run workflow.
+#
+# Needs, in Settings → Secrets and variables → Actions:
+#   secret DEPLOY_SSH_KEY   the private key that can log in as root on the server
+#   secret SERVER_ENV       the server's settings, one KEY=value per line (GOOGLE_CLIENT_SECRET=…, ADMIN_KEY=…)
+#   variable DEPLOY_HOST    the server's IP (default below)
+name: Deploy server
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['server/**', 'shared/**', 'client/**', 'scripts/**', 'package.json', 'package-lock.json',
+            'Dockerfile', 'docker-compose.yml', 'Caddyfile', 'deploy/**', '.github/workflows/deploy.yml']
+concurrency:
+  group: deploy-server
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      HOST: ${{ vars.DEPLOY_HOST || '46.225.157.22' }}
+      DOMAIN: ahwa-games.a7medhussien.com
+      HAS_KEY: ${{ secrets.DEPLOY_SSH_KEY != '' }}
+    steps:
+      - name: Waiting for the key
+        if: env.HAS_KEY != 'true'
+        run: echo "::warning::Add the DEPLOY_SSH_KEY secret to deploy the server." 
+      - uses: actions/checkout@v4
+        if: env.HAS_KEY == 'true'
+      - name: Connect
+        if: env.HAS_KEY == 'true'
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -T 15 "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -o BatchMode=yes root@"$HOST" 'echo connected to $(hostname)'
+      - name: Send the code and the settings
+        if: env.HAS_KEY == 'true'
+        env:
+          SERVER_ENV: ${{ secrets.SERVER_ENV }}
+        run: |
+          ssh root@"$HOST" 'mkdir -p /opt/board-battles && rm -rf /opt/board-battles/app.new && mkdir /opt/board-battles/app.new'
+          git archive --format=tar HEAD -- . ':(exclude)unity' ':(exclude)design' | ssh root@"$HOST" 'tar -x -C /opt/board-battles/app.new'
+          ssh root@"$HOST" 'cd /opt/board-battles && rm -rf app.old && { [ -d app ] && mv app app.old || true; } && mv app.new app && rm -rf app.old'
+          printf '%s\n' "$SERVER_ENV" | tr -d '\r' | ssh root@"$HOST" 'umask 077; cat > /opt/board-battles/env.github'
+      - name: Build and start
+        if: env.HAS_KEY == 'true'
+        run: ssh root@"$HOST" "DOMAIN=$DOMAIN bash /opt/board-battles/app/deploy/server-setup.sh"
+      - name: Check from outside
+        if: env.HAS_KEY == 'true'
+        run: |
+          echo "by IP (before the domain points here):"; curl -s -m 10 -o /dev/null -w "%{http_code}\n" "http://$HOST/healthz" || true
+          echo "the domain resolves to: $(dig +short $DOMAIN | tr '\n' ' ')"
+          curl -s -m 15 "https://$DOMAIN/healthz" --resolve "$DOMAIN:443:$HOST" && echo " (HTTPS on this server works)" || echo "HTTPS not ready yet: it starts working a minute after the domain points to $HOST"
