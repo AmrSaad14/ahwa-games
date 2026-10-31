@@ -174,7 +174,7 @@ E-mail through Gmail: turn on 2-step verification for the sending Google account
 
 ## The dashboard (/admin)
 
-`https://ahwa-games.a7medhussien.com/admin` is the team's control room. Set `ADMIN_KEY` on the server to a long random
+`https://static.22.157.225.46.clients.your-server.de/admin` is the team's control room. Set `ADMIN_KEY` on the server to a long random
 password and sign in with it (the session lasts 12 hours). Everything done there is in its **Activity log**.
 
 - **Overview:** players online, played today, new players, games, purchases, coins held, 14-day charts.
@@ -212,15 +212,15 @@ wallet, and presses **Paid** in the dashboard (**Monthly prizes** page); **Ask a
 
 ## The game server's address
 
-The apps connect to **`https://ahwa-games.a7medhussien.com`** (WebSocket `wss://ahwa-games.a7medhussien.com/ws`;
+The apps connect to **`https://static.22.157.225.46.clients.your-server.de`** (WebSocket `wss://static.22.157.225.46.clients.your-server.de/ws`;
 set in `unity/Assets/Scripts/Net.cs`, and as `SERVER_URL` for the web app build). Sign-in redirect addresses on
-that host: `https://ahwa-games.a7medhussien.com/auth/google/callback` and `…/auth/apple/callback`.
+that host: `https://static.22.157.225.46.clients.your-server.de/auth/google/callback` and `…/auth/apple/callback`.
 
 ### Going live on that address
 
-- **Server:** `docker compose up -d --build` with `.env` from `.env.example` (`DOMAIN=ahwa-games.a7medhussien.com`);
+- **Server:** `docker compose up -d --build` with `.env` from `.env.example` (`DOMAIN=static.22.157.225.46.clients.your-server.de`);
   Caddy gets the certificate and passes the WebSocket. Without Docker: `deploy/nginx.conf` in front of `node dist/server.cjs`.
-- **Check it from outside:** GitHub → Actions → **Server check** → Run (or `node scripts/check-server.mjs https://ahwa-games.a7medhussien.com`):
+- **Check it from outside:** GitHub → Actions → **Server check** → Run (or `node scripts/check-server.mjs https://static.22.157.225.46.clients.your-server.de`):
   health, API, legal pages, Google sign-in and a real game session over `/ws`.
 - **Google Play's required pages:** `/privacy`, `/terms`, `/delete-account` (server/legal.ts). In the app: Settings →
   Privacy & terms, and Delete my account.
@@ -230,7 +230,7 @@ that host: `https://ahwa-games.a7medhussien.com/auth/google/callback` and `…/a
 
 ## The game server (our VPS)
 
-The server runs on our own VPS (EgyVPS, Ubuntu 24.04, `46.225.157.22`) at `https://ahwa-games.a7medhussien.com`.
+The server runs on our own VPS (EgyVPS, Ubuntu 24.04, `46.225.157.22`) at `https://static.22.157.225.46.clients.your-server.de`.
 The **Deploy server** workflow (`.github/workflows/deploy.yml`) puts it there and keeps it updated: every push that
 changes the server or the web game redeploys it (about 3–5 minutes; players in a game at that moment reconnect).
 Run it by hand too: Actions → Deploy server → Run workflow.
@@ -249,8 +249,10 @@ On the server (`deploy/server-setup.sh` sets it up the first time, then rebuilds
 - Logs: `cd /opt/board-battles/app && docker compose -p board-battles logs -f domino`.
 - The dashboard password, if you didn't set one: `grep ADMIN_KEY /opt/board-battles/env.secrets`.
 
-The domain: an `A` record `ahwa-games` → the server's IP. If the server moves, change it there (and `DEPLOY_HOST`);
-the app keeps the same address. Ads: the app shows Google's test ads until it is published on Google Play.
+The address: the server's own host name, `static.22.157.225.46.clients.your-server.de` (it already points at the
+server; Caddy gets its HTTPS certificate by itself). To use your own domain later, point an `A` record at the IP, set the
+repository variable `DEPLOY_DOMAIN` to it and change `ServerUrl` in `unity/Assets/Scripts/Net.cs`. Ads: the app shows
+Google's test ads until it is published on Google Play.
 
 Settings worth knowing (the `SERVER_ENV` secret, then run Deploy server):
 
@@ -277,7 +279,7 @@ sign-in runs in the browser like Google's, so it works in the Android app too. Y
 1. **Certificates, Identifiers & Profiles → Identifiers → +** → **App IDs** → an App ID (e.g. `com.ahwa.boardbattles`)
    with **Sign in with Apple** ticked.
 2. **Identifiers → + → Services IDs** → e.g. `com.ahwa.boardbattles.signin`; tick **Sign in with Apple** → **Configure**:
-   primary App ID the one above; **Domains**: your server's domain (`ahwa-games.a7medhussien.com`);
+   primary App ID the one above; **Domains**: your server's domain (`static.22.157.225.46.clients.your-server.de`);
    **Return URLs**: `https://YOUR-SERVER/auth/apple/callback`.
 3. **Keys → +** → tick **Sign in with Apple** (configure it with the App ID) → download the `.p8` file (only once).
 4. On the server (the `SERVER_ENV` secret): `APPLE_SERVICE_ID` (the Services ID), `APPLE_TEAM_ID` (top right of the

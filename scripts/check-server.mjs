@@ -1,10 +1,10 @@
 // Checks a running game server from the outside, the way the app uses it:
-//   node scripts/check-server.mjs https://ahwa-games.a7medhussien.com
+//   node scripts/check-server.mjs https://static.22.157.225.46.clients.your-server.de
 // health and version, the API, the legal pages, the sign-in settings, and a real WebSocket session
 // (a guest account is made, the leaderboard and the shop answer, a practice-free quick game is queued and left).
 import WebSocket from 'ws';
 
-const base = (process.argv[2] || 'https://ahwa-games.a7medhussien.com').replace(/\/$/, '');
+const base = (process.argv[2] || 'https://static.22.157.225.46.clients.your-server.de').replace(/\/$/, '');
 const results = [];
 const ok = (name, pass, detail = '') => { results.push({ name, pass, detail }); console.log(`${pass ? 'PASS' : 'FAIL'}  ${name}${detail ? '  · ' + detail : ''}`); };
 

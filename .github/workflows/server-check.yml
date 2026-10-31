@@ -7,7 +7,7 @@ on:
     inputs:
       url:
         description: The server's address
-        default: https://ahwa-games.a7medhussien.com
+        default: https://static.22.157.225.46.clients.your-server.de
   push:
     branches: [main]
     paths: ['scripts/check-server.mjs', '.github/workflows/server-check.yml']
@@ -29,7 +29,7 @@ jobs:
           mkdir -p /tmp/check && cp scripts/check-server.mjs /tmp/check/ && cd /tmp/check
           npm init -y > /dev/null && npm install --no-audit --no-fund ws@8.18.0 > /dev/null 2>&1
           set +e
-          node check-server.mjs "${{ github.event.inputs.url || 'https://ahwa-games.a7medhussien.com' }}" 2>&1 | tee "$GITHUB_WORKSPACE/server-check.txt"
+          node check-server.mjs "${{ github.event.inputs.url || 'https://static.22.157.225.46.clients.your-server.de' }}" 2>&1 | tee "$GITHUB_WORKSPACE/server-check.txt"
           echo "exit ${PIPESTATUS[0]}" >> "$GITHUB_WORKSPACE/server-check.txt"
           true
       - name: Publish

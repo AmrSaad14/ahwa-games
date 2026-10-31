@@ -24,7 +24,7 @@ jobs:
     timeout-minutes: 25
     env:
       HOST: ${{ vars.DEPLOY_HOST || '46.225.157.22' }}
-      DOMAIN: ahwa-games.a7medhussien.com
+      DOMAIN: ${{ vars.DEPLOY_DOMAIN || 'static.22.157.225.46.clients.your-server.de' }}
       HAS_KEY: ${{ secrets.DEPLOY_SSH_KEY != '' }}
     steps:
       - name: Waiting for the key
