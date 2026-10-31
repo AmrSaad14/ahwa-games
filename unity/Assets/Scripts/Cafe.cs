@@ -203,7 +203,7 @@ public class Cafe : MonoBehaviour
     {
         g = string.IsNullOrEmpty(g) ? "domino" : g;
         if (g == gameKind) return;
-        gameKind = g;
+        gameKind = g; ResetZoom();
         if (inGame) camPosTo = GameShot(out camLookTo);
     }
 
@@ -212,7 +212,7 @@ public class Cafe : MonoBehaviour
         inGame = on;
         if (lobby != null) lobby.gameObject.SetActive(!on);
         foreach (var r in regulars) if (r != null) r.SetActive(!on);
-        GameLight(on);
+        GameLight(on); ResetZoom();
         if (on) camPosTo = GameShot(out camLookTo); else Focus(focus);
     }
 
@@ -287,8 +287,58 @@ public class Cafe : MonoBehaviour
         float e = el * Mathf.Deg2Rad;
         // the board's middle sits in the middle of the free part of the screen
         float shift = H * (bottom - top);
-        look = Vector3.zero + front * shift + Vector3.up * 0.3f;
+        look = Vector3.zero + front * shift * zoom + Vector3.up * 0.3f + pan;
+        boardHalf = Mathf.Max(hx, hz); boardDist = d;
+        d = (d - 0.3f) * zoom + 0.3f;
         return look + front * d * Mathf.Cos(e) + Vector3.up * d * Mathf.Sin(e);
+    }
+
+    // ---------- zoom: two fingers pinch in and out (the mouse wheel on a computer), and move the board while close ----------
+    const float ZoomMin = 0.4f, ZoomMax = 1.25f;
+    float zoom = 1f, boardHalf = 5.5f, boardDist = 20f;
+    Vector3 pan;
+    float pinchFrom; Vector2 pinchMid; bool pinching;
+
+    void ResetZoom() { zoom = 1f; pan = Vector3.zero; pinching = false; }
+
+    void ZoomInput()
+    {
+        if (!inGame || cam == null) return;
+        bool moved = false;
+        if (Input.touchCount >= 2)
+        {
+            Touch a = Input.GetTouch(0), b = Input.GetTouch(1);
+            float dist = Mathf.Max(1f, (a.position - b.position).magnitude);
+            Vector2 mid = (a.position + b.position) * 0.5f;
+            if (!pinching)
+            {
+                // a pinch that starts on a menu or button belongs to it, not to the board
+                var es = UnityEngine.EventSystems.EventSystem.current;
+                if (es != null && (es.IsPointerOverGameObject(a.fingerId) || es.IsPointerOverGameObject(b.fingerId))) return;
+                pinching = true; pinchFrom = dist; pinchMid = mid;
+            }
+            else
+            {
+                zoom = Mathf.Clamp(zoom * pinchFrom / dist, ZoomMin, ZoomMax);
+                // the fingers' middle drags the board with them
+                float perPixel = 2f * boardDist * zoom * Mathf.Tan(cam.fieldOfView * Mathf.Deg2Rad / 2) / Mathf.Max(1, Screen.height);
+                Vector2 dm = mid - pinchMid;
+                var right = Vector3.Cross(front, Vector3.up);
+                pan -= right * dm.x * perPixel;
+                pan += front * dm.y * perPixel;
+                pinchFrom = dist; pinchMid = mid; moved = true;
+            }
+        }
+        else pinching = false;
+        float wheel = Input.mouseScrollDelta.y;
+        if (Mathf.Abs(wheel) > 0.01f) { zoom = Mathf.Clamp(zoom * Mathf.Pow(0.9f, wheel), ZoomMin, ZoomMax); moved = true; }
+        if (!moved) return;
+        // close up, the board can move as far as its edge; at the full view or farther it stays in the middle
+        float reach = boardHalf * Mathf.Max(0f, 1f - zoom);
+        pan.y = 0;
+        if (pan.magnitude > reach) pan = pan.normalized * reach;
+        camPosTo = GameShot(out camLookTo);
+        camPos = camPosTo; camLook = camLookTo;   // follows the fingers at once
     }
 
     public void Focus(string g)
@@ -314,6 +364,7 @@ public class Cafe : MonoBehaviour
     void Update()
     {
         if (!ready) return;
+        ZoomInput();
         float k = 1 - Mathf.Exp(-Time.deltaTime * 2.2f);
         camPos = Vector3.Lerp(camPos, camPosTo, k);
         camLook = Vector3.Lerp(camLook, camLookTo, k);

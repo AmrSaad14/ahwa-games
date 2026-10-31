@@ -26,7 +26,7 @@ public class App : MonoBehaviour
     string leftTableId = "";
     OfflineGame offline;
     string reportedPractice = "";
-    bool boardDragging; Vector2 boardDragFrom;            // a practice game played on the phone, with no server
+    bool boardDragging, boardPinched; Vector2 boardDragFrom;            // a practice game played on the phone, with no server
 
     // the home menu
     Canvas ui, toastCanvas;
@@ -181,24 +181,36 @@ public class App : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Escape) && menus != null && menus.IsOpen) { menus.Close(); return; }   // Android's back button
         if (menus != null && menus.IsOpen) return;
         if (toastGroup != null) toastGroup.alpha = Mathf.MoveTowards(toastGroup.alpha, Time.time < toastUntil ? 1 : 0, Time.deltaTime * 4);
-        // a piece dragged on a board and let go somewhere else: move it there
+        // at a game, a touch counts when the finger lifts: two fingers on the screen are a zoom, never a move
+        if (Input.touchCount >= 2) boardPinched = true;
         if (boardDragging && Input.GetMouseButtonUp(0))
         {
             boardDragging = false;
-            if (view != null && view.Board && ((Vector2)Input.mousePosition - boardDragFrom).magnitude > Screen.height * 0.04f) boardGame.Drop(Input.mousePosition);
+            if (view != null && !boardPinched && cafe != null && cafe.ready)
+            {
+                Vector2 up = Input.mousePosition;
+                if (view.Board)
+                {
+                    // chess, tawla, ludo: the board works out what you tapped; dragged somewhere else, the piece goes there
+                    boardGame.Tap(boardDragFrom);
+                    if ((up - boardDragFrom).magnitude > Screen.height * 0.04f) boardGame.Drop(up);
+                }
+                else if ((up - boardDragFrom).magnitude < Screen.height * 0.04f)
+                {
+                    // at the table: a glowing spot picks the end for the chosen tile
+                    var ray = cafe.cam.ScreenPointToRay(boardDragFrom);
+                    if (Physics.Raycast(ray, out var hit, 200f))
+                    {
+                        var g = hit.collider.GetComponent<GhostEnd>();
+                        if (g != null) PlayEnd(g.end);
+                    }
+                }
+            }
         }
         if (cafe == null || !cafe.ready || !Input.GetMouseButtonDown(0) || OverUi()) return;
         if (view != null)
         {
-            // chess, tawla, ludo: the board works out what you tapped
-            if (view.Board) { boardGame.Tap(Input.mousePosition); boardDragFrom = Input.mousePosition; boardDragging = true; return; }
-            // at the table: a glowing spot picks the end for the chosen tile
-            var ray = cafe.cam.ScreenPointToRay(Input.mousePosition);
-            if (Physics.Raycast(ray, out var hit, 200f))
-            {
-                var g = hit.collider.GetComponent<GhostEnd>();
-                if (g != null) PlayEnd(g.end);
-            }
+            boardDragFrom = Input.mousePosition; boardDragging = true; boardPinched = Input.touchCount >= 2;
             return;
         }
         // on the café floor, taps pick a table
