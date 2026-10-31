@@ -127,7 +127,7 @@ To switch it on after the app is on Play:
    one-time product: a player can buy it again next season).
 2. In Google Cloud, create a service account and a JSON key; in Play Console → Users and permissions, invite its
    email with "View financial data" and "Manage orders and subscriptions".
-3. Put the JSON key in the server's `GOOGLE_PLAY_SERVICE_ACCOUNT` setting (Render → Environment).
+3. Put the JSON key in the server's `GOOGLE_PLAY_SERVICE_ACCOUNT` setting (the `SERVER_ENV` secret).
 Until then buying says the product isn't on Google Play yet. Coins can't be cashed out.
 
 A full-screen ad (video when AdMob has one; AdMob decides the length, usually up to 30 seconds) shows after
@@ -142,8 +142,8 @@ a "come and play" notification, in the player's language.
    package name `com.ahwa.boardbattles`. Download its `google-services.json`.
 2. GitHub → this repo → Settings → Secrets and variables → Actions → New secret `GOOGLE_SERVICES_JSON`: paste the
    whole file. The next Unity build has push turned on (without it the app builds with push off).
-3. Firebase console → Project settings → Service accounts → **Generate new private key**. On the server (Render →
-   Environment) add `FIREBASE_SERVICE_ACCOUNT` with the whole JSON file as its value.
+3. Firebase console → Project settings → Service accounts → **Generate new private key**. In the `SERVER_ENV` secret
+   add `FIREBASE_SERVICE_ACCOUNT=` followed by the whole JSON file on one line.
 4. Optional: `PUSH_TIMES` (default `14:00,20:00`), `PUSH_TZ` (default `Africa/Cairo`).
 5. Free hosts sleep when nobody plays, so their clock stops: at [cron-job.org](https://cron-job.org) (free) add a job
    that opens `https://YOUR-SERVER/api/cron/push?key=ADMIN_KEY` every 15 minutes. Each reminder still goes out once.
@@ -228,49 +228,38 @@ that host: `https://ahwa-games.a7medhussien.com/auth/google/callback` and `…/a
   `ANDROID_KEY_PASS` (your upload key); every Unity build then also makes the `.aab` for Google Play ("unity-aab" release),
   with the build number as its version code.
 
-## Free hosting for testing (Render)
+## The game server (our VPS)
 
-Until you rent a server, the game runs on Render's free plan, with no card needed. `render.yaml` describes everything:
+The server runs on our own VPS (EgyVPS, Ubuntu 24.04, `46.225.157.22`) at `https://ahwa-games.a7medhussien.com`.
+The **Deploy server** workflow (`.github/workflows/deploy.yml`) puts it there and keeps it updated: every push that
+changes the server or the web game redeploys it (about 3–5 minutes; players in a game at that moment reconnect).
+Run it by hand too: Actions → Deploy server → Run workflow.
 
-1. Sign in at render.com with GitHub and allow it to see this repository.
-2. Create a fine-grained GitHub token (GitHub → Settings → Developer settings → Fine-grained tokens) for **this repository only**,
-   with **Contents: Read and write**. The server uses it to back up the database.
-3. Render → **New → Blueprint** → pick this repository. Fill in `BACKUP_GITHUB_TOKEN` (the token) and
-   `GOOGLE_CLIENT_SECRET` (from `ahwa-signin.env`), then **Apply**.
-4. The server's address is `https://ahwa-games.a7medhussien.com` (`PUBLIC_URL`; if it moves, set the repository
-   variable `SERVER_URL` to it so the APK connects there).
-5. For Google sign-in, add `https://<that address>/auth/google/callback` to the OAuth client's redirect URIs in Google Cloud.
+What it needs (Settings → Secrets and variables → Actions):
+- secret `DEPLOY_SSH_KEY`: the private key that logs in as root on the server.
+- secret `SERVER_ENV`: the server's settings, one `KEY=value` per line (the table below).
+- variable `DEPLOY_HOST` only if the server's IP ever changes.
 
-What to expect on the free plan:
-- It sleeps after 15 minutes with no players; the first player after that waits about a minute while it wakes.
-- Its disk is wiped on every restart, so the database is saved to a hidden `db-backup` release in this repository
-  every 3 minutes (when something changed) and when it shuts down, and restored when it starts (`server/backup.ts`).
-  At worst the last few minutes of play are lost if it crashes.
-- Ads: the app shows Google's test ads until it is published on Google Play. AdMob only serves real ads to apps
-  that are live in a store and approved.
+On the server (`deploy/server-setup.sh` sets it up the first time, then rebuilds on every deploy):
+- `/opt/board-battles/app` the code, `/opt/board-battles/env.secrets` the generated `TURN_SECRET` and `ADMIN_KEY`
+  (a value in `SERVER_ENV` wins over them), the database in the Docker volume `board-battles_domino-data`.
+- A copy of the database every night in `/opt/board-battles/backups` (the last 14).
+- Docker restarts the game if it stops; Caddy gets the HTTPS certificate by itself; a firewall allows only SSH, web
+  and the voice relay.
+- Logs: `cd /opt/board-battles/app && docker compose -p board-battles logs -f domino`.
+- The dashboard password, if you didn't set one: `grep ADMIN_KEY /opt/board-battles/env.secrets`.
 
-## Moving to a paid server on Render (what changes, step by step)
+The domain: an `A` record `ahwa-games` → the server's IP. If the server moves, change it there (and `DEPLOY_HOST`);
+the app keeps the same address. Ads: the app shows Google's test ads until it is published on Google Play.
 
-Everything already runs on the same server; paying only keeps it awake and gives it a real disk. On the paid plan:
-the app connects instantly (no minute-long "Connecting…"), push reminders go out at 14:00 and 20:00 Cairo time by
-themselves (no cron job needed), the weekly tournament starts every Thursday at 9 pm Cairo time by itself, the weekly
-leaderboard prizes are paid every Monday, and the database lives on a disk instead of being restored from GitHub.
-
-1. Render → your service **kings-battle** → **Settings → Instance type** → **Starter** (or higher). Save.
-2. **Disks → Add disk**: name `data`, mount path `/data`, size 1 GB. Render restarts the service once.
-3. Nothing to change for the database: the server already keeps it at `/data/domino.db` (set in the Dockerfile). On the
-   first start with the new, empty disk it restores the latest backup from GitHub, so no player loses anything. After
-   that start, check the leaderboard; then you may delete `BACKUP_GITHUB_TOKEN` (the GitHub backup is only needed on the
-   free plan; keeping it as an extra copy does no harm).
-4. In `render.yaml`, change `plan: free` to `plan: starter` so the Blueprint matches (otherwise a Blueprint sync would put it back).
-5. Check: `https://YOUR-SERVER/api/v1/health` answers `{"ok":true,…}` and `https://YOUR-SERVER/api/docs` shows the API.
-
-Settings worth knowing (Render → Environment):
+Settings worth knowing (the `SERVER_ENV` secret, then run Deploy server):
 
 | Variable | What it does |
 |---|---|
 | `ADMIN_KEY` | Password for the dashboard at `/admin` (and `/admin/support`, `/admin/tourney`) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Sign-in with Google |
 | `FIREBASE_SERVICE_ACCOUNT` | Push reminders and notifications (tournament, referrals, prizes) |
+| `GOOGLE_PLAY_SERVICE_ACCOUNT` | Checks Google Play purchases (the season pass) |
 | `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` | Support messages by e-mail |
 | `PUSH_TIMES` | Reminder times, default `14:00,20:00` (Cairo) |
 | `TOURNEY_WEEKDAY`, `TOURNEY_HOUR` | Tournament day (0 Sunday … 4 Thursday) and hour, Cairo time; default Thursday 21 |
@@ -291,7 +280,7 @@ sign-in runs in the browser like Google's, so it works in the Android app too. Y
    primary App ID the one above; **Domains**: your server's domain (`ahwa-games.a7medhussien.com`);
    **Return URLs**: `https://YOUR-SERVER/auth/apple/callback`.
 3. **Keys → +** → tick **Sign in with Apple** (configure it with the App ID) → download the `.p8` file (only once).
-4. On the server (Render → Environment): `APPLE_SERVICE_ID` (the Services ID), `APPLE_TEAM_ID` (top right of the
+4. On the server (the `SERVER_ENV` secret): `APPLE_SERVICE_ID` (the Services ID), `APPLE_TEAM_ID` (top right of the
    developer site), `APPLE_KEY_ID` (the key's id) and `APPLE_PRIVATE_KEY` (the whole `.p8` file, pasted as it is).
    Redeploy; the app shows **Continue with Apple** next to Google.
 
@@ -339,7 +328,7 @@ All data (accounts, ratings, match history) is one SQLite file in the `domino-da
 The app is a single container listening on port 8080 that needs a persistent folder mounted at `/data`.
 
 - **Fly.io**: `fly launch`, then `fly volumes create data` and mount it at `/data`.
-- **Render or Railway**: deploy from the Dockerfile and attach a persistent disk at `/data`.
+- **Railway** and similar: deploy from the Dockerfile and attach a persistent disk at `/data`.
 
 These platforms terminate HTTPS for you, so you don't need Caddy there. Set `TRUST_PROXY=1` so rate limits see real client IPs.
 
