@@ -240,7 +240,7 @@ public partial class Menus : MonoBehaviour
                 string ticket = m.Str("ticket"); bool ssv = m.Bool("ssv");
                 if (Ads.Available)
                 {
-                    // a real rewarded video; the coins come from the server once it is watched (AdMob tells the server
+                    // a real rewarded video; the coins come from the server once it is watched (Unity Ads tells the server
                     // itself when server-side verification is on)
                     adShowing = true;
                     Ads.Rewarded(user?.Str("id"), ticket, watched =>

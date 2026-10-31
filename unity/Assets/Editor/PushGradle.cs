@@ -20,11 +20,11 @@ public class PushGradle : IPostGenerateGradleAndroidProject
         var gradle = Path.Combine(path, "build.gradle");
         var g = File.ReadAllText(gradle);
         if (!g.Contains("firebase-messaging"))
-            File.AppendAllText(gradle, "\n// push reminders and ads (Editor/PushGradle.cs)\ndependencies {\n    implementation platform('com.google.firebase:firebase-bom:33.7.0')\n    implementation 'com.google.firebase:firebase-messaging'\n    implementation 'com.google.android.gms:play-services-ads:23.6.0'\n}\n");
+            File.AppendAllText(gradle, "\n// push reminders and ads (Editor/PushGradle.cs)\ndependencies {\n    implementation platform('com.google.firebase:firebase-bom:33.7.0')\n    implementation 'com.google.firebase:firebase-messaging'\n}\n");
         if (!g.Contains("installreferrer"))
             File.AppendAllText(gradle, "\n// the review card, sharing a picture, the install referrer (Plugins/Android/BBExtras.java)\ndependencies {\n    implementation 'com.google.android.play:review:2.0.2'\n    implementation 'androidx.core:core:1.13.1'\n    implementation 'com.android.installreferrer:installreferrer:2.2'\n}\n");
-        if (!g.Contains("user-messaging-platform"))
-            File.AppendAllText(gradle, "\n// the ad privacy consent where the law asks for it (Plugins/Android/BBAds.java)\ndependencies {\n    implementation 'com.google.android.ump:user-messaging-platform:3.1.0'\n}\n");
+        if (!g.Contains("unity-ads"))
+            File.AppendAllText(gradle, "\n// Unity Ads: the interstitial and the rewarded video (Plugins/Android/BBAds.java)\ndependencies {\n    implementation 'com.unity3d.ads:unity-ads:4.18.0'\n}\n");
         if (!g.Contains("billingclient"))
             File.AppendAllText(gradle, "\n// Google Play purchases: coin packs, the season pass, the ad-free month (Plugins/Android/BBBilling.java)\ndependencies {\n    implementation 'com.android.billingclient:billing:7.1.1'\n}\n");
         var props = Path.Combine(Path.GetDirectoryName(path), "gradle.properties");
@@ -32,16 +32,6 @@ public class PushGradle : IPostGenerateGradleAndroidProject
         {
             var p = File.ReadAllText(props);
             if (!p.Contains("android.useAndroidX")) File.AppendAllText(props, "\nandroid.useAndroidX=true\n");
-        }
-
-        // AdMob's app id in the manifest (Google's test app until ADMOB_APP_ID is set)
-        var manifest = Path.Combine(path, "src", "main", "AndroidManifest.xml");
-        if (File.Exists(manifest))
-        {
-            var appId = System.Environment.GetEnvironmentVariable("ADMOB_APP_ID");
-            if (string.IsNullOrEmpty(appId)) appId = "ca-app-pub-3492998296780013~6952389253";   // the Board Battles app in AdMob
-            File.WriteAllText(manifest, File.ReadAllText(manifest).Replace("ADMOB_APP_ID_PLACEHOLDER", appId.Trim()));
-            Debug.Log("[ads] AdMob app " + appId);
         }
 
         // 2. the icon and colour

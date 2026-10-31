@@ -61,10 +61,11 @@ jobs:
         env:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-          # AdMob (empty: Google's test ads)
-          ADMOB_APP_ID: ${{ secrets.ADMOB_APP_ID }}
-          ADMOB_INTERSTITIAL_ID: ${{ secrets.ADMOB_INTERSTITIAL_ID }}
-          ADMOB_REWARDED_ID: ${{ secrets.ADMOB_REWARDED_ID }}
+          # Unity Ads (repository variables; no game id: no ads; UNITY_ADS_TEST=0 for real ads once the game is live)
+          UNITY_ADS_GAME_ID: ${{ vars.UNITY_ADS_GAME_ID }}
+          UNITY_ADS_INTERSTITIAL: ${{ vars.UNITY_ADS_INTERSTITIAL }}
+          UNITY_ADS_REWARDED: ${{ vars.UNITY_ADS_REWARDED }}
+          UNITY_ADS_TEST: ${{ vars.UNITY_ADS_TEST }}
           # release signing (your upload key; without it the debug key) and the version code
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
@@ -80,7 +81,7 @@ jobs:
           echo "pull exit $?" >> logs/build-step.txt
           # a license file only works on the computer that made it, so the seat comes from the Unity account
           # (Personal) for this run and goes back at the end
-          docker run --rm -e UNITY_EMAIL -e UNITY_PASSWORD -e ADMOB_APP_ID -e ADMOB_INTERSTITIAL_ID -e ADMOB_REWARDED_ID -e ANDROID_KEYSTORE_PASS -e ANDROID_KEY_ALIAS -e ANDROID_KEY_PASS -e BUILD_NUMBER -v "$PWD":/w -w /w $IMAGE bash -c '
+          docker run --rm -e UNITY_EMAIL -e UNITY_PASSWORD -e UNITY_ADS_GAME_ID -e UNITY_ADS_INTERSTITIAL -e UNITY_ADS_REWARDED -e UNITY_ADS_TEST -e ANDROID_KEYSTORE_PASS -e ANDROID_KEY_ALIAS -e ANDROID_KEY_PASS -e BUILD_NUMBER -v "$PWD":/w -w /w $IMAGE bash -c '
             LC=/opt/unity/Editor/Data/Resources/Licensing/Client/Unity.Licensing.Client
             for i in 1 2 3; do
               "$LC" --activate-all --include-personal --username "$UNITY_EMAIL" --password "$UNITY_PASSWORD" > /w/logs/activate.log 2>&1 && break

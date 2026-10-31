@@ -1,4 +1,4 @@
-// Google AdMob for Board Battles: an interstitial between games and a rewarded video for coins.
+// Unity Ads for Board Battles: an interstitial between games and a rewarded video for coins.
 // The game calls these from C# (Scripts/Ads.cs); results come back as UnitySendMessage("Board Battles", "OnAdEvent", …):
 //   inter_closed          the interstitial is gone (shown, or there was none to show)
 //   reward_earned         the player watched the rewarded video to the end
@@ -8,113 +8,90 @@ package com.ahwa.ads;
 
 import android.app.Activity;
 
-import com.google.android.gms.ads.AdError;
-import com.google.android.gms.ads.AdRequest;
-import com.google.android.gms.ads.FullScreenContentCallback;
-import com.google.android.gms.ads.LoadAdError;
-import com.google.android.gms.ads.MobileAds;
-import com.google.android.gms.ads.interstitial.InterstitialAd;
-import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
-import com.google.android.gms.ads.rewarded.RewardedAd;
-import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
-import com.google.android.gms.ads.rewarded.ServerSideVerificationOptions;
-import com.google.android.ump.ConsentInformation;
-import com.google.android.ump.ConsentRequestParameters;
-import com.google.android.ump.UserMessagingPlatform;
+import com.unity3d.ads.IUnityAdsInitializationListener;
+import com.unity3d.ads.IUnityAdsLoadListener;
+import com.unity3d.ads.IUnityAdsShowListener;
+import com.unity3d.ads.UnityAds;
+import com.unity3d.ads.UnityAdsShowOptions;
+import com.unity3d.ads.metadata.PlayerMetaData;
 import com.unity3d.player.UnityPlayer;
 
 public class BBAds {
     static String go = "Board Battles", interId = "", rewardId = "";
-    static InterstitialAd inter;
-    static RewardedAd reward;
-    static boolean loadingInter, loadingReward, started;
+    static boolean interReady, rewardReady, loadingInter, loadingReward, started;
 
     static void send(String what) { try { UnityPlayer.UnitySendMessage(go, "OnAdEvent", what); } catch (Throwable ignored) { } }
 
-    public static void init(String gameObject, String interstitialId, String rewardedId) {
+    public static void init(String gameObject, String gameId, String interstitialId, String rewardedId, boolean test) {
         go = gameObject; interId = interstitialId; rewardId = rewardedId;
         final Activity a = UnityPlayer.currentActivity;
+        if (gameId == null || gameId.isEmpty()) { send("error:no game id"); return; }
         a.runOnUiThread(() -> {
-            // first the privacy consent Google requires (shown only where the law asks for it, e.g. the EU and UK),
-            // then the ads
             try {
-                consent = UserMessagingPlatform.getConsentInformation(a);
-                consent.requestConsentInfoUpdate(a, new ConsentRequestParameters.Builder().build(),
-                    () -> UserMessagingPlatform.loadAndShowConsentFormIfRequired(a, err -> { if (consent.canRequestAds()) start(a); }),
-                    err -> { if (consent.canRequestAds()) start(a); });
-                if (consent.canRequestAds()) start(a);
-            } catch (Throwable t) { start(a); }
+                UnityAds.initialize(a.getApplicationContext(), gameId, test, new IUnityAdsInitializationListener() {
+                    @Override public void onInitializationComplete() { started = true; loadInter(); loadReward(); }
+                    @Override public void onInitializationFailed(UnityAds.UnityAdsInitializationError e, String msg) { send("error:init " + e + " " + msg); }
+                });
+            } catch (Throwable t) { send("error:" + t); }
         });
     }
 
-    static ConsentInformation consent;
-    static boolean initializing;
-    static void start(final Activity a) {
-        if (initializing) return;
-        initializing = true;
-        try { MobileAds.initialize(a, status -> { started = true; loadInter(); loadReward(); }); }
-        catch (Throwable t) { send("error:" + t); }
-    }
-
-    /** Whether the player must be able to change their ad privacy choice (a button in Settings then). */
-    public static boolean privacyOptionsRequired() {
-        return consent != null && consent.getPrivacyOptionsRequirementStatus() == ConsentInformation.PrivacyOptionsRequirementStatus.REQUIRED;
-    }
-    public static void showPrivacyOptions() {
-        final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> UserMessagingPlatform.showPrivacyOptionsForm(a, err -> { }));
-    }
+    /** Unity Ads asks for consent through its own flow where needed: no separate settings button. */
+    public static boolean privacyOptionsRequired() { return false; }
+    public static void showPrivacyOptions() { }
 
     static void loadInter() {
-        if (inter != null || loadingInter || interId.isEmpty()) return;
+        if (!started || interReady || loadingInter || interId.isEmpty()) return;
         loadingInter = true;
-        final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> InterstitialAd.load(a, interId, new AdRequest.Builder().build(), new InterstitialAdLoadCallback() {
-            @Override public void onAdLoaded(InterstitialAd ad) { inter = ad; loadingInter = false; }
-            @Override public void onAdFailedToLoad(LoadAdError e) { loadingInter = false; send("inter_load_failed:" + e.getCode()); }
-        }));
+        UnityAds.load(interId, new IUnityAdsLoadListener() {
+            @Override public void onUnityAdsAdLoaded(String p) { interReady = true; loadingInter = false; }
+            @Override public void onUnityAdsFailedToLoad(String p, UnityAds.UnityAdsLoadError e, String msg) { loadingInter = false; send("inter_load_failed:" + e); }
+        });
     }
 
     static void loadReward() {
-        if (reward != null || loadingReward || rewardId.isEmpty()) return;
+        if (!started || rewardReady || loadingReward || rewardId.isEmpty()) return;
         loadingReward = true;
-        final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> RewardedAd.load(a, rewardId, new AdRequest.Builder().build(), new RewardedAdLoadCallback() {
-            @Override public void onAdLoaded(RewardedAd ad) { reward = ad; loadingReward = false; }
-            @Override public void onAdFailedToLoad(LoadAdError e) { loadingReward = false; send("reward_load_failed:" + e.getCode()); }
-        }));
+        UnityAds.load(rewardId, new IUnityAdsLoadListener() {
+            @Override public void onUnityAdsAdLoaded(String p) { rewardReady = true; loadingReward = false; }
+            @Override public void onUnityAdsFailedToLoad(String p, UnityAds.UnityAdsLoadError e, String msg) { loadingReward = false; send("reward_load_failed:" + e); }
+        });
     }
 
-    public static boolean interstitialReady() { return inter != null; }
-    public static boolean rewardedReady() { return reward != null; }
+    public static boolean interstitialReady() { return interReady; }
+    public static boolean rewardedReady() { return rewardReady; }
 
     public static void showInterstitial() {
         final Activity a = UnityPlayer.currentActivity;
         a.runOnUiThread(() -> {
-            InterstitialAd ad = inter;
-            if (ad == null) { send("inter_closed"); loadInter(); return; }
-            inter = null;
-            ad.setFullScreenContentCallback(new FullScreenContentCallback() {
-                @Override public void onAdDismissedFullScreenContent() { send("inter_closed"); loadInter(); }
-                @Override public void onAdFailedToShowFullScreenContent(AdError e) { send("inter_closed"); loadInter(); }
+            if (!interReady) { send("inter_closed"); loadInter(); return; }
+            interReady = false;
+            UnityAds.show(a, interId, new UnityAdsShowOptions(), new IUnityAdsShowListener() {
+                @Override public void onUnityAdsShowFailure(String p, UnityAds.UnityAdsShowError e, String msg) { send("inter_closed"); loadInter(); }
+                @Override public void onUnityAdsShowStart(String p) { }
+                @Override public void onUnityAdsShowClick(String p) { }
+                @Override public void onUnityAdsShowComplete(String p, UnityAds.UnityAdsShowCompletionState s) { send("inter_closed"); loadInter(); }
             });
-            ad.show(a);
         });
     }
 
-    /** The rewarded video; with the player's id and a one-time ticket so AdMob can tell the server (server-side verification). */
+    /** The rewarded video. The player's id and a one-time ticket go along as the "server id", so Unity can tell
+     *  the server the video was watched (server-to-server callback, /ads/unity). */
     public static void showRewarded(final String userId, final String ticket) {
         final Activity a = UnityPlayer.currentActivity;
         a.runOnUiThread(() -> {
-            RewardedAd ad = reward;
-            if (ad == null) { send("reward_unavailable"); loadReward(); return; }
-            reward = null;
-            ad.setServerSideVerificationOptions(new ServerSideVerificationOptions.Builder().setUserId(userId).setCustomData(ticket).build());
-            ad.setFullScreenContentCallback(new FullScreenContentCallback() {
-                @Override public void onAdDismissedFullScreenContent() { send("reward_closed"); loadReward(); }
-                @Override public void onAdFailedToShowFullScreenContent(AdError e) { send("reward_unavailable"); loadReward(); }
+            if (!rewardReady) { send("reward_unavailable"); loadReward(); return; }
+            rewardReady = false;
+            try { PlayerMetaData md = new PlayerMetaData(a); md.setServerId(userId + ":" + ticket); md.commit(); } catch (Throwable ignored) { }
+            UnityAds.show(a, rewardId, new UnityAdsShowOptions(), new IUnityAdsShowListener() {
+                @Override public void onUnityAdsShowFailure(String p, UnityAds.UnityAdsShowError e, String msg) { send("reward_unavailable"); loadReward(); }
+                @Override public void onUnityAdsShowStart(String p) { }
+                @Override public void onUnityAdsShowClick(String p) { }
+                @Override public void onUnityAdsShowComplete(String p, UnityAds.UnityAdsShowCompletionState s) {
+                    if (s == UnityAds.UnityAdsShowCompletionState.COMPLETED) send("reward_earned");
+                    send("reward_closed"); loadReward();
+                }
             });
-            ad.show(a, item -> send("reward_earned"));
         });
     }
 }

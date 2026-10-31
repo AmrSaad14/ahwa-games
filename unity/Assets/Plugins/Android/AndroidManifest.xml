@@ -35,7 +35,5 @@
               android:exported="false" android:grantUriPermissions="true">
       <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/bb_share_paths" />
     </provider>
-    <!-- AdMob: the app id is filled in at build time (Editor/PushGradle.cs: ADMOB_APP_ID, or Google's test app) -->
-    <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ADMOB_APP_ID_PLACEHOLDER" />
   </application>
 </manifest>

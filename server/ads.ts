@@ -1,4 +1,7 @@
-// Rewarded video ads: 5K coins for watching one, up to a daily limit.
+// Rewarded video ads: coins for watching one, up to a daily limit.
+//
+// Unity Ads (the game's network): with UNITY_ADS_SECRET set, Unity itself calls GET /ads/unity after the player
+// watched the video (signed with that secret, from Unity support); only then are coins added.
 //
 // Safe mode (ADS_SSV=1, recommended for real money ads): AdMob itself calls GET /ads/ssv on this server
 // after the player watched the ad, signed with Google's key; only then are coins added. The app can't fake it.
@@ -35,6 +38,23 @@ export async function verifySsv(query: string, key?: crypto.KeyObject): Promise<
     const ok = crypto.verify('sha256', Buffer.from(message), k, Buffer.from(sig, 'base64url'));
     return ok ? new URLSearchParams(message) : null;
   } catch { return null; }
+}
+
+/**
+ * Checks a Unity Ads server-to-server redeem callback (GET /ads/unity?sid=…&oid=…&hmac=…). Unity signs every
+ * parameter but hmac, sorted by name, as "k=v" joined by commas, with HMAC-MD5 and the secret its support
+ * gives you (UNITY_ADS_SECRET). Returns the player id and ticket we put in sid ("uid:ticket"), or null.
+ */
+export function verifyUnityS2S(params: URLSearchParams, secret: string): { uid: string; ticket: string; oid: string } | null {
+  const hmac = params.get('hmac'), sid = params.get('sid'), oid = params.get('oid');
+  if (!secret || !hmac || !sid || !oid) return null;
+  const msg = [...params.entries()].filter(([k]) => k !== 'hmac').sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([k, v]) => `${k}=${v}`).join(',');
+  const want = crypto.createHmac('md5', secret).update(msg).digest('hex');
+  const a = Buffer.from(want), b = Buffer.from(hmac.toLowerCase());
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  const i = sid.lastIndexOf(':');
+  if (i <= 0) return null;
+  return { uid: sid.slice(0, i), ticket: sid.slice(i + 1), oid };
 }
 
 /** One-time tickets: the app asks for one before showing an ad and passes it to AdMob as custom data. */

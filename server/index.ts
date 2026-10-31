@@ -10,7 +10,7 @@ import { Limiter, Tokens } from './auth';
 import { Hub } from './hub';
 import { GoogleSignIn, PhoneCodes, backToAppPage } from './login';
 import { AppleSignIn } from './apple';
-import { verifySsv } from './ads';
+import { verifySsv, verifyUnityS2S } from './ads';
 import { GitHubBackup } from './backup';
 import { PlayBilling } from './billing';
 import { Push } from './push';
@@ -158,6 +158,14 @@ export function createServer(opts = config) {
     // cash-out requests are in the dashboard now
     if (url.pathname === '/admin/cashouts' || url.pathname === '/admin/prizes') { res.writeHead(302, { Location: '/admin#prizes' }); return res.end(); }
     // AdMob server-side verification: Google calls this after a player watched a rewarded ad
+    if (url.pathname === '/ads/unity') {
+      // Unity Ads' server-to-server callback: "1" means rewarded; anything else and Unity tries again later
+      const v = verifyUnityS2S(url.searchParams, config.unityAdsSecret);
+      if (!v) { res.writeHead(403, { 'Content-Type': 'text/plain' }); return res.end('bad signature'); }
+      const ok = hub.rewardAd(v.uid, v.ticket);
+      res.writeHead(ok ? 200 : 400, { 'Content-Type': 'text/plain' });
+      return res.end(ok ? '1' : 'Duplicate order');
+    }
     if (url.pathname === '/ads/ssv') {
       const raw = (req.url || '').split('?')[1] || '';
       verifySsv(raw).then(q => {

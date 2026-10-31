@@ -78,10 +78,13 @@ public static class BuildScript
         Directory.CreateDirectory("Assets/Resources/Materials");
         if (AssetDatabase.LoadAssetAtPath<Material>("Assets/Resources/Materials/Standard.mat") == null)
             AssetDatabase.CreateAsset(new Material(Shader.Find("Standard")), "Assets/Resources/Materials/Standard.mat");
-        // ad units (Scripts/Ads.cs): the Board Battles units in AdMob (ADMOB_* build settings override them)
+        // Unity Ads (Scripts/Ads.cs): the game id and the two ad units from the build settings (UNITY_ADS_*);
+        // test ads until UNITY_ADS_TEST is 0 (only once the game is live, so we never watch our own real ads)
         string Env(string k, string d) { var v = System.Environment.GetEnvironmentVariable(k); return string.IsNullOrEmpty(v) ? d : v.Trim(); }
-        File.WriteAllText("Assets/Resources/AdsConfig.json", "{\"interstitial\":\"" + Env("ADMOB_INTERSTITIAL_ID", "ca-app-pub-3492998296780013/2334487395")
-            + "\",\"rewarded\":\"" + Env("ADMOB_REWARDED_ID", "ca-app-pub-3492998296780013/1021405722") + "\"}");
+        File.WriteAllText("Assets/Resources/AdsConfig.json", "{\"game\":\"" + Env("UNITY_ADS_GAME_ID", "")
+            + "\",\"interstitial\":\"" + Env("UNITY_ADS_INTERSTITIAL", "Interstitial_Android")
+            + "\",\"rewarded\":\"" + Env("UNITY_ADS_REWARDED", "Rewarded_Android")
+            + "\",\"test\":" + (Env("UNITY_ADS_TEST", "1") == "0" ? "false" : "true") + "}");
         AssetDatabase.ImportAsset("Assets/Resources/AdsConfig.json");
         // voice chat is built when Unity's WebRTC package is installed (Scripts/Voice.cs)
         bool webrtc = UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.webrtc") != null;

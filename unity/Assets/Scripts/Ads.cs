@@ -1,6 +1,6 @@
-// Google AdMob ads (Plugins/Android/BBAds.java): an interstitial after a game when you play again, and a
-// rewarded video for coins. The ad units come from Resources/AdsConfig.json (written at build time;
-// Google's test ads until the real ones are set). Off the phone there are no real ads: the game's own
+// Unity Ads (Plugins/Android/BBAds.java): an interstitial after a game when you play again, and a
+// rewarded video for coins. The game id and ad units come from Resources/AdsConfig.json (written at build time
+// from the UNITY_ADS_* settings; test ads until UNITY_ADS_TEST is 0). No game id: no ads. Off the phone there are no real ads: the game's own
 // short spot stands in for the rewarded video, and the interstitial is skipped.
 using System;
 using System.Collections.Generic;
@@ -32,8 +32,10 @@ public static class Ads
         {
             var cfg = Resources.Load<TextAsset>("AdsConfig");
             var d = cfg != null ? Json.Parse(cfg.text) as Dictionary<string, object> : null;
-            string inter = d?.Str("interstitial") ?? "", reward = d?.Str("rewarded") ?? "";
-            using (var c = new AndroidJavaClass("com.ahwa.ads.BBAds")) c.CallStatic("init", "Board Battles", inter, reward);
+            string game = d?.Str("game") ?? "", inter = d?.Str("interstitial") ?? "", reward = d?.Str("rewarded") ?? "";
+            bool test = d == null || d.Bool("test");
+            if (string.IsNullOrEmpty(game)) { Debug.Log("[ads] no Unity Ads game id in this build: ads are off"); return; }
+            using (var c = new AndroidJavaClass("com.ahwa.ads.BBAds")) c.CallStatic("init", "Board Battles", game, inter, reward, test);
             started = true;
             Debug.Log("[ads] started");
         }

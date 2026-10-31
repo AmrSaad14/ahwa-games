@@ -24,7 +24,8 @@ export const config = {
   trustProxy: process.env.TRUST_PROXY === '1',             // read client IPs from X-Forwarded-For (behind Caddy/nginx)
   maxConnectionsPerIp: num(process.env.MAX_CONNECTIONS_PER_IP, 20),
   // Rewarded ads: ADS_SSV=1 once AdMob's server-side verification calls PUBLIC_URL/ads/ssv (README → Ads)
-  adsSsv: process.env.ADS_SSV === '1',
+  adsSsv: process.env.ADS_SSV === '1' || !!process.env.UNITY_ADS_SECRET,
+  unityAdsSecret: process.env.UNITY_ADS_SECRET || '',
   // Shop: Google Play purchases are checked with Google (server/billing.ts)
   billing: {
     serviceAccount: process.env.GOOGLE_PLAY_SERVICE_ACCOUNT || '',

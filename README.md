@@ -149,17 +149,20 @@ a "come and play" notification, in the player's language.
    that opens `https://YOUR-SERVER/api/cron/push?key=ADMIN_KEY` every 15 minutes. Each reminder still goes out once.
    Add `&now=1` once to send a reminder right away (a test).
 
-## Ads (Google AdMob)
+## Ads (Unity Ads)
 
-The Unity app shows an **interstitial** when a player taps "Play again" after a game, and a **rewarded video** for
-the "+2K" coins button (season pass holders see no interstitials). Until you set your own units it shows
-the Board Battles app's own AdMob units (app `ca-app-pub-3492998296780013~6952389253`, interstitial
-`…/2334487395`, rewarded `…/1021405722`; these ids are not secret, they ship inside every app). To use other units,
-set the GitHub secrets `ADMOB_APP_ID`, `ADMOB_INTERSTITIAL_ID` and `ADMOB_REWARDED_ID`. Ads serve fully once the app
-is published on Google Play and AdMob has reviewed it; never tap your own ads (add your phone as a test device in
-AdMob → Settings → Test devices).
-3. Optional, recommended: in the rewarded unit turn on **server-side verification** with the callback
-   `https://YOUR-SERVER/ads/ssv`, then set `ADS_SSV=1` on the server, so coins are only paid for ads Google confirms.
+The app shows Unity Ads: an interstitial now and then between games, and a rewarded video for coins
+(Plugins/Android/BBAds.java, Scripts/Ads.cs). Without a game id the app builds and plays with no ads.
+
+1. dashboard.unity.com → **Monetization** → add the project / Android app. Note its **Game ID** (Android) and the two
+   ad units it makes: `Interstitial_Android` and `Rewarded_Android`.
+2. GitHub → Settings → Secrets and variables → Actions → **Variables**: `UNITY_ADS_GAME_ID` = the Android Game ID.
+   (`UNITY_ADS_INTERSTITIAL` / `UNITY_ADS_REWARDED` only if your ad units have other names.)
+3. Builds show **test ads** until the variable `UNITY_ADS_TEST` is `0`; set it only once the game is live, so you never
+   watch your own real ads.
+4. Safe rewards: email Unity Ads support your Game ID and the callback URL `https://YOUR-SERVER/ads/unity`; they send a
+   secret. Put `UNITY_ADS_SECRET=…` in the `SERVER_ENV` secret: from then on only Unity's signed call adds the coins.
+   Without it the server trusts the app's "watched" message (one per ticket, a daily limit).
 
 ## Contact support
 
