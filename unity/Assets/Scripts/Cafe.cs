@@ -219,8 +219,7 @@ public class Cafe : MonoBehaviour
     // ---------- the light while a game is on: even, neutral, from above, with no glare ----------
     Quaternion keyRot; Color keyColor; float keyIntensity, keyShadow; bool savedLight;
     Color ambSky, ambEq, ambGround;
-    readonly List<(Light l, float i)> lamps = new List<(Light, float)>();
-    GameObject backdrop;
+    readonly Dictionary<Light, float> lamps = new Dictionary<Light, float>();
 
     void GameLight(bool on)
     {
@@ -230,51 +229,37 @@ public class Cafe : MonoBehaviour
             savedLight = true;
             keyRot = keyLight.transform.rotation; keyColor = keyLight.color; keyIntensity = keyLight.intensity; keyShadow = keyLight.shadowStrength;
             ambSky = RenderSettings.ambientSkyColor; ambEq = RenderSettings.ambientEquatorColor; ambGround = RenderSettings.ambientGroundColor;
-            foreach (var l in FindObjectsByType<Light>(FindObjectsSortMode.None)) if (l.type == LightType.Point) lamps.Add((l, l.intensity));
         }
+        // every lamp, the one over the game table too (made hidden with it), with its own brightness
+        foreach (var l in FindObjectsByType<Light>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            if (l.type == LightType.Point && !lamps.ContainsKey(l)) lamps[l] = l.intensity;
         if (on)
         {
-            // nearly straight down, a touch from your side, so pieces cast short soft shadows away from you
+            // the café keeps its own warm light all around; only the light falling on the board is softened:
+            // the sun from nearly straight down (short, soft shadows) and a little weaker, the lamp right above the board dimmed
             keyLight.transform.rotation = Quaternion.LookRotation(Vector3.down * 4f - front * 0.6f + Vector3.Cross(Vector3.up, front) * 0.35f);
-            // soft: enough to read every tile and square, never bright enough to wash them out
-            keyLight.color = new Color(1f, 0.96f, 0.9f);
-            keyLight.intensity = 0.8f;
-            keyLight.shadowStrength = 0.3f;
-            RenderSettings.ambientSkyColor = new Color(0.46f, 0.44f, 0.41f);
-            RenderSettings.ambientEquatorColor = new Color(0.34f, 0.31f, 0.28f);
-            RenderSettings.ambientGroundColor = new Color(0.17f, 0.15f, 0.13f);
-            foreach (var (l, i) in lamps) if (l != null) l.intensity = i * 0.15f;   // no hot spot in the middle of the board
+            keyLight.intensity = keyIntensity * 0.75f;
+            keyLight.shadowStrength = 0.5f;
+            foreach (var kv in lamps)
+            {
+                var l = kv.Key; float i = kv.Value;
+                if (l == null) continue;
+                var p = l.transform.position; p.y = 0;
+                l.intensity = p.magnitude < 5f ? i * 0.25f : i;   // no hot spot in the middle of the board
+            }
         }
         else
         {
             keyLight.transform.rotation = keyRot; keyLight.color = keyColor; keyLight.intensity = keyIntensity; keyLight.shadowStrength = keyShadow;
-            RenderSettings.ambientSkyColor = ambSky; RenderSettings.ambientEquatorColor = ambEq; RenderSettings.ambientGroundColor = ambGround;
-            foreach (var (l, i) in lamps) if (l != null) l.intensity = i;
+            foreach (var kv in lamps) if (kv.Key != null) kv.Key.intensity = kv.Value;
         }
-        // the camera's look: no glow on the white tiles and squares, a light vignette
+        // the camera's look: the same warm café, without the glow that washed out the white tiles and squares
         var look = cam != null ? cam.GetComponent<CafeLook>() : null;
         if (look != null)
         {
-            look.bloom = on ? 0f : 0.35f; look.threshold = on ? 2.5f : 1.1f;
-            look.vignette = on ? 0.18f : 0.5f; look.saturation = on ? 1.02f : 1.08f; look.exposure = on ? 0.9f : 0.95f;
-            look.warm = on ? new Color(1.01f, 1.0f, 0.98f) : new Color(1.04f, 1.0f, 0.93f);
+            look.bloom = on ? 0.08f : 0.35f; look.threshold = on ? 1.8f : 1.1f;
+            look.exposure = on ? 0.9f : 0.95f;
         }
-        // the busy café floor fades behind a dark cloth around the table, so the eye stays on the board
-        if (backdrop == null)
-        {
-            backdrop = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            backdrop.name = "Backdrop";
-            Destroy(backdrop.GetComponent<Collider>());
-            backdrop.transform.position = new Vector3(0, -0.08f, 0);
-            backdrop.transform.rotation = Quaternion.Euler(90, 0, 0);
-            backdrop.transform.localScale = new Vector3(90, 90, 1);
-            const int S = 128;
-            var tex = Art.Paint(S, S, (x, y) => { float d = Vector2.Distance(new Vector2(x, y), new Vector2(S / 2f, S / 2f)) / (S / 2f); return Color.Lerp(new Color(0.16f, 0.11f, 0.08f), new Color(0.05f, 0.035f, 0.025f), Mathf.Clamp01(d * 1.4f)); });
-            var r = backdrop.GetComponent<MeshRenderer>();
-            r.sharedMaterial = Art.Mat(Color.white, 0.05f, 0, tex);
-            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        }
-        backdrop.SetActive(on);
     }
 
     /// Straight down on the board (a few degrees from your side, so 3D pieces keep their shape), framed between
