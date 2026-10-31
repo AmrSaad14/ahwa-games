@@ -236,13 +236,14 @@ public class Cafe : MonoBehaviour
         {
             // nearly straight down, a touch from your side, so pieces cast short soft shadows away from you
             keyLight.transform.rotation = Quaternion.LookRotation(Vector3.down * 4f - front * 0.6f + Vector3.Cross(Vector3.up, front) * 0.35f);
-            keyLight.color = new Color(1f, 0.97f, 0.92f);
-            keyLight.intensity = 1.15f;
-            keyLight.shadowStrength = 0.4f;
-            RenderSettings.ambientSkyColor = new Color(0.62f, 0.6f, 0.57f);
-            RenderSettings.ambientEquatorColor = new Color(0.45f, 0.42f, 0.38f);
-            RenderSettings.ambientGroundColor = new Color(0.22f, 0.2f, 0.18f);
-            foreach (var (l, i) in lamps) if (l != null) l.intensity = i * 0.35f;   // no hot spot in the middle of the board
+            // soft: enough to read every tile and square, never bright enough to wash them out
+            keyLight.color = new Color(1f, 0.96f, 0.9f);
+            keyLight.intensity = 0.8f;
+            keyLight.shadowStrength = 0.3f;
+            RenderSettings.ambientSkyColor = new Color(0.46f, 0.44f, 0.41f);
+            RenderSettings.ambientEquatorColor = new Color(0.34f, 0.31f, 0.28f);
+            RenderSettings.ambientGroundColor = new Color(0.17f, 0.15f, 0.13f);
+            foreach (var (l, i) in lamps) if (l != null) l.intensity = i * 0.15f;   // no hot spot in the middle of the board
         }
         else
         {
@@ -254,8 +255,8 @@ public class Cafe : MonoBehaviour
         var look = cam != null ? cam.GetComponent<CafeLook>() : null;
         if (look != null)
         {
-            look.bloom = on ? 0.06f : 0.35f; look.threshold = on ? 1.8f : 1.1f;
-            look.vignette = on ? 0.22f : 0.5f; look.saturation = on ? 1.04f : 1.08f; look.exposure = on ? 1.0f : 0.95f;
+            look.bloom = on ? 0f : 0.35f; look.threshold = on ? 2.5f : 1.1f;
+            look.vignette = on ? 0.18f : 0.5f; look.saturation = on ? 1.02f : 1.08f; look.exposure = on ? 0.9f : 0.95f;
             look.warm = on ? new Color(1.01f, 1.0f, 0.98f) : new Color(1.04f, 1.0f, 0.93f);
         }
         // the busy café floor fades behind a dark cloth around the table, so the eye stays on the board
@@ -285,17 +286,19 @@ public class Cafe : MonoBehaviour
         float hf = 2 * Mathf.Atan(Mathf.Tan(vf / 2) * aspect);
         // each board: its half width and half depth (world units), the camera's angle above the table, and the
         // parts of the screen the game's own buttons take (top bar; your tiles at the bottom in dominoes; the side buttons)
-        float hx, hz, el, top = 0.13f, bottom, side = 0.075f;
+        // (the boards' real sizes: chess 9.2 + its frame, tawla 11.6 × 7.8, ludo 15 cells of 0.7 + its frame,
+        //  dominoes the cloth and the tiles the others hold up at its edges): as close as the whole board still fits
+        float hx, hz, el, top = 0.105f, bottom, side = 0.02f;
         switch (gameKind)
         {
-            case "chess": hx = 5.25f; hz = 5.6f; el = 64f; bottom = 0.05f; break;   // a little tilted: the pieces keep their shapes
-            case "tawla": hx = 6.0f; hz = 3.7f; el = 82f; bottom = 0.08f; break;
-            case "ludo": hx = 5.3f; hz = 5.3f; el = 84f; bottom = 0.05f; break;
-            default: hx = 5.4f; hz = 5.0f; el = 84f; bottom = 0.27f; break;   // dominoes: your hand at the bottom
+            case "chess": hx = 5.2f; hz = 5.0f; el = 64f; bottom = 0.02f; break;   // a little tilted: the pieces keep their shapes
+            case "tawla": hx = 5.85f; hz = 3.95f; el = 82f; bottom = 0.05f; break;
+            case "ludo": hx = 5.45f; hz = 5.45f; el = 84f; bottom = 0.02f; break;
+            default: hx = 5.5f; hz = 5.35f; el = 84f; bottom = 0.21f; break;   // dominoes: your hand at the bottom
         }
         float free = 1 - top - bottom, freeW = 1 - 2 * side;
         float H = hz / free;                                   // the half height the screen must show
-        float d = Mathf.Max(H / Mathf.Tan(vf / 2), hx / freeW / Mathf.Tan(hf / 2)) + 0.6f;
+        float d = Mathf.Max(H / Mathf.Tan(vf / 2), hx / freeW / Mathf.Tan(hf / 2)) + 0.3f;   // + the pieces' height
         float e = el * Mathf.Deg2Rad;
         // the board's middle sits in the middle of the free part of the screen
         float shift = H * (bottom - top);
