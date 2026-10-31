@@ -154,10 +154,9 @@ a "come and play" notification, in the player's language.
 The app shows Unity Ads: an interstitial now and then between games, and a rewarded video for coins
 (Plugins/Android/BBAds.java, Scripts/Ads.cs). Without a game id the app builds and plays with no ads.
 
-1. dashboard.unity.com → **Monetization** → add the project / Android app. Note its **Game ID** (Android) and the two
-   ad units it makes: `Interstitial_Android` and `Rewarded_Android`.
-2. GitHub → Settings → Secrets and variables → Actions → **Variables**: `UNITY_ADS_GAME_ID` = the Android Game ID.
-   (`UNITY_ADS_INTERSTITIAL` / `UNITY_ADS_REWARDED` only if your ad units have other names.)
+1. Set up in cloud.unity.com → Monetization: the Android app **Board Battles**, Game ID `800419375`, placements
+   `BP_Interstitial_Android` and `BP_Rewarded_Android` (the defaults in Editor/BuildScript.cs).
+2. Another app or placements: the repository variables `UNITY_ADS_GAME_ID`, `UNITY_ADS_INTERSTITIAL`, `UNITY_ADS_REWARDED`.
 3. Builds show **test ads** until the variable `UNITY_ADS_TEST` is `0`; set it only once the game is live, so you never
    watch your own real ads.
 4. Safe rewards: email Unity Ads support your Game ID and the callback URL `https://YOUR-SERVER/ads/unity`; they send a
