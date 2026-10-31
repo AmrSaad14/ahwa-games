@@ -274,31 +274,62 @@ public class Cafe : MonoBehaviour
     /// the top bar and the bottom of the screen.
     Vector3 GameShot(out Vector3 look)
     {
-        float aspect = Mathf.Max(0.5f, (float)Screen.width / Mathf.Max(1, Screen.height));
-        float vf = cam.fieldOfView * Mathf.Deg2Rad;
-        float hf = 2 * Mathf.Atan(Mathf.Tan(vf / 2) * aspect);
-        // each board: its half width and half depth (world units), the camera's angle above the table, and the
-        // parts of the screen the game's own buttons take (top bar; your tiles at the bottom in dominoes; the side buttons)
+        // each board: its half width and half depth (world units), how tall its pieces stand, the camera's angle
+        // above the table (like sitting at it: the pieces look 3D), and the parts of the screen the game's own
+        // buttons take (top bar; your tiles at the bottom in dominoes; the side buttons)
         // (the boards' real sizes: chess 9.2 + its frame, tawla 11.6 × 7.8, ludo 15 cells of 0.7 + its frame,
-        //  dominoes the cloth and the tiles the others hold up at its edges): as close as the whole board still fits
-        float hx, hz, el, top = 0.105f, bottom, side = 0.02f;
+        //  dominoes the cloth and the tiles the others hold up at its edges)
+        float hx, hz, tall, el, top = 0.1f, bottom, side = 0.075f;
         switch (gameKind)
         {
-            case "chess": hx = 5.2f; hz = 5.0f; el = 64f; bottom = 0.02f; break;   // a little tilted: the pieces keep their shapes
-            case "tawla": hx = 5.85f; hz = 3.95f; el = 82f; bottom = 0.05f; break;
-            case "ludo": hx = 5.45f; hz = 5.45f; el = 84f; bottom = 0.02f; break;
-            default: hx = 5.5f; hz = 5.35f; el = 84f; bottom = 0.21f; break;   // dominoes: your hand at the bottom
+            case "chess": hx = 5.2f; hz = 5.2f; tall = 1.3f; el = 54f; bottom = 0.03f; break;
+            case "tawla": hx = 5.85f; hz = 3.95f; tall = 0.5f; el = 58f; bottom = 0.04f; break;
+            case "ludo": hx = 5.45f; hz = 5.45f; tall = 0.7f; el = 58f; bottom = 0.03f; break;
+            default: hx = 5.5f; hz = 5.35f; tall = 0.8f; el = 58f; bottom = 0.21f; break;   // dominoes: your hand at the bottom
         }
-        float free = 1 - top - bottom, freeW = 1 - 2 * side;
-        float H = hz / free;                                   // the half height the screen must show
-        float d = Mathf.Max(H / Mathf.Tan(vf / 2), hx / freeW / Mathf.Tan(hf / 2)) + 0.3f;   // + the pieces' height
         float e = el * Mathf.Deg2Rad;
-        // the board's middle sits in the middle of the free part of the screen
-        float shift = H * (bottom - top);
-        look = Vector3.zero + front * shift * zoom + Vector3.up * 0.3f + pan;
+        var dir = front * Mathf.Cos(e) + Vector3.up * Mathf.Sin(e);
+        // as close as the whole board still fits the free part of the screen, its middle in the middle of it:
+        // found by trying the shot (the near edge looks bigger than the far one at an angle)
+        var corners = new Vector3[8];
+        var right = Vector3.Cross(Vector3.up, front);
+        int c = 0;
+        foreach (float y in new[] { 0f, tall })
+            foreach (float sx in new[] { -1f, 1f })
+                foreach (float sz in new[] { -1f, 1f })
+                    corners[c++] = right * hx * sx + front * hz * sz + Vector3.up * y;
+        var t = cam.transform; var p0 = t.position; var r0 = t.rotation;
+        Vector3 aim = Vector3.up * 0.3f;
+        float d = 20f;
+        float lo = 0, hi = 0;
+        for (int it = 0; it < 6; it++)
+        {
+            float a = 4f, b = 90f;
+            for (int k = 0; k < 22; k++)
+            {
+                float m = (a + b) / 2;
+                t.position = aim + dir * m; t.LookAt(aim);
+                bool fits = true;
+                foreach (var q in corners)
+                {
+                    var v = cam.WorldToViewportPoint(q);
+                    if (v.z <= 0 || v.x < side || v.x > 1 - side || v.y < bottom || v.y > 1 - top) { fits = false; break; }
+                }
+                if (fits) b = m; else a = m;
+            }
+            d = b;
+            t.position = aim + dir * d; t.LookAt(aim);
+            lo = 1; hi = 0;
+            foreach (var q in corners) { float vy = cam.WorldToViewportPoint(q).y; lo = Mathf.Min(lo, vy); hi = Mathf.Max(hi, vy); }
+            float want = bottom + (1 - top - bottom) / 2, now = (lo + hi) / 2;
+            if (Mathf.Abs(want - now) < 0.004f) break;
+            // the board too low on the screen: aim a little nearer to you (it moves up), and the other way round
+            aim += front * (want - now) * (2 * hz) / Mathf.Max(0.05f, hi - lo);
+        }
+        t.position = p0; t.rotation = r0;
         boardHalf = Mathf.Max(hx, hz); boardDist = d;
-        d = (d - 0.3f) * zoom + 0.3f;
-        return look + front * d * Mathf.Cos(e) + Vector3.up * d * Mathf.Sin(e);
+        look = Vector3.zero + (aim - Vector3.zero) * zoom + Vector3.up * 0.3f * (1 - zoom) + pan;
+        return look + dir * (d * zoom);
     }
 
     // ---------- zoom: two fingers pinch in and out (the mouse wheel on a computer), and move the board while close ----------
