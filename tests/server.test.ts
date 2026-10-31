@@ -213,27 +213,29 @@ test('daily bonus, gifts between players, and coins', async () => {
   a3.close(); b.close();
 });
 
-test('voice: offers only pass between players who joined voice at the same table', async () => {
-  const a = await new Client().open(), b = await new Client().open();
+test('voice: offers pass between the people at the same table, mic on or not; the mic flag shows who talks', async () => {
+  const a = await new Client().open(), b = await new Client().open(), c = await new Client().open();
   a.send({ t: 'create', mode: 'ffa2', target: 51 });
   await a.until(() => !!a.view?.code);
   b.send({ t: 'join', code: a.view!.code! });
   await a.until(() => a.view?.seats.filter(Boolean).length === 2);
   await b.until(() => !!b.view);
   const sig = { type: 'offer' as const, sdp: 'v=0 fake', table: '' };
-  a.send({ t: 'rtc', to: b.view!.you, data: sig });
+  // someone not at the table can't reach them
+  c.send({ t: 'rtc', to: b.view!.you, data: sig });
   await new Promise(r => setTimeout(r, 300));
-  assert.equal(b.last('rtc'), undefined, 'not relayed before both joined voice');
-  a.send({ t: 'voice', on: true }); b.send({ t: 'voice', on: true });
-  await a.until(() => !!a.view?.seats.every(s => s?.mic));
+  assert.equal(b.last('rtc'), undefined, 'not relayed from outside the table');
+  // at the table it passes even with no mic on (everyone listens)
   a.send({ t: 'rtc', to: b.view!.you, data: sig });
   await b.until(() => b.last('rtc')?.data.sdp === 'v=0 fake');
   assert.equal(b.last('rtc')!.from, a.view!.you);
   assert.ok(Array.isArray(a.last('welcome')!.ice) && a.last('welcome')!.ice.length >= 1, 'ICE servers are provided');
-  // leaving voice is visible to the other player
+  // turning the mic on and off is visible to the other player
+  b.send({ t: 'voice', on: true });
+  await a.until(() => a.view?.seats[b.view!.you]?.mic === true);
   b.send({ t: 'voice', on: false });
   await a.until(() => a.view?.seats[b.view!.you]?.mic === false);
-  a.close(); b.close();
+  a.close(); b.close(); c.close();
 });
 
 test('tawla, ludo and chess play to the end online, with ratings kept per game', async () => {

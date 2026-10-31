@@ -484,6 +484,17 @@ public class GameUi : MonoBehaviour
         micIcon = Ui.Picture(mic.transform, "Mic", Menus.Icon("micoff")); micIcon.rectTransform.Fill(9); micIcon.color = Ui.GoldLight;
         micButton = mic.GetComponent<Image>();
 
+        // the music: on and off from the table too (the same switch as in Settings)
+        RawImage musicIcon = null;
+        var mus = Ui.Button(hud, "", new Color(0.1f, 0.06f, 0.04f, 0.85f), Color.white, 10, () =>
+        {
+            Sfx.Tap(); Music.On = !Music.On;
+            musicIcon.texture = Menus.Icon(Music.On ? "music" : "musicoff");
+            app.Toast(Loc.T(Music.On ? "الموسيقى شغالة" : "الموسيقى مقفولة"));
+        });
+        ((RectTransform)mus.transform).Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(46, 46), new Vector2(-12, -148));
+        musicIcon = Ui.Picture(mus.transform, "Music", Menus.Icon(Music.On ? "music" : "musicoff")); musicIcon.rectTransform.Fill(10); musicIcon.color = Ui.GoldLight;
+
         // quick chat: phrases and emojis
         chat = gameObject.AddComponent<QuickChat>();
         chat.Build(app, hud);

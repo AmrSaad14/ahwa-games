@@ -1,6 +1,6 @@
-// Table voice chat, like the web game's (client/src/voice.ts): everyone at the table who turns their mic on
-// gets a direct audio connection (WebRTC) to every other player in voice — at most three, so no media
-// server is needed. The game server only passes the offers and answers along ("rtc" messages), and gives
+// Table voice chat: everyone at the table is connected to every other person there (WebRTC, at most three
+// connections, so no media server is needed) and hears whoever has their mic on; the mic button only decides
+// whether you are heard (and asks for the microphone the first time). The game server only passes the offers and answers along ("rtc" messages), and gives
 // the relay addresses (TURN) for phones that can't reach each other directly.
 // The lower seat number starts each connection; the whole offer goes in one message (no trickle).
 // Built only when Unity's WebRTC package is installed (BuildScript sets BB_VOICE); otherwise a stub.
@@ -59,7 +59,8 @@ public class Voice : MonoBehaviour
         micDevice = Microphone.devices[0];
         micClip = Microphone.Start(micDevice, true, 1, 48000);
         micPos = 0;
-        micTrack = new AudioStreamTrack();
+        if (micTrack == null) micTrack = new AudioStreamTrack();
+        micTrack.Enabled = true;
         Joined = true; MicMuted = false;
         app.Send(new Dictionary<string, object> { ["t"] = "voice", ["on"] = true });
         app.Toast(Loc.T("الصوت شغال"));
@@ -71,7 +72,7 @@ public class Voice : MonoBehaviour
         Joined = false;
         CloseAll();
         if (micDevice != null) Microphone.End(micDevice);
-        micTrack?.Dispose(); micTrack = null; micClip = null;
+        micTrack?.Dispose(); micTrack = null; micClip = null; micDevice = null;
     }
 
     public void SetMicMuted(bool m) { MicMuted = m; if (micTrack != null) micTrack.Enabled = !m; }
@@ -103,16 +104,20 @@ public class Voice : MonoBehaviour
         if (v == null) { CloseAll(); tableId = ""; return; }
         if (v.id != tableId) { CloseAll(); tableId = v.id; }
         you = v.you;
-        if (!Joined || v.you < 0) return;
+        if (v.you < 0) return;   // watching: no voice
+        // everyone at the table listens; the outgoing track is there from the start (silent until the mic is on),
+        // so turning the mic on later needs no new connection
+        if (micTrack == null) { micTrack = new AudioStreamTrack(); micTrack.Enabled = false; }
         var want = new HashSet<int>();
-        for (int i = 0; i < v.seats.Count; i++) { var s = v.seats[i]; if (s != null && i != v.you && s.mic && s.online && !s.bot) want.Add(i); }
+        for (int i = 0; i < v.seats.Count; i++) { var s = v.seats[i]; if (s != null && i != v.you && s.online && !s.bot) want.Add(i); }
         foreach (var seat in new List<int>(peers.Keys)) if (!want.Contains(seat)) Close(seat);
         foreach (var seat in want) if (!peers.ContainsKey(seat) && v.you < seat) StartCoroutine(Call(seat));
     }
 
     public void OnSignal(int from, Dictionary<string, object> data)
     {
-        if (!Joined || data == null || data.Str("table") != tableId) return;
+        if (data == null || data.Str("table") != tableId || you < 0) return;
+        if (micTrack == null) { micTrack = new AudioStreamTrack(); micTrack.Enabled = false; }
         StartCoroutine(Signal(from, data.Str("type"), data.Str("sdp")));
     }
 
@@ -175,6 +180,7 @@ public class Voice : MonoBehaviour
         };
         p.pc.OnConnectionStateChange = state =>
         {
+            Debug.Log("[voice] seat " + seat + ": " + state);
             if (state == RTCPeerConnectionState.Failed && p.initiator && peers.TryGetValue(seat, out var still) && still == p)
                 StartCoroutine(Retry(seat, p));
         };
@@ -184,7 +190,7 @@ public class Voice : MonoBehaviour
     IEnumerator Retry(int seat, Peer p)
     {
         yield return new WaitForSeconds(2f);
-        if (peers.TryGetValue(seat, out var still) && still == p) { Close(seat); if (Joined) StartCoroutine(Call(seat)); }
+        if (peers.TryGetValue(seat, out var still) && still == p) { Close(seat); StartCoroutine(Call(seat)); }
     }
 
     RTCIceServer[] IceServers()

@@ -591,10 +591,11 @@ export class Hub {
       }
       case 'voice': { table?.setMic(uid, !!m.on); return; }
       case 'rtc': {
-        // pass an audio offer/answer to one other person at the same table who is in voice chat
+        // pass an audio offer/answer to another person at the same table: everyone at a table listens, and
+        // whoever turns their mic on is heard (the mic flag only shows who is talking)
         if (!table || !m.data || typeof m.data.sdp !== 'string' || m.data.sdp.length > 20_000) return;
         const from = table.seatOf(uid), target = table.seats[Number(m.to)];
-        if (from < 0 || !target || target.bot || !target.mic || !table.seats[from]?.mic) return;
+        if (from < 0 || !target || target.bot || !target.uid) return;
         if (this.userTable.get(target.uid) !== table) return;
         const type = m.data.type === 'answer' ? 'answer' : 'offer';
         this.byUser.get(target.uid)?.conn.send({ t: 'rtc', from, data: { type, sdp: m.data.sdp, table: table.id } });
