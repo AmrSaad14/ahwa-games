@@ -39,11 +39,15 @@ await new Promise(resolve => {
   const timer = setTimeout(() => { ok('WebSocket session', false, 'timed out; seen: ' + [...seen].join(', ')); finish(); }, 15000);
   ws.on('open', () => { ok('WebSocket connects to /ws', true, url); ws.send(JSON.stringify({ t: 'hello', v: 2 })); });
   ws.on('error', e => { ok('WebSocket connects to /ws', false, String(e.message || e)); clearTimeout(timer); finish(); });
-  ws.on('message', raw => {
+  ws.on('message', async raw => {
     let m; try { m = JSON.parse(String(raw)); } catch { return; }
     seen.add(m.t);
     if (m.t === 'welcome') {
       ok('a guest account is made', !!m.user?.id, `coins ${m.user?.coins}, token ${m.token ? 'yes' : 'no'}`);
+      // voice chat: the relay (TURN) is offered, with short-lived credentials (kept for the relay test, never printed)
+      const turn = (m.ice || []).find(s => [].concat(s.urls || []).some(u => String(u).startsWith('turn:')));
+      ok('voice relay (TURN) is offered', !!turn, turn ? [].concat(turn.urls).join(' ') : 'no TURN in ice: ' + JSON.stringify((m.ice || []).map(s => s.urls)));
+      if (turn) { try { (await import('node:fs')).writeFileSync('/tmp/turn.json', JSON.stringify(turn)); } catch { /* */ } }
       ws.send(JSON.stringify({ t: 'lb', game: 'domino' }));
       ws.send(JSON.stringify({ t: 'quick', mode: 'ffa2', stake: 5000 }));
     }

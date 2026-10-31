@@ -31,6 +31,21 @@ jobs:
           set +e
           node check-server.mjs "${{ github.event.inputs.url || 'https://static.22.157.225.46.clients.your-server.de' }}" 2>&1 | tee "$GITHUB_WORKSPACE/server-check.txt"
           echo "exit ${PIPESTATUS[0]}" >> "$GITHUB_WORKSPACE/server-check.txt"
+          # the voice relay itself: ask it for a relayed address with the credentials the game gave out
+          if [ -f /tmp/turn.json ]; then
+            sudo apt-get install -y -q coturn-utils > /dev/null 2>&1 || sudo apt-get install -y -q coturn > /dev/null 2>&1
+            U=$(node -e 'const t=require("/tmp/turn.json");process.stdout.write(t.username||"")')
+            P=$(node -e 'const t=require("/tmp/turn.json");process.stdout.write(t.credential||"")')
+            H=$(node -e 'const t=require("/tmp/turn.json");const u=[].concat(t.urls)[0];process.stdout.write(u.replace(/^turns?:/,"").split("?")[0].split(":")[0])')
+            for proto in udp tcp; do
+              flag=""; [ $proto = tcp ] && flag="-t"
+              if timeout 20 turnutils_uclient $flag -y -n 3 -m 1 -u "$U" -w "$P" "$H" > /tmp/turn-$proto.txt 2>&1 && grep -qi "relay addr\|allocate.*success\|Total transmit" /tmp/turn-$proto.txt; then
+                echo "PASS  voice relay answers over $proto  · $H:3478" | tee -a "$GITHUB_WORKSPACE/server-check.txt"
+              else
+                echo "FAIL  voice relay answers over $proto  · $(grep -iE 'error|fail|timeout|refused' /tmp/turn-$proto.txt | head -2 | tr '\n' ' ')" | tee -a "$GITHUB_WORKSPACE/server-check.txt"
+              fi
+            done
+          fi
           true
       - name: Publish
         if: always()
