@@ -430,12 +430,6 @@ public partial class Menus : MonoBehaviour
             Toggle(list, "أصوات القهوة", Music.CafeOn, v => { Music.CafeOn = v; });
             Toggle(list, "الاهتزاز", Sfx.VibrateOn, v => { Sfx.VibrateOn = v; if (v) Sfx.Buzz(); });
             Toggle(list, "توفير البطارية", Perf.Saver, v => { Perf.Saver = v; });
-            // how the game table is seen
-            var vr = Row(list, 44, Card);
-            At(Ui.Label(vr, "طريقة العرض", 16, Color.white, StartAlign, Ui.Bold).rectTransform, 14, 160, 40);
-            var full = Ui.Button(vr, "كامل", !Cafe.BoardView ? Ui.Gold : new Color(1, 1, 1, 0.08f), !Cafe.BoardView ? Ui.Ink : Ui.GoldLight, 14, () => { SetView(false); });
-            var brd = Ui.Button(vr, "اللوح بس", Cafe.BoardView ? Ui.Gold : new Color(1, 1, 1, 0.08f), Cafe.BoardView ? Ui.Ink : Ui.GoldLight, 14, () => { SetView(true); });
-            At((RectTransform)full.transform, 280, 100, 32); At((RectTransform)brd.transform, 384, 100, 32);
             // language
             var lr = Row(list, 44, Card);
             At(Ui.Label(lr, "اللغة", 16, Color.white, StartAlign, Ui.Bold).rectTransform, 14, 160, 40);
@@ -708,7 +702,7 @@ public partial class Menus : MonoBehaviour
     void SetView(bool board)
     {
         Sfx.Tap();
-        if (app.cafe != null) app.cafe.SetView(board); else Cafe.BoardView = board;
+        if (app.cafe != null) app.cafe.SetView(board);
         app.dominoTable?.ApplyView(); app.game?.ShowViewIcon();
         refreshOpen?.Invoke();
     }

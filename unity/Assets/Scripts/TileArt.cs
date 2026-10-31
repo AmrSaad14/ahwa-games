@@ -16,7 +16,7 @@ public static class TileArt
     static readonly Dictionary<int, Material> faceMats = new Dictionary<int, Material>();
     static readonly Dictionary<int, Texture2D> faceTex = new Dictionary<int, Texture2D>();
     public static Color Ivory = new Color(0.96f, 0.93f, 0.85f);
-    public static Color PipInk = new Color(0.1f, 0.07f, 0.05f);
+    public static Color PipInk = new Color(0.06f, 0.04f, 0.03f);
     static Color Divider = new Color(0.62f, 0.5f, 0.28f);
     static bool Veins;
     public static string SkinId { get; private set; } = "tiles_ivory";
@@ -150,7 +150,7 @@ public static class TileArt
 
     static Texture2D Paint(int a, int b)
     {
-        const int TW = 256, TH = 128;
+        const int TW = 384, TH = 192;   // sharp pips close up
         var px = new Color[TW * TH];
         for (int y = 0; y < TH; y++)
             for (int x = 0; x < TW; x++)
@@ -175,7 +175,7 @@ public static class TileArt
 
     static void DrawPips(Color[] px, int TW, int TH, int n, int x0)
     {
-        float cell = TH / 3.4f, r = TH * 0.085f;
+        float cell = TH / 3.4f, r = TH * 0.095f;
         float cx0 = x0 + TW / 4f - cell, cy0 = TH / 2f - cell;
         foreach (var p in Pips[n])
         {

@@ -165,7 +165,7 @@ public class DominoTable : MonoBehaviour
     /// Board-only view: the players (and their chairs) step out of the picture.
     public void ApplyView()
     {
-        bool show = !Cafe.BoardView;
+        bool show = false;   // the board is seen from above: the players step out of the picture (their name tags stay)
         for (int p = 0; p < 4; p++)
         {
             if (chars[p] != null) chars[p].gameObject.SetActive(show);

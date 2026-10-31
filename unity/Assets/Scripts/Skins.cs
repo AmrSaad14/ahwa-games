@@ -117,7 +117,8 @@ public static class Skins
             case "chess_rosewood": return new ChessLook { kind = "wood", light = W("#f0d8b0", "#d8b888", "#fae8c8"), dark = W("#7a2a24", "#4a1410", "#9a3c32"), frame = W("#3a1410", "#1e0806", "#5a2420"), line = H("#f0d8b0") };
             case "chess_marble": return new ChessLook { kind = "marble", light = W("#f4f2ee", "#b8b4ac", "#ffffff"), dark = W("#3e434a", "#1a1d22", "#7a8088"), frame = W("#1c1c20", "#0a0a0c", "#34343a"), line = H("#c9c4bb") };
             case "chess_gold": return new ChessLook { kind = "flat", light = W("#f3d98a", "#d8b660", "#ffe9b0"), dark = W("#1a1614", "#0a0807", "#2e2826"), frame = W("#c9962f", "#8a6420", "#f0c862"), line = H("#f3cd62"), metalFrame = true };
-            default: return new ChessLook { kind = "wood", light = W("#e7c993", "#c9a46a", "#f4dfb2"), dark = W("#7a4a26", "#4e2c14", "#9a6236"), frame = W("#5a2d18", "#2e130a", "#7a4428"), line = H("#e8cf9c") };
+            // the classic board: light maple and walnut, far apart in brightness so every square reads at a glance
+            default: return new ChessLook { kind = "wood", light = W("#f0dab4", "#e4c99c", "#f8e8cc"), dark = W("#8f5d36", "#7a4c2a", "#a26c42"), frame = W("#4a2414", "#2a1208", "#64341e"), line = H("#f0d8a8") };
         }
     }
 

@@ -29,7 +29,7 @@ public class QuickChat : MonoBehaviour
     {
         app = a; hud = h;
         var b = Ui.Button(hud, "", new Color(0.1f, 0.06f, 0.04f, 0.85f), Color.white, 10, Toggle);
-        ((RectTransform)b.transform).Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(46, 46), new Vector2(-12, -148));
+        ((RectTransform)b.transform).Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(46, 46), new Vector2(-12, -96));
         var ic = Ui.Picture(b.transform, "Chat", Menus.Icon("chat")); ic.rectTransform.Fill(10); ic.color = Ui.GoldLight;
 
         panel = Ui.Box(hud, "QuickChat", new Color(0.1f, 0.06f, 0.04f, 0.96f)).rectTransform;

@@ -496,6 +496,7 @@ public class GameUi : MonoBehaviour
             app.Toast(Loc.T(Cafe.BoardView ? "عرض اللوح بس" : "عرض كامل"));
         });
         ((RectTransform)vb.transform).Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(46, 46), new Vector2(-12, -96));
+        vb.gameObject.SetActive(false);   // one view for everyone now: straight down on the board
         viewIcon = Ui.Picture(vb.transform, "View", Menus.Icon("view")); viewIcon.rectTransform.Fill(10); viewIcon.color = Ui.GoldLight;
         ShowViewIcon();
 

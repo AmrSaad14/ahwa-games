@@ -192,12 +192,18 @@ public class Cafe : MonoBehaviour
     }
 
     /// The café while a game is on: the four small tables and their regulars step aside for the big table.
-    /// How the game table is seen: the whole scene with the players (false), or just the board from above (true).
-    public static bool BoardView { get => PlayerPrefs.GetInt("view.board", 0) == 1; set { PlayerPrefs.SetInt("view.board", value ? 1 : 0); PlayerPrefs.Save(); } }
+    /// Every game is seen the same way, for everyone: straight down on the board, filling the screen between the
+    /// top bar and the bottom (your tiles in dominoes), in a clear, even light.
+    public static bool BoardView => true;
+    public void SetView(bool board) { if (inGame) camPosTo = GameShot(out camLookTo); }
 
-    public void SetView(bool board)
+    string gameKind = "domino";
+    /// Which game is on the table: each board has its own size and its own camera height.
+    public void SetGameKind(string g)
     {
-        BoardView = board;
+        g = string.IsNullOrEmpty(g) ? "domino" : g;
+        if (g == gameKind) return;
+        gameKind = g;
         if (inGame) camPosTo = GameShot(out camLookTo);
     }
 
@@ -206,28 +212,95 @@ public class Cafe : MonoBehaviour
         inGame = on;
         if (lobby != null) lobby.gameObject.SetActive(!on);
         foreach (var r in regulars) if (r != null) r.SetActive(!on);
+        GameLight(on);
         if (on) camPosTo = GameShot(out camLookTo); else Focus(focus);
     }
 
-    /// Looking down at the game table from your side, framed to the screen.
+    // ---------- the light while a game is on: even, neutral, from above, with no glare ----------
+    Quaternion keyRot; Color keyColor; float keyIntensity, keyShadow; bool savedLight;
+    Color ambSky, ambEq, ambGround;
+    readonly List<(Light l, float i)> lamps = new List<(Light, float)>();
+    GameObject backdrop;
+
+    void GameLight(bool on)
+    {
+        if (keyLight == null) return;
+        if (!savedLight)
+        {
+            savedLight = true;
+            keyRot = keyLight.transform.rotation; keyColor = keyLight.color; keyIntensity = keyLight.intensity; keyShadow = keyLight.shadowStrength;
+            ambSky = RenderSettings.ambientSkyColor; ambEq = RenderSettings.ambientEquatorColor; ambGround = RenderSettings.ambientGroundColor;
+            foreach (var l in FindObjectsByType<Light>(FindObjectsSortMode.None)) if (l.type == LightType.Point) lamps.Add((l, l.intensity));
+        }
+        if (on)
+        {
+            // nearly straight down, a touch from your side, so pieces cast short soft shadows away from you
+            keyLight.transform.rotation = Quaternion.LookRotation(Vector3.down * 4f - front * 0.6f + Vector3.Cross(Vector3.up, front) * 0.35f);
+            keyLight.color = new Color(1f, 0.97f, 0.92f);
+            keyLight.intensity = 1.15f;
+            keyLight.shadowStrength = 0.4f;
+            RenderSettings.ambientSkyColor = new Color(0.62f, 0.6f, 0.57f);
+            RenderSettings.ambientEquatorColor = new Color(0.45f, 0.42f, 0.38f);
+            RenderSettings.ambientGroundColor = new Color(0.22f, 0.2f, 0.18f);
+            foreach (var (l, i) in lamps) if (l != null) l.intensity = i * 0.35f;   // no hot spot in the middle of the board
+        }
+        else
+        {
+            keyLight.transform.rotation = keyRot; keyLight.color = keyColor; keyLight.intensity = keyIntensity; keyLight.shadowStrength = keyShadow;
+            RenderSettings.ambientSkyColor = ambSky; RenderSettings.ambientEquatorColor = ambEq; RenderSettings.ambientGroundColor = ambGround;
+            foreach (var (l, i) in lamps) if (l != null) l.intensity = i;
+        }
+        // the camera's look: no glow on the white tiles and squares, a light vignette
+        var look = cam != null ? cam.GetComponent<CafeLook>() : null;
+        if (look != null)
+        {
+            look.bloom = on ? 0.06f : 0.35f; look.threshold = on ? 1.8f : 1.1f;
+            look.vignette = on ? 0.22f : 0.5f; look.saturation = on ? 1.04f : 1.08f; look.exposure = on ? 1.0f : 0.95f;
+            look.warm = on ? new Color(1.01f, 1.0f, 0.98f) : new Color(1.04f, 1.0f, 0.93f);
+        }
+        // the busy café floor fades behind a dark cloth around the table, so the eye stays on the board
+        if (backdrop == null)
+        {
+            backdrop = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            backdrop.name = "Backdrop";
+            Destroy(backdrop.GetComponent<Collider>());
+            backdrop.transform.position = new Vector3(0, -0.08f, 0);
+            backdrop.transform.rotation = Quaternion.Euler(90, 0, 0);
+            backdrop.transform.localScale = new Vector3(90, 90, 1);
+            const int S = 128;
+            var tex = Art.Paint(S, S, (x, y) => { float d = Vector2.Distance(new Vector2(x, y), new Vector2(S / 2f, S / 2f)) / (S / 2f); return Color.Lerp(new Color(0.16f, 0.11f, 0.08f), new Color(0.05f, 0.035f, 0.025f), Mathf.Clamp01(d * 1.4f)); });
+            var r = backdrop.GetComponent<MeshRenderer>();
+            r.sharedMaterial = Art.Mat(Color.white, 0.05f, 0, tex);
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
+        backdrop.SetActive(on);
+    }
+
+    /// Straight down on the board (a few degrees from your side, so 3D pieces keep their shape), framed between
+    /// the top bar and the bottom of the screen.
     Vector3 GameShot(out Vector3 look)
     {
         float aspect = Mathf.Max(0.5f, (float)Screen.width / Mathf.Max(1, Screen.height));
         float vf = cam.fieldOfView * Mathf.Deg2Rad;
         float hf = 2 * Mathf.Atan(Mathf.Tan(vf / 2) * aspect);
-        if (BoardView)
+        // each board: its half width and half depth (world units), the camera's angle above the table, and the
+        // parts of the screen the game's own buttons take (top bar; your tiles at the bottom in dominoes; the side buttons)
+        float hx, hz, el, top = 0.13f, bottom, side = 0.075f;
+        switch (gameKind)
         {
-            // the same angle as you sit, zoomed in on the board and the tiles (the players step out of the picture)
-            float eb = aspect < 0.9f ? 1.12f : 1.02f;
-            float db = Mathf.Max(6.4f / Mathf.Tan(hf / 2), 5.2f / Mathf.Tan(vf / 2));
-            look = Vector3.zero - front * 0.5f + Vector3.up * 0.4f;
-            return look + front * db * Mathf.Cos(eb) + Vector3.up * db * Mathf.Sin(eb);
+            case "chess": hx = 5.25f; hz = 5.6f; el = 64f; bottom = 0.05f; break;   // a little tilted: the pieces keep their shapes
+            case "tawla": hx = 6.0f; hz = 3.7f; el = 82f; bottom = 0.08f; break;
+            case "ludo": hx = 5.3f; hz = 5.3f; el = 84f; bottom = 0.05f; break;
+            default: hx = 5.4f; hz = 5.0f; el = 84f; bottom = 0.27f; break;   // dominoes: your hand at the bottom
         }
-        float el = aspect < 0.9f ? 1.08f : 0.98f;
-        // framed so the player across the table shows head to chest, below the top bar
-        float d = Mathf.Max(9.6f / Mathf.Tan(hf / 2), 8.5f / Mathf.Tan(vf / 2)) * 1.02f;
-        look = Vector3.zero - front * 1.4f + Vector3.up * 1.2f;   // a little past the table's centre: your hand covers the near edge anyway
-        return look + front * d * Mathf.Cos(el) + Vector3.up * d * Mathf.Sin(el);
+        float free = 1 - top - bottom, freeW = 1 - 2 * side;
+        float H = hz / free;                                   // the half height the screen must show
+        float d = Mathf.Max(H / Mathf.Tan(vf / 2), hx / freeW / Mathf.Tan(hf / 2)) + 0.6f;
+        float e = el * Mathf.Deg2Rad;
+        // the board's middle sits in the middle of the free part of the screen
+        float shift = H * (bottom - top);
+        look = Vector3.zero + front * shift + Vector3.up * 0.3f;
+        return look + front * d * Mathf.Cos(e) + Vector3.up * d * Mathf.Sin(e);
     }
 
     public void Focus(string g)

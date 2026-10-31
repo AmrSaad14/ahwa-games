@@ -288,6 +288,7 @@ public class App : MonoBehaviour
                 if (view != null && tilesNow > tilesOnTable) Sfx.Slap();
                 if (v.MyTurn && v.phase == "play" && (view == null || !view.MyTurn)) { Sfx.Chime(); Sfx.Buzz(); if (guided && guideHints < 3) { guideHints++; Toast(Loc.T(v.game == "domino" ? "دورك! دوس على حجر بينوّر عشان تلعبه" : "دورك! دوس على اللوح"), 4f); } }
                 tilesOnTable = tilesNow;
+                cafe.SetGameKind(v.game);   // each board framed its own way
                 view = v;
                 Redraw();
                 break;
@@ -835,9 +836,9 @@ public class App : MonoBehaviour
                 }
                 SendEmote("nice"); yield return new WaitForSeconds(2.2f); Still("q-chat.png");
                 Still("7-later.png");
-                cafe.SetView(true); dominoTable.ApplyView(); yield return new WaitForSeconds(2.5f); Still("v-board-view.png");
+                yield return new WaitForSeconds(2.5f); Still("v-board-view.png");
                 Debug.Log("[test] board view: players shown " + (dominoTable.CharAtSeat(1) != null && dominoTable.CharAtSeat(1).gameObject.activeSelf));
-                cafe.SetView(false); dominoTable.ApplyView(); yield return new WaitForSeconds(0.6f);
+                yield return new WaitForSeconds(0.6f);
                 yield return new WaitForSeconds(0.5f);
             }
             Loc.Set(true);   // the board games in English (screenshots for the store in both languages)

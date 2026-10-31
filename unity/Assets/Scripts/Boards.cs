@@ -90,10 +90,42 @@ public class ChessBoard : Board
             var c = L.kind == "wood" ? Art.Wood(x * 3 + f * 97, y * 3 + r * 53, w[0], w[1], w[2], 50, f * 0.7f + r * 1.3f)
                   : L.kind == "marble" ? Skins.Marble(x * 2 + f * 97, y * 2 + r * 53, w, f * 0.7f + r * 1.3f)
                   : w[0] * (0.97f + Mathf.PerlinNoise(x * 0.05f, y * 0.05f) * 0.06f);
-            if (x % 64 == 0 || y % 64 == 0) c *= 0.75f;
             return c;
         });
-        Art.Sheet("Squares", spin, B, B, new Vector3(0, 0.303f, 0), Art.Mat(new Color(0.85f, 0.83f, 0.8f), L.kind == "wood" ? 0.4f : 0.55f, 0, tex));
+        // matte, so the light never washes a square out
+        Art.Sheet("Squares", spin, B, B, new Vector3(0, 0.303f, 0), Art.Mat(Color.white, 0.12f, 0, tex));
+        coordsFor = null;
+    }
+
+    // the files (a–h) and ranks (1–8) along the frame, the right way up for you (they don't turn with the board)
+    Transform coords; string coordsFor;
+    void Coords(bool black)
+    {
+        string key = black ? "b" : "w";
+        if (coordsFor == key) return;
+        coordsFor = key;
+        if (coords != null) Object.Destroy(coords.gameObject);
+        coords = new GameObject("Coords").transform; coords.SetParent(root.transform, false);
+        var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        var ink = Skins.Chess(Skins.Worn("chess")).line;
+        float edge = S * 4 + FrameW * 0.5f;
+        for (int i = 0; i < 8; i++)
+        {
+            int f = black ? 7 - i : i, r = black ? 7 - i : i;
+            Label(coords, font, ((char)('a' + f)).ToString(), new Vector3((i - 3.5f) * S, 0.31f, -edge), ink);
+            Label(coords, font, (r + 1).ToString(), new Vector3(-edge, 0.31f, (i - 3.5f) * S), ink);
+        }
+    }
+    static void Label(Transform parent, Font font, string text, Vector3 at, Color c)
+    {
+        var go = new GameObject("Coord " + text);
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = at;
+        go.transform.localRotation = Quaternion.Euler(90, 0, 0);
+        var tm = go.AddComponent<TextMesh>();
+        tm.text = text; tm.font = font; tm.fontSize = 64; tm.characterSize = 0.045f;
+        tm.anchor = TextAnchor.MiddleCenter; tm.alignment = TextAlignment.Center; tm.color = c; tm.fontStyle = FontStyle.Bold;
+        go.GetComponent<MeshRenderer>().sharedMaterial = font.material;
     }
 
     /// Square to board position: a1 at your bottom-left when you play white (the board turns for black).
@@ -110,7 +142,9 @@ public class ChessBoard : Board
     public override void Render(TableView v, int sel, List<int> targets, List<int> movable)
     {
         var c = v.chess; if (c == null) return;
-        spin.localRotation = Quaternion.Euler(0, c.Str("you") == "b" ? 180 : 0, 0);
+        bool black = c.Str("you") == "b";
+        spin.localRotation = Quaternion.Euler(0, black ? 180 : 0, 0);
+        Coords(black);
         Clear(pieces); Clear(marks); bySq.Clear();
         var board = c.Arr("board");
         var last = c.Obj("last");
