@@ -79,12 +79,12 @@ public static class BuildScript
         if (AssetDatabase.LoadAssetAtPath<Material>("Assets/Resources/Materials/Standard.mat") == null)
             AssetDatabase.CreateAsset(new Material(Shader.Find("Standard")), "Assets/Resources/Materials/Standard.mat");
         // Unity Ads (Scripts/Ads.cs): the Board Battles game id and ad units in Unity's dashboard (UNITY_ADS_* override them);
-        // test ads until UNITY_ADS_TEST is 0 (only once the game is live, so we never watch our own real ads)
+        // real ads; the repository variable UNITY_ADS_TEST=1 switches a build back to test ads
         string Env(string k, string d) { var v = System.Environment.GetEnvironmentVariable(k); return string.IsNullOrEmpty(v) ? d : v.Trim(); }
         File.WriteAllText("Assets/Resources/AdsConfig.json", "{\"game\":\"" + Env("UNITY_ADS_GAME_ID", "800419375")
             + "\",\"interstitial\":\"" + Env("UNITY_ADS_INTERSTITIAL", "BP_Interstitial_Android")
             + "\",\"rewarded\":\"" + Env("UNITY_ADS_REWARDED", "BP_Rewarded_Android")
-            + "\",\"test\":" + (Env("UNITY_ADS_TEST", "1") == "0" ? "false" : "true") + "}");
+            + "\",\"test\":" + (Env("UNITY_ADS_TEST", "0") == "1" ? "true" : "false") + "}");
         AssetDatabase.ImportAsset("Assets/Resources/AdsConfig.json");
         // voice chat is built when Unity's WebRTC package is installed (Scripts/Voice.cs)
         bool webrtc = UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.webrtc") != null;

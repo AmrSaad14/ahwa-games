@@ -61,7 +61,7 @@ jobs:
         env:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-          # Unity Ads (repository variables; no game id: no ads; UNITY_ADS_TEST=0 for real ads once the game is live)
+          # Unity Ads (repository variables; no game id: no ads; real ads by default; UNITY_ADS_TEST=1 for test ads)
           UNITY_ADS_GAME_ID: ${{ vars.UNITY_ADS_GAME_ID }}
           UNITY_ADS_INTERSTITIAL: ${{ vars.UNITY_ADS_INTERSTITIAL }}
           UNITY_ADS_REWARDED: ${{ vars.UNITY_ADS_REWARDED }}
