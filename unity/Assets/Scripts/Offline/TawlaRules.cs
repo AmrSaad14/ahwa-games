@@ -376,12 +376,51 @@ public class Tables : ITawla
         return results;
     }
 
+    /// The most dice that can still be played from here (memoised: doubles branch a lot).
+    static int Longest(Tables st, List<int> ds, Dictionary<string, int> memo)
+    {
+        if (ds.Count == 0) return 0;
+        var k = st.Key() + "#" + string.Join("", ds.OrderBy(x => x));
+        if (memo.TryGetValue(k, out var hit)) return hit;
+        int best = 0;
+        foreach (var d in ds.Distinct().ToList())
+        {
+            foreach (var step in st.SingleSteps(d))
+            {
+                var rest = new List<int>(ds); rest.Remove(d);
+                best = Math.Max(best, 1 + Longest(st.Apply(step), rest, memo));
+                if (best == ds.Count) break;
+            }
+            if (best == ds.Count) break;
+        }
+        memo[k] = best;
+        return best;
+    }
+
+    /// Steps the player may take now, in any order of the dice: allowed when the rest of the dice can still be
+    /// played as fully as possible after it (and, if only one of two different dice fits, the larger).
     public List<TStep> NextSteps()
     {
         var o = new List<TStep>();
         if (rolled == null || dice.Count == 0) return o;
+        var memo = new Dictionary<string, int>();
+        var opts = new List<(TStep step, int n)>();
+        int best = 0;
+        foreach (var d in dice.Distinct().ToList())
+            foreach (var step in SingleSteps(d))
+            {
+                var rest = new List<int>(dice); rest.Remove(d);
+                int n = 1 + Longest(Apply(step), rest, memo);
+                opts.Add((step, n)); best = Math.Max(best, n);
+            }
+        var ok = opts.Where(x => x.n == best).Select(x => x.step).ToList();
+        if (best == 1 && dice.Count == 2 && dice[0] != dice[1])
+        {
+            int big = Math.Max(dice[0], dice[1]);
+            if (ok.Any(q => q.die == big)) ok = ok.Where(q => q.die == big).ToList();
+        }
         var seenK = new HashSet<int>();
-        foreach (var q in Sequences()) if (q.Count > 0 && seenK.Add(q[0].from * 1000 + q[0].to)) o.Add(q[0]);
+        foreach (var q in ok.OrderBy(q => q.die)) if (seenK.Add(q.from * 1000 + q.to)) o.Add(q);
         return o;
     }
 

@@ -170,11 +170,47 @@ export function sequences(s: TablesState): Step[][] {
   return results;
 }
 
+/** The most dice that can still be played from here (memoised: doubles branch a lot). */
+function longest(st: TablesState, dice: number[], memo: Map<string, number>): number {
+  if (!dice.length) return 0;
+  const k = key(st) + '#' + dice.slice().sort().join('');
+  const hit = memo.get(k);
+  if (hit !== undefined) return hit;
+  let best = 0;
+  for (const d of [...new Set(dice)]) {
+    for (const step of singleSteps(st, d)) {
+      const rest = dice.slice(); rest.splice(rest.indexOf(d), 1);
+      best = Math.max(best, 1 + longest(applyStep(st, step), rest, memo));
+      if (best === dice.length) break;
+    }
+    if (best === dice.length) break;
+  }
+  memo.set(k, best);
+  return best;
+}
+
+/** Steps the player may take now, in any order of the dice: a step is allowed when the rest of the dice can
+ *  still be played after it as fully as possible (and, if only one of two different dice fits, the larger). */
 export function nextSteps(s: TablesState): Step[] {
   if (!s.rolled || !s.dice.length) return [];
-  const seqs = sequences(s);
+  const memo = new Map<string, number>();
+  const opts: { step: Step; n: number }[] = [];
+  let best = 0;
+  for (const d of [...new Set(s.dice)]) {
+    for (const step of singleSteps(s, d)) {
+      const rest = s.dice.slice(); rest.splice(rest.indexOf(d), 1);
+      const n = 1 + longest(applyStep(s, step), rest, memo);
+      opts.push({ step, n }); best = Math.max(best, n);
+    }
+  }
+  let ok = opts.filter(o => o.n === best).map(o => o.step);
+  if (best === 1 && s.dice.length === 2 && s.dice[0] !== s.dice[1]) {
+    const big = Math.max(...s.dice);
+    if (ok.some(q => q.die === big)) ok = ok.filter(q => q.die === big);
+  }
+  ok.sort((a, b) => a.die - b.die);   // same from→to with two dice (bearing off): use the smaller one
   const seen = new Set<string>(), out: Step[] = [];
-  for (const q of seqs) if (q.length) { const k = q[0].from + '>' + q[0].to; if (!seen.has(k)) { seen.add(k); out.push(q[0]); } }
+  for (const q of ok) { const k = q.from + '>' + q.to; if (!seen.has(k)) { seen.add(k); out.push(q); } }
   return out;
 }
 

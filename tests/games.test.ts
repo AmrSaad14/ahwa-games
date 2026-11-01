@@ -347,3 +347,16 @@ test('tawla: one checker can use both dice in a single move (5 and 2 → 7 point
   }
 });
 
+
+test('tables variants: either die may be played first (5 then 4, or 4 then 5)', () => {
+  for (const v of ['mahbousa', 'tawla31', 'gulbahar'] as const) {
+    let s = V.startPosition(v, 0);
+    s = V.roll(s, (() => { const r = [4 / 6, 3 / 6]; let i = 0; return () => r[i++]; })());   // 5 and 4
+    assert.deepEqual(s.rolled, [5, 4]);
+    const dice = new Set(V.nextSteps(s).map(x => x.die));
+    assert.ok(dice.has(4) && dice.has(5), `${v}: both dice offered first, got ${[...dice]}`);
+    const first4 = V.nextSteps(s).find(x => x.die === 4)!;
+    const n = V.playStep(s, first4.from, first4.to)!;
+    assert.ok(n && V.nextSteps(n).some(x => x.die === 5), `${v}: the 5 follows the 4`);
+  }
+});
