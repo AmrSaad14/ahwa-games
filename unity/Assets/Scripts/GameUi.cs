@@ -119,6 +119,10 @@ public class GameUi : MonoBehaviour
     // each player's title, under their name tag
     readonly RectTransform[] seatTitle = new RectTransform[4];
     readonly RawImage[] seatFace = new RawImage[4];
+    RawImage soundButtonIcon;
+    static void ShowSound(RawImage i) { if (i != null) i.texture = Menus.Icon(Sfx.SoundOn || Music.On || Music.CafeOn ? "sound" : "soundoff"); }
+    /// The table's sound button follows changes made in Settings.
+    public void RefreshSound() => ShowSound(soundButtonIcon);
     readonly string[] seatFaceKey = new string[4];
     readonly string[] seatTitleId = new string[4];
     readonly int[] seatTitleVer = new int[4];
@@ -490,16 +494,30 @@ public class GameUi : MonoBehaviour
         micIcon = Ui.Picture(mic.transform, "Mic", Menus.Icon("micoff")); micIcon.rectTransform.Fill(9); micIcon.color = Ui.GoldLight;
         micButton = mic.GetComponent<Image>();
 
-        // the music: on and off from the table too (the same switch as in Settings)
-        RawImage musicIcon = null;
-        var mus = Ui.Button(hud, "", new Color(0.1f, 0.06f, 0.04f, 0.85f), Color.white, 10, () =>
+        // sound: one tap mutes everything (music, café sounds, game sounds); another brings back what was on.
+        // Voice chat is not affected. (The same switches as in Settings.)
+        RawImage soundIcon = null;
+        var snd = Ui.Button(hud, "", new Color(0.1f, 0.06f, 0.04f, 0.85f), Color.white, 10, () =>
         {
-            Sfx.Tap(); Music.On = !Music.On;
-            musicIcon.texture = Menus.Icon(Music.On ? "music" : "musicoff");
-            app.Toast(Loc.T(Music.On ? "الموسيقى شغالة" : "الموسيقى مقفولة"));
+            bool anyOn = Sfx.SoundOn || Music.On || Music.CafeOn;
+            if (anyOn)
+            {
+                PlayerPrefs.SetInt("mute.was", (Sfx.SoundOn ? 1 : 0) | (Music.On ? 2 : 0) | (Music.CafeOn ? 4 : 0));
+                Sfx.SoundOn = false; Music.On = false; Music.CafeOn = false;
+            }
+            else
+            {
+                int was = PlayerPrefs.GetInt("mute.was", 7); if (was == 0) was = 7;
+                Sfx.SoundOn = (was & 1) != 0; Music.On = (was & 2) != 0; Music.CafeOn = (was & 4) != 0;
+                Sfx.Tap();
+            }
+            ShowSound(soundIcon);
+            app.Toast(Loc.T(anyOn ? "الصوت مقفول" : "الصوت رجع"));
         });
-        ((RectTransform)mus.transform).Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(46, 46), new Vector2(-12, -148));
-        musicIcon = Ui.Picture(mus.transform, "Music", Menus.Icon(Music.On ? "music" : "musicoff")); musicIcon.rectTransform.Fill(10); musicIcon.color = Ui.GoldLight;
+        ((RectTransform)snd.transform).Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(46, 46), new Vector2(-12, -148));
+        soundIcon = Ui.Picture(snd.transform, "Sound", Menus.Icon("sound")); soundIcon.rectTransform.Fill(10); soundIcon.color = Ui.GoldLight;
+        soundButtonIcon = soundIcon;
+        ShowSound(soundIcon);
 
         // quick chat: phrases and emojis
         chat = gameObject.AddComponent<QuickChat>();

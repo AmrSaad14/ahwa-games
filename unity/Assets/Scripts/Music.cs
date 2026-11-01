@@ -42,7 +42,9 @@ public class Music : MonoBehaviour
 
     void Update()
     {
-        if (src != null) src.volume = Mathf.MoveTowards(src.volume, On && !App.Recording ? target : 0, Time.unscaledDeltaTime * 0.3f);
-        if (amb != null) amb.volume = Mathf.MoveTowards(amb.volume, CafeOn && !App.Recording ? ambTarget : 0, Time.unscaledDeltaTime * 0.25f);
+        // quieter while you're in voice chat, so voices are clear
+        float duck = Voice.I != null && Voice.I.Joined ? 0.35f : 1f;
+        if (src != null) src.volume = Mathf.MoveTowards(src.volume, On && !App.Recording ? target * duck : 0, Time.unscaledDeltaTime * 0.3f);
+        if (amb != null) amb.volume = Mathf.MoveTowards(amb.volume, CafeOn && !App.Recording ? ambTarget * duck : 0, Time.unscaledDeltaTime * 0.25f);
     }
 }

@@ -38,6 +38,10 @@ public class Voice : MonoBehaviour
     string micDevice;
     int micPos;
     float[] buf = new float[48000];
+    bool nativeMic;
+#if UNITY_ANDROID && !UNITY_EDITOR
+    AndroidJavaClass micJava;
+#endif
     bool started;
 
     void Start() { StartCoroutine(WebRTC.Update()); started = true; }
@@ -55,10 +59,27 @@ public class Voice : MonoBehaviour
             if (!UnityEngine.Android.Permission.HasUserAuthorizedPermission(UnityEngine.Android.Permission.Microphone)) { app.Toast(Loc.T("اسمح بالميكروفون عشان تتكلم")); yield break; }
         }
 #endif
-        if (Microphone.devices.Length == 0) { app.Toast(Loc.T("اسمح بالميكروفون عشان تتكلم")); yield break; }
-        micDevice = Microphone.devices[0];
-        micClip = Microphone.Start(micDevice, true, 1, 48000);
-        micPos = 0;
+        // on the phone: the microphone the way calling apps open it, with the phone's echo canceller, so the
+        // game's music and sounds from the speaker don't reach the others (Plugins/Android/BBMic.java)
+        nativeMic = false;
+#if UNITY_ANDROID && !UNITY_EDITOR
+        try
+        {
+            using (var c = new AndroidJavaClass("com.ahwa.voice.BBMic"))
+            {
+                nativeMic = c.CallStatic<bool>("start");
+                Debug.Log("[voice] phone mic " + (nativeMic ? "on, echo canceller " + c.CallStatic<bool>("echoCancel") : "failed: Unity's mic instead"));
+            }
+        }
+        catch (System.Exception e) { Debug.Log("[voice] phone mic: " + e.Message); }
+#endif
+        if (!nativeMic)
+        {
+            if (Microphone.devices.Length == 0) { app.Toast(Loc.T("اسمح بالميكروفون عشان تتكلم")); yield break; }
+            micDevice = Microphone.devices[0];
+            micClip = Microphone.Start(micDevice, true, 1, 48000);
+            micPos = 0;
+        }
         if (micTrack == null) micTrack = new AudioStreamTrack();
         micTrack.Enabled = true;
         Joined = true; MicMuted = false;
@@ -72,6 +93,10 @@ public class Voice : MonoBehaviour
         Joined = false;
         CloseAll();
         if (micDevice != null) Microphone.End(micDevice);
+#if UNITY_ANDROID && !UNITY_EDITOR
+        if (nativeMic) try { using (var c = new AndroidJavaClass("com.ahwa.voice.BBMic")) c.CallStatic("stop"); } catch (System.Exception) { }
+#endif
+        nativeMic = false;
         micTrack?.Dispose(); micTrack = null; micClip = null; micDevice = null;
     }
 
@@ -80,7 +105,19 @@ public class Voice : MonoBehaviour
     void Update()
     {
         // the microphone's new samples go to the outgoing audio track
-        if (!Joined || micClip == null || micTrack == null) return;
+        if (!Joined || micTrack == null) return;
+#if UNITY_ANDROID && !UNITY_EDITOR
+        if (nativeMic)
+        {
+            if (micJava == null) micJava = new AndroidJavaClass("com.ahwa.voice.BBMic");
+            var got = micJava.CallStatic<float[]>("read");
+            if (got == null || got.Length == 0) return;
+            if (MicMuted) System.Array.Clear(got, 0, got.Length);
+            micTrack.SetData(got, 1, 48000);
+            return;
+        }
+#endif
+        if (micClip == null) return;
         int pos = Microphone.GetPosition(micDevice);
         if (pos < 0 || pos == micPos) return;
         int n = pos > micPos ? pos - micPos : micClip.samples - micPos + pos;

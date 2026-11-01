@@ -431,9 +431,9 @@ public partial class Menus : MonoBehaviour
         {
             foreach (Transform c in area) Destroy(c.gameObject);
             var list = Scroll(area, 8);
-            Toggle(list, "الصوت", Sfx.SoundOn, v => { Sfx.SoundOn = v; if (v) Sfx.Tap(); });
-            Toggle(list, "الموسيقى", Music.On, v => { Music.On = v; });
-            Toggle(list, "أصوات القهوة", Music.CafeOn, v => { Music.CafeOn = v; });
+            Toggle(list, "الصوت", Sfx.SoundOn, v => { Sfx.SoundOn = v; if (v) Sfx.Tap(); app.game?.RefreshSound(); });
+            Toggle(list, "الموسيقى", Music.On, v => { Music.On = v; app.game?.RefreshSound(); });
+            Toggle(list, "أصوات القهوة", Music.CafeOn, v => { Music.CafeOn = v; app.game?.RefreshSound(); });
             Toggle(list, "الاهتزاز", Sfx.VibrateOn, v => { Sfx.VibrateOn = v; if (v) Sfx.Buzz(); });
             Toggle(list, "توفير البطارية", Perf.Saver, v => { Perf.Saver = v; });
             // language

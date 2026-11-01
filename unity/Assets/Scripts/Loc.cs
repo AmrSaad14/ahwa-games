@@ -76,7 +76,7 @@ public static class Loc
         ["تعادل"] = "Draw", ["تعادل، محدش سجّل"] = "A draw. Nobody scores.", ["اللعبة مقفولة  ·"] = "Blocked game  ·",
         ["العب تاني"] = "Play again",
         // settings
-        ["الصوت"] = "Sound", ["الموسيقى"] = "Music", ["حسابك اتفتح على موبايل تاني"] = "Your account was opened on another phone", ["انتهت مهلة تسجيل الدخول، جرّب تاني"] = "The sign-in timed out, please try again", ["كمّل الإعلان للآخر عشان تاخد الكوينز"] = "Watch the ad to the end to get the coins", ["خففنا الرسوم عشان اللعب يبقى أنعم"] = "Lighter graphics for smoother play", ["الموسيقى شغالة"] = "Music on", ["الموسيقى مقفولة"] = "Music off", ["الاهتزاز"] = "Vibration", ["اللغة"] = "Language",
+        ["الصوت"] = "Sound", ["الموسيقى"] = "Music", ["الصوت مقفول"] = "Sound off", ["الصوت رجع"] = "Sound on", ["حسابك اتفتح على موبايل تاني"] = "Your account was opened on another phone", ["انتهت مهلة تسجيل الدخول، جرّب تاني"] = "The sign-in timed out, please try again", ["كمّل الإعلان للآخر عشان تاخد الكوينز"] = "Watch the ad to the end to get the coins", ["خففنا الرسوم عشان اللعب يبقى أنعم"] = "Lighter graphics for smoother play", ["الموسيقى شغالة"] = "Music on", ["الموسيقى مقفولة"] = "Music off", ["الاهتزاز"] = "Vibration", ["اللغة"] = "Language",
         ["العربية"] = "العربية", ["English"] = "English", ["الحساب"] = "Account", ["اسمك"] = "Your name", ["حفظ"] = "Save",
         ["تسجيل الدخول بجوجل"] = "Sign in with Google", ["تسجيل الخروج"] = "Sign out",
         ["بتلعب كضيف. سجّل عشان فلوسك وتقدمك يتحفظوا."] = "You're playing as a guest. Sign in to keep your coins and progress.",
