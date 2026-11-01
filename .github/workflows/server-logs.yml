@@ -26,7 +26,7 @@ jobs:
           mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -T 15 "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
           N="${{ github.event.inputs.lines || '600' }}"
-          ssh root@"$HOST" "cd /opt/board-battles/app && docker compose -p board-battles logs --no-color --tail $N domino 2>&1; echo; echo '--- containers'; docker compose -p board-battles ps 2>&1" > /tmp/logs.txt 2>&1 || true
+          ssh root@"$HOST" "cd /opt/board-battles/app && docker compose -p board-battles logs --no-color --tail $N domino 2>&1; echo; echo '--- containers'; docker compose -p board-battles ps 2>&1; echo '--- volumes'; docker volume ls 2>&1; ls -la \$(docker volume inspect board-battles_domino-data -f '{{.Mountpoint}}') 2>&1; echo '--- users'; sqlite3 \$(docker volume inspect board-battles_domino-data -f '{{.Mountpoint}}')/domino.db \"SELECT COUNT(*), SUM(google_sub IS NOT NULL), datetime(MIN(created)/1000,'unixepoch'), datetime(MAX(created)/1000,'unixepoch') FROM users; SELECT substr(id,1,6), datetime(created/1000,'unixepoch'), datetime(seen/1000,'unixepoch'), google_sub IS NOT NULL FROM users ORDER BY seen DESC LIMIT 15;\" 2>&1" > /tmp/logs.txt 2>&1 || true
           openssl rand -out /tmp/k.bin 32
           openssl enc -aes-256-cbc -pbkdf2 -salt -in /tmp/logs.txt -out logs.enc -pass file:/tmp/k.bin
           openssl pkeyutl -encrypt -pubin -inkey .github/logs-public-key.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out key.enc
