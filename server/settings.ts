@@ -37,7 +37,7 @@ function defaults(): GameSettings {
     tourney: { enabled: true, weekday: TOURNEY.weekday, hour: TOURNEY.hour, game: 'rotate', prizes: [...TOURNEY.prizes], played: TOURNEY.played },
     season: { enabled: true, passCoins: SEASON_PASS.coins, passEgp: SEASON_PASS.egp, tiers: TIERS.map(t => ({ free: { ...t.free }, prem: { ...t.prem } })) },
     economy: { startCoins: ECONOMY.startCoins, adReward: ECONOMY.adReward, adsPerDay: ECONOMY.adsPerDay, tutorialCoins: ECONOMY.tutorialCoins, comebackCoins: ECONOMY.comebackCoins, comebackDays: ECONOMY.comebackDays, streak: [...STREAK], weeklyPrizes: [...WEEKLY_PRIZES] },
-    play: { botFillSeconds: 8, turnSeconds: 10 },
+    play: { botFillSeconds: 60, turnSeconds: 10 },
     maintenance: { on: false, message: 'السيرفر في صيانة دلوقتي، ارجع كمان شوية · Maintenance, back soon' },
     notice: { text: '', until: 0 },
     titles: { monthly: true, minGames: 10 },

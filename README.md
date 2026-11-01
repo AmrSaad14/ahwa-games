@@ -267,7 +267,7 @@ Settings worth knowing (the `SERVER_ENV` secret, then run Deploy server):
 | `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` | Support messages by e-mail |
 | `PUSH_TIMES` | Reminder times, default `14:00,20:00` (Cairo) |
 | `TOURNEY_WEEKDAY`, `TOURNEY_HOUR` | Tournament day (0 Sunday … 4 Thursday) and hour, Cairo time; default Thursday 21 |
-| `BOT_FILL_SECONDS` | How long matchmaking waits for people before computer players join (default 8) |
+| `BOT_FILL_SECONDS` | How long matchmaking waits for people before computer players join (default 60) |
 
 Test the tournament without waiting for Thursday: `https://YOUR-SERVER/admin/tourney?key=ADMIN_KEY&start=1` starts this
 week's tournament now with whoever signed up.
@@ -344,7 +344,7 @@ These platforms terminate HTTPS for you, so you don't need Caddy there. Set `TRU
 | `DB_PATH` | `/data/domino.db` (Docker) | SQLite database file |
 | `SECRET` | generated | Signs session tokens. If empty, one is generated and stored in the database |
 | `TURN_SECONDS` | `10` | Time a player has for each move; when it runs out a move is made for them |
-| `BOT_FILL_SECONDS` | `12` | How long quick match waits before computer players fill seats |
+| `BOT_FILL_SECONDS` | `60` | How long quick match waits before computer players fill seats |
 | `CHESS_MINUTES` | (per mode) | Forces one chess clock length for every chess mode. Normally each mode has its own: 1+0, 3+2, 5+2, 10+5 |
 | `NEXT_ROUND_SECONDS` | `7` | Pause between rounds |
 | `TRUST_PROXY` | off | Set to `1` behind Caddy, nginx or a platform proxy |
