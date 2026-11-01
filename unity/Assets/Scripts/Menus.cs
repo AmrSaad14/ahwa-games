@@ -187,11 +187,12 @@ public partial class Menus : MonoBehaviour
         // a friend's invite code from Google Play (or a link) waiting: credit them, once the account is new
         // a new player: the first-game guide, offered once (an easy game of dominoes with hints, and a gift)
         // once a session, on the home screen with nothing else open: the season pass, for players who don't have it
-        if (!seasonPromoShown && SeasonOn && dailyShown && !IsOpen && app.view == null && !App.Recording && !AdFilm.Any && u.Obj("season") != null && !u.Obj("season").Bool("premium")) { seasonPromoShown = true; ShowSeasonPromo(); }
+        // (both cards are for signed-in players only: a guest sees neither)
+        if (app.SignedIn && !seasonPromoShown && SeasonOn && dailyShown && !IsOpen && app.view == null && !App.Recording && !AdFilm.Any && u.Obj("season") != null && !u.Obj("season").Bool("premium")) { seasonPromoShown = true; ShowSeasonPromo(); }
         if (Growth.PendingCode != null && u.Bool("canRefer")) { app.Send(new Dictionary<string, object> { ["t"] = "referral", ["code"] = Growth.PendingCode }); Growth.PendingCode = null; }
         // each time the game opens, the daily rewards first (collect today's, or see when tomorrow's comes),
         // then the season pass card when it's closed
-        if (!dailyShown && app.view == null && !IsOpen && !App.Recording) { dailyShown = true; OpenDaily(); return; }
+        if (app.SignedIn && !dailyShown && app.view == null && !IsOpen && !App.Recording) { dailyShown = true; OpenDaily(); return; }
         refreshOpen?.Invoke();
     }
 
@@ -365,7 +366,7 @@ public partial class Menus : MonoBehaviour
         bool afterDaily = refreshOpen != null && refreshOpen == refreshDaily && !seasonPromoShown;
         if (open != null) Destroy(open.gameObject);
         open = null; refreshOpen = null;
-        if (afterDaily && user != null) StartCoroutine(SeasonAfterDaily());
+        if (afterDaily && user != null && app.SignedIn) StartCoroutine(SeasonAfterDaily());
     }
     public bool IsOpen => open != null;
 
@@ -1290,6 +1291,24 @@ public partial class Menus : MonoBehaviour
     }
 
     /* ---------- Google sign-in ---------- */
+
+    /// A new player types the code of the friend who invited them: you both get 50K after your first game.
+    public void AskReferral()
+    {
+        Panel(Loc.T("كود الدعوة"), out var body, new Vector2(440, 220));
+        refreshOpen = null;
+        var t = Ui.Label(body, "", 14, Ui.GoldLight); t.Set(Loc.T("اكتب كود صاحبك اللي دعاك، وانتو الاتنين هتاخدوا ٥٠ ألف كوين بعد أول دور تلعبه"));
+        t.horizontalOverflow = HorizontalWrapMode.Wrap; t.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(400, 44), new Vector2(0, -2));
+        var f = Field(body, Loc.T("كود صاحبك"), 18, false); f.characterLimit = 8;
+        ((RectTransform)f.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(220, 44), new Vector2(0, -60));
+        var go = Ui.Button(body, "تأكيد", Ui.Gold, Ui.Ink, 16, () =>
+        {
+            Sfx.Tap(); var c = f.text.Trim();
+            if (c.Length < 4) { app.Toast(Loc.T("اكتب الكود صح")); return; }
+            app.Send(new Dictionary<string, object> { ["t"] = "referral", ["code"] = c }); Close();
+        });
+        ((RectTransform)go.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(200, 44), new Vector2(0, 8));
+    }
 
     /// A yes/no question: the risky choice in red, the safe one in gold.
     public void Confirm(string title, string text, string yes, string no, Action onYes)

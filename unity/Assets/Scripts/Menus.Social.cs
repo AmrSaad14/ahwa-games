@@ -225,6 +225,12 @@ public partial class Menus
         At(Ui.Label(top, Loc.T("كودك") + ":  " + code, 16, Ui.Gold, StartAlign, Ui.Bold).rectTransform, 12, 170, 36);
         var cp = Ui.Button(top, "انسخ", new Color(1, 1, 1, 0.1f), Ui.GoldLight, 13, () => { Sfx.Tap(); GUIUtility.systemCopyBuffer = code; app.Toast(Loc.T("الكود اتنسخ")); });
         At((RectTransform)cp.transform, 186, 64, 30);
+        // a new player: who invited you (a button that stays while the code can still be used)
+        if (user != null && user.Bool("canRefer"))
+        {
+            var rf = Ui.Button(body, "عندك كود دعوة؟  +50K", Ui.Gold, Ui.Ink, 13, () => { Sfx.Tap(); AskReferral(); });
+            ((RectTransform)rf.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(240, 34), new Vector2(0, 0));
+        }
         var inv = Ui.Button(top, "ادعي صحابك  +50K", new Color32(0x2f, 0x6b, 0x3a, 0xff), Color.white, 13, () => { Sfx.Tap(); ShareInvite(); });
         At((RectTransform)inv.transform, 258, 160, 30);
         var field = Field(top, Loc.T("كود صاحبك"), 13, false);
@@ -237,7 +243,8 @@ public partial class Menus
         });
         At((RectTransform)add.transform, 530, 62, 30);
 
-        var listArea = Ui.Rect("List", body); listArea.anchorMin = Vector2.zero; listArea.anchorMax = Vector2.one; listArea.offsetMin = Vector2.zero; listArea.offsetMax = new Vector2(0, -48);
+        var listArea = Ui.Rect("List", body); listArea.anchorMin = Vector2.zero; listArea.anchorMax = Vector2.one;
+        listArea.offsetMin = new Vector2(0, user != null && user.Bool("canRefer") ? 40 : 0); listArea.offsetMax = new Vector2(0, -48);
         if (friendRows == null) { Ui.Label(listArea, Loc.T("جاري التحميل…"), 15, Ui.GoldLight).rectTransform.Fill(); return; }
         if (friendRows.Count == 0) { Ui.Label(listArea, Loc.T("لسه مفيش صحاب. ابعت كودك أو دوس على أي لاعب في الترابيزة وضيفه"), 14, Ui.GoldLight).rectTransform.Fill(); return; }
         var list = Scroll(listArea, 5);
