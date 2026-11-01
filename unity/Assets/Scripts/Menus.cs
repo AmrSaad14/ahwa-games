@@ -71,10 +71,11 @@ public partial class Menus : MonoBehaviour
 
         // along the top, left of your name and coins: watch an ad, sign in, language
         var ad = Chip(home, "video", "+2K", new Vector2(-252, -10), 98, new Color32(0x2f, 0x6b, 0x3a, 0xf0), Color.white, WatchAd);
-        adText = ad.GetComponentInChildren<Text>();
+        adText = ad.GetComponentInChildren<Text>(); adRect = (RectTransform)ad.transform; prizeRect = (RectTransform)prize.transform; homeRect = home;
         // (the language is changed in Settings only)
         var sign = Chip(home, "google", "دخول", new Vector2(-388, -10), 92, new Color(1, 1, 1, 0.94f), Ui.Ink, SignIn);
         signChip = sign.gameObject; signText = sign.GetComponentInChildren<Text>();
+        LayoutTop();
 
         Loc.Changed += () => { refreshOpen?.Invoke(); };
         Application.deepLinkActivated += OnLink;
@@ -155,6 +156,7 @@ public partial class Menus : MonoBehaviour
         bool signed = !string.IsNullOrEmpty(u.Str("google")) || !string.IsNullOrEmpty(u.Str("apple")) || !string.IsNullOrEmpty(u.Str("phone")) || !string.IsNullOrEmpty(u.Str("email"));
         signChip.SetActive(!signed);
         ApplyFeatures(u.Obj("features"));
+        LayoutTop();
         // the event on now: its limited skins in the shop, and the banner
         var ev = u.Obj("event");
         Skins.EventKind = ev?.Str("kind");
@@ -382,6 +384,7 @@ public partial class Menus : MonoBehaviour
             int idx = i;
             var b = Ui.Button(body, labels[i], i == sel ? Ui.Gold : new Color(1, 1, 1, 0.07f), i == sel ? Ui.Ink : Ui.GoldLight, labels.Length >= 7 ? 12 : 14, () => { Sfx.Tap(); pick(idx); });
             var bt = b.GetComponentInChildren<Text>(); bt.resizeTextForBestFit = true; bt.resizeTextMinSize = 9; bt.resizeTextMaxSize = labels.Length >= 7 ? 12 : 14; bt.rectTransform.offsetMin = new Vector2(4, 0); bt.rectTransform.offsetMax = new Vector2(-4, 0);
+            bt.horizontalOverflow = HorizontalWrapMode.Wrap; bt.verticalOverflow = VerticalWrapMode.Truncate;   // a long label shrinks inside its tab
             ((RectTransform)b.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(w, 30), new Vector2((k - (labels.Length - 1) / 2f) * (w + 6), 0));
         }
         var area = Ui.Rect("Area", body);
@@ -536,6 +539,8 @@ public partial class Menus : MonoBehaviour
     /// waits for you to collect it; once collected it counts down to tomorrow's.
     public void OpenDaily()
     {
+        // the daily reward is for signed-in players (a guest is asked to sign in first)
+        if (!app.SignedIn && !App.Recording) { AskSignIn(null, false, "سجّل دخولك عشان تاخد مكافأة كل يوم"); return; }
         Panel(Loc.T("مكافأة النهارده"), out var body, new Vector2(660, 312));
         var area = Ui.Rect("Area", body); area.Fill();
         refreshDaily = refreshOpen = () =>
@@ -631,9 +636,26 @@ public partial class Menus : MonoBehaviour
         dailyCountdown.Set(Loc.T("المكافأة الجاية بعد") + "  " + (left / 3600).ToString("0") + ":" + (left / 60 % 60).ToString("00") + ":" + (left % 60).ToString("00"));
     }
 
+    RectTransform adRect, prizeRect, homeRect;
+    float lastWidth;
+    /// The chips along the top: on a wide phone the sign-in chip sits beside the ad chip; on a narrower screen
+    /// (16:9, tablets) that would cover "How to play" and "Settings", so the ad chip drops to a second row.
+    void LayoutTop()
+    {
+        if (homeRect == null || adRect == null) return;
+        lastWidth = homeRect.rect.width;
+        int n = 0; foreach (var b in topButtons) if (b.gameObject.activeSelf) n++;
+        float topEnd = 82 + n * 60;
+        bool narrow = signChip.activeSelf && lastWidth > 0 && lastWidth - 480 < topEnd + 6;
+        ((RectTransform)signChip.transform).anchoredPosition = narrow ? new Vector2(-252, -10) : new Vector2(-388, -10);
+        adRect.anchoredPosition = narrow ? new Vector2(-252, -58) : new Vector2(-252, -10);
+        prizeRect.anchoredPosition = narrow ? new Vector2(-356, -64) : new Vector2(-252, -62);
+    }
+
     float dailyTick;
     void Update()
     {
+        if (homeRect != null && Mathf.Abs(homeRect.rect.width - lastWidth) > 1) LayoutTop();
         if (dailyCountdown == null) return;
         dailyTick += Time.unscaledDeltaTime;
         if (dailyTick < 0.5f) return;
@@ -1325,10 +1347,10 @@ public partial class Menus : MonoBehaviour
     }
 
     /// Online games need an account: sign in with Google (or Apple), or play the computer for now.
-    public void AskSignIn(string mode, bool welcome = false)
+    public void AskSignIn(string mode, bool welcome = false, string why = null)
     {
         Sfx.Tap();
-        Panel(Loc.T(welcome ? "أهلاً! عندك حساب؟" : "سجّل دخولك عشان تلعب أونلاين"), out var body, new Vector2(440, appleOn ? 300 : 250));
+        Panel(Loc.T(why ?? (welcome ? "أهلاً! عندك حساب؟" : "سجّل دخولك عشان تلعب أونلاين")), out var body, new Vector2(440, appleOn ? 300 : 250));
         refreshOpen = null;
         var t = Ui.Label(body, "", 13, Ui.GoldLight); t.Set(Loc.T(welcome ? "سجّل دخول بنفس الحساب وكل كوينزك وتقدمك يرجعوا، أو اعمل حساب جديد عشان تلعب أونلاين" : "اللعب أونلاين مع ناس حقيقية محتاج حساب، وكوينزك وصورتك وتقدمك بيتحفظوا"));
         t.horizontalOverflow = HorizontalWrapMode.Wrap; t.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(400, 40), new Vector2(0, -2));

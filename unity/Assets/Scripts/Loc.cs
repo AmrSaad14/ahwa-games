@@ -163,7 +163,7 @@ public static class Loc
         ["لسه معندكش ألقاب"] = "No titles yet", ["لحد"] = "Until", ["اقلعه"] = "Take off", ["البسه"] = "Wear", ["اللقب ده مش عندك"] = "You don't have that title",
         ["لأعلى نقط الشهر"] = "Most points this month", ["مفيش متصدر لسه"] = "No leader yet", ["المتصدر"] = "Leader",
         ["مبروك! بقيت"] = "Congratulations! You are", ["الشهر ده كله"] = "all this month",
-        ["الموسم المميز"] = "Premium season", ["سكين في كل مستوى (٣٠ سكين) + بدون إعلانات لآخر الموسم"] = "A skin at every tier (30 skins) + no ads until the season ends",
+        ["الموسم المميز"] = "Premium season", ["سجّل دخولك عشان تاخد مكافأة كل يوم"] = "Sign in to collect a reward every day", ["سجّل دخولك عشان تفتح جوايز الموسم"] = "Sign in to unlock the season rewards", ["سكين في كل مستوى (٣٠ سكين) + بدون إعلانات لآخر الموسم"] = "A skin at every tier (30 skins) + no ads until the season ends",
         ["كوينز ببلاش"] = "Free coins", ["شوف إعلان وخد"] = "Watch an ad, get", ["فاضلك النهارده"] = "Left today",
         ["شوف الإعلان"] = "Watch the ad", ["خلصت إعلانات النهارده"] = "No ads left today",
         ["العب"] = "Play", ["ماتش أونلاين كمان وتقدر تسحب"] = "more online games to cash out",

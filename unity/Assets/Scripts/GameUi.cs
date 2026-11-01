@@ -62,7 +62,7 @@ public class GameUi : MonoBehaviour
         var tex = QuickChat.Emoji(k);
         if (tex == null) return;
         Vector2 at;
-        if (seat == v.you) at = new Vector2(-root.rect.width / 2 + 120, -root.rect.height / 2 + (v.Board ? 150 : 200));
+        if (seat == v.you) at = new Vector2(-root.rect.width / 2 + 104, -root.rect.height / 2 + 70);   // bottom left: clear of the turn timer and its hint
         else
         {
             int pos = System.Array.IndexOf(app.dominoTable.posToSeat, seat);
@@ -440,6 +440,9 @@ public class GameUi : MonoBehaviour
         sb.rectTransform.Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(300, 34), new Vector2(100, -10));
         scoreText = Ui.Label(sb.transform, "", 15, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
         scoreText.rectTransform.Fill(6);
+        // four players' names shrink to fit the bar instead of spilling over "leave"
+        scoreText.horizontalOverflow = HorizontalWrapMode.Wrap; scoreText.verticalOverflow = VerticalWrapMode.Truncate;
+        scoreText.resizeTextForBestFit = true; scoreText.resizeTextMinSize = 9; scoreText.resizeTextMaxSize = 15;
         roundText = Ui.Label(hud, "", 13, Ui.GoldLight, TextAnchor.MiddleRight);
         roundText.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(200, 24), new Vector2(-14, -14));
 
@@ -569,7 +572,9 @@ public class GameUi : MonoBehaviour
         matchPanel = mp.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(400, 220), new Vector2(0, 10));
         mp.gameObject.AddComponent<Outline>().effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.5f);
         matchTitle = Ui.Label(matchPanel, "", 26, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold);
-        matchTitle.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(380, 40), new Vector2(0, -16));
+        matchTitle.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 40), new Vector2(0, -16));
+        // long names ("Hajj Mahmoud won the match") shrink to fit instead of running under the share button
+        matchTitle.resizeTextForBestFit = true; matchTitle.resizeTextMinSize = 16; matchTitle.resizeTextMaxSize = 26;
         matchSub = Ui.Label(matchPanel, "", 15, Color.white);
         matchSub.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(380, 30), new Vector2(0, -60));
         payoutText = Ui.Label(matchPanel, "", 20, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Bold);
@@ -884,8 +889,14 @@ public class GameUi : MonoBehaviour
     void RenderBoard(TableView v)
     {
         var parts = new List<string>();
-        for (int s = 0; s < v.seats.Count; s++) parts.Add(NameOf(v, s) + " " + (v.scores.Count > s ? v.scores[s] : 0));
-        scoreText.Set(string.Join("   ·   ", parts));
+        bool many = v.seats.Count > 2;
+        for (int s = 0; s < v.seats.Count; s++)
+        {
+            var nm = NameOf(v, s);
+            if (many && s != v.you) { int sp = nm.IndexOf(' '); if (sp > 0 && sp < nm.Length - 1) nm = nm.Substring(sp + 1); }   // "Hajj Mahmoud" → "Mahmoud"
+            parts.Add(nm + " " + (v.scores.Count > s ? v.scores[s] : 0));
+        }
+        scoreText.Set(string.Join(many ? "  ·  " : "   ·   ", parts));
         string modeName = BoardModeNames.TryGetValue(v.mode, out var mn) ? Loc.T(mn) : v.mode;
         roundText.Set(v.game == "tawla" ? modeName + "  ·  " + Loc.T("إلى") + " " + v.target + (v.stake > 0 ? Loc.T("  ·  رهان ") + Short(v.stake) : "")
             : modeName + (v.stake > 0 ? Loc.T("  ·  رهان ") + Short(v.stake) : ""));
@@ -1007,7 +1018,7 @@ public class GameUi : MonoBehaviour
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
             // on screen, and clear of the top bar
             float halfH = root.rect.height / 2, halfW = root.rect.width / 2;
-            local.y = Mathf.Min(local.y, halfH - 66); local.x = Mathf.Clamp(local.x, -halfW + 70, halfW - 70);
+            local.y = Mathf.Min(local.y, halfH - 66); local.x = Mathf.Clamp(local.x, -halfW + 104, halfW - 150);   // clear of the screen edge and the mic / chat / sound buttons on the right
             rt.anchoredPosition = local;
             string extra = "";
             if (!s.bot && s.back > 0) extra = "  ·  " + Loc.T("بيرجع") + " " + Mathf.Max(0, Mathf.CeilToInt((float)((s.back - app.ServerNow()) / 1000))) + Loc.T("ث");

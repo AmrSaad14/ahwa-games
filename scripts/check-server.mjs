@@ -58,6 +58,12 @@ await new Promise(resolve => {
       clearTimeout(timer); setTimeout(finish, 300);
     }
     if (m.t === 'err') console.log('  (server said: ' + m.code + ')');
+    // production keeps online play for signed-in players: a guest being turned away is the right answer
+    if (m.t === 'err' && m.code === 'sign_in_required' && !seen.has('queued')) {
+      seen.add('queued');
+      ok('matchmaking answers (guests are asked to sign in)', true, m.code);
+      clearTimeout(timer); setTimeout(finish, 300);
+    }
   });
 });
 

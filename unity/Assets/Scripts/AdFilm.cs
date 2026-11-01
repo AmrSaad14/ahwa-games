@@ -50,7 +50,7 @@ public class AdFilm : MonoBehaviour
         StartCoroutine(Film());
     }
 
-    float Start(string id, float def = 0) { foreach (var l in lines) if (l.id == id) return l.start; return def; }
+    float LineStart(string id, float def = 0) { foreach (var l in lines) if (l.id == id) return l.start; return def; }
     float End(string id, float def = 0) { foreach (var l in lines) if (l.id == id) return l.end; return def; }
 
     void LateUpdate()
@@ -116,50 +116,50 @@ public class AdFilm : MonoBehaviour
             string speaking = Speaker(t);
             if (fathi != null) fathi.LookAt(speaking == "hajj" && hajj != null ? FaceOf(hajj) : camAt);
             if (hajj != null) hajj.LookAt(speaking == "fathi" && fathi != null ? FaceOf(fathi) : camAt);
-            if (t < Start("l2", 6.3f))
+            if (t < LineStart("l2", 6.3f))
             {
                 // 1. Am Fathi alone, close; when he names Hajj Mahmoud the camera pulls back to show them both
                 if (fathi != null && hajj != null)
                 {
-                    float wide = Ui.Ease(Mathf.Clamp01((t - Start("l1") - 2.4f) / 1.8f));
+                    float wide = Ui.Ease(Mathf.Clamp01((t - LineStart("l1") - 2.4f) / 1.8f));
                     var (cp, cl) = Close(fathi, 3.4f - 0.3f * Mathf.Clamp01(t / 2.4f), 0.5f);
                     var (wp, wl) = Two(1f - 0.08f * Mathf.Clamp01((t - 4f) / 3f));
                     cam.Shot(Vector3.Lerp(cp, wp, wide), Vector3.Lerp(cl, wl, wide));
                 }
             }
-            else if (t < Start("l3", 10.7f))
+            else if (t < LineStart("l3", 10.7f))
             {
                 // 2. the café: a slow glide past the tables (dominoes, tawla, chess, ludo)
-                float k = Mathf.Clamp01((t - Start("l2")) / Mathf.Max(0.1f, Start("l3") - Start("l2")));
+                float k = Mathf.Clamp01((t - LineStart("l2")) / Mathf.Max(0.1f, LineStart("l3") - LineStart("l2")));
                 var c = cam.Center; var f = cam.Front; var r = Vector3.Cross(Vector3.up, f);
                 var pos = c + f * 24f + r * Mathf.Lerp(-10f, 10f, Ui.Ease(k)) + Vector3.up * Mathf.Lerp(13f, 10f, k);
                 cam.Shot(pos, c + r * Mathf.Lerp(-5f, 5f, k) + Vector3.up * 2f);
             }
-            else if (t < Start("l5", 15.2f))
+            else if (t < LineStart("l5", 15.2f))
             {
                 // 3. Hajj Mahmoud, sure no one can beat him; on his own line he throws his arms up
                 if (hajj != null)
                 {
-                    float k = Mathf.Clamp01((t - Start("l3")) / 4f);
+                    float k = Mathf.Clamp01((t - LineStart("l3")) / 4f);
                     // he throws his arms up on his line: the camera steps back to keep them in the picture
-                    float cheer = Ui.Ease(Mathf.Clamp01((t - Start("l4", 13.7f) + 0.2f) / 0.6f));
+                    float cheer = Ui.Ease(Mathf.Clamp01((t - LineStart("l4", 13.7f) + 0.2f) / 0.6f));
                     var (p3, l3) = Close(hajj, Mathf.Lerp(Mathf.Lerp(3.6f, 2.9f, k), 6.5f, cheer), -0.7f);
                     p3 += Vector3.up * cheer * 0.8f;
                     cam.Shot(p3, l3);
-                    if (!hajjCheered && t >= Start("l4", 13.7f)) { hajjCheered = true; hajj.Win(); }
+                    if (!hajjCheered && t >= LineStart("l4", 13.7f)) { hajjCheered = true; hajj.Win(); }
                 }
             }
-            else if (t < Start("l6", 18.3f) - 0.4f)
+            else if (t < LineStart("l6", 18.3f) - 0.4f)
             {
                 // 4. Am Fathi, close, leaning in: "so we brought the café to your phone"
                 if (fathi != null)
                 {
-                    float k = Mathf.Clamp01((t - Start("l5")) / 3f);
+                    float k = Mathf.Clamp01((t - LineStart("l5")) / 3f);
                     var (p4, l4) = Close(fathi, Mathf.Lerp(3.2f, 2.4f, Ui.Ease(k)), 0.6f);
                     cam.Shot(p4, l4);
                 }
             }
-            else if (t < Start("l7", 22.3f) - 0.2f)
+            else if (t < LineStart("l7", 22.3f) - 0.2f)
             {
                 // 5. the game itself: a real game of dominoes for four, played here
                 if (!inGame) { inGame = true; cam.Shot(null); app.Practice("ffa4"); }
@@ -171,7 +171,7 @@ public class AdFilm : MonoBehaviour
                 if (inGame) { inGame = false; app.Leave(); app.HideHome(); }
                 if (fathi != null && hajj != null)
                 {
-                    float k = Ui.Ease(Mathf.Clamp01((t - Start("l7")) / 5f));
+                    float k = Ui.Ease(Mathf.Clamp01((t - LineStart("l7")) / 5f));
                     var (p6, l6) = Two(Mathf.Lerp(0.95f, 1.25f, k));
                     cam.Shot(p6 + Vector3.up * k, l6);
                     if (!fathiCheered && t > End("l7", 25.5f) - 0.6f) { fathiCheered = true; fathi.Win(); hajj.Win(); }
