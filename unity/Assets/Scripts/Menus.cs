@@ -72,9 +72,9 @@ public partial class Menus : MonoBehaviour
         // along the top, left of your name and coins: watch an ad, sign in, language
         var ad = Chip(home, "video", "+2K", new Vector2(-252, -10), 98, new Color32(0x2f, 0x6b, 0x3a, 0xf0), Color.white, WatchAd);
         adText = ad.GetComponentInChildren<Text>();
-        var lang = Chip(home, "globe", Loc.En ? "ع" : "EN", new Vector2(-488, -62), 66, Ui.Panel, Ui.GoldLight, () => { Sfx.Tap(); Loc.Set(!Loc.En); });
+        var lang = Chip(home, "globe", Loc.En ? "ع" : "EN", new Vector2(-488, -10), 66, Ui.Panel, Ui.GoldLight, () => { Sfx.Tap(); Loc.Set(!Loc.En); });
         langText = lang.GetComponentInChildren<Text>();
-        var sign = Chip(home, "google", "دخول", new Vector2(-388, -62), 92, new Color(1, 1, 1, 0.94f), Ui.Ink, SignIn);
+        var sign = Chip(home, "google", "دخول", new Vector2(-388, -10), 92, new Color(1, 1, 1, 0.94f), Ui.Ink, SignIn);
         signChip = sign.gameObject; signText = sign.GetComponentInChildren<Text>();
 
         Loc.Changed += () => { langText.Set(Loc.En ? "ع" : "EN"); refreshOpen?.Invoke(); };
@@ -204,7 +204,7 @@ public partial class Menus : MonoBehaviour
             case "welcome":
                 var login = m.Obj("login");
                 if (login != null) { googleOn = login.Bool("google"); appleOn = login.Bool("apple"); }
-                if (pendingTicket != null) { app.Send(new Dictionary<string, object> { ["t"] = "ticket", ["ticket"] = pendingTicket }); pendingTicket = null; }
+                if (pendingTicket != null) { var tk = pendingTicket; pendingTicket = null; app.Send(new Dictionary<string, object> { ["t"] = "ticket", ["ticket"] = tk }); }
                 if (pendingJoin != null) { var j = pendingJoin; pendingJoin = null; StartCoroutine(JoinSoon(j)); }
                 break;
             case "signedIn":
@@ -246,7 +246,13 @@ public partial class Menus : MonoBehaviour
                     Ads.Rewarded(user?.Str("id"), ticket, watched =>
                     {
                         adShowing = false;
-                        if (!watched) { app.Toast(Loc.T("الإعلان مش جاهز، جرّب تاني")); return; }
+                        if (!watched)
+                        {
+                            if (!Ads.Unavailable) { app.Toast(Loc.T("كمّل الإعلان للآخر عشان تاخد الكوينز")); return; }
+                            string why = Ads.LastError;
+                            app.Toast(Loc.T("الإعلان مش جاهز، جرّب تاني") + (string.IsNullOrEmpty(why) ? "" : "  (" + why + ")"), 5f);
+                            return;
+                        }
                         if (!ssv) app.Send(new Dictionary<string, object> { ["t"] = "adWatched", ["ticket"] = ticket });
                     });
                 }
@@ -284,7 +290,7 @@ public partial class Menus : MonoBehaviour
         switch (code)
         {
             case "ad_limit": app.Toast(Loc.T("خلصت إعلانات النهارده، تعالى بكرة")); return true;
-            case "ticket_expired": app.Toast(Loc.T("تسجيل الدخول بجوجل مش متاح على السيرفر ده")); return true;
+            case "ticket_expired": app.Toast(Loc.T("انتهت مهلة تسجيل الدخول، جرّب تاني")); return true;
             case "sign_in_first": app.Toast(Loc.T("سجّل دخول الأول عشان تقدر تسحب")); return true;
             case "bad_wallet": app.Toast(Loc.T("اكتب رقم فودافون صحيح يبدأ بـ 010")); return true;
             case "prize_gone": app.Toast(Loc.T("الجايزة دي مش متاحة")); return true;
@@ -1341,6 +1347,16 @@ public partial class Menus : MonoBehaviour
         Application.OpenURL(app.net.HttpBase + "/auth/" + provider + "/start?to=app");
     }
 
+    IEnumerator SendTicketSoon()
+    {
+        yield return new WaitForSeconds(1.2f);
+        if (pendingTicket != null && app.net != null && app.net.Open && user != null)
+        {
+            app.Send(new Dictionary<string, object> { ["t"] = "ticket", ["ticket"] = pendingTicket }); pendingTicket = null;
+        }
+        // otherwise the next "welcome" sends it
+    }
+
     string pendingJoin;
     IEnumerator JoinSoon(string code) { yield return new WaitForSeconds(0.5f); app.JoinRoom(code); }
     void OnLink(string url)
@@ -1361,7 +1377,9 @@ public partial class Menus : MonoBehaviour
         int q = url.IndexOf("ticket=", StringComparison.Ordinal);
         if (q < 0) return;
         var ticket = Uri.UnescapeDataString(url.Substring(q + 7).Split('&')[0]);
-        if (app.net != null && app.net.Online) app.Send(new Dictionary<string, object> { ["t"] = "ticket", ["ticket"] = ticket });
-        else pendingTicket = ticket;
+        // coming back from the browser, the app reconnects (Net.Resume): keep the ticket and send it once the
+        // connection is settled, so it is never sent into a socket that is just being closed
+        pendingTicket = ticket;
+        StartCoroutine(SendTicketSoon());
     }
 }

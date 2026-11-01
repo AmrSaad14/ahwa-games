@@ -7,7 +7,9 @@
     <activity android:name="com.unity3d.player.UnityPlayerActivity"
               android:theme="@style/UnityThemeSelector"
               android:exported="true"
-              android:launchMode="singleTask">
+              android:launchMode="singleTask"
+              android:screenOrientation="sensorLandscape"
+              tools:replace="android:screenOrientation">
       <intent-filter>
         <action android:name="android.intent.action.MAIN" />
         <category android:name="android.intent.category.LAUNCHER" />

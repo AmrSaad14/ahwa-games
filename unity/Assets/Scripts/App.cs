@@ -65,6 +65,10 @@ public class App : MonoBehaviour
         I = this;
         Application.targetFrameRate = 60;
         Screen.sleepTimeout = SleepTimeout.NeverSleep;
+        // either way round in landscape: the game turns with the phone (camera on the left or the right)
+        Screen.autorotateToLandscapeLeft = true; Screen.autorotateToLandscapeRight = true;
+        Screen.autorotateToPortrait = false; Screen.autorotateToPortraitUpsideDown = false;
+        Screen.orientation = ScreenOrientation.AutoRotation;
         QualitySettings.shadowDistance = 60;
         QualitySettings.shadows = ShadowQuality.All;
         QualitySettings.shadowResolution = ShadowResolution.High;
@@ -118,6 +122,7 @@ public class App : MonoBehaviour
         net = new Net();
         net.OnMessage += OnMessage;
         net.OnOnline += SetStatus;
+        net.OnReplaced += () => Toast(Loc.T("حسابك اتفتح على موبايل تاني"), 6f);
         if (!AdFilm.Any)   // filming the advert: no server, no ads, nothing popping up over the café
         {
             net.Start();

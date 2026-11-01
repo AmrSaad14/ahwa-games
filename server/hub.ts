@@ -796,6 +796,7 @@ export class Hub {
   private signIn(s: Session, via: 'phone' | 'google' | 'playgames' | 'apple', key: string, email: string | null, name: string | null, photo: string | null = null) {
     const uid = s.uid; if (!uid) return;
     const existing = via === 'phone' ? this.store.byPhone(key) : via === 'google' ? this.store.byGoogle(key) : via === 'apple' ? this.store.byApple(key) : this.store.byPlayGames(key);
+    console.log(`[signin] ${via}: session ${uid.slice(0, 6)} → ${existing ? 'existing ' + existing.id.slice(0, 6) + (existing.banned ? ' (banned)' : '') : 'new link'}`);
     if (existing) {
       if (photo) this.store.setPhoto(existing.id, photo);   // the picture follows the Google account
       if (existing.id !== uid) { this.detach(s); this.attach(s, existing); } else if (photo) this.sendUser(uid);

@@ -78,8 +78,22 @@ public static class Ads
     public static void Rewarded(string userId, string ticket, Action<bool> done)
     {
         if (!Available || !Call("showRewarded", userId ?? "", ticket ?? "")) { done?.Invoke(false); return; }
-        earned = false; rewardDone = done;
+        earned = false; rewardDone = done; Unavailable = false;
         Sfx.Pause(true);
+    }
+
+    /// The last ad couldn't be shown at all (not loaded, or the network said no), and why.
+    public static bool Unavailable { get; private set; }
+    public static string LastError
+    {
+        get
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            try { using (var c = new AndroidJavaClass("com.ahwa.ads.BBAds")) return c.CallStatic<string>("lastError"); }
+            catch (Exception) { }
+#endif
+            return "";
+        }
     }
 
     /// From Java, through App.OnAdEvent.
@@ -95,6 +109,7 @@ public static class Ads
             case "reward_earned": earned = true; break;
             case "reward_closed":
             case "reward_unavailable":
+                if (e == "reward_unavailable") Unavailable = true;
                 Sfx.Pause(false);
                 var r = rewardDone; rewardDone = null; r?.Invoke(e == "reward_closed" && earned);
                 break;

@@ -23,6 +23,8 @@ public class Net
     float lastPing;
 
     public bool Online { get; private set; }
+    /// The socket is open right now (Online can lag a moment behind a dropped connection).
+    public bool Open { get { var w = ws; return w != null && w.State == WebSocketState.Open; } }
     public event Action<Dictionary<string, object>> OnMessage;
     public event Action<bool> OnOnline;
 
@@ -63,7 +65,9 @@ public class Net
         try { if (ws == null || ws.State != WebSocketState.Open) { wake.Cancel(); wake = new CancellationTokenSource(); } else ws.Abort(); } catch { }
         quickRetry = true;
     }
-    volatile bool quickRetry;
+    volatile bool quickRetry, replaced;
+    /// The account was opened on another phone (this one stays offline until the player comes back to it).
+    public event Action OnReplaced;
 
     async Task Run()
     {
@@ -82,7 +86,12 @@ public class Net
                 while (ws.State == WebSocketState.Open && !stop.IsCancellationRequested)
                 {
                     var r = await ws.ReceiveAsync(new ArraySegment<byte>(buf), stop.Token);
-                    if (r.MessageType == WebSocketMessageType.Close) break;
+                    if (r.MessageType == WebSocketMessageType.Close)
+                    {
+                        // the same account opened on another phone: don't fight it for the connection
+                        if ((int?)ws.CloseStatus == 4001) replaced = true;
+                        break;
+                    }
                     for (int i = 0; i < r.Count; i++) msg.Add(buf[i]);
                     if (!r.EndOfMessage) continue;
                     inbox.Enqueue(Encoding.UTF8.GetString(msg.ToArray()));
@@ -94,6 +103,14 @@ public class Net
                 if (!stop.IsCancellationRequested) inbox.Enqueue("\u0001log " + e.GetType().Name + ": " + e.Message + (e.InnerException != null ? " / " + e.InnerException.Message : ""));
             }
             inbox.Enqueue("\u0001closed");
+            if (replaced)
+            {
+                // wait until the player comes back to this phone (Resume) before taking the account back
+                inbox.Enqueue("\u0001replaced");
+                try { using (var both = CancellationTokenSource.CreateLinkedTokenSource(stop.Token, wake.Token)) await Task.Delay(Timeout.Infinite, both.Token); } catch { }
+                replaced = false; backoff = 300;
+                continue;
+            }
             if (quickRetry) { quickRetry = false; backoff = 300; }
             try { using (var both = CancellationTokenSource.CreateLinkedTokenSource(stop.Token, wake.Token)) await Task.Delay(backoff, both.Token); } catch { }
             backoff = Math.Min(backoff * 2, 15000);
@@ -131,6 +148,7 @@ public class Net
                     Debug.Log("[net] connected to " + url);
                 }
                 else if (s == "\u0001closed") { if (Online) { Online = false; OnOnline?.Invoke(false); } }
+                else if (s == "\u0001replaced") OnReplaced?.Invoke();
                 else Debug.Log("[net] " + s.Substring(1));
                 continue;
             }

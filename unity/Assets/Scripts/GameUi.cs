@@ -442,7 +442,7 @@ public class GameUi : MonoBehaviour
         for (int p = 0; p < 4; p++)
         {
             var bg = Ui.Box(hud, "Seat" + p, new Color(0.1f, 0.06f, 0.04f, 0.8f));
-            bg.rectTransform.Place(new Vector2(0, 0), new Vector2(0.5f, 0.5f), new Vector2(130, 30), Vector2.zero);
+            bg.rectTransform.Place(new Vector2(0, 0), new Vector2(0.5f, 0.5f), new Vector2(160, 32), Vector2.zero);
             seatTagBg[p] = bg;
             seatTags[p] = Ui.Label(bg.transform, "", 13, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
             seatTags[p].rectTransform.Fill(4);
@@ -452,7 +452,8 @@ public class GameUi : MonoBehaviour
             seatCpu[p].color = new Color(1, 1, 1, 0.8f);
             // their photo (or their character's face) at the start of the name tag
             seatFace[p] = Ui.Picture(bg.transform, "Face", Menus.Face(0));
-            seatFace[p].rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(30, 30), new Vector2(-17, 0));
+            seatFace[p].rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(28, 28), new Vector2(2, 0));
+            seatTags[p].rectTransform.offsetMin = new Vector2(32, 2);   // the name starts after the photo
             // tap a player: their card (stats, add friend, mute, report)
             int pos = p;
             bg.gameObject.AddComponent<Button>().onClick.AddListener(() => { int seat = app.dominoTable.posToSeat[pos]; if (seat >= 0) { Sfx.Tap(); app.menus.OpenCardSeat(seat); } });
