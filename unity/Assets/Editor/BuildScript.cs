@@ -167,6 +167,21 @@ public static class BuildScript
         string store = Path.GetFullPath("release.keystore");
         if (!File.Exists(store) || string.IsNullOrEmpty(pass) || string.IsNullOrEmpty(alias))
         {
+            // test builds: one fixed key kept in the repository (unity/test.keystore, public: for testing only, never
+            // for Google Play), so each new APK installs over the last one and keeps the player signed in.
+            // (Unity's own debug key is made fresh on every build machine: Android then refused the update and the
+            // app had to be uninstalled, which wiped the saved sign-in.)
+            string test = Path.GetFullPath("test.keystore");
+            if (File.Exists(test))
+            {
+                PlayerSettings.Android.useCustomKeystore = true;
+                PlayerSettings.Android.keystoreName = test;
+                PlayerSettings.Android.keystorePass = "boardbattles-test";
+                PlayerSettings.Android.keyaliasName = "test";
+                PlayerSettings.Android.keyaliasPass = "boardbattles-test";
+                Debug.Log("[build] signing: the test key (no upload key set)");
+                return false;
+            }
             PlayerSettings.Android.useCustomKeystore = false;
             Debug.Log("[build] signing: debug key (no upload key set)");
             return false;

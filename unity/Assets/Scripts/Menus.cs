@@ -187,6 +187,8 @@ public partial class Menus : MonoBehaviour
         // a friend's invite code from Google Play (or a link) waiting: credit them, once the account is new
         // a new player: the first-game guide, offered once (an easy game of dominoes with hints, and a gift)
         // once a session, on the home screen with nothing else open: the season pass, for players who don't have it
+        // a new install with no saved account: offer to sign in (and get an existing account back) once
+        if (app.FreshInstall && !welcomeAsked && !app.SignedIn && !IsOpen && app.view == null && !App.Recording && !AdFilm.Any) { welcomeAsked = true; AskSignIn(null, true); }
         // (both cards are for signed-in players only: a guest sees neither)
         if (app.SignedIn && !seasonPromoShown && SeasonOn && dailyShown && !IsOpen && app.view == null && !App.Recording && !AdFilm.Any && u.Obj("season") != null && !u.Obj("season").Bool("premium")) { seasonPromoShown = true; ShowSeasonPromo(); }
         if (Growth.PendingCode != null && u.Bool("canRefer")) { app.Send(new Dictionary<string, object> { ["t"] = "referral", ["code"] = Growth.PendingCode }); Growth.PendingCode = null; }
@@ -421,7 +423,7 @@ public partial class Menus : MonoBehaviour
 
     /* ---------- settings ---------- */
 
-    bool deleteArmed;
+    bool deleteArmed, welcomeAsked;
     public void OpenSettings()
     {
         deleteArmed = false;
@@ -466,7 +468,7 @@ public partial class Menus : MonoBehaviour
             else
             {
                 note.Set(Loc.T("متسجل بـ") + " " + who);
-                var b = Ui.Button(acc, "تسجيل الخروج", new Color(1, 1, 1, 0.08f), Ui.GoldLight, 14, () => { app.Send(new Dictionary<string, object> { ["t"] = "logout" }); Close(); });
+                var b = Ui.Button(acc, "تسجيل الخروج", new Color(1, 1, 1, 0.08f), Ui.GoldLight, 14, () => { Sfx.Tap(); AskLogout(); });
                 ((RectTransform)b.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(180, 32), new Vector2(0, 6));
             }
             // a new player: the friend code of who invited you (you both get 50K after your first game)
@@ -501,15 +503,7 @@ public partial class Menus : MonoBehaviour
             }
             var del = Row(list, 44, Card);
             At(Ui.Label(del, "امسح حسابي", 16, new Color(1f, 0.6f, 0.55f), StartAlign, Ui.Bold).rectTransform, 14, 200, 40);
-            var dl = Ui.Button(del, deleteArmed ? "متأكد؟ دوس تاني" : "امسح", new Color32(0x8a, 0x22, 0x1c, 0xff), Color.white, 14, () =>
-            {
-                Sfx.Tap();
-                if (!deleteArmed) { deleteArmed = true; app.Toast(Loc.T("الحساب والكوينز والسكينز هيتمسحوا خالص. دوس تاني للتأكيد")); refreshOpen(); return; }
-                deleteArmed = false;
-                app.Send(new Dictionary<string, object> { ["t"] = "delete" });
-                app.Toast(Loc.T("اتمسح حسابك. بدأت من جديد كضيف"));
-                Close();
-            });
+            var dl = Ui.Button(del, "امسح", new Color32(0x8a, 0x22, 0x1c, 0xff), Color.white, 14, () => { Sfx.Tap(); AskDelete(); });
             At((RectTransform)dl.transform, 334, 150, 32);
             var ver = Row(list, 22);
             Ui.Label(ver, "Board Battles  ·  " + Application.version, 11, new Color(1, 1, 1, 0.4f)).rectTransform.Fill();
@@ -1310,6 +1304,13 @@ public partial class Menus : MonoBehaviour
         ((RectTransform)go.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(200, 44), new Vector2(0, 8));
     }
 
+    /// Sign out (this phone starts again as a guest; signing in with the same account brings everything back).
+    public void AskLogout() => Confirm(Loc.T("تسجيل الخروج"), Loc.T("هتخرج من حسابك على الموبايل ده. حسابك وكوينزك محفوظين، وترجعلهم لما تسجل دخول تاني بنفس الحساب."),
+        Loc.T("اخرج"), Loc.T("خليني"), () => { app.Send(new Dictionary<string, object> { ["t"] = "logout" }); app.Toast(Loc.T("خرجت من حسابك")); });
+    /// Delete the account for good (Google Play's rule: from inside the app too).
+    public void AskDelete() => Confirm(Loc.T("امسح حسابي"), Loc.T("الحساب والكوينز والسكينز والتقدم هيتمسحوا خالص ومش هيرجعوا."),
+        Loc.T("امسح نهائي"), Loc.T("لأ"), () => { app.Send(new Dictionary<string, object> { ["t"] = "delete" }); app.Toast(Loc.T("اتمسح حسابك. بدأت من جديد كضيف")); });
+
     /// A yes/no question: the risky choice in red, the safe one in gold.
     public void Confirm(string title, string text, string yes, string no, Action onYes)
     {
@@ -1324,12 +1325,12 @@ public partial class Menus : MonoBehaviour
     }
 
     /// Online games need an account: sign in with Google (or Apple), or play the computer for now.
-    public void AskSignIn(string mode)
+    public void AskSignIn(string mode, bool welcome = false)
     {
         Sfx.Tap();
-        Panel(Loc.T("سجّل دخولك عشان تلعب أونلاين"), out var body, new Vector2(440, appleOn ? 300 : 250));
+        Panel(Loc.T(welcome ? "أهلاً! عندك حساب؟" : "سجّل دخولك عشان تلعب أونلاين"), out var body, new Vector2(440, appleOn ? 300 : 250));
         refreshOpen = null;
-        var t = Ui.Label(body, "", 13, Ui.GoldLight); t.Set(Loc.T("اللعب أونلاين مع ناس حقيقية محتاج حساب، وكوينزك وصورتك وتقدمك بيتحفظوا"));
+        var t = Ui.Label(body, "", 13, Ui.GoldLight); t.Set(Loc.T(welcome ? "سجّل دخول بنفس الحساب وكل كوينزك وتقدمك يرجعوا، أو اعمل حساب جديد عشان تلعب أونلاين" : "اللعب أونلاين مع ناس حقيقية محتاج حساب، وكوينزك وصورتك وتقدمك بيتحفظوا"));
         t.horizontalOverflow = HorizontalWrapMode.Wrap; t.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(400, 40), new Vector2(0, -2));
         float y = -50;
         var g = Ui.Button(body, "كمّل بجوجل", Color.white, Ui.Ink, 16, () => { Close(); SignInWith("google"); });

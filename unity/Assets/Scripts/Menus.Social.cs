@@ -151,6 +151,8 @@ public partial class Menus
         if (c0.Bool("me"))
         {
             buttons.Add(("شارك كودك", Ui.Gold, Ui.Ink, () => ShareInvite()));
+            if (app.SignedIn) buttons.Add(("تسجيل الخروج", new Color(1, 1, 1, 0.1f), Ui.GoldLight, () => AskLogout()));
+            buttons.Add(("امسح حسابي", new Color32(0x8a, 0x22, 0x1c, 0xff), Color.white, () => AskDelete()));
         }
         else
         {

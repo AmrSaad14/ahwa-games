@@ -119,6 +119,7 @@ public class App : MonoBehaviour
         game = gameObject.AddComponent<GameUi>();
         game.Build(this);
 
+        FreshInstall = string.IsNullOrEmpty(PlayerPrefs.GetString("ahwa.token", ""));   // no saved sign-in on this phone
         net = new Net();
         net.OnMessage += OnMessage;
         net.OnOnline += SetStatus;
@@ -462,6 +463,8 @@ public class App : MonoBehaviour
         || !string.IsNullOrEmpty(user.Str("phone")) || user.Bool("playGames") || !string.IsNullOrEmpty(user.Str("email")));
     /// False (and asks the player to sign in) when online play needs an account they don't have yet.
     bool guestsOnline;   // the server lets guests play online too (test servers)
+    /// This phone had no saved account when the game opened (a new install, or the app's data was cleared).
+    public bool FreshInstall { get; private set; }
     public bool CanPlayOnline(string mode = null)
     {
         if (SignedIn || user == null || guestsOnline) return true;
