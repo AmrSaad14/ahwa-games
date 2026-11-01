@@ -432,7 +432,7 @@ public class GameUi : MonoBehaviour
     void BuildHud()
     {
         hud = Ui.Rect("Hud", root).Fill();
-        var leave = Ui.Button(hud, "خروج", new Color(0.1f, 0.06f, 0.04f, 0.85f), Ui.GoldLight, 15, () => app.Leave());
+        var leave = Ui.Button(hud, "خروج", new Color(0.1f, 0.06f, 0.04f, 0.85f), Ui.GoldLight, 15, () => { Sfx.Tap(); app.AskLeave(); });
         ((RectTransform)leave.transform).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(80, 34), new Vector2(12, -10));
 
         var sb = Ui.Box(hud, "Scores", new Color(0.1f, 0.06f, 0.04f, 0.85f));

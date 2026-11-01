@@ -72,12 +72,11 @@ public partial class Menus : MonoBehaviour
         // along the top, left of your name and coins: watch an ad, sign in, language
         var ad = Chip(home, "video", "+2K", new Vector2(-252, -10), 98, new Color32(0x2f, 0x6b, 0x3a, 0xf0), Color.white, WatchAd);
         adText = ad.GetComponentInChildren<Text>();
-        var lang = Chip(home, "globe", Loc.En ? "ع" : "EN", new Vector2(-488, -10), 66, Ui.Panel, Ui.GoldLight, () => { Sfx.Tap(); Loc.Set(!Loc.En); });
-        langText = lang.GetComponentInChildren<Text>();
+        // (the language is changed in Settings only)
         var sign = Chip(home, "google", "دخول", new Vector2(-388, -10), 92, new Color(1, 1, 1, 0.94f), Ui.Ink, SignIn);
         signChip = sign.gameObject; signText = sign.GetComponentInChildren<Text>();
 
-        Loc.Changed += () => { langText.Set(Loc.En ? "ع" : "EN"); refreshOpen?.Invoke(); };
+        Loc.Changed += () => { refreshOpen?.Invoke(); };
         Application.deepLinkActivated += OnLink;
         if (!string.IsNullOrEmpty(Application.absoluteURL)) OnLink(Application.absoluteURL);
     }
@@ -1291,6 +1290,19 @@ public partial class Menus : MonoBehaviour
     }
 
     /* ---------- Google sign-in ---------- */
+
+    /// A yes/no question: the risky choice in red, the safe one in gold.
+    public void Confirm(string title, string text, string yes, string no, Action onYes)
+    {
+        Panel(title, out var body, new Vector2(460, 240));
+        refreshOpen = null;
+        var t = Ui.Label(body, "", 16, Color.white, TextAnchor.MiddleCenter); t.Set(text);
+        t.horizontalOverflow = HorizontalWrapMode.Wrap; t.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(420, 96), new Vector2(0, -4));
+        var y = Ui.Button(body, yes, new Color(0.62f, 0.16f, 0.16f, 1), Color.white, 16, () => { Sfx.Tap(); Close(); onYes?.Invoke(); });
+        ((RectTransform)y.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(190, 46), new Vector2(Loc.En ? -102 : 102, 8));
+        var n = Ui.Button(body, no, Ui.Gold, Ui.Ink, 16, () => { Sfx.Tap(); Close(); });
+        ((RectTransform)n.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(190, 46), new Vector2(Loc.En ? 102 : -102, 8));
+    }
 
     /// Online games need an account: sign in with Google (or Apple), or play the computer for now.
     public void AskSignIn(string mode)

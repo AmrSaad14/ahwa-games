@@ -254,6 +254,18 @@ export class BoardTable {
     return null;
   }
 
+  /** A player walked out of a two-sided match: `team` (the other side) wins it now. */
+  forfeitTo(team: number) {
+    if (this.phase !== 'play' && this.phase !== 'rend') return;
+    this.turnEndsAt = 0;
+    this.phase = 'mend';
+    this.match = { team, scores: this.scores.slice(), deltas: this.seats.map(() => null) };
+    this.last = { t: 'end', s: team, k: ++this.v };
+    this.nextAt = Date.now() + (this.isPrivate ? this.opts.lobbyAfterMatchMs : 90_000);
+    this.hooks.matchEnd(this, this.match);
+    this.bump();
+  }
+
   private endGame(end: GameEnd) {
     this.result = end;
     this.turnEndsAt = 0;

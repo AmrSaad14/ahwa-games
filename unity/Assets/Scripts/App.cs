@@ -579,6 +579,23 @@ public class App : MonoBehaviour
         Send(m);
     }
 
+    /// "Leave" during an online match: first say what it costs (the match and the stake, to the other side).
+    public void AskLeave()
+    {
+        var v = view;
+        bool live = v != null && !Practicing && !Watching && v.you >= 0 && (v.phase == "play" || v.phase == "rend");
+        if (!live) { Leave(); return; }
+        int sides = Modes.Sides(v.mode);
+        string others = "";
+        for (int i = 0; i < v.seats.Count; i++) if (i != v.you && v.seats[i] != null && (sides != 2 || TeamOf(v.mode, i) != TeamOf(v.mode, v.you))) others += (others.Length > 0 ? "، " : "") + GameUi.NameOf(v, i);
+        string coins = v.stake > 0 ? Loc.Short(v.stake) + " " + Loc.T("كوين") : "";
+        string text = sides == 2
+            ? Loc.T("لو خرجت دلوقتي هتخسر الماتش") + (coins != "" ? " " + Loc.T("و") + " " + coins : "") + "، " + Loc.T("و") + " " + others + " " + Loc.T("هيكسب") + (coins != "" ? " " + Loc.T("الكوينز") : "") + "."
+            : Loc.T("لو خرجت دلوقتي هتخسر الماتش") + (coins != "" ? " " + Loc.T("و") + " " + coins : "") + "، " + Loc.T("والكمبيوتر هيكمل مكانك") + ".";
+        menus.Confirm(Loc.T("تخرج من الماتش؟"), text, Loc.T("اخرج وخسّر"), Loc.T("كمّل اللعب"), Leave);
+    }
+    static int TeamOf(string mode, int seat) => mode == "team" ? seat % 2 : seat;
+
     public void Leave()
     {
         if (Watching) { Watching = false; if (view != null) leftTableId = view.id; Send(new Dictionary<string, object> { ["t"] = "unwatch" }); ExitGame(); return; }

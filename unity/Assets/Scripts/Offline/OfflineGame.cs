@@ -121,6 +121,8 @@ public static class Modes
         if (GameOf(m) == "chess") return 2;
         return 4;
     }
+    /// How many sides play against each other ("team" dominoes: two teams of two).
+    public static int Sides(string m) => m == "team" ? 2 : Players(m);
     public static int DefaultTarget(string m)
     {
         var g = GameOf(m);

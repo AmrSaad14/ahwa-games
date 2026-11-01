@@ -947,6 +947,12 @@ export class Hub {
     const t = this.userTable.get(uid);
     this.userTable.delete(uid);
     if (t) this.forfeit(t, uid);
+    // walking out of a match between two sides (1 v 1, or two teams) loses it: the other side wins at once and
+    // takes the stakes; with three or four sides the game goes on (the computer plays the empty seat)
+    if (t && (t.phase === 'play' || t.phase === 'rend') && t.scores.length === 2) {
+      const seat = t.seatOf(uid);
+      if (seat >= 0) t.forfeitTo(1 - teamOf(t.mode, seat));
+    }
     t?.leave(uid);
     if (t && this.rematch.has(t.id)) this.sendRematch(t, true);
   }
