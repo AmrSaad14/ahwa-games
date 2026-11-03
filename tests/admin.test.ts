@@ -225,3 +225,12 @@ test('analytics: retention by day, the new-player funnel, games by game and by h
   assert.ok(a.games.practice.some((r: { game: string; n: number }) => r.game === 'domino' && r.n >= 1));
   assert.equal(a.hours.length, 24);
 });
+
+test('the dashboard page\'s script is valid JavaScript (a typo there leaves the page blank)', async () => {
+  const vm = await import('node:vm');
+  const res = await fetch(base + "/admin");
+  const html = await res.text();
+  const scripts = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map(m => m[1]);
+  assert.ok(scripts.length > 0);
+  for (const js of scripts) assert.doesNotThrow(() => new vm.Script(js), 'dashboard script');
+});

@@ -388,7 +388,7 @@ RENDER.rewards = async main => {
       '<div class="form"><label class="f" style="grid-column:1/-1">Text<textarea id="nt" rows="2" maxlength="400">' + esc(live ? st.notice.text : '') + '</textarea></label>' +
       '<label class="f">Show for (hours)<input id="nh" type="number" value="24" min="1" max="720"></label></div>' +
       '<div class="row" style="margin-top:12px"><label class="switch"><input type="checkbox" id="np"> Also a push to players of the last 30 days</label><button class="btn gold" id="nb">Show notice</button>' + (live ? '<button class="btn" id="nc">Take it down</button>' : '') + '</div></div>' +
-    '<h2>Daily reward, ads and weekly prizes</h2><div class="card"><div class="sub">Daily streak: ' + st.economy.streak.map(short).join(' · ') + ' · rewarded ad: ' + short(st.economy.adReward) + ' (' + st.economy.adsPerDay + ' a day) · skins by ads: 30–150 ads (' + st.economy.skinAdsPerDay + ' a day)' · weekly top ten: ' + st.economy.weeklyPrizes.map(short).join(' · ') + '</div><a class="btn" href="#settings" style="display:inline-block;margin-top:10px">Change them</a></div>';
+    '<h2>Daily reward, ads and weekly prizes</h2><div class="card"><div class="sub">Daily streak: ' + st.economy.streak.map(short).join(' · ') + ' · rewarded ad: ' + short(st.economy.adReward) + ' (' + st.economy.adsPerDay + ' a day) · skins by ads: 30–150 ads (' + st.economy.skinAdsPerDay + ' a day) · weekly top ten: ' + st.economy.weeklyPrizes.map(short).join(' · ') + '</div><a class="btn" href="#settings" style="display:inline-block;margin-top:10px">Change them</a></div>';
   $('#gb').onclick = async () => {
     const c = Number($('#gc').value), days = Number($('#ga').value);
     if (!(c > 0)) return toast('Enter the coins', true);
