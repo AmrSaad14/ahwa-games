@@ -286,6 +286,13 @@ public partial class Menus : MonoBehaviour
                 app.Toast("+" + ((long)m.Num("coins")).ToString("N0") + " " + Loc.T("عملة"));
                 Sfx.Coins();
                 break;
+            case "skinAd":
+                if (m.Bool("won")) { app.Toast(Loc.T("مبروك! السكين بقى بتاعك") + ": " + Skins.Name(m.Str("skin")), 4f); Sfx.Coins(); Sfx.Buzz(); }
+                else app.Toast(Skins.Name(m.Str("skin")) + "  ▶ " + (int)m.Num("n") + "/" + (int)m.Num("need"));
+                break;
+            case "invitePushed":
+                app.Toast(Loc.T("صاحبك مش في اللعبة، بعتناله إشعار. استنى في الغرفة"), 4f);
+                break;
         }
     }
 
@@ -328,6 +335,9 @@ public partial class Menus : MonoBehaviour
             case "friend_offline": app.Toast(Loc.T("صاحبك مش متصل دلوقتي")); return true;
             case "rematch_coins": app.Toast(Loc.T("حد رصيده مش كفاية للماتش تاني")); return true;
             case "not_owned": app.Toast(Loc.T("لسه مش معاك")); return true;
+            case "skin_ad_limit": app.Toast(Loc.T("خلصت إعلانات السكينز النهارده، تعالى بكرة")); return true;
+            case "owned": app.Toast(Loc.T("السكين ده معاك خلاص")); return true;
+            case "not_on_sale": app.Toast(Loc.T("السكين ده مش متاح دلوقتي")); return true;
         }
         return false;
     }
@@ -998,9 +1008,26 @@ public partial class Menus : MonoBehaviour
         var pic = Ui.Picture(c, "Look", Skins.Picture(s.id, out var tint)); pic.color = tint;
         var size = s.cat == "tiles" ? new Vector2(Mathf.Min(96, w - 12), Mathf.Min(48, (w - 12) / 2)) : new Vector2(Mathf.Min(64, w - 16), Mathf.Min(64, w - 16));
         pic.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), size, new Vector2(0, s.cat == "tiles" ? -26 : -12));
+        bool owned = Skins.Owns(s.id), wearing = Skins.Worn(s.cat) == s.id;
+        // not yours yet: it can also be won by watching ads (a second button above the price)
+        int adsNeed = owned || collection ? 0 : Skins.AdsFor(s);
         var nm = Ui.Label(c, Loc.T(s.name), 13, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
-        nm.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(w - 4, 36), new Vector2(0, -96));
+        nm.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(w - 4, adsNeed > 0 ? 24 : 36), new Vector2(0, adsNeed > 0 ? -86 : -96));
         nm.horizontalOverflow = HorizontalWrapMode.Wrap;
+        if (adsNeed > 0) { nm.resizeTextForBestFit = true; nm.resizeTextMinSize = 9; nm.resizeTextMaxSize = 13; }
+        if (adsNeed > 0)
+        {
+            int have = Skins.AdsWatched(s.id);
+            var ab = Ui.Button(c, "▶ " + have + "/" + adsNeed, new Color32(0x2f, 0x6b, 0x3a, 0xff), Color.white, 12, () => { Sfx.Tap(); WatchSkinAd(s.id); });
+            ((RectTransform)ab.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(w - 16, 26), new Vector2(0, 44));
+            // how far along: a thin bar under the label
+            if (have > 0)
+            {
+                var bar = Ui.Box(ab.transform, "Bar", Ui.Gold); bar.raycastTarget = false;
+                bar.rectTransform.anchorMin = new Vector2(0, 0); bar.rectTransform.anchorMax = new Vector2(Mathf.Clamp01(have / (float)adsNeed), 0);
+                bar.rectTransform.offsetMin = Vector2.zero; bar.rectTransform.offsetMax = new Vector2(0, 3);
+            }
+        }
         if (s.ev != null)
         {
             var tag = Ui.Label(c, Loc.T(s.ev == "ramadan" ? "عرض رمضان" : "عرض العيد"), 10, new Color(1f, 0.75f, 0.35f), TextAnchor.MiddleCenter, Ui.Bold);
@@ -1011,7 +1038,6 @@ public partial class Menus : MonoBehaviour
             var tag = Ui.Label(c, Loc.T("الموسم"), 10, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold);
             tag.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(w - 8, 14), new Vector2(0, -2));
         }
-        bool owned = Skins.Owns(s.id), wearing = Skins.Worn(s.cat) == s.id;
         if (wearing) BuyButton(c, Loc.T("متلبس"), new Color(1, 1, 1, 0.1f), Ui.GoldLight, null);
         else if (owned) BuyButton(c, Loc.T("البس"), new Color32(0x2f, 0x6b, 0x3a, 0xff), Color.white, () => app.Send(new Dictionary<string, object> { ["t"] = "equipSkin", ["id"] = s.id }));
         else if (s.pass) BuyButton(c, Loc.T("من الموسم"), new Color(1, 1, 1, 0.08f), Ui.Gold, () => { Close(); OpenSeason(); });
@@ -1275,6 +1301,16 @@ public partial class Menus : MonoBehaviour
         if (app.net == null || !app.net.Online) { app.Toast(Loc.T("مش متصل بالسيرفر لسه")); return; }
         if (user != null && user.Num("adsLeft") <= 0) { app.Toast(Loc.T("خلصت إعلانات النهارده، تعالى بكرة")); return; }
         app.Send(new Dictionary<string, object> { ["t"] = "adStart" });
+    }
+
+    /// An ad towards a skin: watch enough and it's yours (signed-in players: the progress is kept on the account).
+    public void WatchSkinAd(string skin)
+    {
+        if (adShowing) return;
+        if (!app.SignedIn && !App.Recording) { AskSignIn(null, false, "سجّل دخولك عشان تكسب السكينز بالإعلانات"); return; }
+        if (app.net == null || !app.net.Online) { app.Toast(Loc.T("مش متصل بالسيرفر لسه")); return; }
+        if (user != null && user.ContainsKey("skinAdsLeft") && user.Num("skinAdsLeft") <= 0) { app.Toast(Loc.T("خلصت إعلانات السكينز النهارده، تعالى بكرة")); return; }
+        app.Send(new Dictionary<string, object> { ["t"] = "adStart", ["skin"] = skin });
     }
 
     /// The video ad. Until an ad network is set up for this version, the game shows its own five-second

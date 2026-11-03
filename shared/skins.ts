@@ -104,6 +104,14 @@ export const SKINS: Skin[] = [
 ];
 
 export const skinById = (id: string) => SKINS.find(s => s.id === id);
+
+/** Skins can also be earned by watching rewarded ads: the dearer the skin, the more ads (30 at least, 150 at most,
+ *  in steps of 5). Season-pass skins and the free classics can't. 0: not by ads. */
+export const SKIN_ADS_MIN = 30, SKIN_ADS_MAX = 150;
+export function adsForSkin(s: Skin | undefined): number {
+  if (!s || s.price <= 0 || s.pass) return 0;
+  return Math.min(SKIN_ADS_MAX, Math.max(SKIN_ADS_MIN, Math.round(s.price / 6_000 / 5) * 5));
+}
 export const isFree = (s: Skin) => s.price === 0 && !s.pass;
 export const defaultSkin = (cat: SkinCat) => SKINS.find(s => s.cat === cat && isFree(s))!.id;
 export type Equipped = Partial<Record<SkinCat, string>>;

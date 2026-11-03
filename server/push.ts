@@ -4,6 +4,8 @@
 //                             Firebase console → Project settings → Service accounts → Generate new private key
 //   PUSH_TIMES                when the reminders go out, Cairo time (default "14:00,20:00")
 //   PUSH_TZ                   the time zone of PUSH_TIMES (default Africa/Cairo)
+//   DAILY_PUSH_TIME           when signed-in players who haven't collected today's daily reward are reminded
+//                             (default "18:00"; empty: no daily-reward reminder)
 //
 // Free hosts that sleep when nobody plays can't run a clock: point any free cron service (cron-job.org, for
 // example) at PUBLIC_URL/api/cron/push?key=ADMIN_KEY every 15 minutes; it wakes the server and sends any reminder
@@ -28,10 +30,11 @@ export class Push {
   private sa: ServiceAccount | null = null;
   private token: { value: string; until: number } | null = null;
   private times: string[];
+  private dailyTime: string;
   private tz: string;
   private running = false;
 
-  constructor(private store: Store, cfg: { serviceAccount: string; times: string; tz: string }) {
+  constructor(private store: Store, cfg: { serviceAccount: string; times: string; tz: string; dailyTime?: string }) {
     const raw = cfg.serviceAccount.trim();
     if (raw) {
       try { this.sa = JSON.parse(raw.startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf8')) as ServiceAccount; }
@@ -39,6 +42,8 @@ export class Push {
     }
     this.times = cfg.times.split(',').map(s => s.trim()).filter(s => /^\d{1,2}:\d{2}$/.test(s));
     this.tz = cfg.tz;
+    const d = (cfg.dailyTime ?? '18:00').trim();
+    this.dailyTime = /^\d{1,2}:\d{2}$/.test(d) ? d : '';
   }
   get enabled() { return !!this.sa; }
 
@@ -85,23 +90,43 @@ export class Push {
   }
 
   /** The current time slot that is due and not sent yet ("2026-10-20 14:00"), or null. Slots stay due for 3 hours. */
-  private dueSlot(now = new Date()): string | null {
+  private dueSlot(now = new Date(), times = this.times, key = 'push_slot_'): string | null {
     const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: this.tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
       .formatToParts(now).map(p => [p.type, p.value]));
     const day = `${parts.year}-${parts.month}-${parts.day}`, mins = Number(parts.hour) * 60 + Number(parts.minute);
-    for (const t of this.times) {
+    for (const t of times) {
       const [h, m] = t.split(':').map(Number), at = h * 60 + m;
       if (mins >= at && mins < at + 180) {
         const slot = `${day} ${t}`;
-        if (this.store.metaGet('push_slot_' + t) !== slot) return slot;
+        if (this.store.metaGet(key + t) !== slot) return slot;
       }
     }
     return null;
   }
 
+  /** The daily-reward reminder: once a day, to signed-in players who haven't collected today's reward yet. */
+  async dailyTick(now = new Date(), force = false): Promise<number> {
+    if (!this.sa || (!this.dailyTime && !force)) return 0;
+    const slot = force ? 'now' : this.dueSlot(now, [this.dailyTime], 'push_daily_');
+    if (!slot) return 0;
+    if (!force) this.store.metaSet('push_daily_' + this.dailyTime, slot);
+    let sent = 0;
+    for (const t of this.store.dailyPushTargets(2 * 3600_000, now.getTime())) {
+      const streak = t.day > 1;
+      const msg: [string, string] = t.lang === 'en'
+        ? ['Your daily reward is waiting 🎁', streak ? `Day ${t.day} in a row: collect it before midnight to keep your streak` : 'Open the game and collect today\'s free coins']
+        : ['مكافأتك اليومية مستنياك 🎁', streak ? `اليوم ${t.day} على التوالي: خدها قبل نص الليل عشان ما تخسرش السلسلة` : 'ادخل خد كوينز النهارده ببلاش'];
+      try { if (await this.send(t.token, msg[0], msg[1], { kind: 'daily' })) sent++; }
+      catch (e) { console.error('[push]', (e as Error).message); }
+    }
+    console.log(`[push] daily reward reminder ${slot}: sent to ${sent} phones`);
+    return sent;
+  }
+
   /** Sends the reminder if one is due. Called every minute, and by the cron URL. */
   async tick(now = new Date(), force = false): Promise<{ slot: string | null; sent: number }> {
     if (!this.sa || this.running) return { slot: null, sent: 0 };
+    if (!force) await this.dailyTick(now).catch(e => console.error('[push]', (e as Error).message));
     const slot = force ? 'now' : this.dueSlot(now);
     if (!slot) return { slot: null, sent: 0 };
     this.running = true;

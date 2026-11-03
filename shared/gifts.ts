@@ -16,6 +16,7 @@ export const ECONOMY = {
   dailyBonus: 10_000,
   adReward: 2_000,      // coins for watching a rewarded video ad (the only way to get coins besides playing)
   adsPerDay: 10,
+  skinAdsPerDay: 30,    // ads a day towards a skin (counted apart from the coin ads)
   tutorialCoins: 10_000,  // finishing the first-game guide
   comebackCoins: 30_000,  // a gift for coming back after a while away…
   comebackDays: 3,        // …of this many days (and one push reminder at that point)

@@ -277,10 +277,10 @@ public partial class Menus
             else if (st == "friend")
             {
                 // one tap: a room for the two of you in the game you play most, and the invitation goes out
-                var go = Ui.Button(row, "ادعيه يلعب", on ? Ui.Gold : new Color(1, 1, 1, 0.08f), on ? Ui.Ink : new Color(1, 1, 1, 0.5f), 13, () =>
+                // offline: the invitation goes to their phone as a notification (the server says if it can't)
+                var go = Ui.Button(row, "ادعيه يلعب", on ? Ui.Gold : new Color(1, 1, 1, 0.12f), on ? Ui.Ink : Ui.GoldLight, 13, () =>
                 {
                     Sfx.Tap();
-                    if (!on) { app.Toast(Loc.T("صاحبك مش متصل دلوقتي")); return; }
                     app.InviteFriend(id);
                     Close();
                 });

@@ -51,6 +51,8 @@ export interface HubOptions {
   onWeeklyPrize?: (uid: string, rank: number, coins: number) => void;
   /** A push to players' phones (the tournament's reminders, a referral bonus). */
   push?: (uids: string[], ar: [string, string], en: [string, string]) => void;
+  /** Whether push notifications are set up (Firebase). */
+  pushOn?: () => boolean;
   /** How long a player who dropped out has to come back before the computer plays for them (default 30 s). */
   graceMs?: number;
   /** The live settings from the dashboard (prizes, maintenance, notice, how play runs). */
@@ -66,6 +68,8 @@ const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/;
 
 /** Everything live on the server: who is connected, the matchmaking queues and every table. */
 /** A real account: signed in with Google, Apple, a phone number, Play Games or an e-mail and password. */
+/** The games' names in notifications. */
+const GAME_NAMES: Record<string, { ar: string; en: string }> = { domino: { ar: 'دومينو', en: 'dominoes' }, tawla: { ar: 'طاولة', en: 'tawla' }, chess: { ar: 'شطرنج', en: 'chess' }, ludo: { ar: 'لودو', en: 'ludo' } };
 export const isSignedIn = (u: UserRow) => !!(u.google_sub || u.apple_sub || u.phone || u.pg_id || u.email);
 
 export class Hub {
@@ -87,6 +91,12 @@ export class Hub {
   private reportLimiter = new Limiter(10, 60 * 60_000);
   private friendLimiter = new Limiter(30, 60 * 60_000);
   private inviteLimiter = new Limiter(20, 60_000);
+  private startedAt = Date.now();
+  /** Invitations sent to offline friends as a notification: shown when they open the game (for 15 minutes). */
+  private pendingInvites = new Map<string, { msg: S2C; code: string; from: string; at: number }>();
+  /** "Your friend is online" notifications: when each player last got one, and when each player last caused one. */
+  private onlinePushTo = new Map<string, number>();
+  private onlinePushFrom = new Map<string, number>();
   private cashLimiter = new Limiter(6, 60 * 60_000);
   private supportLimiter = new Limiter(5, 60 * 60_000);
   private practiceLimiter = new Limiter(20, 60 * 60_000);
@@ -394,7 +404,8 @@ export class Hub {
         if (!this.inviteLimiter.allow(uid)) return err('slow_down');
         if (this.store.friendStatus(uid, id) !== 'friend') return err('not_friends');
         const to = this.byUser.get(id);
-        if (!to) return err('friend_offline');
+        // offline: a notification on their phone instead (if they have one); the invitation waits for them
+        if (!to && (!this.opts.pushOn?.() || !this.store.pushTokensOf(id).length)) return err('friend_offline');
         let room = table;
         if (!room || !room.code || room.phase !== 'lobby') {
           // one tap from the friends list: open a room for the two of you first (just for fun, no stake)
@@ -407,8 +418,12 @@ export class Hub {
           this.pushView(room, uid);
         }
         const me = this.store.get(uid)!;
-        to.conn.send({ t: 'invited', from: { id: uid, name: me.name, ch: me.ch }, code: room.code!, mode: room.mode, stake: room.stake });
-        return;
+        const msg: S2C = { t: 'invited', from: { id: uid, name: me.name, ch: me.ch }, code: room.code!, mode: room.mode, stake: room.stake };
+        if (to) return to.conn.send(msg);
+        this.pendingInvites.set(id, { msg, code: room.code!, from: uid, at: Date.now() });
+        const g = GAME_NAMES[gameOf(room.mode)] ?? { ar: '', en: 'game' };
+        this.opts.push?.([id], [`${me.name} بيدعوك تلعب 🎲`, `${me.name} فاتح ترابيزة ${g.ar} ومستنيك. ادخل العب`], [`${me.name} invited you to play 🎲`, `${me.name} opened a ${g.en} table and is waiting for you`]);
+        return s.conn.send({ t: 'invitePushed', name: this.store.get(id)?.name ?? '' });
       }
       case 'logout': {
         this.detach(s);
@@ -434,6 +449,14 @@ export class Hub {
       case 'cancel': this.dequeue(uid); return s.conn.send({ t: 'queue', mode: null, count: 0, need: 0, botsAt: 0, now: Date.now() });
       case 'coins': return s.conn.send({ t: 'coins', rows: this.store.coinHistory(uid) });
       case 'adStart': {
+        // an ad towards a skin (signed-in players only: the progress is kept on the account)
+        if (m.skin) {
+          const me = this.store.get(uid);
+          if (me && !isSignedIn(me)) return err('sign_in_required');
+          const e = this.store.skinAdCheck(uid, String(m.skin));
+          if (e) return err(e);
+          return s.conn.send({ t: 'adTicket', ticket: this.adTickets.issue(uid, String(m.skin)), ssv: !!this.opts.adsSsv });
+        }
         if (this.store.adsToday(uid) >= ECONOMY.adsPerDay) return err('ad_limit');
         return s.conn.send({ t: 'adTicket', ticket: this.adTickets.issue(uid), ssv: !!this.opts.adsSsv });
       }
@@ -847,6 +870,14 @@ export class Hub {
     s.conn.send({ t: 'welcome', user: this.pub(fresh), token: this.tokens.issue(u.id), now: Date.now(), ice: this.iceFor(u.id), guestsOnline: this.opts.guestsOnline !== false,
       login: { google: !!this.opts.google?.enabled, apple: !!this.opts.apple?.enabled, phone: !!this.opts.phones?.enabled, playGames: this.opts.google?.playGamesEnabled ? this.opts.google.clientId : undefined } });
     this.friendsChanged(u.id);
+    this.friendOnlinePush(u);
+    // a friend invited you while you were away (you got a notification): the invitation, if the room still waits
+    const inv = this.pendingInvites.get(u.id);
+    if (inv) {
+      this.pendingInvites.delete(u.id);
+      const room = this.byCode.get(inv.code);
+      if (Date.now() - inv.at < 15 * 60_000 && room && !room.closed && room.phase === 'lobby' && room.seatOf(inv.from) >= 0) s.conn.send(inv.msg);
+    }
     if (daily.coins) s.conn.send({ t: 'bonus', coins: daily.coins, streak: daily.streak });
     if (back) s.conn.send({ t: 'comeback', coins: back, days: Math.floor((Date.now() - u.seen) / 86_400_000) });
     const t = this.userTable.get(u.id);
@@ -861,6 +892,24 @@ export class Hub {
     if (this.userTable.has(uid)) this.leaveTable(uid);
     this.byUser.delete(uid);
     s.uid = null;
+    if (!this.stopping) this.store.touch(uid);   // "last seen": when they left
+  }
+
+  /**
+   * A signed-in player came back after at least 30 minutes away: their friends who aren't in the game get a
+   * notification. Each friend gets at most one of these every 3 hours, and each player causes at most one round
+   * every 6 hours. None for a few minutes after the server starts (everyone reconnects then).
+   */
+  private friendOnlinePush(u: UserRow) {
+    const now = Date.now();
+    if (!this.opts.push || !isSignedIn(u) || now - this.startedAt < 5 * 60_000 || now - (u.seen ?? 0) < 30 * 60_000) return;
+    if (now - (this.onlinePushFrom.get(u.id) ?? 0) < 6 * 3600_000) return;
+    const to = this.store.friendLinks(u.id).filter(l => l.status === 'friend' && !this.byUser.has(l.other) && now - (this.onlinePushTo.get(l.other) ?? 0) >= 3 * 3600_000)
+      .map(l => l.other).slice(0, 100);
+    if (!to.length) return;
+    this.onlinePushFrom.set(u.id, now);
+    for (const id of to) this.onlinePushTo.set(id, now);
+    this.opts.push(to, ['صاحبك متصل دلوقتي 🟢', `${u.name} دخل القهوة، تعالى العب معاه`], ['A friend is online 🟢', `${u.name} just came in. Come and play together`]);
   }
 
   /** STUN servers plus short-lived TURN credentials (coturn "use-auth-secret" scheme). */
@@ -1019,7 +1068,16 @@ export class Hub {
 
   /** Pays for one watched ad. False if the ticket is unknown or used, or today's limit is reached. */
   rewardAd(uid: string, ticket: string): boolean {
-    if (!this.store.get(uid) || !this.adTickets.take(ticket, uid)) return false;
+    const tk = this.store.get(uid) ? this.adTickets.take(ticket, uid) : null;
+    if (!tk) return false;
+    if (tk.skin) {
+      // an ad towards a skin: one step closer, and the skin once enough are watched
+      const r = this.store.addSkinAd(uid, tk.skin);
+      if (!r) return false;
+      this.byUser.get(uid)?.conn.send({ t: 'skinAd', skin: tk.skin, ...r });
+      this.sendUser(uid);
+      return true;
+    }
     if (this.store.adsToday(uid) >= ECONOMY.adsPerDay) return false;
     this.store.addCoins(uid, ECONOMY.adReward);
     this.store.logCoins(uid, 'ad', ECONOMY.adReward);

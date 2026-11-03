@@ -156,6 +156,8 @@ export interface PublicUser {
   titles?: { id: string; until: number; note: string | null }[];   // the titles you have (until 0: for good)
   title?: string | null;  // the one you wear
   skins: string[];        // skins bought in the shop (the free classic ones aren't listed)
+  skinAds?: Record<string, number>;   // ads watched towards skins not won yet
+  skinAdsLeft?: number;   // ads towards skins still possible today
   equip: Partial<Record<'tiles' | 'dice' | 'tawla' | 'chess' | 'ludo', string>>;   // the skin chosen for each kind
   ratings: Partial<Record<GameId, { rating: number; games: number; wins: number }>>;
   playGames?: boolean;   // signed in with Google Play Games
@@ -253,7 +255,7 @@ export type C2S =
   | { t: 'emote'; k: Emote }
   | { t: 'lb'; game?: GameId | 'week' }
   | { t: 'coins' }
-  | { t: 'adStart' }
+  | { t: 'adStart'; skin?: string }   // skin: the ad counts towards that skin instead of coins
   | { t: 'adWatched'; ticket: string }
   /** A Google Play purchase to check and credit: a coin pack or the ad-free plan. */
   | { t: 'buy'; product: string; token: string }
@@ -305,6 +307,8 @@ export type S2C =
   | { t: 'coins'; rows: CoinRow[] }
   | { t: 'adTicket'; ticket: string; ssv: boolean }
   | { t: 'adReward'; coins: number }
+  | { t: 'skinAd'; skin: string; n: number; need: number; won: boolean }
+  | { t: 'invitePushed'; name: string }   // your friend was offline: they got a notification
   /** A purchase was checked with the store and credited (or was already credited earlier). */
   | { t: 'bought'; product: string; token: string; coins: number; adFreeUntil: number }
   | { t: 'buyFailed'; product: string; token: string; code: string }

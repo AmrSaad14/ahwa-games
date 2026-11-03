@@ -388,7 +388,7 @@ RENDER.rewards = async main => {
       '<div class="form"><label class="f" style="grid-column:1/-1">Text<textarea id="nt" rows="2" maxlength="400">' + esc(live ? st.notice.text : '') + '</textarea></label>' +
       '<label class="f">Show for (hours)<input id="nh" type="number" value="24" min="1" max="720"></label></div>' +
       '<div class="row" style="margin-top:12px"><label class="switch"><input type="checkbox" id="np"> Also a push to players of the last 30 days</label><button class="btn gold" id="nb">Show notice</button>' + (live ? '<button class="btn" id="nc">Take it down</button>' : '') + '</div></div>' +
-    '<h2>Daily reward, ads and weekly prizes</h2><div class="card"><div class="sub">Daily streak: ' + st.economy.streak.map(short).join(' · ') + ' · rewarded ad: ' + short(st.economy.adReward) + ' (' + st.economy.adsPerDay + ' a day) · weekly top ten: ' + st.economy.weeklyPrizes.map(short).join(' · ') + '</div><a class="btn" href="#settings" style="display:inline-block;margin-top:10px">Change them</a></div>';
+    '<h2>Daily reward, ads and weekly prizes</h2><div class="card"><div class="sub">Daily streak: ' + st.economy.streak.map(short).join(' · ') + ' · rewarded ad: ' + short(st.economy.adReward) + ' (' + st.economy.adsPerDay + ' a day) · skins by ads: 30–150 ads (' + st.economy.skinAdsPerDay + ' a day)' · weekly top ten: ' + st.economy.weeklyPrizes.map(short).join(' · ') + '</div><a class="btn" href="#settings" style="display:inline-block;margin-top:10px">Change them</a></div>';
   $('#gb').onclick = async () => {
     const c = Number($('#gc').value), days = Number($('#ga').value);
     if (!(c > 0)) return toast('Enter the coins', true);
@@ -643,7 +643,7 @@ RENDER.settings = async main => {
       n('cg', 'Online games needed in the month', s.titles.minGames) +
       '<label class="f">Accepted numbers (prefixes)<input id="cp" value="' + esc(s.prizes.prefixes.join(', ')) + '"></label>' +
     '</div><div class="sub" style="margin-top:8px">Four games, so up to ' + num(4 * s.prizes.egp) + ' EGP a month. The winner must be signed in (Google, Apple or phone). Vodafone Cash works on Vodafone lines (010). Coins can\'t be turned into money.</div></div>' +
-    '<h2>Economy</h2><div class="card"><div class="form">' + n('es', 'Coins for a new player', s.economy.startCoins) + n('ea', 'Coins for a rewarded ad', s.economy.adReward) + n('ed', 'Rewarded ads a day', s.economy.adsPerDay) +
+    '<h2>Economy</h2><div class="card"><div class="form">' + n('es', 'Coins for a new player', s.economy.startCoins) + n('ea', 'Coins for a rewarded ad', s.economy.adReward) + n('ed', 'Rewarded ads a day', s.economy.adsPerDay) + n('esa', 'Ads a day towards skins', s.economy.skinAdsPerDay) +
       n('et', 'Coins for finishing the first-game guide', s.economy.tutorialCoins) + n('eb', 'Gift for coming back', s.economy.comebackCoins) + n('ey', '…after this many days away (0: off)', s.economy.comebackDays) + '</div>' +
       '<div class="sub" style="margin:12px 0 6px">Daily reward, day by day (day 7 repeats after)</div><div class="form">' + list('ek', 'Day', s.economy.streak) + '</div>' +
       '<div class="sub" style="margin:12px 0 6px">Weekly leaderboard prizes, places 1–10 (paid every Monday)</div><div class="form">' + list('ew', 'Place', s.economy.weeklyPrizes) + '</div></div>' +
@@ -655,7 +655,7 @@ RENDER.settings = async main => {
       maintenance: { on: $('#mo').checked, message: $('#mm').value },
       prizes: { enabled: $('#co').checked, egp: Number($('#ce').value), claimDays: Number($('#cd').value), prefixes: $('#cp').value.split(/[ ,]+/).filter(Boolean) },
       titles: { minGames: Number($('#cg').value) },
-      economy: { startCoins: Number($('#es').value), adReward: Number($('#ea').value), adsPerDay: Number($('#ed').value), tutorialCoins: Number($('#et').value), comebackCoins: Number($('#eb').value), comebackDays: Number($('#ey').value), streak: vals('ek'), weeklyPrizes: vals('ew') },
+      economy: { startCoins: Number($('#es').value), adReward: Number($('#ea').value), adsPerDay: Number($('#ed').value), skinAdsPerDay: Number($('#esa').value), tutorialCoins: Number($('#et').value), comebackCoins: Number($('#eb').value), comebackDays: Number($('#ey').value), streak: vals('ek'), weeklyPrizes: vals('ew') },
       play: { botFillSeconds: Number($('#pb').value), turnSeconds: Number($('#pt').value) },
     } }), 'Settings saved'); go();
   };

@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import type { PrizeRow, CoinRow, LeaderRow, PublicUser } from '../shared/protocol';
 import type { GameId } from '../shared/engine';
 import { ECONOMY, WEEKLY_PRIZES, cairoDay, levelOf, nextCairoDay, streakBonus, weekKey } from '../shared/gifts';
-import { Equipped, isFree, skinById } from '../shared/skins';
+import { Equipped, adsForSkin, isFree, skinById } from '../shared/skins';
 import { activeEvent } from '../shared/events';
 import { CHEST, MISSION_SP, counts, missionById, missionsFor, type MissionEvent } from '../shared/missions';
 import { SEASON_PASS, SEASON_TIERS, SP, TIERS, seasonEndsAt, seasonOf, tierOf } from '../shared/season';
@@ -136,6 +136,9 @@ export class Store {
     // every store purchase, so the same purchase can never be credited twice
     this.db.exec(`CREATE TABLE IF NOT EXISTS purchases (
       token TEXT PRIMARY KEY, user_id TEXT NOT NULL, product TEXT NOT NULL, order_id TEXT, ts INTEGER NOT NULL, coins INTEGER NOT NULL DEFAULT 0, until INTEGER NOT NULL DEFAULT 0)`);
+    // skins earned by watching ads: how many ads each player has watched towards each skin, and how many today
+    this.db.exec(`CREATE TABLE IF NOT EXISTS skin_ads (user_id TEXT NOT NULL, skin TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, skin));
+      CREATE TABLE IF NOT EXISTS skin_ads_day (user_id TEXT NOT NULL, day TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day))`);
     // phones for push reminders (Firebase Cloud Messaging); monthly prizes paid by hand (cashouts: the old coin cash-out, no longer used)
     this.db.exec(`CREATE TABLE IF NOT EXISTS push_tokens (token TEXT PRIMARY KEY, user_id TEXT NOT NULL, lang TEXT NOT NULL DEFAULT 'ar', platform TEXT NOT NULL DEFAULT 'android', ts INTEGER NOT NULL);
       CREATE INDEX IF NOT EXISTS push_user ON push_tokens(user_id);
@@ -281,6 +284,8 @@ export class Store {
     this.db.prepare('DELETE FROM season WHERE user_id = ?').run(id);
     this.db.prepare('DELETE FROM tourney_reg WHERE user_id = ?').run(id);
     this.db.prepare('DELETE FROM user_skins WHERE user_id = ?').run(id);
+    this.db.prepare('DELETE FROM skin_ads WHERE user_id = ?').run(id);
+    this.db.prepare('DELETE FROM skin_ads_day WHERE user_id = ?').run(id);
   }
 
   /** The daily bonus, once per (UTC) day; it grows for each day in a row (STREAK). Returns the coins and the day. */
@@ -459,6 +464,7 @@ export class Store {
     const adFreeUntil = Math.max(u.ad_free_until ?? 0, season.premium ? season.endsAt : 0);
     return { ...toPublic(u), adFreeUntil, titles: this.titlesOf(u.id, now), title: this.wornTitle(u.id, now), chest: this.chestState(u.id, now), tutorial: !!u.tutorial, xp: u.xp ?? 0, level: levelOf(u.xp ?? 0), streak: u.streak ?? 0, daily: this.dailyState(u), code: this.friendCode(u.id), ratings: this.ratingsOf(u.id),
       adsLeft: Math.max(0, ECONOMY.adsPerDay - this.adsToday(u.id)), skins: this.skinsOf(u.id),
+      skinAds: this.skinAdsOf(u.id), skinAdsLeft: Math.max(0, ECONOMY.skinAdsPerDay - this.skinAdsToday(u.id)),
       missions: this.missions(u.id), missionsAt: nextCairoDay(now), season,
       canRefer: !u.ref_by && now - u.created < REFER_DAYS * 86_400_000, referred: !!u.ref_by, muted: (u.muted_until ?? 0) > now ? u.muted_until : 0 };
   }
@@ -631,6 +637,53 @@ export class Store {
     } catch (e) { this.db.exec('ROLLBACK'); throw e; }
     this.equipSkin(id, skin);   // wear it straight away
     return null;
+  }
+  /** Ads watched towards skins not won yet: { skin id: ads watched }. */
+  skinAdsOf(id: string): Record<string, number> {
+    const owned = new Set(this.skinsOf(id)), out: Record<string, number> = {};
+    for (const r of this.db.prepare('SELECT skin, n FROM skin_ads WHERE user_id = ? AND n > 0').all(id) as { skin: string; n: number }[]) if (!owned.has(r.skin)) out[r.skin] = r.n;
+    return out;
+  }
+  /** Ads watched towards skins today (Cairo day). */
+  skinAdsToday(id: string, now = Date.now()): number {
+    return (this.db.prepare('SELECT n FROM skin_ads_day WHERE user_id = ? AND day = ?').get(id, cairoDay(now)) as { n: number } | undefined)?.n ?? 0;
+  }
+  /** Can this skin be earned by ads right now? An error code, or null. */
+  skinAdCheck(id: string, skin: string): string | null {
+    const s = skinById(skin), need = adsForSkin(s);
+    if (!s || !need) return 'bad_skin';
+    if (this.skinsOf(id).includes(skin)) return 'owned';
+    if (s.event && activeEvent()?.kind !== s.event) return 'not_on_sale';
+    if (this.skinAdsToday(id) >= ECONOMY.skinAdsPerDay) return 'skin_ad_limit';
+    return null;
+  }
+  /** One ad watched towards a skin: counts it, and gives (and wears) the skin when enough are watched. */
+  addSkinAd(id: string, skin: string, now = Date.now()): { n: number; need: number; won: boolean } | null {
+    if (this.skinAdCheck(id, skin)) return null;
+    const need = adsForSkin(skinById(skin));
+    this.db.exec('BEGIN');
+    let n = 0;
+    try {
+      this.db.prepare('INSERT INTO skin_ads_day (user_id, day, n) VALUES (?, ?, 1) ON CONFLICT(user_id, day) DO UPDATE SET n = n + 1').run(id, cairoDay(now));
+      this.db.prepare('INSERT INTO skin_ads (user_id, skin, n) VALUES (?, ?, 1) ON CONFLICT(user_id, skin) DO UPDATE SET n = n + 1').run(id, skin);
+      n = (this.db.prepare('SELECT n FROM skin_ads WHERE user_id = ? AND skin = ?').get(id, skin) as { n: number }).n;
+      if (n >= need) {
+        this.db.prepare('INSERT INTO user_skins (user_id, skin, ts) VALUES (?, ?, ?)').run(id, skin, now);
+        this.db.prepare('DELETE FROM skin_ads WHERE user_id = ? AND skin = ?').run(id, skin);
+      }
+      this.db.exec('COMMIT');
+    } catch (e) { this.db.exec('ROLLBACK'); throw e; }
+    if (n >= need) this.equipSkin(id, skin);
+    return { n: Math.min(n, need), need, won: n >= need };
+  }
+  /** Signed-in players with a phone for push who haven't collected today's daily reward, and their streak day. */
+  dailyPushTargets(quietMs: number, now = Date.now()): { token: string; user_id: string; lang: string; day: number }[] {
+    const today = cairoDay(now), yesterday = cairoDay(now - 86_400_000);
+    const rows = this.db.prepare(`SELECT p.token, p.user_id, p.lang, u.bonus_day, u.streak FROM push_tokens p JOIN users u ON u.id = p.user_id
+      WHERE u.seen < ? AND u.banned = 0 AND (u.bonus_day IS NULL OR u.bonus_day <> ?)
+      AND (u.google_sub IS NOT NULL OR u.apple_sub IS NOT NULL OR u.phone IS NOT NULL OR u.pg_id IS NOT NULL OR u.email IS NOT NULL)`)
+      .all(now - quietMs, today) as { token: string; user_id: string; lang: string; bonus_day: string | null; streak: number | null }[];
+    return rows.map(r => ({ token: r.token, user_id: r.user_id, lang: r.lang, day: r.bonus_day === yesterday ? (r.streak ?? 0) + 1 : 1 }));
   }
   /** Wear a skin the player owns (or a free one). */
   equipSkin(id: string, skin: string): string | null {

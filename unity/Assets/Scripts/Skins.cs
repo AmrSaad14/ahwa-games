@@ -63,8 +63,21 @@ public static class Skins
         owned.Clear(); equip.Clear();
         var l = u?.Arr("skins"); if (l != null) foreach (var o in l) if (o is string s) owned.Add(s);
         var e = u?.Obj("equip"); if (e != null) foreach (var kv in e) if (kv.Value is string s) equip[kv.Key] = s;
+        adsWatched.Clear();
+        var a = u?.Obj("skinAds"); if (a != null) foreach (var kv in a) if (kv.Value is double n) adsWatched[kv.Key] = (int)n;
     }
     public static bool Owns(string id) { var d = Get(id); return d != null && (IsFree(d) || owned.Contains(id)); }
+
+    // ---------- skins earned by watching ads (the same rule as the server's shared/skins.ts) ----------
+    static readonly Dictionary<string, int> adsWatched = new Dictionary<string, int>();
+    /// Ads needed for a skin: the dearer, the more (30 at least, 150 at most, in steps of 5); 0: not by ads.
+    public static int AdsFor(Def d)
+    {
+        if (d == null || d.price <= 0 || d.pass) return 0;
+        return Mathf.Clamp(Mathf.RoundToInt(d.price / 6000f / 5f) * 5, 30, 150);
+    }
+    /// Ads already watched towards a skin.
+    public static int AdsWatched(string id) => adsWatched.TryGetValue(id, out var n) ? n : 0;
     /// Looks forced on (the test run's screenshots show the new skins).
     public static readonly Dictionary<string, string> Force = new Dictionary<string, string>();
     /// What you wear of a kind: the equipped one if you own it, else the classic.

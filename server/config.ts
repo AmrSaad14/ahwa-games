@@ -39,6 +39,7 @@ export const config = {
   push: {
     serviceAccount: process.env.FIREBASE_SERVICE_ACCOUNT || '',
     times: process.env.PUSH_TIMES || '14:00,20:00',
+    dailyTime: process.env.DAILY_PUSH_TIME ?? '18:00',
     tz: process.env.PUSH_TZ || 'Africa/Cairo',
   },
   // Support messages from the app ("Contact support" in settings) are kept on the server and e-mailed (server/mail.ts)

@@ -136,7 +136,14 @@ every finished game, never during play, and never for season pass holders.
 ## Push reminders (Firebase Cloud Messaging)
 
 Twice a day (14:00 and 20:00 Cairo time by default) every phone whose player hasn't played in the last two hours gets
-a "come and play" notification, in the player's language.
+a "come and play" notification, in the player's language. Also:
+
+- **Daily reward:** at 18:00 Cairo time (`DAILY_PUSH_TIME`, empty for none), signed-in players who haven't collected
+  today's reward get a reminder with their streak day.
+- **A friend is online:** when a signed-in player comes back after 30+ minutes away, their friends who aren't in the
+  game get a notification (each friend at most one every 3 hours; each player sets off at most one round every 6 hours).
+- **Invite a friend who is offline:** the friends list's "Invite" works for offline friends too: they get a
+  notification, and the invitation pops up when they open the game within 15 minutes (if the room still waits).
 
 1. In the [Firebase console](https://console.firebase.google.com) create a project and add an **Android app** with the
    package name `com.ahwa.boardbattles`. Download its `google-services.json`.
@@ -162,6 +169,13 @@ The app shows Unity Ads: an interstitial now and then between games, and a rewar
 4. Safe rewards: email Unity Ads support your Game ID and the callback URL `https://YOUR-SERVER/ads/unity`; they send a
    secret. Put `UNITY_ADS_SECRET=…` in the `SERVER_ENV` secret: from then on only Unity's signed call adds the coins.
    Without it the server trusts the app's "watched" message (one per ticket, a daily limit).
+
+### Skins by watching ads
+
+Every skin sold for coins can also be won by watching rewarded ads (signed-in players): 30 ads for the cheapest,
+up to 150 for the dearest (`adsForSkin` in shared/skins.ts: the price ÷ 6,000, in steps of 5). Progress is kept per
+skin. These ads count apart from the coin ads, with their own daily limit (30 by default; dashboard → Game settings →
+"Ads a day towards skins"). Season-pass skins stay season-only.
 
 ## Contact support
 

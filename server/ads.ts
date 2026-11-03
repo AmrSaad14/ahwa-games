@@ -59,18 +59,19 @@ export function verifyUnityS2S(params: URLSearchParams, secret: string): { uid: 
 
 /** One-time tickets: the app asks for one before showing an ad and passes it to AdMob as custom data. */
 export class AdTickets {
-  private open = new Map<string, { uid: string; exp: number }>();
-  issue(uid: string) {
+  private open = new Map<string, { uid: string; exp: number; skin?: string }>();
+  /** skin: this ad counts towards that skin instead of paying coins. */
+  issue(uid: string, skin?: string) {
     const t = crypto.randomBytes(16).toString('base64url');
     if (this.open.size > 20_000) for (const [k, v] of this.open) if (v.exp < Date.now()) this.open.delete(k);
-    this.open.set(t, { uid, exp: Date.now() + 30 * 60_000 });
+    this.open.set(t, { uid, exp: Date.now() + 30 * 60_000, skin });
     return t;
   }
-  /** Uses up a ticket; true if it was issued to this player and hasn't expired. */
-  take(ticket: string, uid: string) {
+  /** Uses up a ticket: what it was for if it was issued to this player and hasn't expired, otherwise null. */
+  take(ticket: string, uid: string): { skin?: string } | null {
     const t = this.open.get(ticket);
-    if (!t) return false;
+    if (!t) return null;
     this.open.delete(ticket);
-    return t.uid === uid && t.exp > Date.now();
+    return t.uid === uid && t.exp > Date.now() ? { skin: t.skin } : null;
   }
 }
