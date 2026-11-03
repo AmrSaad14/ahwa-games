@@ -5,6 +5,7 @@
 # Needs, in Settings → Secrets and variables → Actions:
 #   secret DEPLOY_SSH_KEY   the private key that can log in as root on the server
 #   secret SERVER_ENV       the server's settings, one KEY=value per line (GOOGLE_CLIENT_SECRET=…, ADMIN_KEY=…)
+#   secret FIREBASE_SERVICE_ACCOUNT  optional: the Firebase service-account key file (JSON) for push notifications
 #   variable DEPLOY_HOST    the server's IP (default below)
 name: Deploy server
 on:
@@ -45,11 +46,16 @@ jobs:
         if: env.HAS_KEY == 'true'
         env:
           SERVER_ENV: ${{ secrets.SERVER_ENV }}
+          # the Firebase service-account key as its own secret (paste the downloaded JSON file as it is)
+          FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           ssh root@"$HOST" 'mkdir -p /opt/board-battles && rm -rf /opt/board-battles/app.new && mkdir /opt/board-battles/app.new'
           git archive --format=tar HEAD -- . ':(exclude)unity' ':(exclude)design' | ssh root@"$HOST" 'tar -x -C /opt/board-battles/app.new'
           ssh root@"$HOST" 'cd /opt/board-battles && rm -rf app.old && { [ -d app ] && mv app app.old || true; } && mv app.new app && rm -rf app.old'
-          printf '%s\n' "$SERVER_ENV" | tr -d '\r' | ssh root@"$HOST" 'umask 077; cat > /opt/board-battles/env.github'
+          { printf '%s\n' "$SERVER_ENV" | tr -d '\r'
+            # one line, base64 (the server reads either); a value in SERVER_ENV comes first and wins
+            if [ -n "$FIREBASE_SA" ] && ! printf '%s' "$SERVER_ENV" | grep -q '^FIREBASE_SERVICE_ACCOUNT='; then echo "FIREBASE_SERVICE_ACCOUNT=$(printf '%s' "$FIREBASE_SA" | base64 -w0)"; echo "push: on (FIREBASE_SERVICE_ACCOUNT secret)" >&2; fi
+          } | ssh root@"$HOST" 'umask 077; cat > /opt/board-battles/env.github'
       - name: Build and start
         if: env.HAS_KEY == 'true'
         run: ssh root@"$HOST" "DOMAIN=$DOMAIN bash /opt/board-battles/app/deploy/server-setup.sh"

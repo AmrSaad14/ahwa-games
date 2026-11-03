@@ -149,8 +149,9 @@ a "come and play" notification, in the player's language. Also:
    package name `com.ahwa.boardbattles`. Download its `google-services.json`.
 2. GitHub → this repo → Settings → Secrets and variables → Actions → New secret `GOOGLE_SERVICES_JSON`: paste the
    whole file. The next Unity build has push turned on (without it the app builds with push off).
-3. Firebase console → Project settings → Service accounts → **Generate new private key**. In the `SERVER_ENV` secret
-   add `FIREBASE_SERVICE_ACCOUNT=` followed by the whole JSON file on one line.
+3. Firebase console → Project settings → Service accounts → **Generate new private key**. Add it as a new GitHub secret
+   `FIREBASE_SERVICE_ACCOUNT` (paste the downloaded JSON file as it is) and run **Deploy server**. (Or put
+   `FIREBASE_SERVICE_ACCOUNT=` followed by the JSON on one line in `SERVER_ENV`: that one wins.)
 4. Optional: `PUSH_TIMES` (default `14:00,20:00`), `PUSH_TZ` (default `Africa/Cairo`).
 5. Free hosts sleep when nobody plays, so their clock stops: at [cron-job.org](https://cron-job.org) (free) add a job
    that opens `https://YOUR-SERVER/api/cron/push?key=ADMIN_KEY` every 15 minutes. Each reminder still goes out once.
