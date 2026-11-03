@@ -923,6 +923,17 @@ export class Store {
       return Number(r.changes);
     } catch (e) { this.db.exec('ROLLBACK'); throw e; }
   }
+  /** Players who can get a push (they have a phone registered), by who: everyone, seen in the last `days`, or signed in. */
+  pushAudience(who: 'all' | 'signed' | number): string[] {
+    const signed = '(u.google_sub IS NOT NULL OR u.apple_sub IS NOT NULL OR u.phone IS NOT NULL OR u.pg_id IS NOT NULL OR u.email IS NOT NULL)';
+    const where = who === 'signed' ? signed : typeof who === 'number' && who > 0 ? 'u.seen >= ' + (Date.now() - who * 86_400_000) : '1';
+    return (this.db.prepare(`SELECT DISTINCT p.user_id AS id FROM push_tokens p JOIN users u ON u.id = p.user_id WHERE u.banned = 0 AND ${where}`).all() as { id: string }[]).map(r => r.id);
+  }
+  /** How many phones and players can get a push. */
+  pushStats(): { phones: number; players: number; week: number; month: number; signed: number } {
+    return { phones: this.n('SELECT COUNT(*) AS n FROM push_tokens'), players: this.pushAudience('all').length, week: this.pushAudience(7).length,
+      month: this.pushAudience(30).length, signed: this.pushAudience('signed').length };
+  }
   adminIdsSeenSince(since: number): string[] { return (this.db.prepare('SELECT id FROM users WHERE seen >= ? AND banned = 0').all(since) as { id: string }[]).map(r => r.id); }
 
   /** The season pass this month: how many bought it, and how far players have got. */

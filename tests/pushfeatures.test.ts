@@ -17,7 +17,7 @@ let app: ReturnType<typeof createServer>;
 let port = 0;
 before(async () => {
   app = createServer({ ...config, port: 0, host: '127.0.0.1', dbPath: ':memory:', staticDir: '/nonexistent', botFillMs: 60_000, msgsPer5s: 10000,
-    guestsOnline: false, push: { ...config.push, serviceAccount: SA }, login: { ...config.login, sms: 'console' } } as typeof config);
+    guestsOnline: false, adminKey: 'push-admin-key', push: { ...config.push, serviceAccount: SA }, login: { ...config.login, sms: 'console' } } as typeof config);
   port = await app.listen();
 });
 after(async () => { await app.close(); });
@@ -145,4 +145,28 @@ test('inviting a friend who is offline: they get a notification, and the invitat
   await a.until(() => a.msgs.some(m => m.t === 'err'));
   assert.equal(a.last('err').code, 'friend_offline');
   a.ws.close();
+});
+
+test('the dashboard sends a push: to one player to test, or to a group; it says how many phones', async () => {
+  const base = `http://127.0.0.1:${port}`;
+  const login = await fetch(base + '/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'push-admin-key' }) });
+  const cookie = (login.headers.get('set-cookie') || '').split(';')[0];
+  const adm = async (method: string, path: string, body?: unknown) => {
+    const r = await fetch(base + '/api/admin' + path, { method, headers: { 'Content-Type': 'application/json', Cookie: cookie }, body: body ? JSON.stringify(body) : undefined });
+    return { status: r.status, json: await r.json().catch(() => null) as any };
+  };
+  const u = app.store.createGuest('Phone owner', 0);
+  app.store.savePushToken(u.id, 'phone-owner-token-xxxxxxxxxxxxxxxx', 'ar', 'android');
+  const st = await adm('GET', '/push');
+  assert.equal(st.json.on, true);
+  assert.ok(st.json.phones >= 1 && st.json.players >= 1);
+  const one = await adm('POST', '/push', { titleAr: 'تجربة', bodyAr: 'رسالة تجربة', player: u.id });
+  assert.deepEqual([one.status, one.json.players, one.json.phones], [200, 1, 1]);
+  const code = app.store.friendCode(u.id);
+  assert.equal((await adm('POST', '/push', { bodyAr: 'تاني', player: code })).json.phones, 1, 'by friend code too');
+  const all = await adm('POST', '/push', { bodyAr: 'للكل', bodyEn: 'For everyone', audience: 'all' });
+  assert.equal(all.status, 200);
+  assert.ok(all.json.players >= 1);
+  assert.equal((await adm('POST', '/push', { titleAr: 'no text' })).status, 400);
+  assert.equal((await adm('POST', '/push', { bodyAr: 'x', player: 'nobody-here' })).status, 404);
 });

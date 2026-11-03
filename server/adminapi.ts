@@ -137,6 +137,31 @@ export function adminApi(ctx: AdminCtx) {
       }
     }
 
+    // ---- push notifications: how many phones, and a message to a group of players (or one, to test)
+    if (p === '/push' && m === 'GET') return { on: ctx.pushOn(), ...store.pushStats() };
+    if (p === '/push' && m === 'POST') {
+      const b = await readBody(req);
+      if (!ctx.pushOn()) fail(400, 'push_off');
+      const t = (v: unknown, n: number) => String(v ?? '').trim().slice(0, n);
+      const arT = t(b.titleAr, 80), arB = t(b.bodyAr, 300), enT = t(b.titleEn, 80) || arT, enB = t(b.bodyEn, 300) || arB;
+      if (!arB && !enB) fail(400, 'empty');
+      const ar: [string, string] = [arT || enT || 'بورد باتلز', arB || enB], en: [string, string] = [enT || 'Board Battles', enB];
+      let ids: string[];
+      if (b.player) {
+        const k = t(b.player, 80);
+        const u = store.get(k) ?? store.byPid(k) ?? store.byFriendCode(k.replace(/[^a-z0-9]/gi, ''));
+        if (!u) fail(404, 'player_not_found');
+        ids = [u!.id];
+      } else {
+        const who = b.audience === 'signed' ? 'signed' : b.audience === 'all' ? 'all' : Math.max(1, Math.min(365, Number(b.audience) || 30));
+        ids = store.pushAudience(who);
+      }
+      const phones = ids.reduce((n, id) => n + store.pushTokensOf(id).length, 0);
+      ctx.push(ids, ar, en);
+      log(req, 'push', b.player ? ids[0] : null, { audience: b.player ? 'one' : b.audience, players: ids.length, title: ar[0], text: ar[1] });
+      return { ok: true, players: ids.length, phones };
+    }
+
     // ---- rewards for everyone, notices
     if (p === '/rewards' && m === 'POST') {
       const b = await readBody(req);

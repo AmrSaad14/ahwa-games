@@ -376,9 +376,19 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(
 
 /* ---------------- rewards and notices ---------------- */
 RENDER.rewards = async main => {
-  const st = await api('/settings');
+  const st = await api('/settings'), ps = await api('/push');
   const live = st.notice.until > Date.now() && st.notice.text;
   main.innerHTML = '<h1>Rewards & notices</h1>' +
+    '<h2>Push notification</h2><div class="card"' + (ps.on ? '' : ' style="border-color:var(--warn)"') + '><div class="sub" style="margin-bottom:8px">' +
+      (ps.on ? num(ps.players) + ' players can get one (' + num(ps.phones) + ' phones): ' + num(ps.week) + ' played this week, ' + num(ps.month) + ' this month, ' + num(ps.signed) + ' signed in.'
+        : 'Push is off on the server (no FIREBASE_SERVICE_ACCOUNT).') + ' Each player gets it in their language; leave English empty to send the Arabic to everyone.</div>' +
+      '<div class="form"><label class="f">Title (Arabic)<input id="pta" maxlength="80" placeholder="بورد باتلز"></label>' +
+      '<label class="f">Title (English)<input id="pte" maxlength="80" placeholder="Board Battles"></label>' +
+      '<label class="f">Message (Arabic)<textarea id="pba" rows="2" maxlength="300" placeholder="ادخل العب دور…"></textarea></label>' +
+      '<label class="f">Message (English)<textarea id="pbe" rows="2" maxlength="300" placeholder="Come and play a round…"></textarea></label>' +
+      '<label class="f">Who<select id="pw"><option value="7">Played in the last 7 days</option><option value="30">Played in the last 30 days</option><option value="signed">Signed-in players</option><option value="all">Everyone with the app</option></select></label>' +
+      '<label class="f">Test on one player first (friend code or id)<input id="pp" placeholder="optional"></label></div>' +
+      '<div class="row" style="margin-top:12px"><button class="btn" id="pst"' + (ps.on ? '' : ' disabled') + '>Send the test</button><button class="btn gold" id="psa"' + (ps.on ? '' : ' disabled') + '>Send to the group</button></div></div>' +
     '<h2>Coins for everyone</h2><div class="card"><div class="form">' +
       '<label class="f">Coins each<input id="gc" type="number" min="1" placeholder="e.g. 50000"></label>' +
       '<label class="f">Who<select id="ga"><option value="7">Played in the last 7 days</option><option value="30">Played in the last 30 days</option><option value="0">Every player</option></select></label>' +
@@ -389,6 +399,20 @@ RENDER.rewards = async main => {
       '<label class="f">Show for (hours)<input id="nh" type="number" value="24" min="1" max="720"></label></div>' +
       '<div class="row" style="margin-top:12px"><label class="switch"><input type="checkbox" id="np"> Also a push to players of the last 30 days</label><button class="btn gold" id="nb">Show notice</button>' + (live ? '<button class="btn" id="nc">Take it down</button>' : '') + '</div></div>' +
     '<h2>Daily reward, ads and weekly prizes</h2><div class="card"><div class="sub">Daily streak: ' + st.economy.streak.map(short).join(' · ') + ' · rewarded ad: ' + short(st.economy.adReward) + ' (' + st.economy.adsPerDay + ' a day) · skins by ads: 30–150 ads (' + st.economy.skinAdsPerDay + ' a day) · weekly top ten: ' + st.economy.weeklyPrizes.map(short).join(' · ') + '</div><a class="btn" href="#settings" style="display:inline-block;margin-top:10px">Change them</a></div>';
+  const pushBody = () => ({ titleAr: $('#pta').value, titleEn: $('#pte').value, bodyAr: $('#pba').value, bodyEn: $('#pbe').value });
+  $('#pst').onclick = async () => {
+    if (!$('#pp').value.trim()) return toast('Enter a friend code or player id to test on', true);
+    if (!$('#pba').value.trim() && !$('#pbe').value.trim()) return toast('Write the message first', true);
+    const r = await act(() => api('/push', { body: { ...pushBody(), player: $('#pp').value.trim() } }));
+    toast(r.phones ? 'Sent to their ' + r.phones + ' phone(s)' : 'That player has no phone registered for push', !r.phones);
+  };
+  $('#psa').onclick = async () => {
+    if (!$('#pba').value.trim() && !$('#pbe').value.trim()) return toast('Write the message first', true);
+    const w = $('#pw'), label = w.options[w.selectedIndex].text;
+    if (!confirm('Send this push to: ' + label + '?')) return;
+    const r = await act(() => api('/push', { body: { ...pushBody(), audience: w.value } }));
+    toast('Sent to ' + num(r.players) + ' players (' + num(r.phones) + ' phones)');
+  };
   $('#gb').onclick = async () => {
     const c = Number($('#gc').value), days = Number($('#ga').value);
     if (!(c > 0)) return toast('Enter the coins', true);

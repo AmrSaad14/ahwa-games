@@ -234,3 +234,9 @@ test('the dashboard page\'s script is valid JavaScript (a typo there leaves the 
   assert.ok(scripts.length > 0);
   for (const js of scripts) assert.doesNotThrow(() => new vm.Script(js), 'dashboard script');
 });
+
+test('push from the dashboard: off without Firebase, and it says so', async () => {
+  const st = await adm('GET', '/push');
+  assert.equal(st.json.on, false);
+  assert.equal((await adm('POST', '/push', { bodyAr: 'x', audience: 'all' })).status, 400);
+});
