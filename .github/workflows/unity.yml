@@ -9,6 +9,11 @@ on:
     branches: [main]
     paths: ['unity/**', '.github/workflows/unity.yml']
   workflow_dispatch:
+    inputs:
+      films:
+        description: 'Also film the adverts (adds up to 2 hours)'
+        type: boolean
+        default: false
 permissions:
   contents: write
 concurrency:
@@ -170,7 +175,7 @@ jobs:
           true
 
       - name: Film the engagement-visit advert (commits marked [salon], or run by hand)
-        if: always() && (contains(github.event.head_commit.message, '[salon]') || github.event_name == 'workflow_dispatch')
+        if: always() && (contains(github.event.head_commit.message, '[salon]') || inputs.films)
         run: |
           set +e
           if [ -f build/linux/BoardBattles.x86_64 ]; then
