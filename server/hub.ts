@@ -464,7 +464,8 @@ export class Hub {
         // with server-side verification on, only AdMob's signed call (/ads/ssv) pays out
         if (this.opts.adsSsv) return;
         if (!this.adLimiter.allow(uid)) return err('slow_down');
-        if (!this.rewardAd(uid, String(m.ticket || ''))) return err('ad_limit');
+        // a ticket already paid (the app resends after a reconnect) is ignored; only a real limit is reported
+        if (!this.rewardAd(uid, String(m.ticket || ''))) { if (this.store.adsToday(uid) >= ECONOMY.adsPerDay) return err('ad_limit'); }
         return;
       }
       case 'buySkin': {

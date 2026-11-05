@@ -384,13 +384,15 @@ test('rewarded ads: 5K per watched ad, one reward per ticket, ten a day', async 
   await a.until(() => a.last('user')?.user.coins === start + 2_000 && a.last('user')!.user.adsLeft === 9);
   // the same ticket doesn't pay twice
   await new Promise(r => setTimeout(r, 20_100));
-  a.send({ t: 'adWatched', ticket });
-  await a.until(() => a.last('err')?.code === 'ad_limit');
+  a.send({ t: 'adWatched', ticket });   // (the app resends after a reconnect: ignored, no error)
+  await new Promise(r => setTimeout(r, 500));
+  assert.equal(a.last('user')!.user.coins, start + 2_000);
+  assert.ok(!a.msgs.some(m => m.t === 'err' && m.code === 'ad_limit'));
   // the daily limit
   for (let i = 0; i < 9; i++) app.hub.rewardAd(a.uid, (app.hub as unknown as { adTickets: { issue(u: string): string } }).adTickets.issue(a.uid));
   await a.until(() => a.last('user')?.user.adsLeft === 0);
   a.send({ t: 'adStart' });
-  await a.until(() => a.msgs.filter(m => m.t === 'err' && m.code === 'ad_limit').length === 2);
+  await a.until(() => a.msgs.filter(m => m.t === 'err' && m.code === 'ad_limit').length === 1);
   a.send({ t: 'coins' });
   await a.until(() => !!a.last('coins'));
   assert.equal(a.last('coins')!.rows.filter(r => r.kind === 'ad').length, 10);

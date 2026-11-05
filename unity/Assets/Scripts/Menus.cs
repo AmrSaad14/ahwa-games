@@ -208,6 +208,8 @@ public partial class Menus : MonoBehaviour
             case "welcome":
                 var login = m.Obj("login");
                 if (login != null) { googleOn = login.Bool("google"); appleOn = login.Bool("apple"); }
+                // the connection dropped while the video played: tell the new one (the old message was lost)
+                if (pendingAd != null) app.Send(new Dictionary<string, object> { ["t"] = "adWatched", ["ticket"] = pendingAd });
                 if (pendingTicket != null) { var tk = pendingTicket; pendingTicket = null; app.Send(new Dictionary<string, object> { ["t"] = "ticket", ["ticket"] = tk }); }
                 if (pendingJoin != null) { var j = pendingJoin; pendingJoin = null; StartCoroutine(JoinSoon(j)); }
                 break;
@@ -257,7 +259,7 @@ public partial class Menus : MonoBehaviour
                             app.Toast(Loc.T("الإعلان مش جاهز، جرّب تاني") + (string.IsNullOrEmpty(why) ? "" : "  (" + why + ")"), 5f);
                             return;
                         }
-                        if (!ssv) app.Send(new Dictionary<string, object> { ["t"] = "adWatched", ["ticket"] = ticket });
+                        if (!ssv) SendAdWatched(ticket);
                     });
                 }
                 else if (ssv) app.Toast(Loc.T("الإعلان مش جاهز، جرّب تاني"));
@@ -283,10 +285,12 @@ public partial class Menus : MonoBehaviour
                 }
                 break;
             case "adReward":
+                pendingAd = null;
                 app.Toast("+" + ((long)m.Num("coins")).ToString("N0") + " " + Loc.T("عملة"));
                 Sfx.Coins();
                 break;
             case "skinAd":
+                pendingAd = null;
                 if (m.Bool("won")) { app.Toast(Loc.T("مبروك! السكين بقى بتاعك") + ": " + Skins.Name(m.Str("skin")), 4f); Sfx.Coins(); Sfx.Buzz(); }
                 else app.Toast(Skins.Name(m.Str("skin")) + "  ▶ " + (int)m.Num("n") + "/" + (int)m.Num("need"));
                 break;
@@ -300,7 +304,7 @@ public partial class Menus : MonoBehaviour
     {
         switch (code)
         {
-            case "ad_limit": app.Toast(Loc.T("خلصت إعلانات النهارده، تعالى بكرة")); return true;
+            case "ad_limit": pendingAd = null; app.Toast(Loc.T("خلصت إعلانات النهارده، تعالى بكرة")); return true;
             case "ticket_expired": app.Toast(Loc.T("انتهت مهلة تسجيل الدخول، جرّب تاني")); return true;
             case "sign_in_first": app.Toast(Loc.T("سجّل دخول الأول عشان تقدر تسحب")); return true;
             case "bad_wallet": app.Toast(Loc.T("اكتب رقم فودافون صحيح يبدأ بـ 010")); return true;
@@ -841,6 +845,19 @@ public partial class Menus : MonoBehaviour
     // coins are not sold: the shop's first tab is free coins (a rewarded ad); coins also come from games, the daily
     // reward, missions, the season track and tournaments
     long adReward = 2_000;
+    // a watched ad the server hasn't paid for yet. While the video plays the game is paused and Android often drops
+    // the connection, so "adWatched" is sent once it is back (and again after a reconnect, until the reward arrives).
+    string pendingAd;
+    void SendAdWatched(string ticket) { pendingAd = ticket; StartCoroutine(AdWatchedWhenOnline(ticket)); }
+    IEnumerator AdWatchedWhenOnline(string ticket)
+    {
+        for (float t = 0; t < 60f && pendingAd == ticket && !(app.net != null && app.net.Open); t += 0.25f)
+        {
+            if (t == 0) app.net?.Resume();
+            yield return new WaitForSecondsRealtime(0.25f);
+        }
+        if (pendingAd == ticket) app.Send(new Dictionary<string, object> { ["t"] = "adWatched", ["ticket"] = ticket });
+    }
     string AdLabel => "+" + Loc.Short(adReward);
 
     // the shop's skin tabs: boards and pieces each for dominoes, tawla and chess; then dice, hats, drinks
@@ -1335,7 +1352,7 @@ public partial class Menus : MonoBehaviour
             logo.rectTransform.localScale = Vector3.one * (1 + Mathf.Sin(Time.time * 3) * 0.03f);
             yield return null;
         }
-        app.Send(new Dictionary<string, object> { ["t"] = "adWatched", ["ticket"] = ticket });
+        SendAdWatched(ticket);
         count.Set(Loc.T("+٥٬٠٠٠ عملة"));
         yield return new WaitForSeconds(0.9f);
         Destroy(root.gameObject);
