@@ -168,7 +168,8 @@ The app shows Unity Ads: an interstitial now and then between games, and a rewar
 3. Builds show **real ads**. Set the repository variable `UNITY_ADS_TEST` to `1` for a build with test ads (don't tap
    your own real ads: Unity can flag it as invalid traffic).
 4. Safe rewards: email Unity Ads support your Game ID and the callback URL `https://YOUR-SERVER/ads/unity`; they send a
-   secret. Put `UNITY_ADS_SECRET=…` in the `SERVER_ENV` secret: from then on only Unity's signed call adds the coins.
+   secret ("S2S redeem hash secret"). Add it as the GitHub secret `UNITY_ADS_SECRET` (or a line in `SERVER_ENV`) and
+   redeploy: from then on only Unity's signed call adds the coins.
    Without it the server trusts the app's "watched" message (one per ticket, a daily limit).
 
 ### Skins by watching ads
