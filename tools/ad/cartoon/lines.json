@@ -1,0 +1,18 @@
+{
+ "voices": {
+  "fathi": { "voice": "ar-EG-ShakirNeural", "rate": "+4%", "pitch": "-16Hz" },
+  "ziko": { "voice": "ar-EG-ShakirNeural", "rate": "+16%", "pitch": "+12Hz" },
+  "nada": { "voice": "ar-EG-SalmaNeural", "rate": "+12%", "pitch": "+4Hz" }
+ },
+ "lines": [
+  { "id": "f1", "who": "fathi", "before": 0.9, "text": "دُش! مين يقدر يقفل على عم فتحي؟" },
+  { "id": "z1", "who": "ziko", "before": 0.4, "text": "أنا يا عم فتحي. بس مش هنا." },
+  { "id": "f2", "who": "fathi", "before": 0.35, "text": "أومال فين يا فالح؟" },
+  { "id": "z2", "who": "ziko", "before": 0.3, "text": "في بورد باتلز! دومينو، وطاولة، وشطرنج، ولودو. أونلاين مع ناس من مصر كلها." },
+  { "id": "n1", "who": "nada", "before": 0.9, "text": "إيه يا عم فتحي، هتلعب ولا هتتفرج؟" },
+  { "id": "f3", "who": "fathi", "before": 0.3, "text": "استني يا بنتي. قفلت!" },
+  { "id": "z3", "who": "ziko", "before": 0.5, "text": "وكمان تتفرج على إعلان، تاخد كوينز ببلاش." },
+  { "id": "f4", "who": "fathi", "before": 0.5, "text": "يا ولاد، القهوة بقت في جيبي!" },
+  { "id": "z4", "who": "ziko", "before": 0.6, "after": 1.2, "text": "بورد باتلز. نزّلها ببلاش من جوجل بلاي." }
+ ]
+}
