@@ -16,7 +16,7 @@ function page(title: string, body: string): string {
 <nav><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/delete-account">Delete account</a></nav>${body}</main></body></html>`;
 }
 
-const UPDATED = '28 October 2026';
+const UPDATED = '5 November 2026';
 
 /** The monthly prizes right now (the dashboard's settings). */
 export interface PrizeTerms { enabled: boolean; egp: number; claimDays?: number }
@@ -35,7 +35,7 @@ ${c?.enabled ? '<li><b>Monthly prizes:</b> if you win one, the Vodafone Cash num
 <h2>What we don't keep</h2><ul><li>Voice chat goes directly between the players' phones (or through our relay when a direct route is blocked); it is never recorded.</li>
 <li>Table chat is quick phrases and emojis, not stored after the game.</li><li>We don't sell your data and don't use it for anything but running the game.</li></ul>
 <h2>Services we use</h2><ul>
-<li><b>Google Play</b> (purchases, the install referrer for invite codes), <b>Google AdMob</b> (ads; AdMob may use your device's advertising id, see <a href="https://policies.google.com/technologies/ads">Google's ad policy</a>), <b>Firebase Cloud Messaging</b> (reminders).</li>
+<li><b>Google Play</b> (purchases, the install referrer for invite codes), <b>Unity Ads</b> (ads; Unity may use your device's advertising id, approximate location from your IP address and device information to show and measure ads, see <a href="https://unity.com/legal/game-player-and-app-user-privacy-policy">Unity's privacy policy</a>; you can reset or delete your advertising id in your phone's settings), <b>Firebase Cloud Messaging</b> (reminders).</li>
 <li><b>Google</b> and <b>Apple</b> sign-in, and an SMS provider for mobile-number codes, only when you choose them.</li></ul>
 <h2>How long</h2><p>As long as your account exists. Delete it any time: in the app, Settings → Delete my account, or on the <a href="/delete-account">delete-account page</a>. Everything above is removed; purchase records the law requires us to keep are kept for that time only.</p>
 <h2>Children</h2><p>The game is for players 13 and over${c?.enabled ? '; the monthly cash prizes are for adults (18+) living in Egypt' : ''}. Coins can't be cashed out.</p>
@@ -46,7 +46,7 @@ ${c?.enabled ? '<li><b>Monthly prizes:</b> if you win one, the Vodafone Cash num
 <li>المشتريات من Google Play ورقم الطلب، عشان تتحسب مرة واحدة. عمرنا ما بنشوف بيانات الكارت.</li>
 <li>رسايل الدعم والبلاغات، وتوكن الإشعارات لو سمحت بيها.</li>${c?.enabled ? '<li>لو كسبت جايزة الشهر: رقم فودافون كاش اللي بتكتبه، عشان نحولك ونحتفظ بسجل.</li>' : ''}</ul>
 <h2>مش بنحتفظ بـ</h2><ul><li>الكلام الصوتي مش بيتسجل. شات الترابيزة مش بيتخزن. مش بنبيع بياناتك.</li></ul>
-<h2>خدمات بنستخدمها</h2><ul><li>Google Play، Google AdMob للإعلانات، Firebase للإشعارات، وتسجيل الدخول بجوجل أو أبل أو الموبايل لو اخترته.</li></ul>
+<h2>خدمات بنستخدمها</h2><ul><li>Google Play، Unity Ads للإعلانات، Firebase للإشعارات، وتسجيل الدخول بجوجل أو أبل أو الموبايل لو اخترته.</li></ul>
 <h2>امسح حسابك</h2><p>من اللعبة: الإعدادات ← امسح حسابي، أو من <a href="/delete-account">صفحة مسح الحساب</a>.</p></div>`);
 }
 
@@ -55,7 +55,7 @@ export function termsPage(c?: PrizeTerms): string {
 <h1>Terms of use</h1><div class="sub">Board Battles, by Qimma Labs · last updated ${UPDATED}</div>
 <ul><li>Board Battles is a game for fun. Coins can't be sold or traded between players.</li>
 <li><b>Coins have no money value</b>: they can't be bought, sold or cashed out.</li>
-${c?.enabled ? `<li><b>Monthly prizes:</b> each month, the player with the most points in each game's monthly leaderboard (3 points a win, 1 a game, online games against people or matchmade tables, with a minimum number of games) wins ${fmt(c.egp)} EGP by Vodafone Cash. Winners must be 18 or over, live in Egypt, be signed in (Google, Apple or mobile number) and give their Vodafone Cash number in the game within ${c.claimDays ?? 30} days. Winners are checked by hand before paying; cheating, several accounts or playing against yourself make a prize void. Playing is free: nothing needs to be bought to win. The amount and the rules can change.</li>` : ''}
+${c?.enabled ? `<li><b>Monthly prizes:</b> each month, the player with the most points in each game's monthly leaderboard (3 points a win, 1 a game, online games against people or matchmade tables, with a minimum number of games) wins ${fmt(c.egp)} EGP by Vodafone Cash. Winners must be 18 or over, live in Egypt, be signed in (Google, Apple or mobile number) and give their Vodafone Cash number in the game within ${c.claimDays ?? 30} days. Winners are checked by hand before paying; cheating, several accounts or playing against yourself make a prize void. Playing is free: nothing needs to be bought to win. The amount and the rules can change. Google and Apple are not sponsors of the prizes and are not involved in them in any way.</li>` : ''}
 <li>Coins can't be bought. Purchases (the season pass: skins and no ads until the season ends) are digital items for the game, sold through Google Play under its refund rules.</li>
 <li>Be decent: no cheating, no abuse in names or chat, no harassment. Players others report are muted automatically, and we may close accounts that break these rules.</li>
 <li>One account per player. Don't use bots or modified apps.</li>
