@@ -151,10 +151,30 @@ public static class BuildScript
         if (ok && signed)
         {
             EditorUserBuildSettings.buildAppBundle = true;
+            BundleDebugSymbols();
             if (!Build(BuildTarget.Android, BuildTargetGroup.Android, "../build/android/BoardBattles.aab")) Debug.Log("[build] the app bundle failed");
             EditorUserBuildSettings.buildAppBundle = false;
         }
         return ok;
+    }
+
+    /// Native debug symbols (symbol table) inside the .aab, so Play Console shows readable native crash stacks
+    /// without a separate upload. Unity 6: UnityEditor.Android.UserBuildSettings.DebugSymbols.level / .format;
+    /// set by reflection so the editor scripts still compile without the Android module.
+    static void BundleDebugSymbols()
+    {
+        try
+        {
+            System.Type ds = null;
+            foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
+                if ((ds = asm.GetType("UnityEditor.Android.UserBuildSettings+DebugSymbols")) != null) break;
+            if (ds == null) { Debug.Log("[build] debug symbols: API not found"); return; }
+            var level = ds.GetProperty("level"); var format = ds.GetProperty("format");
+            level.SetValue(null, System.Enum.Parse(level.PropertyType, "SymbolTable"));
+            format.SetValue(null, System.Enum.Parse(format.PropertyType, "IncludeInBundle"));
+            Debug.Log("[build] debug symbols: symbol table in the app bundle");
+        }
+        catch (System.Exception e) { Debug.Log("[build] debug symbols: " + e.Message); }
     }
 
     /// Release signing with your upload key (GitHub secrets ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASS,
