@@ -53,7 +53,8 @@ public class BBBilling {
     static void connect(Activity a, Runnable then) {
         if (client == null) {
             client = BillingClient.newBuilder(a.getApplicationContext()).setListener(listener)
-                .enablePendingPurchases(PendingPurchasesParams.newBuilder().enableOneTimeProducts().build()).build();
+                .enablePendingPurchases(PendingPurchasesParams.newBuilder().enableOneTimeProducts().build())
+                .enableAutoServiceReconnection().build();
         }
         if (ready && client.isReady()) { then.run(); return; }
         synchronized (waiting) { waiting.add(then); if (waiting.size() > 1) return; }
@@ -73,7 +74,8 @@ public class BBBilling {
             String type = subscription ? BillingClient.ProductType.SUBS : BillingClient.ProductType.INAPP;
             QueryProductDetailsParams q = QueryProductDetailsParams.newBuilder().setProductList(Collections.singletonList(
                 QueryProductDetailsParams.Product.newBuilder().setProductId(productId).setProductType(type).build())).build();
-            client.queryProductDetailsAsync(q, (r, list) -> {
+            client.queryProductDetailsAsync(q, (r, res) -> {
+                List<ProductDetails> list = res == null ? null : res.getProductDetailsList();
                 if (r.getResponseCode() != BillingClient.BillingResponseCode.OK || list == null || list.isEmpty()) { send("OnBillingError", "no_product"); return; }
                 ProductDetails d = list.get(0);
                 BillingFlowParams.ProductDetailsParams.Builder pb = BillingFlowParams.ProductDetailsParams.newBuilder().setProductDetails(d);
