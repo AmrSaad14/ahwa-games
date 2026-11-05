@@ -162,6 +162,7 @@ export function createServer(opts = config) {
     if (url.pathname === '/ads/unity') {
       // Unity Ads' server-to-server callback: "1" means rewarded; anything else and Unity tries again later
       const v = verifyUnityS2S(url.searchParams, config.unityAdsSecret);
+      console.log(`[ads] Unity callback: ${!config.unityAdsSecret ? 'no UNITY_ADS_SECRET set yet' : v ? 'signature ok' : 'bad signature'}`);
       if (!v) { res.writeHead(403, { 'Content-Type': 'text/plain' }); return res.end('bad signature'); }
       const ok = hub.rewardAd(v.uid, v.ticket);
       res.writeHead(ok ? 200 : 400, { 'Content-Type': 'text/plain' });
