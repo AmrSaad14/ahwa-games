@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="ar"><head><meta charset="utf-8">
+<title>Board Battles cartoon advert</title>
+<style>
+@font-face{font-family:Kufi;src:url(../logo/ReemKufi.ttf)}
+@font-face{font-family:Plex;src:url(../logo/PlexArabicBold.ttf)}
+html,body{margin:0;background:#000;overflow:hidden}
+svg{display:block}
+text{font-family:Plex}
+.k{font-family:Kufi}
+</style></head>
+<body>
+<svg id="s" xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920"></svg>
+<script>
+// The cartoon advert, drawn frame by frame: window.render(t) draws time t (seconds).
+// window.TL = timeline.json from tools/ad/voice.py (when each line starts and ends), window.MOUTH = mouth.json (lip sync).
+const W = 1080, H = 1920;
+const G = '../../design/ad/build/game/';
+const IMG = { domino: G + 'clip/c010.jpg', domino2: G + 'clip/c060.jpg', tawla: G + 'g-tawla-2.png', chess: G + 'g-chess-1.png', ludo: G + 'g-ludo-1.png', logo: '../logo/logo-full.png', icon: '../logo/icon-1024.png' };
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const p = (t, a, b) => clamp((t - a) / (b - a));
+const eo = x => 1 - Math.pow(1 - x, 3);
+const eio = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const back = x => { const c = 1.7; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
+const lerp = (a, b, x) => a + (b - a) * x;
+const L = id => (window.TL.lines.find(l => l.id === id));
+const S = id => L(id).start, E = id => L(id).end;
+function mouthOf(who, t) {
+  const m = window.MOUTH; if (!m) return 0;
+  const i = Math.round(t * m.fps); if (i < 0 || i >= m.open.length) return 0;
+  return m.who[i] === who ? m.open[i] : 0;
+}
+function talking(t) { const l = window.TL.lines.find(l => t >= l.start - 0.05 && t < l.end + 0.15); return l; }
+function blink(t, seed) { const c = (t + seed * 1.37) % 3.3; return c < 0.12 ? 0.1 : 1; }
+
+/* ---------- characters (original cartoon designs) ---------- */
+// all drawn around (0,0) = the base of the neck; o: {mouth 0..1, blink 0..1, look [x,y], brow, armL, armR (degrees), skin}
+function eye(x, y, rx, ry, o) {
+  const b = o.blink ?? 1, lx = (o.look?.[0] ?? 0) * rx * .45, ly = (o.look?.[1] ?? 0) * ry * .4;
+  return `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry * b}" fill="#fff"/>` +
+    (b > .3 ? `<circle cx="${x + lx}" cy="${y + ly}" r="${rx * .52}" fill="#2a1a12"/><circle cx="${x + lx + rx * .18}" cy="${y + ly - rx * .2}" r="${rx * .16}" fill="#fff"/>` : '');
+}
+function mouth(x, y, w, open, smile = 0) {
+  const h = 3 + open * w * 0.95;
+  if (open < 0.06) return `<path d="M${x - w},${y - smile * 4} Q${x},${y + 10 + smile * 14} ${x + w},${y - smile * 4}" stroke="#4a1410" stroke-width="7" fill="none" stroke-linecap="round"/>`;
+  return `<path d="M${x - w},${y - 2} Q${x},${y - 6} ${x + w},${y - 2} Q${x + w * .9},${y + h} ${x},${y + h + 4} Q${x - w * .9},${y + h} ${x - w},${y - 2}Z" fill="#5a1514"/>` +
+    `<ellipse cx="${x}" cy="${y + h * .78}" rx="${w * .55}" ry="${Math.max(2, h * .28)}" fill="#e0676a"/>` +
+    `<path d="M${x - w * .8},${y} Q${x},${y - 3} ${x + w * .8},${y} L${x + w * .7},${y + Math.min(9, h * .3)} L${x - w * .7},${y + Math.min(9, h * .3)}Z" fill="#fff"/>`;
+}
+function arm(sx, sy, ang, len, sleeve, skin, hand = '') {
+  return `<g transform="translate(${sx},${sy}) rotate(${ang})"><rect x="-27" y="-8" width="54" height="${len}" rx="27" fill="${sleeve}"/>` +
+    `<circle cx="0" cy="${len}" r="31" fill="${skin}"/>${hand}</g>`;
+}
+function fathi(o = {}) {
+  const sk = '#e8a873', skD = '#cf8a57', m = o.mouth ?? 0, br = (o.brow ?? 0) * 14;
+  let s = '';
+  // body: white shirt, brown vest, round belly
+  s += `<path d="M-150,30 Q-185,170 -150,330 L150,330 Q185,170 150,30 Q0,-20 -150,30Z" fill="#f4ecdc"/>`;
+  s += `<path d="M-150,30 Q-185,170 -150,330 L-60,330 Q-40,160 -55,10Z" fill="#6b3a22"/><path d="M150,30 Q185,170 150,330 L60,330 Q40,160 55,10Z" fill="#6b3a22"/>`;
+  s += `<circle cx="-48" cy="110" r="7" fill="#e7c36a"/><circle cx="-44" cy="190" r="7" fill="#e7c36a"/><circle cx="-46" cy="270" r="7" fill="#e7c36a"/>`;
+  s += arm(-140, 50, o.armL ?? 15, 165, '#f4ecdc', sk, o.handL || '') + arm(140, 50, o.armR ?? -15, 165, '#f4ecdc', sk, o.handR || '');
+  s += `<rect x="-38" y="-40" width="76" height="70" fill="${skD}"/>`;
+  // head
+  s += `<g transform="rotate(${o.tilt ?? 0} 0 -170)">`;
+  s += `<circle cx="-120" cy="-165" r="27" fill="${skD}"/><circle cx="120" cy="-165" r="27" fill="${skD}"/>`;
+  s += `<ellipse cx="0" cy="-168" rx="124" ry="136" fill="${sk}"/>`;
+  s += `<ellipse cx="-72" cy="-120" rx="26" ry="16" fill="#f08a7a" opacity=".45"/><ellipse cx="72" cy="-120" rx="26" ry="16" fill="#f08a7a" opacity=".45"/>`;
+  // tarboosh
+  s += `<path d="M-98,-262 L-76,-375 Q0,-392 76,-375 L98,-262 Q0,-240 -98,-262Z" fill="#b8232f"/><ellipse cx="0" cy="-376" rx="76" ry="15" fill="#8e1822"/>`;
+  s += `<path d="M2,-380 Q${70 + (o.tassel ?? 0)},-370 ${84 + (o.tassel ?? 0)},-300" stroke="#1a1a1a" stroke-width="7" fill="none"/><path d="M${78 + (o.tassel ?? 0)},-306 l14,46 l-22,-4z" fill="#1a1a1a"/>`;
+  // eyes, glasses, brows
+  s += eye(-46, -190, 17, 19, o) + eye(46, -190, 17, 19, o);
+  s += `<circle cx="-46" cy="-190" r="35" stroke="#2b2b2b" stroke-width="7" fill="#bfe3ff" fill-opacity=".18"/><circle cx="46" cy="-190" r="35" stroke="#2b2b2b" stroke-width="7" fill="#bfe3ff" fill-opacity=".18"/><path d="M-12,-192 Q0,-200 12,-192" stroke="#2b2b2b" stroke-width="6" fill="none"/>`;
+  s += `<path d="M-84,${-240 - br} Q-48,${-262 - br} -14,${-242 - br}" stroke="#7d7d7d" stroke-width="15" fill="none" stroke-linecap="round"/><path d="M84,${-240 - br} Q48,${-262 - br} 14,${-242 - br}" stroke="#7d7d7d" stroke-width="15" fill="none" stroke-linecap="round"/>`;
+  // nose, mouth, mustache
+  s += `<ellipse cx="0" cy="-138" rx="31" ry="27" fill="${skD}"/>`;
+  s += mouth(0, -92, 30, m, o.smile ?? 0);
+  s += `<path d="M-6,-118 Q-40,-128 -78,-104 Q-92,-92 -96,-74 Q-60,-98 -6,-100Z M6,-118 Q40,-128 78,-104 Q92,-92 96,-74 Q60,-98 6,-100Z" fill="#8a8a8a"/>`;
+  s += `</g>`;
+  return s;
+}
+function ziko(o = {}) {
+  const sk = '#c98654', skD = '#ad6c3f', m = o.mouth ?? 0, br = (o.brow ?? 0) * 14;
+  let s = '';
+  s += `<path d="M-125,40 Q-140,180 -130,330 L130,330 Q140,180 125,40 Q0,0 -125,40Z" fill="#2f9d6b"/><path d="M-40,22 Q0,60 40,22" stroke="#24835a" stroke-width="12" fill="none"/>`;
+  s += arm(-118, 56, o.armL ?? 12, 160, '#2f9d6b', sk, o.handL || '') + arm(118, 56, o.armR ?? -12, 160, '#2f9d6b', sk, o.handR || '');
+  s += `<rect x="-33" y="-30" width="66" height="60" fill="${skD}"/>`;
+  s += `<g transform="rotate(${o.tilt ?? 0} 0 -170)">`;
+  s += `<circle cx="-108" cy="-160" r="24" fill="${skD}"/><circle cx="108" cy="-160" r="24" fill="${skD}"/>`;
+  s += `<ellipse cx="0" cy="-165" rx="112" ry="126" fill="${sk}"/>`;
+  // beard along the jaw
+  s += `<path d="M-108,-175 Q-110,-60 -40,-46 Q0,-36 40,-46 Q110,-60 108,-175 Q96,-110 60,-96 Q30,-84 0,-86 Q-30,-84 -60,-96 Q-96,-110 -108,-175Z" fill="#1d1712"/>`;
+  // hair: curls
+  for (const [x, y, r] of [[-86, -248, 40], [-46, -282, 44], [0, -294, 46], [46, -282, 44], [86, -248, 40], [-104, -210, 28], [104, -210, 28], [-20, -262, 40], [24, -262, 40]]) s += `<circle cx="${x}" cy="${y}" r="${r}" fill="#1d1712"/>`;
+  s += eye(-42, -180, 19, 22, o) + eye(42, -180, 19, 22, o);
+  s += `<path d="M-72,${-222 - br} Q-44,${-238 - br} -16,${-224 - br}" stroke="#1d1712" stroke-width="12" fill="none" stroke-linecap="round"/><path d="M72,${-222 - br} Q44,${-238 - br} 16,${-224 - br}" stroke="#1d1712" stroke-width="12" fill="none" stroke-linecap="round"/>`;
+  s += `<path d="M-4,-170 Q-20,-132 -2,-128 Q16,-126 22,-134" stroke="${skD}" stroke-width="9" fill="none" stroke-linecap="round"/>`;
+  s += `<ellipse cx="0" cy="-92" rx="44" ry="${12 + m * 26}" fill="${sk}"/>`;
+  s += mouth(0, -96, 28, m, o.smile ?? 0.6);
+  if (o.wink) s += `<path d="M20,-180 Q42,-196 64,-180" stroke="#2a1a12" stroke-width="8" fill="${sk}" />`;
+  s += `</g>`;
+  return s;
+}
+function nada(o = {}) {
+  const sk = '#efbe94', m = o.mouth ?? 0;
+  let s = `<path d="M-120,120 Q-130,-150 0,-175 Q130,-150 120,120Z" fill="#d6577f"/>`;
+  s += `<ellipse cx="0" cy="-30" rx="80" ry="94" fill="${sk}"/>`;
+  s += `<path d="M-84,-60 Q-90,-150 0,-150 Q90,-150 84,-60 Q60,-118 0,-122 Q-60,-118 -84,-60Z" fill="#d6577f"/>`;
+  s += eye(-30, -40, 15, 18, o) + eye(30, -40, 15, 18, o);
+  s += `<path d="M-46,-62 l-8,-10 M-40,-64 l-4,-12 M46,-62 l8,-10 M40,-64 l4,-12" stroke="#2a1a12" stroke-width="4"/>`;
+  s += `<ellipse cx="-50" cy="0" rx="17" ry="10" fill="#f28a8a" opacity=".5"/><ellipse cx="50" cy="0" rx="17" ry="10" fill="#f28a8a" opacity=".5"/>`;
+  s += mouth(0, 18, 20, m, 0.8);
+  return s;
+}
+
+/* ---------- props ---------- */
+function tile(x, y, w, a, b, rot = 0) {
+  const h = w * 2, pip = (cx, cy, n) => {
+    const P = { 0: [], 1: [[0, 0]], 2: [[-1, -1], [1, 1]], 3: [[-1, -1], [0, 0], [1, 1]], 4: [[-1, -1], [1, -1], [-1, 1], [1, 1]], 5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]], 6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]] }[n];
+    return P.map(([dx, dy]) => `<circle cx="${cx + dx * w * .26}" cy="${cy + dy * w * .26}" r="${w * .08}" fill="#1e1e1e"/>`).join('');
+  };
+  return `<g transform="translate(${x},${y}) rotate(${rot})"><rect x="${-w / 2 + 4}" y="${-h / 2 + 6}" width="${w}" height="${h}" rx="${w * .14}" fill="#000" opacity=".25"/><rect x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="${w * .14}" fill="#fbf6ea" stroke="#d8cfbd" stroke-width="3"/>` +
+    `<line x1="${-w * .36}" y1="0" x2="${w * .36}" y2="0" stroke="#bdb3a0" stroke-width="3"/>${pip(0, -h / 4, a)}${pip(0, h / 4, b)}</g>`;
+}
+function phone(x, y, w, img, rot = 0, extra = '') {
+  const h = w * .5, r = w * .07;
+  return `<g transform="translate(${x},${y}) rotate(${rot})"><rect x="${-w / 2 - 16}" y="${-h / 2 - 16}" width="${w + 32}" height="${h + 32}" rx="${r + 14}" fill="#141414"/>` +
+    `<clipPath id="ps${Math.round(w)}"><rect x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="${r}"/></clipPath>` +
+    `<g clip-path="url(#ps${Math.round(w)})"><rect x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" fill="#2a1a10"/>` +
+    (img ? `<image href="${img}" x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h * 1.0}" preserveAspectRatio="xMidYMid slice"/>` : '') + extra + `</g>` +
+    `<circle cx="${-w / 2 - 8}" cy="0" r="4" fill="#333"/></g>`;
+}
+function coin(x, y, r, spin = 0) {
+  const sx = Math.max(.15, Math.abs(Math.cos(spin)));
+  return `<g transform="translate(${x},${y}) scale(${sx},1)"><circle r="${r}" fill="#c98d1c"/><circle r="${r * .86}" fill="#f6c94c"/><circle r="${r * .62}" fill="none" stroke="#c98d1c" stroke-width="${r * .1}"/><text y="${r * .32}" text-anchor="middle" font-size="${r * .9}" fill="#a86d0c" font-family="Kufi">ب</text></g>`;
+}
+function burst(x, y, r, text, fill = '#ffd34d', size = 92, rot = -8, n = 14) {
+  let d = '';
+  for (let i = 0; i < n * 2; i++) { const a = i / (n * 2) * Math.PI * 2, rr = i % 2 ? r * .7 : r; d += (i ? 'L' : 'M') + (x + Math.cos(a) * rr * 1.25) + ',' + (y + Math.sin(a) * rr) + ' '; }
+  return `<g transform="rotate(${rot} ${x} ${y})"><path d="${d}Z" fill="${fill}" stroke="#3b1607" stroke-width="8" stroke-linejoin="round"/>` +
+    `<text x="${x}" y="${y + size * .35}" direction="rtl" text-anchor="middle" font-size="${size}" class="k" font-family="Kufi" fill="#7a1010" stroke="#fff" stroke-width="3" paint-order="stroke">${text}</text></g>`;
+}
+
+/* ---------- the café ---------- */
+function cafe(t, cam = {}) {
+  const z = cam.zoom ?? 1, cx = cam.x ?? 0, cy = cam.y ?? 0;
+  let s = `<defs><linearGradient id="wall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7a3f22"/><stop offset="1" stop-color="#3f1f12"/></linearGradient>` +
+    `<radialGradient id="glow"><stop offset="0" stop-color="#ffd27a" stop-opacity=".75"/><stop offset="1" stop-color="#ffd27a" stop-opacity="0"/></radialGradient>` +
+    `<linearGradient id="night" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0d1b3d"/><stop offset="1" stop-color="#27407a"/></linearGradient></defs>`;
+  s += `<g transform="translate(${W / 2 + cx},${H / 2 + cy}) scale(${z}) translate(${-W / 2},${-H / 2})">`;
+  s += `<rect x="-200" y="-200" width="${W + 400}" height="${H + 400}" fill="url(#wall)"/>`;
+  // tiled band (the café's patterned floor tiles on the lower wall)
+  for (let i = -2; i < 14; i++) for (let j = 0; j < 4; j++) {
+    const x = i * 100 + (j % 2) * 50, y = 1180 + j * 100;
+    s += `<rect x="${x}" y="${y}" width="100" height="100" fill="${(i + j) % 2 ? '#e9d7b4' : '#dcc59a'}"/><circle cx="${x + 50}" cy="${y + 50}" r="30" fill="none" stroke="#2f6b4f" stroke-width="10"/><circle cx="${x + 50}" cy="${y + 50}" r="9" fill="#b8232f"/>`;
+  }
+  // arched window with the night and the moon
+  s += `<path d="M330,820 L330,420 Q540,220 750,420 L750,820Z" fill="url(#night)" stroke="#2a150b" stroke-width="22"/>`;
+  s += `<circle cx="640" cy="430" r="46" fill="#fff4c9"/><circle cx="662" cy="418" r="42" fill="#1a2b57"/>`;
+  for (const [x, y] of [[420, 470], [470, 560], [380, 640], [700, 600], [600, 700], [520, 400]]) s += `<circle cx="${x}" cy="${y}" r="${3 + (Math.sin(t * 3 + x) + 1) * 1.5}" fill="#fff"/>`;
+  s += `<path d="M330,620 L750,620 M540,320 L540,820" stroke="#2a150b" stroke-width="12"/>`;
+  // shelf with tea glasses
+  s += `<rect x="40" y="880" width="270" height="18" rx="6" fill="#2a150b"/><rect x="770" y="880" width="270" height="18" rx="6" fill="#2a150b"/>`;
+  for (let i = 0; i < 4; i++) s += `<path d="M${70 + i * 60},880 l6,-62 l34,0 l6,62z" fill="#f1c87a" opacity=".85"/><path d="M${800 + i * 60},880 l6,-62 l34,0 l6,62z" fill="#c45a2b" opacity=".85"/>`;
+  // string of lights
+  let d = 'M-20,140 '; for (let x = 0; x <= W + 40; x += 60) d += `Q${x + 30},${200} ${x + 60},140 `;
+  s += `<path d="${d}" stroke="#1a0d06" stroke-width="5" fill="none"/>`;
+  for (let x = 10; x < W; x += 60) { const on = .6 + .4 * Math.sin(t * 4 + x * .05); s += `<circle cx="${x + 20}" cy="${168}" r="34" fill="url(#glow)" opacity="${on}"/><circle cx="${x + 20}" cy="${168}" r="11" fill="${['#ffd27a', '#ff8a5c', '#7fe0b0', '#8ab8ff'][(x / 60 | 0) % 4]}"/>`; }
+  // two lanterns
+  for (const [x, ph] of [[160, 0], [920, 1.4]]) {
+    const sw = Math.sin(t * 1.6 + ph) * 4;
+    s += `<g transform="rotate(${sw} ${x} 200)"><line x1="${x}" y1="200" x2="${x}" y2="330" stroke="#1a0d06" stroke-width="5"/><circle cx="${x}" cy="420" r="150" fill="url(#glow)"/>` +
+      `<path d="M${x - 50},350 L${x + 50},350 L${x + 64},440 L${x},500 L${x - 64},440Z" fill="#e2a23b" stroke="#5a3210" stroke-width="7"/><path d="M${x - 30},370 L${x + 30},370 L${x + 38},440 L${x},475 L${x - 38},440Z" fill="#fff0b3"/><path d="M${x - 24},350 L${x},322 L${x + 24},350Z" fill="#5a3210"/></g>`;
+  }
+  s += `</g>`;
+  return s;
+}
+function table(t, slam, tiles) {
+  // the table across the bottom, with tiles; slam (0..1 just after the hit) bounces them
+  const b = slam > 0 ? Math.sin(slam * Math.PI * 3) * (1 - slam) * 18 : 0;
+  let s = `<path d="M-40,1360 L1120,1360 L1120,1920 L-40,1920Z" fill="#6e3d1e"/><rect x="-40" y="1300" width="1160" height="90" rx="20" fill="#8c5129"/><rect x="-40" y="1300" width="1160" height="22" rx="10" fill="#a8693a"/>`;
+  s += `<ellipse cx="300" cy="1330" rx="70" ry="14" fill="#000" opacity=".2"/>`;
+  // tea glass and the tiles
+  s += `<path d="M820,1330 l10,-96 l60,0 l10,96z" fill="#f1c87a" opacity=".9"/><rect x="826" y="1232" width="68" height="12" fill="#fff" opacity=".5"/>`;
+  for (const [x, y, a, c, r] of tiles) s += tile(x, y - b * (x % 3 ? 1 : 1.6), 46, a, c, r);
+  return s;
+}
+function caption(t) {
+  const l = talking(t); if (!l || t > l.end + 0.15) return '';
+  const name = { fathi: 'عم فتحي', ziko: 'زيكو', nada: 'ندى' }[l.who], col = { fathi: '#ffcf5a', ziko: '#7fe0b0', nada: '#ff9cc0' }[l.who];
+  const a = clamp(p(t, l.start - 0.05, l.start + 0.1)) * clamp(1 - p(t, l.end + 0.02, l.end + 0.15));
+  const txt = l.text, fs = txt.length > 44 ? 40 : 48, lines = txt.length > 44 ? split(txt) : [txt];
+  const h = 70 + lines.length * fs * 1.25;
+  let s = `<g opacity="${a}"><rect x="70" y="${1520}" width="940" height="${h}" rx="28" fill="#1a0e08" opacity=".82"/>`;
+  s += `<text x="${W / 2}" y="${1520 + 46}" text-anchor="middle" font-size="30" fill="${col}">${name}</text>`;
+  lines.forEach((ln, i) => s += `<text x="${W / 2}" y="${1520 + 50 + (i + 1) * fs * 1.2}" text-anchor="middle" font-size="${fs}" fill="#fff8e6" direction="rtl">${ln}</text>`);
+  return s + '</g>';
+}
+function split(s) { const w = s.split(' '), mid = s.length / 2; let a = '', i = 0; while (i < w.length && (a + w[i]).length < mid) a += (a ? ' ' : '') + w[i++]; return [a, w.slice(i).join(' ')]; }
+
+/* ---------- the scenes ---------- */
+function scenes() {
+  const T = window.TL, end = T.duration + 0.4;
+  return [
+    { from: 0, to: S('z2') - 0.15, draw: sCafe },
+    { from: S('z2') - 0.15, to: S('n1') - 0.25, draw: sPhone },
+    { from: S('n1') - 0.25, to: S('z3') - 0.15, draw: sFathiPlays },
+    { from: S('z3') - 0.15, to: S('f4') - 0.15, draw: sCoins },
+    { from: S('f4') - 0.15, to: S('z4') - 0.1, draw: sDance },
+    { from: S('z4') - 0.1, to: end, draw: sEnd },
+  ];
+}
+window.SCENES = () => scenes().map(s => ({ from: s.from, to: s.to }));
+function slideIn(t, from) { const x = eo(p(t, from, from + 0.28)); return (1 - x) * W * 0.9; }
+
+function sCafe(t) {
+  const slamAt = S('f1') + 0.05, slam = t >= slamAt ? p(t, slamAt, slamAt + 0.7) : 0;
+  const shake = t >= slamAt && t < slamAt + 0.35 ? Math.sin(t * 90) * 14 * (1 - p(t, slamAt, slamAt + 0.35)) : 0;
+  const zoom = 1 + 0.03 * t;
+  let s = `<g transform="translate(${shake},${shake * .4})">` + cafe(t, { zoom });
+  // the arm comes up during the wind-up and slams down
+  const up = p(t, 0.15, slamAt - 0.12), down = p(t, slamAt - 0.12, slamAt);
+  const armR = t < slamAt - 0.12 ? lerp(-20, -160, eio(up)) : lerp(-160, -32, down);
+  s += `<g transform="translate(300,1110) scale(1.05)">` + fathi({ mouth: mouthOf('fathi', t), blink: blink(t, 0), armR: -armR * -1 > 0 ? armR : armR, armL: 18, look: t > S('z1') - 0.2 ? [1, 0] : [0.3, 0.4], brow: t > S('f2') - .1 && t < E('f2') + .2 ? 1 : (t < slamAt + .5 ? .6 : 0), smile: t < S('z1') ? 1 : 0, tilt: t > S('f2') - .1 && t < E('f2') ? -6 : 0, tassel: Math.sin(t * 6) * 4 + (slam > 0 ? (1 - slam) * 24 : 0) }) + `</g>`;
+  // Ziko, relaxed, phone in hand
+  const lift = eo(p(t, S('z1'), S('z1') + 0.4));
+  s += `<g transform="translate(790,1130)">` + ziko({ mouth: mouthOf('ziko', t), blink: blink(t, 1), look: t < S('z1') ? [0, .6] : [-1, 0], smile: .7, armL: lerp(20, 120, lift), tilt: lerp(4, -4, lift), handL: lift > .05 ? phone(0, 150, 150, IMG.domino, -90) : '' }) + `</g>`;
+  const tiles = [[420, 1310, 6, 6, 90], [520, 1318, 6, 3, 90], [610, 1312, 3, 1, 90], [180, 1320, 5, 5, 0]];
+  if (t >= slamAt) tiles.push([300, 1306, 4, 4, 90]);
+  s += table(t, slam, tiles);
+  if (t >= slamAt && t < E('f1') + 0.3) { const k = back(clamp(p(t, slamAt, slamAt + 0.25))); s += `<g transform="translate(470,1170) scale(${k}) translate(-470,-1170)">` + burst(470, 1170, 115, 'دُش!', '#ffd34d', 78) + `</g>`; }
+  if (t < 1.6) s += title(t);
+  return s + `</g>` + caption(t);
+}
+function title(t) {
+  const a = 1 - p(t, 1.1, 1.5);
+  return `<g opacity="${a}"><text x="${W / 2}" y="330" direction="rtl" text-anchor="middle" class="k" font-family="Kufi" font-size="64" fill="#ffd27a" stroke="#2a150b" stroke-width="10" paint-order="stroke">على القهوة</text></g>`;
+}
+function sPhone(t) {
+  const f = S('z2') - 0.15, x0 = slideIn(t, f);
+  // when each word is said (from the pauses in the voice): "في بورد باتلز! دومينو، وطاولة، وشطرنج، ولودو. أونلاين…"
+  const z = S('z2'), q = k => z + k;
+  const steps = [[z + 1.19, IMG.domino, 'دومينو'], [z + 1.94, IMG.tawla, 'طاولة'], [z + 2.74, IMG.chess, 'شطرنج'], [z + 3.57, IMG.ludo, 'لودو']];
+  let cur = t < steps[0][0] ? [z, IMG.icon, 'بورد باتلز'] : steps[0]; for (const st of steps) if (t >= st[0]) cur = st;
+  const online = t >= z + 4.31;
+  let s = `<g transform="translate(${x0},0)">` + `<rect width="${W}" height="${H}" fill="#3f1f12"/>` + cafe(t, { zoom: 1.5, y: 300 }) + `<rect width="${W}" height="${H}" fill="#1a0b05" opacity=".45"/>`;
+  // rays behind the phone
+  let rays = ''; for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2 + t * .4; rays += `<path d="M540,720 L${540 + Math.cos(a) * 1400},${720 + Math.sin(a) * 1400} L${540 + Math.cos(a + .12) * 1400},${720 + Math.sin(a + .12) * 1400}Z" fill="#ffd27a" opacity=".08"/>`; }
+  s += rays;
+  const pop = back(clamp(p(t, f + .1, f + .45)));
+  s += `<g transform="translate(540,720) scale(${.6 + .4 * pop}) translate(-540,-720)">` + phone(540, 720, 900, online ? IMG.domino2 : cur[1], -2, cur[1] === IMG.icon && !online ? `<rect x='-450' y='-225' width='900' height='450' fill='#7a1424'/><image href='${IMG.logo}' x='-170' y='-205' width='340' height='397'/>` : '') + `</g>`;
+  if (!online) {
+    const k = back(clamp(p(t, cur[0], cur[0] + .2)));
+    s += `<g transform="translate(540,1060) scale(${k}) translate(-540,-1060)"> <rect x="${cur[2].length > 6 ? 260 : 330}" y="1000" width="${cur[2].length > 6 ? 560 : 420}" height="120" rx="60" fill="#ffd27a" stroke="#2a150b" stroke-width="8"/><text x="540" y="1084" text-anchor="middle" font-size="72" class="k" font-family="Kufi" fill="#5a1514">${cur[2]}</text></g>`;
+    // the four names collected so far, as small chips
+    steps.forEach((st, i) => { if (t >= st[0]) s += `<g opacity="${p(t, st[0], st[0] + .15)}"><rect x="${88 + (3 - i) * 232}" y="350" width="210" height="80" rx="40" fill="#2a150b" stroke="#ffd27a" stroke-width="4"/><text x="${193 + (3 - i) * 232}" y="404" text-anchor="middle" font-size="40" fill="#ffd27a">${st[2]}</text></g>`; });
+  } else {
+    // players all over Egypt pop up around the phone
+    const towns = [['القاهرة', 160, 380], ['إسكندرية', 760, 330], ['أسيوط', 120, 1080], ['المنصورة', 800, 1100], ['أسوان', 460, 1180], ['بورسعيد', 470, 300]];
+    towns.forEach(([n, x, y], i) => { const k = back(clamp(p(t, q(4.4) + i * .14, q(4.4) + i * .14 + .25))); if (k > 0) s += `<g transform="translate(${x + 80},${y}) scale(${k})"><circle r="56" fill="#fff8e6" stroke="#ffd27a" stroke-width="6"/><g transform="translate(0,30) scale(.3)">${[ziko, nada, fathi][i % 3]({ blink: 1, mouth: 0, smile: 1 })}</g><rect x="-90" y="64" width="180" height="56" rx="28" fill="#2a150b"/><text y="103" text-anchor="middle" font-size="32" fill="#7fe0b0">${n}</text></g>`; });
+  }
+  // Ziko in the corner, talking
+  s += `<g transform="translate(860,1600) scale(.95)">` + ziko({ mouth: mouthOf('ziko', t), blink: blink(t, 2), look: [-.8, -.6], smile: .8, armL: 150, armR: -10 }) + `</g>`;
+  return s + `</g>` + caption(t);
+}
+function sFathiPlays(t) {
+  const f = S('n1') - 0.25, x0 = slideIn(t, f);
+  const winAt = S('f3') + 1.26, won = t >= winAt, w = won ? p(t, winAt, winAt + 1.2) : 0;
+  const shake = won && t < winAt + .3 ? Math.sin(t * 80) * 12 : 0;
+  let s = `<g transform="translate(${x0 + shake},0)">` + cafe(t, { zoom: 1.35, y: 120 });
+  // the voice-chat bubble with Nada
+  const bub = back(clamp(p(t, S('n1') - .15, S('n1') + .2))) * (1 - eio(p(t, E('n1') + .3, E('n1') + .6)));
+  if (bub > 0) {
+    s += `<g transform="translate(300,360) scale(${bub})"><rect x="-230" y="-150" width="700" height="300" rx="60" fill="#fff8e6" stroke="#d6577f" stroke-width="8"/><path d="M60,150 l40,70 l30,-70z" fill="#fff8e6"/>` +
+      `<circle cx="-80" cy="0" r="110" fill="#ffe0ea"/><g transform="translate(-80,35) scale(.62)">${nada({ mouth: mouthOf('nada', t), blink: blink(t, 3), look: [.4, .2] })}</g>`;
+    for (let i = 0; i < 3; i++) { const a = mouthOf('nada', t) > .05 ? .4 + .6 * Math.abs(Math.sin(t * 9 + i)) : .25; s += `<path d="M${70 + i * 36},-40 q30,40 0,80" stroke="#d6577f" stroke-width="10" fill="none" stroke-linecap="round" opacity="${a}"/>`; }
+    s += `<text x="300" y="-20" text-anchor="middle" font-size="44" fill="#5a1514">ندى</text><text x="300" y="44" text-anchor="middle" font-size="32" fill="#9a6a50">🎙 صوت مباشر</text></g>`;
+  }
+  // Fathi, close, playing on the phone
+  const lean = won ? -Math.sin(w * Math.PI) * 10 : Math.sin(t * 2) * 2;
+  s += `<g transform="translate(540,1250) scale(1.35)">` + fathi({ mouth: mouthOf('fathi', t), blink: blink(t, 4), look: t < S('f3') ? [0, 1] : [-.3, -.2], brow: won ? 1.2 : 0.4, smile: won ? 1 : 0, armL: won ? -150 + Math.sin(t * 14) * 10 : 40, armR: -40, tilt: lean, tassel: Math.sin(t * 8) * 6 }) + `</g>`;
+  s += phone(560, 1330, 560, IMG.domino, 4, won ? `<rect x="-280" y="-140" width="560" height="280" fill="#fff" opacity="${1 - p(t, winAt, winAt + .4)}"/>` : '');
+  if (won) {
+    for (let i = 0; i < 26; i++) { const a = i * 2.4, sp = 500 + (i * 53) % 400, tt = w; s += coin(560 + Math.cos(a) * sp * tt, 1300 + Math.sin(a) * sp * tt * .8 + 900 * tt * tt, 34, t * 8 + i); }
+    const k = back(clamp(p(t, winAt, winAt + .25)));
+    s += `<g transform="translate(540,560) scale(${k}) translate(-540,-560)">` + burst(540, 560, 180, 'قفلت!', '#7fe0b0', 104, 6) + `</g>`;
+  }
+  return s + `</g>` + caption(t);
+}
+function sCoins(t) {
+  const f = S('z3') - 0.15, x0 = slideIn(t, f);
+  let s = `<g transform="translate(${x0},0)">` + cafe(t, { zoom: 1.3, x: -200, y: 200 }) + `<rect width="${W}" height="${H}" fill="#1a0b05" opacity=".3"/>`;
+  // a little TV playing an ad, then +2,000 coins
+  const k = back(clamp(p(t, f + .1, f + .45)));
+  s += `<g transform="translate(540,620) scale(${k})"><rect x="-300" y="-190" width="600" height="380" rx="40" fill="#2a150b" stroke="#ffd27a" stroke-width="10"/><rect x="-270" y="-160" width="540" height="320" rx="24" fill="#3d6fd8"/>` +
+    `<circle r="80" fill="#fff" opacity=".9"/><path d="M-26,-44 L50,0 L-26,44Z" fill="#3d6fd8"/>` +
+    `<rect x="-270" y="140" width="${540 * clamp(p(t, f + .3, S('z3') + 1.5))}" height="20" fill="#ffd27a"/></g>`;
+  const gotAt = S('z3') + 1.57;
+  if (t >= gotAt) {
+    const g = back(clamp(p(t, gotAt, gotAt + .3)));
+    s += `<g transform="translate(540,1000) scale(${g})"><rect x="-260" y="-80" width="520" height="160" rx="80" fill="#ffd27a" stroke="#5a3210" stroke-width="8"/>${coin(-170, 0, 56, t * 6)}<text x="50" y="30" text-anchor="middle" font-size="96" class="k" font-family="Kufi" fill="#5a1514">+2,000</text></g>`;
+    for (let i = 0; i < 14; i++) { const ph = ((t - gotAt) * .9 + i * .13) % 1; s += coin(100 + (i * 137) % 880, -60 + ph * 1400, 28, t * 7 + i); }
+  }
+  s += `<g transform="translate(540,1600) scale(1.25)">` + ziko({ mouth: mouthOf('ziko', t), blink: blink(t, 5), look: [0, -.5], smile: 1, armR: -150 + Math.sin(t * 3) * 6, armL: 20, wink: t > E('z3') - .2 }) + `</g>`;
+  return s + `</g>` + caption(t);
+}
+function sDance(t) {
+  const f = S('f4') - 0.15, x0 = slideIn(t, f);
+  let s = `<g transform="translate(${x0},0)">` + cafe(t, { zoom: 1.05 });
+  const bob = Math.sin(t * 9) * 16;
+  s += `<g transform="translate(330,${1180 + bob}) rotate(${Math.sin(t * 9) * 5})">` + fathi({ mouth: mouthOf('fathi', t), blink: blink(t, 6), smile: 1, brow: 1, armR: -150 + Math.sin(t * 9) * 20, armL: 150 - Math.sin(t * 9) * 20, handR: phone(0, 190, 150, IMG.domino2, 90), tassel: Math.sin(t * 9) * 26 }) + `</g>`;
+  s += `<g transform="translate(800,1170)">` + ziko({ mouth: mouthOf('ziko', t), blink: blink(t, 7), smile: 1, armL: 150 + Math.sin(t * 14) * 14, armR: -150 - Math.sin(t * 14) * 14, look: [-1, -.3] }) + `</g>`;
+  for (let i = 0; i < 22; i++) { const ph = ((t - f) * .55 + i * .07) % 1; s += coin(40 + (i * 149) % 1000, -80 + ph * 1500, 30, t * 6 + i); }
+  s += table(t, 0, [[420, 1310, 6, 6, 90], [520, 1318, 6, 3, 90], [610, 1312, 3, 1, 90], [300, 1306, 4, 4, 90]]);
+  return s + `</g>` + caption(t);
+}
+function sEnd(t) {
+  const f = S('z4') - 0.1;
+  const a = p(t, f, f + .3);
+  let s = `<defs><radialGradient id="eg" cx=".5" cy=".42" r=".7"><stop offset="0" stop-color="#8a1c2a"/><stop offset="1" stop-color="#2a0710"/></radialGradient></defs><rect width="${W}" height="${H}" fill="url(#eg)" opacity="${a}"/>`;
+  let rays = ''; for (let i = 0; i < 20; i++) { const an = i / 20 * Math.PI * 2 + t * .25; rays += `<path d="M540,760 L${540 + Math.cos(an) * 1500},${760 + Math.sin(an) * 1500} L${540 + Math.cos(an + .1) * 1500},${760 + Math.sin(an + .1) * 1500}Z" fill="#ffd27a" opacity="${.06 * a}"/>`; }
+  s += rays;
+  const k = back(clamp(p(t, f + .1, f + .55)));
+  s += `<g transform="translate(540,720) scale(${k})"><image href="${IMG.logo}" x="-330" y="-385" width="660" height="770"/></g>`;
+  const games = ['دومينو', 'طاولة', 'شطرنج', 'لودو'];
+  games.forEach((g, i) => { const kk = back(clamp(p(t, f + .5 + i * .12, f + .75 + i * .12))); s += `<g transform="translate(${180 + (3 - i) * 240},1200) scale(${kk})"><rect x="-105" y="-44" width="210" height="88" rx="44" fill="#2a0710" stroke="#ffd27a" stroke-width="4"/><text y="14" text-anchor="middle" font-size="40" fill="#ffd27a">${g}</text></g>`; });
+  const b = back(clamp(p(t, f + .9, f + 1.2))), pulse = 1 + Math.sin(t * 6) * .03 * (t > f + 1.2 ? 1 : 0);
+  s += `<g transform="translate(540,1390) scale(${b * pulse})"><rect x="-330" y="-70" width="660" height="140" rx="70" fill="#ffd27a" stroke="#5a3210" stroke-width="8"/><text y="24" text-anchor="middle" font-size="62" class="k" font-family="Kufi" fill="#5a1514">نزّلها ببلاش</text></g>`;
+  s += `<text x="540" y="1530" direction="rtl" text-anchor="middle" font-size="42" fill="#fff8e6" opacity="${p(t, f + 1.1, f + 1.4)}">متاحة على Google Play</text>`;
+  // the two heroes peeking in from the corners
+  const pk = eo(p(t, f + .3, f + .8));
+  s += `<g transform="translate(${lerp(-200, 120, pk)},1820) scale(.8) rotate(12)">` + fathi({ smile: 1, blink: blink(t, 8), look: [1, -.5], mouth: mouthOf('fathi', t), armR: -150, armL: 20 }) + `</g>`;
+  s += `<g transform="translate(${lerp(1280, 960, pk)},1830) scale(.8) rotate(-12)">` + ziko({ smile: 1, blink: blink(t, 9), look: [-1, -.5], mouth: mouthOf('ziko', t), armL: 150, wink: true }) + `</g>`;
+  return s;
+}
+
+window.render = t => {
+  const sc = scenes(); let i = sc.findIndex(s => t >= s.from && t < s.to); if (i < 0) i = t < 0 ? 0 : sc.length - 1;
+  let out = sc[i].draw(t);
+  // the previous scene stays under the one sliding in for its first moments
+  if (i > 0 && i < 5 && t < sc[i].from + 0.28) out = `<g transform="translate(${-eo(p(t, sc[i].from, sc[i].from + .28)) * W * .4},0)">${sc[i - 1].draw(sc[i].from - 0.01)}</g>` + out;
+  document.getElementById('s').innerHTML = out;
+};
+window.DURATION = () => window.TL.duration + 0.4;
+window.READY = true;
+</script></body></html>
