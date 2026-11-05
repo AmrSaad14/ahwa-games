@@ -74,8 +74,8 @@ public class BBBilling {
             String type = subscription ? BillingClient.ProductType.SUBS : BillingClient.ProductType.INAPP;
             QueryProductDetailsParams q = QueryProductDetailsParams.newBuilder().setProductList(Collections.singletonList(
                 QueryProductDetailsParams.Product.newBuilder().setProductId(productId).setProductType(type).build())).build();
-            client.queryProductDetailsAsync(q, (r, res) -> {
-                List<ProductDetails> list = res == null ? null : res.getProductDetailsList();
+            client.queryProductDetailsAsync(q, (r, found) -> {
+                List<ProductDetails> list = found == null ? null : found.getProductDetailsList();
                 if (r.getResponseCode() != BillingClient.BillingResponseCode.OK || list == null || list.isEmpty()) { send("OnBillingError", "no_product"); return; }
                 ProductDetails d = list.get(0);
                 BillingFlowParams.ProductDetailsParams.Builder pb = BillingFlowParams.ProductDetailsParams.newBuilder().setProductDetails(d);
