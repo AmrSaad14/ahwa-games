@@ -705,7 +705,7 @@ public class App : MonoBehaviour
     void BuildHome()
     {
         ui = Ui.MakeCanvas("Home", 10);
-        var root = Ui.Rect("Home", ui.transform).Fill();
+        var root = Ui.Rect("Home", ui.transform).Safe();
         homeRoot = root;
         homeGroup = root.gameObject.AddComponent<CanvasGroup>();
         homeGroup.alpha = 0;

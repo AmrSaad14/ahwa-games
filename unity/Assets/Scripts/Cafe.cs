@@ -167,12 +167,80 @@ public class Cafe : MonoBehaviour
         }
     }
 
+    /// The café from above: all four tables (with their chairs and the people at them) fitted into the part of the
+    /// screen the home buttons leave free, on any screen shape (long phones, short phones, tablets, split screen).
+    /// The camera looks down steeply enough that the two back tables never hide behind the two front ones.
     Vector3 Overview(out Vector3 look)
     {
-        float aspect = Mathf.Max(0.5f, (float)Screen.width / Mathf.Max(1, Screen.height));
-        float far = Mathf.Max(1f, 1.75f / aspect);
-        look = center + Vector3.down * 2f - front * 3.2f;
-        return center + Vector3.up * 23f * far + front * 25f * far;
+        if (cam == null || tables.Count < 4)
+        {
+            float aspect = Mathf.Max(0.5f, (float)Screen.width / Mathf.Max(1, Screen.height));
+            float far = Mathf.Max(1f, 1.75f / aspect);
+            look = center + Vector3.down * 2f - front * 3.2f;
+            return center + Vector3.up * 23f * far + front * 25f * far;
+        }
+        // the free part of the screen (as a share of it): the home menu is laid out on an 844 × 390 canvas that
+        // grows to fill the screen ("Expand"), so its buttons' share of the width depends on the screen's shape
+        float ui = Mathf.Min(Screen.width / 844f, Screen.height / 390f), w = Mathf.Max(1, Screen.width);
+        float left = Mathf.Min(0.2f, 84 * ui / w), right = Mathf.Min(0.35f, 196 * ui / w), top = 0.2f, bottom = 0.1f;
+        const float el = 56f;   // degrees above the floor
+        float e = el * Mathf.Deg2Rad;
+        var dir = front * Mathf.Cos(e) + Vector3.up * Mathf.Sin(e);
+        var side = Vector3.Cross(Vector3.up, front);
+        // each table with its chairs: a box around it, up to the heads of the people sitting there
+        var pts = new List<Vector3>();
+        foreach (var t in tables.Values)
+            foreach (float y in new[] { 0f, 2.6f })
+                foreach (float sx in new[] { -1f, 1f })
+                    foreach (float sz in new[] { -1f, 1f })
+                        pts.Add(new Vector3(t.position.x, center.y, t.position.z) + side * 4.2f * sx + front * 4.2f * sz + Vector3.up * y);
+        var tr = cam.transform; var p0 = tr.position; var r0 = tr.rotation;
+        Vector3 aim = center;
+        float d = 40f;
+        for (int it = 0; it < 8; it++)
+        {
+            // as close as everything still fits (binary search on the distance)
+            float a = 5f, b = 200f;
+            for (int k = 0; k < 24; k++)
+            {
+                float m = (a + b) / 2;
+                tr.position = aim + dir * m; tr.LookAt(aim);
+                bool fits = true;
+                foreach (var q in pts)
+                {
+                    var v = cam.WorldToViewportPoint(q);
+                    if (v.z <= 0 || v.x < left || v.x > 1 - right || v.y < bottom || v.y > 1 - top) { fits = false; break; }
+                }
+                if (fits) b = m; else a = m;
+            }
+            d = b;
+            tr.position = aim + dir * d; tr.LookAt(aim);
+            // then move the aim so the tables sit in the middle of the free part
+            float lx = 1, hx = 0, ly = 1, hy = 0;
+            foreach (var q in pts) { var v = cam.WorldToViewportPoint(q); lx = Mathf.Min(lx, v.x); hx = Mathf.Max(hx, v.x); ly = Mathf.Min(ly, v.y); hy = Mathf.Max(hy, v.y); }
+            float wantX = left + (1 - left - right) / 2, wantY = bottom + (1 - top - bottom) / 2;
+            float dx = wantX - (lx + hx) / 2, dy = wantY - (ly + hy) / 2;
+            if (Mathf.Abs(dx) < 0.004f && Mathf.Abs(dy) < 0.004f) break;
+            // the screen's height at this distance, in world units (roughly); `side` points to the screen's left,
+            // so tables too far left (dx > 0) move the aim left, and tables too low (dy > 0) bring it nearer
+            float span = 2f * d * Mathf.Tan(cam.fieldOfView * Mathf.Deg2Rad / 2);
+            aim += side * dx * span * cam.aspect;
+            aim += front * dy * span / Mathf.Max(0.3f, Mathf.Sin(e));
+        }
+        tr.position = p0; tr.rotation = r0;
+        look = aim;
+        return aim + dir * d;
+    }
+
+    int lastW, lastH;
+    /// The screen changed shape (turned, split screen, a foldable opened): frame the café again.
+    void Reframe()
+    {
+        if (Screen.width == lastW && Screen.height == lastH) return;
+        bool first = lastW == 0;
+        lastW = Screen.width; lastH = Screen.height;
+        if (first || inGame) return;
+        camPosTo = focus == null ? Overview(out camLookTo) : TableShot(focus, out camLookTo);
     }
 
     Vector3 TableShot(string g, out Vector3 look)
@@ -403,6 +471,7 @@ public class Cafe : MonoBehaviour
     void Update()
     {
         if (!ready) return;
+        Reframe();
         ZoomInput();
         float k = 1 - Mathf.Exp(-Time.deltaTime * 2.2f);
         camPos = Vector3.Lerp(camPos, camPosTo, k);

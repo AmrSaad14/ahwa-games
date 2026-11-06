@@ -157,7 +157,7 @@ public class GameUi : MonoBehaviour
     {
         app = a;
         canvas = Ui.MakeCanvas("Game", 20);
-        root = Ui.Rect("Root", canvas.transform).Fill();
+        root = Ui.Rect("Root", canvas.transform).Safe();
         stakeIndex = Mathf.Clamp(PlayerPrefs.GetInt("ahwa.stake", 0), 0, Stakes.Length - 1);
         BuildPicker(); BuildQueue(); BuildHud(); BuildLobby();
         picker.gameObject.SetActive(false); queuePanel.gameObject.SetActive(false); hud.gameObject.SetActive(false); lobby.gameObject.SetActive(false);

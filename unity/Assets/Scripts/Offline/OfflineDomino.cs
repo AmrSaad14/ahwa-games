@@ -5,6 +5,7 @@ using System.Linq;
 
 public class OfflineDomino : OfflineGame
 {
+    const double DominoTurnMs = 20000;   // dominoes: 20 seconds a move (the board games keep TurnMs)
     readonly List<SeatInfo> seats;
     readonly int n, target;
     string phase = "lobby";
@@ -38,7 +39,7 @@ public class OfflineDomino : OfflineGame
         for (int i = deck.Count - 1; i > 0; i--) { int j = rng.Next(i + 1); (deck[i], deck[j]) = (deck[j], deck[i]); }
         int size = three ? 9 : 7;
         hands = new List<int>[n];
-        for (int s = 0; s < n; s++) { hands[s] = deck.GetRange(0, size); deck.RemoveRange(0, size); hands[s].Sort(); }
+        for (int s = 0; s < n; s++) { hands[s] = deck.GetRange(0, size); deck.RemoveRange(0, size); }   // left in the shuffled order (not sorted)
         yard = deck;
         line = new Domino.Line();
         passes = 0; result = null;
@@ -64,7 +65,7 @@ public class OfflineDomino : OfflineGame
     void BeginTurn(int seat)
     {
         turn = seat;
-        turnEndsAt = seats[seat].bot ? 0 : Now + TurnMs;
+        turnEndsAt = seats[seat].bot ? 0 : Now + DominoTurnMs;
     }
 
     static void Place(Domino.Line l, int id, char e)
@@ -114,9 +115,8 @@ public class OfflineDomino : OfflineGame
             if (Domino.CanPlay(line, hand)) return "can_play";
             if (yard.Count == 0) return "yard_empty";
             hand.Add(yard[yard.Count - 1]); yard.RemoveAt(yard.Count - 1);
-            hand.Sort();
             last = new Dictionary<string, object> { ["t"] = "draw", ["s"] = seat, ["k"] = ++v };
-            if (turnEndsAt > 0) turnEndsAt = Math.Max(turnEndsAt, Now + Math.Min(5000, TurnMs));
+            if (turnEndsAt > 0) turnEndsAt = Math.Max(turnEndsAt, Now + Math.Min(5000, DominoTurnMs));
             return null;
         }
         if (t == "pass")
@@ -252,7 +252,7 @@ public class OfflineDomino : OfflineGame
                 {
                     DoMove(seat, Do(yard.Count > 0 ? "draw" : "pass"));
                     if (last != null) last["forced"] = true;
-                    if (turn == seat && phase == "play" && Domino.CanPlay(line, hands[seat])) turnEndsAt = Now + TurnMs;
+                    if (turn == seat && phase == "play" && Domino.CanPlay(line, hands[seat])) turnEndsAt = Now + DominoTurnMs;
                     Bump();
                 });
             }
@@ -278,7 +278,7 @@ public class OfflineDomino : OfflineGame
         {
             ["game"] = "domino", ["id"] = id, ["mode"] = mode, ["target"] = target, ["private"] = true, ["stake"] = 0, ["phase"] = phase, ["you"] = 0,
             ["seats"] = sv, ["hand"] = hands != null ? new List<int>(hands[0]) : new List<int>(),
-            ["line"] = lv, ["yard"] = yard.Count, ["turn"] = turn, ["turnEndsAt"] = turnEndsAt, ["turnMs"] = TurnMs,
+            ["line"] = lv, ["yard"] = yard.Count, ["turn"] = turn, ["turnEndsAt"] = turnEndsAt, ["turnMs"] = DominoTurnMs,
             ["round"] = round, ["scores"] = scores.ToList(), ["last"] = last, ["result"] = reveal ? result : null, ["match"] = match,
             ["nextAt"] = nextAt, ["now"] = Now, ["v"] = v,
         };

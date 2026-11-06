@@ -33,8 +33,9 @@ public static class Ui
         var s = go.GetComponent<CanvasScaler>();
         s.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         s.referenceResolution = new Vector2(844, 390);   // a phone held sideways
-        s.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-        s.matchWidthOrHeight = 1f;
+        // Expand: the canvas is never smaller than 844 × 390 in either direction, so on screens less wide than a
+        // phone (tablets, 16:9 phones, split screen) everything shrinks a little instead of running into each other
+        s.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
         if (UnityEngine.Object.FindFirstObjectByType<EventSystem>() == null)
             new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
         return c;
@@ -56,6 +57,9 @@ public static class Ui
         r.anchoredPosition = pos;
         return r;
     }
+
+    /// Keeps a full-screen rect inside the screen's safe area (clear of camera holes, notches and rounded corners).
+    public static RectTransform Safe(this RectTransform r) { r.Fill(); r.gameObject.AddComponent<SafeArea>(); return r; }
 
     public static RectTransform Fill(this RectTransform r, float inset = 0)
     {
@@ -188,4 +192,21 @@ public static class Ui
     public static float Ease(float t) { t = Mathf.Clamp01(t); return 1 - Mathf.Pow(1 - t, 3); }
     /// Overshoots a little before settling (a "pop").
     public static float Back(float t) { t = Mathf.Clamp01(t); const float c = 1.9f; return 1 + (c + 1) * Mathf.Pow(t - 1, 3) + c * Mathf.Pow(t - 1, 2); }
+}
+
+/// Fits its rect to Screen.safeArea, and again whenever the screen turns or changes size.
+public class SafeArea : MonoBehaviour
+{
+    Rect done; Vector2Int size;
+    void OnEnable() { Fit(); }
+    void Update() { if (Screen.safeArea != done || size.x != Screen.width || size.y != Screen.height) Fit(); }
+    void Fit()
+    {
+        var r = (RectTransform)transform; var a = Screen.safeArea;
+        done = a; size = new Vector2Int(Screen.width, Screen.height);
+        if (Screen.width <= 0 || Screen.height <= 0) return;
+        r.anchorMin = new Vector2(a.xMin / Screen.width, a.yMin / Screen.height);
+        r.anchorMax = new Vector2(a.xMax / Screen.width, a.yMax / Screen.height);
+        r.offsetMin = r.offsetMax = Vector2.zero;
+    }
 }
