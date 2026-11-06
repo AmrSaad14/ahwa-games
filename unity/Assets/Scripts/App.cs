@@ -615,16 +615,20 @@ public class App : MonoBehaviour
     {
         if (Watching) { Watching = false; if (view != null) leftTableId = view.id; Send(new Dictionary<string, object> { ["t"] = "unwatch" }); ExitGame(); return; }
         if (view != null) leftTableId = view.id;
-        if (view != null && view.phase != "mend") Send(new Dictionary<string, object> { ["t"] = "leave" });
+        bool finished = view != null && view.phase == "mend";
+        if (view != null && !finished) Send(new Dictionary<string, object> { ["t"] = "leave" });
         ExitGame();
+        // after every finished game, an ad on the way out too (the player can skip it), not only before "play again"
+        if (finished && !AdFree() && !Recording) Ads.Interstitial(null);
     }
+    bool AdFree() => user != null && user.Num("adFreeUntil") > LocalMs();
 
     public void PlayAgain()
     {
         if (view != null && view.phase == "mend") Send(new Dictionary<string, object> { ["t"] = "leave" });
         ExitGame();
         // an ad between games (not for players on the ad-free plan), then the next game
-        bool adFree = user != null && user.Num("adFreeUntil") > LocalMs();
+        bool adFree = AdFree();
         System.Action next = () => { if (lastStake == 0) Practice(lastMode); else Quick(lastMode, lastStake); };
         if (adFree || Recording) next(); else Ads.Interstitial(next);
     }
