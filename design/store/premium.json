@@ -1,0 +1,22 @@
+{
+ "en": [
+  { "img": "v-board-view.png", "kick": "The café in your pocket", "h": "Four café classics. <em>One table.</em>", "sub": "Play online with real players from all over Egypt, in a 3D coffeehouse.", "chips": ["Dominoes", "Backgammon", "Chess", "Ludo"] },
+  { "img": "5-domino.png", "kick": "Dominoes", "h": "Egyptian dominoes, <em>café rules</em>", "sub": "Solo, 3 or 4 players, or 2 vs 2 teams. Draw or block, first to the target wins.", "chips": ["Solo", "4 players", "2 vs 2"] },
+  { "img": "g-tawla-2.png", "kick": "Backgammon · Tawla", "h": "Every way <em>the café plays tawla</em>", "sub": "Adda, Mahbousa, 31 and Gulbahar, with real dice on a real board.", "chips": ["Adda", "Mahbousa", "31", "Gulbahar"] },
+  { "img": "g-chess-1.png", "kick": "Chess", "h": "Chess with <em>real clocks</em>", "sub": "Bullet, blitz or a calm 10 minutes: pick your time and find an opponent in seconds.", "chips": ["1 min", "3 min", "5 min", "10 min"] },
+  { "img": "g-ludo-1.png", "kick": "Ludo", "h": "Ludo for <em>2, 3 or 4</em>", "sub": "Classic, quick or master: roll the dice and race your pieces home.", "chips": ["Classic", "Quick", "Master"] },
+  { "img": "r-lobby.png", "kick": "Friends", "h": "Your own room, <em>your friends</em>", "sub": "Share a code, sit together at the table and talk with voice chat while you play.", "chips": ["Private rooms", "Voice chat", "Quick chat"] },
+  { "img": "d1-daily.png", "kick": "Rewards", "h": "Come back, <em>win more</em>", "sub": "Daily rewards that grow every day, daily missions, a season pass and a weekly tournament.", "chips": ["Daily rewards", "Missions", "Tournament"] },
+  { "img": "x6-shop-boards-tawla.png", "kick": "Your style", "h": "Make the table <em>yours</em>", "sub": "Collect boards, tiles, pieces, dice, a fez for your character and your drink at the table.", "chips": ["Boards", "Dice", "Hats", "Drinks"] }
+ ],
+ "ar": [
+  { "img": "v-board-view.png", "kick": "القهوة في جيبك", "h": "أربع ألعاب القهوة <em>على ترابيزة واحدة</em>", "sub": "العب أونلاين مع ناس حقيقية من كل مصر، جوه قهوة بلدي ثلاثية الأبعاد.", "chips": ["دومينو", "طاولة", "شطرنج", "لودو"] },
+  { "img": "7-later.png", "kick": "دومينو", "h": "دومينو مصري <em>زي القهوة بالظبط</em>", "sub": "فردي، أو ٣ أو ٤ لاعبين، أو زوجي ٢ ضد ٢. بالسحب أو من غير سحب.", "chips": ["فردي", "٤ لاعبين", "زوجي"] },
+  { "img": "g-tawla-2.png", "kick": "طاولة", "h": "الطاولة <em>بكل أنواعها</em>", "sub": "عادة ومحبوسة و٣١ وجلبهار، بزهر حقيقي على طاولة خشب.", "chips": ["عادة", "محبوسة", "٣١", "جلبهار"] },
+  { "img": "g-chess-1.png", "kick": "شطرنج", "h": "شطرنج <em>بساعة حقيقية</em>", "sub": "دقيقة أو ٣ أو ٥ أو ١٠ دقايق، واختار منافسك في ثواني.", "chips": ["دقيقة", "٣ دقايق", "٥ دقايق", "١٠ دقايق"] },
+  { "img": "g-ludo-1.png", "kick": "لودو", "h": "لودو لـ <em>٢ و٣ و٤ لاعبين</em>", "sub": "عادي أو سريع أو ماستر: ارمي الزهر ووصّل قطعك البيت.", "chips": ["عادي", "سريع", "ماستر"] },
+  { "img": "r-lobby.png", "kick": "صحابك", "h": "أوضتك <em>وصحابك معاك</em>", "sub": "ابعت الكود، اقعدوا على نفس الترابيزة، واتكلموا بالصوت وانتوا بتلعبوا.", "chips": ["غرف خاصة", "شات صوتي", "رسايل سريعة"] },
+  { "img": "d1-daily.png", "kick": "المكافآت", "h": "ارجع كل يوم <em>واكسب أكتر</em>", "sub": "مكافأة يومية بتكبر كل يوم، ومهام يومية، وتذكرة الموسم، وبطولة كل أسبوع.", "chips": ["مكافأة يومية", "مهام", "بطولة"] },
+  { "img": "x6-shop-boards-tawla.png", "kick": "ستايلك", "h": "الترابيزة <em>على ذوقك</em>", "sub": "جمّع ألواح وحجارة وقطع وزهر، وطربوش لشخصيتك، ومشروبك على الترابيزة.", "chips": ["ألواح", "زهر", "طرابيش", "مشروبات"] }
+ ]
+}

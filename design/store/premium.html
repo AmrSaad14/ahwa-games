@@ -1,0 +1,61 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face{font-family:Kufi;src:url(../logo/ReemKufi.ttf)}
+@font-face{font-family:Plex;src:url(../logo/PlexArabicBold.ttf)}
+html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#2a0710}
+#s{position:relative;width:1920px;height:1080px;overflow:hidden;
+  background:radial-gradient(ellipse 75% 95% at var(--cx) 50%,#9b1b2e 0%,#5c0f1d 45%,#24060d 100%)}
+/* the gold sunburst behind the phone */
+#rays{position:absolute;inset:-40%;background:repeating-conic-gradient(from 0deg at var(--rx) 50%,rgba(255,210,122,.07) 0 6deg,transparent 6deg 15deg);}
+/* a fine pattern of domino pips over the background */
+#pips{position:absolute;inset:0;opacity:.09;background-image:radial-gradient(circle,#ffd27a 2.2px,transparent 2.6px);background-size:46px 46px}
+#vign{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.45))}
+/* the phone, held sideways */
+#phone{position:absolute;top:50%;width:1180px;height:664px;transform:translateY(-50%) rotate(var(--rot));
+  padding:22px;border-radius:64px;background:linear-gradient(145deg,#2b2b2e,#0c0c0e 60%,#1d1d20);
+  box-shadow:0 0 0 3px #3a3a3e,0 50px 110px rgba(0,0,0,.6),0 0 140px rgba(255,190,90,.18)}
+#phone .scr{width:100%;height:100%;border-radius:44px;overflow:hidden;position:relative;background:#000}
+#phone img{width:100%;height:100%;object-fit:cover;display:block}
+#phone .cam{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;background:#111;box-shadow:inset 0 0 0 3px #222;transform:translateY(-50%)}
+/* the words */
+#txt{position:absolute;top:0;bottom:0;width:520px;display:flex;flex-direction:column;justify-content:center;gap:26px}
+.kick{font:600 30px Plex;color:#ffd27a;letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:14px}
+.kick:before{content:"";width:54px;height:4px;border-radius:2px;background:#ffd27a}
+h1{margin:0;font:700 82px/1.06 Kufi;color:#fff8e6;text-shadow:0 6px 30px rgba(0,0,0,.4)}
+h1 em{font-style:normal;color:#ffd27a}
+.sub{font:500 33px/1.4 Plex;color:#f3d9c4;opacity:.92}
+.chips{display:flex;flex-wrap:wrap;gap:12px}
+.chip{font:600 26px Plex;color:#2a0710;background:linear-gradient(#ffe39a,#e9b54a);padding:9px 22px;border-radius:40px;box-shadow:0 4px 14px rgba(0,0,0,.3)}
+.logo{position:absolute;width:104px;top:40px;border-radius:24px;box-shadow:0 8px 24px rgba(0,0,0,.45),0 0 0 2px rgba(255,210,122,.35)}
+.ar #txt{direction:rtl}
+.ar .kick{letter-spacing:0;font-size:32px}
+.ar h1{font-size:88px;line-height:1.2}
+.ar .sub{font-size:35px}
+</style></head>
+<body><div id="s"><div id="rays"></div><div id="pips"></div><div id="vign"></div>
+<div id="phone"><div class="scr"><img id="img"></div><div class="cam"></div></div>
+<div id="txt"><div class="kick" id="kick"></div><h1 id="h"></h1><div class="sub" id="sub"></div><div class="chips" id="chips"></div></div>
+<img class="logo" id="logo" src="../logo/icon-1024.png">
+</div>
+<script>
+// show(shot): one store screenshot. English: words on the left, the phone on the right; Arabic the other way.
+window.show = ({ img, kick, h, sub, chips, ar, rot }) => {
+  const s = document.getElementById('s');
+  document.body.className = ar ? 'ar' : '';
+  const left = !ar;   // text side
+  s.style.setProperty('--cx', left ? '68%' : '32%');
+  s.style.setProperty('--rx', left ? '68%' : '32%');
+  s.style.setProperty('--rot', (rot ?? (left ? -2.5 : 2.5)) + 'deg');
+  const ph = document.getElementById('phone'), tx = document.getElementById('txt'), cam = ph.querySelector('.cam'), lg = document.getElementById('logo');
+  ph.style.left = left ? '650px' : '46px';
+  tx.style.left = left ? '88px' : ''; tx.style.right = left ? '' : '88px';
+  cam.style.left = left ? '7px' : ''; cam.style.right = left ? '' : '7px';
+  lg.style.left = left ? '88px' : ''; lg.style.right = left ? '' : '88px';
+  document.getElementById('img').src = img;
+  document.getElementById('kick').textContent = kick;
+  document.getElementById('h').innerHTML = h;
+  document.getElementById('sub').textContent = sub;
+  document.getElementById('chips').innerHTML = (chips || []).map(c => `<span class="chip">${c}</span>`).join('');
+};
+</script></body></html>
