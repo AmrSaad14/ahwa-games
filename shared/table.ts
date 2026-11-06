@@ -238,7 +238,8 @@ export class Table {
     const three = this.mode === 'ffa3';
     const deck = shuffled(TILES.map((_, i) => i).filter(i => !three || i !== 0));
     const size = three ? 9 : HAND_SIZE;
-    this.hands = this.seats.map(() => deck.splice(0, size).sort((a, b) => a - b));
+    // hands stay in the shuffled deal order (not sorted 0|0, 0|1, …), so a player has to read their own tiles
+    this.hands = this.seats.map(() => deck.splice(0, size));
     this.yard = deck;
     this.line = newLine();
     this.passes = 0;
@@ -298,8 +299,7 @@ export class Table {
       if (this.block) return 'no_draw';
       if (canPlay(this.line, hand)) return 'can_play';
       if (!this.yard.length) return 'yard_empty';
-      hand.push(this.yard.pop()!);
-      hand.sort((x, y) => x - y);
+      hand.push(this.yard.pop()!);   // a drawn tile goes at the end of the hand
       this.last = { t: 'draw', s: seat, k: ++this.v };
       // drawing gives a little time back so the player can look at the new tile
       if (this.turnEndsAt) this.turnEndsAt = Math.max(this.turnEndsAt, Date.now() + Math.min(5000, this.opts.turnMs));

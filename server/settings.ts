@@ -21,7 +21,7 @@ export interface GameSettings {
   tourney: { enabled: boolean; weekday: number; hour: number; game: TourneyGame; prizes: number[]; played: number };
   season: { enabled: boolean; passCoins: number; passEgp: number; tiers: { free: Reward; prem: Reward }[] };
   economy: { startCoins: number; adReward: number; adsPerDay: number; skinAdsPerDay: number; streak: number[]; weeklyPrizes: number[]; tutorialCoins: number; comebackCoins: number; comebackDays: number };
-  play: { botFillSeconds: number; turnSeconds: number };
+  play: { botFillSeconds: number; turnSeconds: number; dominoTurnSeconds: number };   // turnSeconds: tawla and ludo
   maintenance: { on: boolean; message: string };
   notice: { text: string; until: number };
   /** "<game> player of the month": given by itself when a month ends, to the best of each game with enough games. */
@@ -37,7 +37,7 @@ function defaults(): GameSettings {
     tourney: { enabled: true, weekday: TOURNEY.weekday, hour: TOURNEY.hour, game: 'rotate', prizes: [...TOURNEY.prizes], played: TOURNEY.played },
     season: { enabled: true, passCoins: SEASON_PASS.coins, passEgp: SEASON_PASS.egp, tiers: TIERS.map(t => ({ free: { ...t.free }, prem: { ...t.prem } })) },
     economy: { startCoins: ECONOMY.startCoins, adReward: ECONOMY.adReward, adsPerDay: ECONOMY.adsPerDay, skinAdsPerDay: ECONOMY.skinAdsPerDay, tutorialCoins: ECONOMY.tutorialCoins, comebackCoins: ECONOMY.comebackCoins, comebackDays: ECONOMY.comebackDays, streak: [...STREAK], weeklyPrizes: [...WEEKLY_PRIZES] },
-    play: { botFillSeconds: 60, turnSeconds: 10 },
+    play: { botFillSeconds: 60, turnSeconds: 10, dominoTurnSeconds: 20 },
     maintenance: { on: false, message: 'السيرفر في صيانة دلوقتي، ارجع كمان شوية · Maintenance, back soon' },
     notice: { text: '', until: 0 },
     titles: { monthly: true, minGames: 10 },
@@ -101,7 +101,7 @@ export function sanitize(input: unknown, cur: GameSettings): GameSettings {
       streak: ints(e.streak, 0, 100_000_000, cur.economy.streak, 7),
       weeklyPrizes: ints(e.weeklyPrizes, 0, 100_000_000, cur.economy.weeklyPrizes, 10),
     },
-    play: { botFillSeconds: int(p.botFillSeconds, 2, 120, cur.play.botFillSeconds), turnSeconds: int(p.turnSeconds, 5, 60, cur.play.turnSeconds) },
+    play: { botFillSeconds: int(p.botFillSeconds, 2, 120, cur.play.botFillSeconds), turnSeconds: int(p.turnSeconds, 5, 60, cur.play.turnSeconds), dominoTurnSeconds: int(p.dominoTurnSeconds, 5, 60, cur.play.dominoTurnSeconds ?? SHIPPED.play.dominoTurnSeconds) },
     maintenance: { on: bool(m.on, cur.maintenance.on), message: text(m.message, 300, cur.maintenance.message) },
     notice: { text: text(n.text, 400, cur.notice.text), until: int(n.until, 0, 4_102_444_800_000, cur.notice.until) },
     titles: { monthly: bool(ti.monthly, curTi.monthly), minGames: int(ti.minGames, 0, 10_000, curTi.minGames) },

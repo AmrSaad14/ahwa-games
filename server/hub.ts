@@ -37,7 +37,7 @@ interface QEntry { uid: string; since: number; rating: number; coins: number }
 interface Escrow { stake: number; mode: Mode; paid: Map<string, { seat: number; left: boolean }> }
 
 export interface HubOptions {
-  turnMs: number; botFillMs: number; nextRoundMs: number; botDelay: [number, number]; lobbyAfterMatchMs: number; msgsPer5s?: number;
+  turnMs: number; dominoTurnMs?: number; botFillMs: number; nextRoundMs: number; botDelay: [number, number]; lobbyAfterMatchMs: number; msgsPer5s?: number;
   stunUrls?: string[]; turnUrls?: string[]; turnSecret?: string;
   autoMoveMs?: number; chessClockMs?: number;
   phones?: PhoneCodes; google?: GoogleSignIn; apple?: AppleSignIn; defaultCountry?: string;
@@ -937,7 +937,7 @@ export class Hub {
       event: this.eventFor(u.id) };
   }
   /** How long matchmaking waits for people, and a turn's length (dashboard). */
-  setTiming(botFillMs: number, turnMs: number) { this.opts.botFillMs = botFillMs; this.opts.turnMs = turnMs; }
+  setTiming(botFillMs: number, turnMs: number, dominoTurnMs?: number) { this.opts.botFillMs = botFillMs; this.opts.turnMs = turnMs; if (dominoTurnMs) this.opts.dominoTurnMs = dominoTurnMs; }
   /** Players online now. */
   get onlineIds(): string[] { return [...this.byUser.keys()]; }
   /** A message on every open app (the dashboard's notice). */
@@ -978,7 +978,7 @@ export class Hub {
     }
     const opts = {
       id: crypto.randomUUID(), code, mode, target, private: isPrivate, stake,
-      turnMs: this.opts.turnMs, nextRoundMs: this.opts.nextRoundMs, botDelay: this.opts.botDelay, offlineGraceMs: this.opts.graceMs ?? 30_000, lobbyAfterMatchMs: this.opts.lobbyAfterMatchMs, humanBots,
+      turnMs: gameOf(mode) === 'domino' ? this.opts.dominoTurnMs ?? this.opts.turnMs : this.opts.turnMs, nextRoundMs: this.opts.nextRoundMs, botDelay: this.opts.botDelay, offlineGraceMs: this.opts.graceMs ?? 30_000, lobbyAfterMatchMs: this.opts.lobbyAfterMatchMs, humanBots,
       autoMoveMs: this.opts.autoMoveMs, chessClockMs: this.opts.chessClockMs,
     };
     const hooks = {

@@ -8,7 +8,8 @@ export const config = {
   dbPath: process.env.DB_PATH || path.resolve('data/domino.db'),
   staticDir: process.env.STATIC_DIR || path.resolve('client/dist'),
   secret: process.env.SECRET || '',                       // generated and stored in the database when empty
-  turnMs: num(process.env.TURN_SECONDS, 10) * 1000,
+  turnMs: num(process.env.TURN_SECONDS, 10) * 1000,              // tawla and ludo: time for a move
+  dominoTurnMs: num(process.env.DOMINO_TURN_SECONDS, 20) * 1000,  // dominoes: time for a move
   botFillMs: num(process.env.BOT_FILL_SECONDS, 60) * 1000,
   nextRoundMs: num(process.env.NEXT_ROUND_SECONDS, 7) * 1000,
   botDelay: [900, 1700] as [number, number],

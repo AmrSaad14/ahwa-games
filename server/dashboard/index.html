@@ -671,7 +671,7 @@ RENDER.settings = async main => {
       n('et', 'Coins for finishing the first-game guide', s.economy.tutorialCoins) + n('eb', 'Gift for coming back', s.economy.comebackCoins) + n('ey', '…after this many days away (0: off)', s.economy.comebackDays) + '</div>' +
       '<div class="sub" style="margin:12px 0 6px">Daily reward, day by day (day 7 repeats after)</div><div class="form">' + list('ek', 'Day', s.economy.streak) + '</div>' +
       '<div class="sub" style="margin:12px 0 6px">Weekly leaderboard prizes, places 1–10 (paid every Monday)</div><div class="form">' + list('ew', 'Place', s.economy.weeklyPrizes) + '</div></div>' +
-    '<h2>Play</h2><div class="card"><div class="form">' + n('pb', 'Seconds before computer players fill a table', s.play.botFillSeconds, ' min="2" max="120"') + n('pt', 'Seconds for a turn (dominoes)', s.play.turnSeconds, ' min="5" max="60"') + '</div></div>' +
+    '<h2>Play</h2><div class="card"><div class="form">' + n('pb', 'Seconds before computer players fill a table', s.play.botFillSeconds, ' min="2" max="120"') + n('pd', 'Seconds for a move (dominoes)', s.play.dominoTurnSeconds, ' min="5" max="60"') + n('pt', 'Seconds for a move (tawla, ludo)', s.play.turnSeconds, ' min="5" max="60"') + '</div></div>' +
     '<div class="row" style="margin-top:16px"><button class="btn gold" id="sv">Save all settings</button><button class="btn" id="rs">Back to the defaults</button></div>';
   $('#sv').onclick = async () => {
     const vals = cls => [...main.querySelectorAll('.' + cls)].map(i => Number(i.value));
@@ -680,7 +680,7 @@ RENDER.settings = async main => {
       prizes: { enabled: $('#co').checked, egp: Number($('#ce').value), claimDays: Number($('#cd').value), prefixes: $('#cp').value.split(/[ ,]+/).filter(Boolean) },
       titles: { minGames: Number($('#cg').value) },
       economy: { startCoins: Number($('#es').value), adReward: Number($('#ea').value), adsPerDay: Number($('#ed').value), skinAdsPerDay: Number($('#esa').value), tutorialCoins: Number($('#et').value), comebackCoins: Number($('#eb').value), comebackDays: Number($('#ey').value), streak: vals('ek'), weeklyPrizes: vals('ew') },
-      play: { botFillSeconds: Number($('#pb').value), turnSeconds: Number($('#pt').value) },
+      play: { botFillSeconds: Number($('#pb').value), turnSeconds: Number($('#pt').value), dominoTurnSeconds: Number($('#pd').value) },
     } }), 'Settings saved'); go();
   };
   $('#rs').onclick = async () => { if (confirm('Put every setting back to the defaults?')) { await act(() => api('/settings/reset', { body: {} }), 'Back to the defaults'); go(); } };
