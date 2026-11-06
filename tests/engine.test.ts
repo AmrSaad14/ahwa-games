@@ -269,3 +269,28 @@ test('the block game (house rule): nobody draws, the yard stays out, and a full 
   assert.equal(drew, false, 'nobody drew');
   assert.equal(yardSeen, 0, 'the players see no pile');
 });
+
+test('قافلة: when no tile left can ever fit, the round ends at once and nobody draws the boneyard', () => {
+  const t = new Table({ ...fast, turnMs: 60_000, botDelay: [60_000, 60_000], id: 'qf', code: 'q', mode: 'ffa2', private: true },
+    { changed() {}, emote() {}, matchEnd() {}, closed() {} });
+  t.join({ uid: 'a', name: 'A', ch: 0, bot: false, rating: 1000 });
+  t.join({ uid: 'b', name: 'B', ch: 1, bot: false, rating: 1000 });
+  t.start('a');
+  const id = (a: number, b: number) => TILES.findIndex(x => x[0] === a && x[1] === b);
+  // the line is 5|5 – 5|6; the player holds 6|6 and plays it: both ends show 6 and every other 6 is out of play
+  t.line = newLine(); place(t.line, id(5, 5), 'C'); place(t.line, id(5, 6), 'R');
+  const me = t.turn, other = 1 - me;
+  t.hands[me] = [id(6, 6), id(0, 0)];
+  t.hands[other] = [id(1, 2), id(3, 4)];
+  t.yard = [id(1, 1), id(2, 2), id(0, 1)];
+  // the other fives: none left in play either
+  const uid = me === 0 ? 'a' : 'b';
+  try {
+    assert.equal(t.act(uid, { t: 'play', id: id(6, 6) }), null);
+    assert.equal(t.phase === 'rend' || t.phase === 'over', true, 'the round ended');
+    assert.equal(t.result?.blocked, true);
+    assert.equal(t.yard.length, 3, 'the boneyard was not drawn');
+    assert.equal(t.result?.winner, me, 'the lighter hand wins: 0 against 10');
+    assert.equal(t.result?.points, 10);
+  } finally { t.close(); }
+});

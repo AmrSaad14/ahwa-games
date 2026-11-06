@@ -292,6 +292,9 @@ export class Table {
       this.passes = 0;
       this.last = { t: 'play', s: seat, id, e, k: ++this.v };
       if (!hand.length) { this.endRound(seat, false); return null; }
+      // "قافلة": no tile left anywhere (any hand or the boneyard) fits either end, so nobody can ever play again:
+      // the round ends now and the hands are counted as they are (nobody draws the boneyard first)
+      if (this.locked()) { this.endRound(-1, true); return null; }
       this.beginTurn(this.nextSeat(seat));
       return null;
     }
@@ -325,6 +328,13 @@ export class Table {
     this.doMove(seat, m.t === 'play' ? { t: 'play', id: m.id, e: m.e } : m);
     if (timedOut && this.last) this.last.auto = true;
     this.bump();
+  }
+
+  /** The line is closed: none of the tiles still out (in the hands or the boneyard) can be played on it. */
+  private locked(): boolean {
+    for (const h of this.hands) for (const id of h) if (endsFor(this.line, id).length) return false;
+    if (!this.block) for (const id of this.yard) if (endsFor(this.line, id).length) return false;
+    return true;
   }
 
   private endRound(winner: number, blocked: boolean) {
