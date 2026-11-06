@@ -540,3 +540,29 @@ test('Google Play Games sign-in links the player id to the account', async () =>
     c.ws.close();
   } finally { app.google.testPlayGames = null; }
 });
+
+test('ordering a drink: paid with coins, brought to your seat, seen by everyone at the table', async () => {
+  const a = await new Client().open(), b = await new Client().open();
+  const start = a.last('welcome')!.user.coins;
+  a.send({ t: 'create', mode: 'ffa2', target: 51 });
+  await a.until(() => !!a.view?.code);
+  // not before the game starts (the lobby)
+  a.send({ t: 'order', k: 'drink_tea' });
+  await a.until(() => a.last('err')?.code === 'bad_order');
+  b.send({ t: 'join', code: a.view!.code! });
+  await b.until(() => b.view?.seats.filter(Boolean).length === 2);
+  a.send({ t: 'start' });
+  await a.until(() => a.view?.phase === 'play');
+  const mine = a.view!.you;
+  await new Promise(r => setTimeout(r, 300));
+  const before = a.last('user')?.user.coins ?? start;
+  a.send({ t: 'order', k: 'drink_coffee' });
+  await b.until(() => b.last('served')?.k === 'drink_coffee');
+  assert.equal(b.last('served')!.seat, mine);
+  await b.until(() => b.view?.seats[mine]?.served === 'drink_coffee');
+  await a.until(() => a.last('user')?.user.coins === before - 2_000);
+  // something not on the menu is refused
+  a.send({ t: 'order', k: 'diamond' });
+  await a.until(() => a.last('err')?.code === 'bad_order');
+  a.close(); b.close();
+});

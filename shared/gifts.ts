@@ -9,6 +9,18 @@ export const GIFTS = [
   { k: 'diamond', price: 50_000, icon: '💎' },
 ] as const;
 export type GiftKind = typeof GIFTS[number]['k'];
+
+/** Drinks a player orders for themselves during a game, paid with coins: the waiter brings the glass and puts it
+ *  in front of them, and everyone at the table sees it (until the match ends). The ids are the drink looks. */
+export const DRINK_MENU = [
+  { k: 'drink_tea', price: 1_000 },
+  { k: 'drink_mint', price: 1_500 },
+  { k: 'drink_coffee', price: 2_000 },
+  { k: 'drink_karkade', price: 2_500 },
+  { k: 'drink_qasab', price: 2_500 },
+  { k: 'drink_sahlab', price: 3_000 },
+] as const;
+export const drinkOnMenu = (k: string) => DRINK_MENU.find(d => d.k === k);
 export const giftByKind = (k: string) => GIFTS.find(g => g.k === k);
 
 export const ECONOMY = {

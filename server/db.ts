@@ -389,6 +389,13 @@ export class Store {
   }
 
   /** Moves coins for a gift in one transaction. Returns false if the sender can't afford it. */
+  /** A drink ordered at the table: takes its price (false: not enough coins). */
+  buyDrink(id: string, price: number): boolean {
+    const r = this.db.prepare('UPDATE users SET coins = coins - ? WHERE id = ? AND coins >= ?').run(price, id, price);
+    if (!Number(r.changes)) return false;
+    this.logCoins(id, 'drink', -price);
+    return true;
+  }
   sendGift(from: string, to: string, kind: string, price: number): boolean {
     this.db.exec('BEGIN');
     try {

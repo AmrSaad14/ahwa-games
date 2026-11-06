@@ -2,7 +2,7 @@ import { PlayBilling } from './billing';
 import crypto from 'node:crypto';
 import { GAMES, GameId, MODES, MODE_PLAYERS, Mode, defaultTarget, gameOf, targetOptions, teamOf } from '../shared/engine';
 import type { C2S, Emote, FriendRow, IceServer, PlayerCard, S2C } from '../shared/protocol';
-import { ECONOMY, STAKES, giftByKind, isStake, winnings, NO_ADS, XP, WEEKLY_PRIZES, weekKey } from '../shared/gifts';
+import { ECONOMY, STAKES, giftByKind, drinkOnMenu, isStake, winnings, NO_ADS, XP, WEEKLY_PRIZES, weekKey } from '../shared/gifts';
 import { EMOTES } from '../shared/protocol';
 import { Table, publicId, Player, BotMaker } from '../shared/table';
 import { botIdentity } from '../shared/botnames';
@@ -87,6 +87,7 @@ export class Hub {
   private emptySince = new Map<string, number>();
   private authLimiter = new Limiter(10, 60_000);
   private giftLimiter = new Limiter(1, 1200);
+  private drinkLimiter = new Limiter(1, 5000);
   private buyLimiter = new Limiter(20, 60_000);
   private reportLimiter = new Limiter(10, 60 * 60_000);
   private friendLimiter = new Limiter(30, 60 * 60_000);
@@ -622,6 +623,19 @@ export class Hub {
         for (const p of table.seats) if (p && !p.bot && this.userTable.get(p.uid) === table) this.byUser.get(p.uid)?.conn.send({ t: 'gift', from, to, k: g.k });
         for (const id of this.store.missionProgress(uid, { type: 'gift' })) s.conn.send({ t: 'missionDone', id });
         this.sendUser(uid); this.sendUser(target.uid);
+        return;
+      }
+      case 'order': {
+        // a drink for yourself, during a game: paid, then the waiter brings it and everyone at the table sees it
+        if (!table) return err('no_table');
+        const seat = table.seatOf(uid), d = drinkOnMenu(String(m.k));
+        if (!d || seat < 0 || !table.seats[seat] || table.phase === 'lobby') return err('bad_order');
+        if (!this.drinkLimiter.allow(uid)) return err('slow_down');
+        if (!this.store.buyDrink(uid, d.price)) return err('drink_no_coins');
+        for (const p of table.seats) if (p && !p.bot && this.userTable.get(p.uid) === table) this.byUser.get(p.uid)?.conn.send({ t: 'served', seat, k: d.k });
+        table.seats[seat]!.served = d.k;
+        table.refresh();
+        this.sendUser(uid);
         return;
       }
       case 'voice': { table?.setMic(uid, !!m.on); return; }

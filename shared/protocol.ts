@@ -20,6 +20,7 @@ export interface SeatView {
   back?: number;       // dropped out: the time (ms) the computer takes over unless they come back first
   hat?: string;        // their look: the hat on their character and the drink by their place
   drink?: string;
+  served?: string;     // a drink they ordered during this match (shown in place of their own drink)
   muted?: boolean;     // their chat is switched off for a while (reported by several players)
   title?: string;      // the title they wear (an id in the titles catalog)
   win?: string;        // how they celebrate a win (a 'win' skin)
@@ -263,6 +264,7 @@ export type C2S =
   | { t: 'buySkin'; id: string }
   | { t: 'equipSkin'; id: string }
   | { t: 'gift'; to: number; k: GiftKind }
+  | { t: 'order'; k: string }   // order a drink for yourself (DRINK_MENU), paid with coins
   | { t: 'voice'; on: boolean }
   | { t: 'rtc'; to: number; data: RtcSignal }
   | { t: 'report'; seat?: number; pid?: string; reason: string }
@@ -300,6 +302,7 @@ export type S2C =
   | { t: 'xp'; gained: number; xp: number; level: number; levelUp: boolean }
   | { t: 'weeklyPrize'; rank: number; coins: number; week: string }
   | { t: 'gift'; from: number; to: number; k: GiftKind }
+  | { t: 'served'; seat: number; k: string }   // the waiter brings seat a drink (to everyone at the table)
   | { t: 'rtc'; from: number; data: RtcSignal }
   | { t: 'user'; user: PublicUser }
   | { t: 'err'; code: string }

@@ -7,7 +7,7 @@ import {
 import type { Action, Emote, LastAction, MatchResult, RoundResult, TableView } from './protocol';
 import { EMOTES } from './protocol';
 
-export interface Player { uid: string; name: string; ch: number; photo?: string | null; bot: boolean; rating: number; hat?: string; drink?: string; muted?: boolean; title?: string; win?: string }
+export interface Player { uid: string; name: string; ch: number; photo?: string | null; bot: boolean; rating: number; hat?: string; drink?: string; served?: string; muted?: boolean; title?: string; win?: string }
 interface Seat extends Player { online: boolean; away: boolean; timeouts: number; lastEmote: number; mic?: boolean; offAt?: number }
 /** A computer player's name and looks when it fills a seat (matchmaking gives them people's names). */
 export type BotMaker = (seat: number, usedCh: number[]) => { name: string; ch: number; rating: number };
@@ -465,7 +465,7 @@ export class Table {
         name: s.name, ch: s.ch, photo: s.photo ?? null, bot: s.bot, away: s.away, online: s.online, count: this.hands[i]?.length ?? 0,
         team: teamOf(this.mode, i), host: s.uid === this.hostUid, rating: s.rating, mic: !!s.mic && s.online, pid: s.bot ? '' : publicId(s.uid),
         back: this.inGrace(s) && this.phase !== 'lobby' ? s.offAt! + this.opts.offlineGraceMs : undefined,
-        hat: s.hat, drink: s.drink, muted: s.muted || undefined, title: s.title || undefined, win: s.win || undefined,
+        hat: s.hat, drink: s.drink, served: s.served, muted: s.muted || undefined, title: s.title || undefined, win: s.win || undefined,
       }),
       hand: you >= 0 && this.hands[you] ? this.hands[you].slice() : [],
       line: this.line, yard: this.block ? 0 : this.yard.length, block: this.block || undefined, open: this.line.f === null ? this.opening : null, turn: this.turn, turnEndsAt: this.turnEndsAt, turnMs: this.opts.turnMs,
