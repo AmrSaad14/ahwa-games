@@ -116,7 +116,7 @@ public partial class Menus
             nm.horizontalOverflow = HorizontalWrapMode.Wrap;
         }
         var l = Ui.Label(body, "", 16, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
-        l.Set(Loc.T("سكين في كل مستوى (٣٠ سكين) + بدون إعلانات لآخر الموسم"));
+        l.Set(Loc.T("سكين في كل مستوى (٣٠ سكين)"));
         l.horizontalOverflow = HorizontalWrapMode.Wrap;
         l.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(540, 44), new Vector2(0, -122));
         double left = s.Num("endsAt") - App.LocalMs();

@@ -907,22 +907,19 @@ public partial class Menus : MonoBehaviour
             }
             else
             {
+                // the no-ads plan: 199 EGP a month on Google Play (a subscription, cancelled any time in Google Play)
                 var c = ShopCard(row, 0, 1);
-                c.sizeDelta = new Vector2(300, c.sizeDelta.y);
-                // the season pass: a skin at every tier, and no ads until the season ends (there's no ad-free plan on its own)
-                var season = user?.Obj("season");
-                bool prem = season != null && season.Bool("premium");
-                if (!SeasonOn)
-                {
-                    Ui.Label(c, "الموسم مش متاح دلوقتي", 15, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Fill();
-                    return;
-                }
                 c.sizeDelta = new Vector2(340, c.sizeDelta.y);
-                var vi = Ui.Picture(c, "Icon", Icon("pass")); vi.color = Ui.Gold; vi.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(44, 44), new Vector2(0, -10));
-                Ui.Label(c, "الموسم المميز", 20, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(320, 28), new Vector2(0, -58));
-                Ui.Label(c, "سكين في كل مستوى (٣٠ سكين) + بدون إعلانات لآخر الموسم", 12, Color.white, TextAnchor.MiddleCenter).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(330, 36), new Vector2(0, -88));
-                if (prem) BuyButton(c, Loc.T("المميز مفتوح"), new Color(1, 1, 1, 0.1f), Ui.GoldLight, () => { Sfx.Tap(); Close(); OpenSeason(); });
-                else BuyButton(c, (int)(season?.Num("egp", 299) ?? 299) + " " + Loc.T("ج.م"), Ui.Gold, Ui.Ink, () => Billing.Buy("season_pass"));
+                var vi = Ui.Picture(c, "Icon", Icon("t_crown")); vi.color = Ui.Gold; vi.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(44, 44), new Vector2(0, -10));
+                Ui.Label(c, "بدون إعلانات", 20, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(320, 28), new Vector2(0, -58));
+                Ui.Label(c, "مفيش إعلانات بين الأدوار لمدة شهر، وبيتجدد كل شهر. تقدر تلغيه في أي وقت من جوجل بلاي", 12, Color.white, TextAnchor.MiddleCenter).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(330, 36), new Vector2(0, -88));
+                double until = user != null ? user.Num("adFreeUntil") : 0;
+                if (until > App.LocalMs())
+                {
+                    var d = System.DateTimeOffset.FromUnixTimeMilliseconds((long)until).ToLocalTime();
+                    BuyButton(c, Loc.T("مفعّل لحد") + " " + d.Day + "/" + d.Month, new Color(1, 1, 1, 0.1f), Ui.GoldLight, () => Sfx.Tap());
+                }
+                else BuyButton(c, "199 " + Loc.T("ج.م") + " / " + Loc.T("شهر"), Ui.Gold, Ui.Ink, () => Billing.Buy(Billing.NoAds));
             }
         };
         refreshOpen();
