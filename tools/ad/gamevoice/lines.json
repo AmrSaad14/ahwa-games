@@ -1,0 +1,15 @@
+{
+ "voices": {
+  "fathi": { "voice": "ar-EG-ShakirNeural", "rate": "+0%", "pitch": "-14Hz" },
+  "ziko": { "voice": "ar-EG-ShakirNeural", "rate": "+10%", "pitch": "+10Hz" },
+  "nada": { "voice": "ar-EG-SalmaNeural", "rate": "+8%", "pitch": "+4Hz" }
+ },
+ "lines": [
+  { "id": "afla_fathi", "who": "fathi", "before": 0.2, "after": 0.4, "text": "آفلة!" },
+  { "id": "afla_ziko", "who": "ziko", "before": 0.2, "after": 0.4, "text": "آفلة!" },
+  { "id": "afla_nada", "who": "nada", "before": 0.2, "after": 0.4, "text": "آفلة!" },
+  { "id": "afla_m3alem", "who": "fathi", "before": 0.2, "after": 0.4, "text": "آفلة يا مِعَلِّم!" },
+  { "id": "afla_dosh", "who": "ziko", "before": 0.2, "after": 0.4, "text": "دُش! آفلة!" },
+  { "id": "qafla_fosha", "who": "fathi", "before": 0.2, "after": 0.4, "text": "قافلة!" }
+ ]
+}
