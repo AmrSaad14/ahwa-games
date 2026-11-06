@@ -107,6 +107,8 @@ public class OfflineDomino : OfflineGame
             passes = 0;
             last = new Dictionary<string, object> { ["t"] = "play", ["s"] = seat, ["id"] = id, ["e"] = e.ToString(), ["k"] = ++v };
             if (hand.Count == 0) { EndRound(seat, false); return null; }
+            // "قافلة": no tile left anywhere fits either end, so the round ends now and the hands count as they are
+            if (Locked()) { EndRound(-1, true); return null; }
             BeginTurn(NextSeat(seat));
             return null;
         }
@@ -191,6 +193,13 @@ public class OfflineDomino : OfflineGame
         if (DoMove(seat, m) != null) DoMove(seat, Do(yard.Count > 0 ? "draw" : "pass"));
         if (timedOut && last != null) last["auto"] = true;
         Bump();
+    }
+
+    bool Locked()
+    {
+        foreach (var h in hands) foreach (var id in h) if (Domino.EndsFor(line, id).Count > 0) return false;
+        foreach (var id in yard) if (Domino.EndsFor(line, id).Count > 0) return false;
+        return true;
     }
 
     void EndRound(int winner, bool blocked)
