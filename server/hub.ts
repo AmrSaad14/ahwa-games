@@ -739,6 +739,7 @@ export class Hub {
         if (['guide_start', 'guide_skip', 'shop_open', 'season_open', 'groups_open'].includes(name)) this.store.track(uid, name);
         return;
       }
+      case 'prayerPush': { this.store.setPrayerPush(uid, !!m.on); this.sendUser(uid); return; }
       case 'tutorialDone': {
         // the first-game guide: its reward, once
         const coins = this.store.tutorialDone(uid, ECONOMY.tutorialCoins);

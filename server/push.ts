@@ -10,6 +10,7 @@
 // Free hosts that sleep when nobody plays can't run a clock: point any free cron service (cron-job.org, for
 // example) at PUBLIC_URL/api/cron/push?key=ADMIN_KEY every 15 minutes; it wakes the server and sends any reminder
 // that is due. A reminder is sent at most once per time slot, even across restarts.
+import { prayerTimes, PRAYERS, PRAYER_TEXT } from './prayer';
 import crypto from 'node:crypto';
 import type { Store } from './db';
 
@@ -123,10 +124,33 @@ export class Push {
     return sent;
   }
 
+  /** At each prayer time in Cairo (a few minutes' window, once each): a notification to every phone that wants it. */
+  async prayerTick(now = new Date()): Promise<number> {
+    if (!this.sa) return 0;
+    const times = prayerTimes(now);
+    for (const p of PRAYERS) {
+      const at = times[p];
+      if (now.getTime() < at || now.getTime() > at + 5 * 60_000) continue;
+      const key = `push_prayer_${new Date(at).toISOString().slice(0, 10)}_${p}`;
+      if (this.store.metaGet(key)) continue;
+      this.store.metaSet(key, '1');   // mark first: a crash can't send it twice
+      let sent = 0;
+      for (const t of this.store.prayerPushTargets()) {
+        const [title, body] = t.lang === 'en' ? PRAYER_TEXT[p].en : PRAYER_TEXT[p].ar;
+        try { if (await this.send(t.token, title, body, { kind: 'prayer' })) sent++; }
+        catch (e) { console.error('[push]', (e as Error).message); }
+      }
+      console.log(`[push] prayer ${p}: sent to ${sent} phones`);
+      return sent;
+    }
+    return 0;
+  }
+
   /** Sends the reminder if one is due. Called every minute, and by the cron URL. */
   async tick(now = new Date(), force = false): Promise<{ slot: string | null; sent: number }> {
     if (!this.sa || this.running) return { slot: null, sent: 0 };
     if (!force) await this.dailyTick(now).catch(e => console.error('[push]', (e as Error).message));
+    if (!force) await this.prayerTick(now).catch(e => console.error('[push]', (e as Error).message));
     const slot = force ? 'now' : this.dueSlot(now);
     if (!slot) return { slot: null, sent: 0 };
     this.running = true;
