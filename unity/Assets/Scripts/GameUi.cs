@@ -525,6 +525,8 @@ public class GameUi : MonoBehaviour
         // quick chat: phrases and emojis
         chat = gameObject.AddComponent<QuickChat>();
         chat.Build(app, hud);
+        // a drink from the waiter, paid with coins
+        gameObject.AddComponent<DrinkMenu>().Build(app, hud);
 
         // the view: the whole scene, or just the board from above
         var vb = Ui.Button(hud, "", new Color(0.1f, 0.06f, 0.04f, 0.85f), Color.white, 10, () =>

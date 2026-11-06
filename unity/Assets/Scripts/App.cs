@@ -321,6 +321,17 @@ public class App : MonoBehaviour
             case "emote":
                 ShowEmote((int)m.Num("seat", -1), m.Str("k"));
                 break;
+            case "served":
+            {
+                // someone at the table ordered a drink: the waiter brings it to their place
+                int seat = (int)m.Num("seat", -1); string k = m.Str("k");
+                if (view == null || seat < 0 || seat >= view.seats.Count || string.IsNullOrEmpty(k)) break;
+                dominoTable.Serve(seat, k);
+                var who = view.seats[seat];
+                if (seat == view.you) Toast(Loc.T("الجرسون جايبلك") + " " + Skins.Name(k));
+                else if (who != null) Toast(who.name + " " + Loc.T("طلب") + " " + Skins.Name(k));
+                break;
+            }
             case "payout":
                 game.ShowPayout(m.Str("kind"), m.Num("delta"));
                 break;
@@ -374,6 +385,7 @@ public class App : MonoBehaviour
         {
             case "maintenance": return Loc.T("السيرفر في صيانة دلوقتي، ارجع كمان شوية");
             case "not_enough_coins": return Loc.T("رصيدك مش كفاية للرهان ده");
+            case "drink_no_coins": return Loc.T("رصيدك مش كفاية للمشروب ده");
             case "not_your_turn": return Loc.T("مش دورك");
             case "room_not_found": return Loc.T("مفيش غرفة بالكود ده");
             case "seats_empty": return Loc.T("لسه في أماكن فاضية");

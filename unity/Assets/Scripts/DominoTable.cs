@@ -127,7 +127,7 @@ public class DominoTable : MonoBehaviour
             var s = v.seats[seat];
             // you are the camera: your own chair stays empty so nothing blocks your view
             if (s != null && !(pos == 0 && v.you >= 0)) { chs[pos] = s.ch; hats[pos] = s.hat; }
-            if (s != null && v.phase != "lobby") drinkIds[pos] = string.IsNullOrEmpty(s.drink) ? "drink_tea" : s.drink;
+            if (s != null && v.phase != "lobby") drinkIds[pos] = !string.IsNullOrEmpty(s.served) ? s.served : string.IsNullOrEmpty(s.drink) ? "drink_tea" : s.drink;
         }
         for (int p = 0; p < 4; p++) { SetChar(p, chs[p], hats[p]); SetDrink(p, drinkIds[p]); }
     }
@@ -135,7 +135,7 @@ public class DominoTable : MonoBehaviour
     /// The drink by a place at the table: on the player's right, clear of their tiles.
     void SetDrink(int pos, string id)
     {
-        if (drinkId[pos] == id) return;
+        if (drinkId[pos] == id || (serving[pos] != null && serving[pos] == id)) return;   // (the waiter is bringing that one)
         drinkId[pos] = id;
         if (drinks[pos] != null) { Destroy(drinks[pos]); drinks[pos] = null; }
         if (id == null || table == null) return;
@@ -143,6 +143,70 @@ public class DominoTable : MonoBehaviour
         var right = Vector3.Cross(toP, U);   // the player's right, looking in at the table
         drinks[pos] = Look.Drink(id, table.transform, C + toP * (T - 1.15f) + right * 3.7f, 1.25f);
     }
+
+    /* ---------- the waiter ---------- */
+
+    readonly string[] serving = new string[4];
+    Vector3 DrinkSpot(int pos)
+    {
+        var toP = (SeatPoint(pos) - C).normalized;
+        var right = Vector3.Cross(toP, U);
+        return C + toP * (T - 1.15f) + right * 3.7f;
+    }
+
+    /// A drink someone ordered: the waiter's tray comes in from that player's side of the table, sets the glass
+    /// down at their place (taking the old glass away) and goes back. Everyone at the table sees it.
+    public void Serve(int seat, string id)
+    {
+        int pos = System.Array.IndexOf(posToSeat, seat);
+        if (pos < 0 || table == null) return;
+        serving[pos] = id;
+        StartCoroutine(ServeRun(pos, id));
+    }
+
+    System.Collections.IEnumerator ServeRun(int pos, string id)
+    {
+        var spot = DrinkSpot(pos);
+        var toP = (SeatPoint(pos) - C); toP.y = 0; toP.Normalize();
+        var right = Vector3.Cross(toP, U);
+        // the tray: a round metal plate, with the waiter's hand under it and the glass on it
+        var tray = new GameObject("Waiter tray");
+        tray.transform.SetParent(table.transform, true);
+        var plate = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        Destroy(plate.GetComponent<Collider>());
+        plate.transform.SetParent(tray.transform, false);
+        plate.transform.localScale = new Vector3(3.2f, 0.06f, 3.2f);
+        plate.GetComponent<Renderer>().sharedMaterial = Art.Mat(new Color(0.8f, 0.76f, 0.68f), 0.75f, 0.85f);   // a brass tray
+        var hand = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+        Destroy(hand.GetComponent<Collider>());
+        hand.transform.SetParent(tray.transform, false);
+        hand.transform.localScale = new Vector3(0.75f, 3.2f, 0.75f);
+        hand.transform.localRotation = Quaternion.FromToRotation(Vector3.up, toP);
+        hand.transform.localPosition = toP * 3.4f + Vector3.down * 0.45f;
+        hand.GetComponent<Renderer>().sharedMaterial = Art.Mat(new Color(0.96f, 0.94f, 0.9f), 0.3f);   // the waiter's white sleeve
+        var glass = Look.Drink(id, tray.transform, tray.transform.position, 1.25f);
+        if (glass == null) { Destroy(tray); serving[pos] = null; SetDrink(pos, id); yield break; }
+        glass.transform.localPosition = Vector3.up * 0.05f;
+        // in from beyond the table edge on the player's side, a little to their right
+        Vector3 from = spot + toP * 16f + right * 2f + U * 3.2f, over = spot + U * 1.6f, down = spot + U * 0.02f;
+        float t = 0;
+        Sfx.Tap();
+        while (t < 1f) { t += Time.deltaTime / 0.9f; tray.transform.position = Vector3.Lerp(from, over, Ease(t)) + U * Mathf.Sin(t * Mathf.PI) * 0.8f; yield return null; }
+        // the old glass goes, the new one comes down onto the table
+        if (drinks[pos] != null) { Destroy(drinks[pos]); drinks[pos] = null; }
+        t = 0;
+        while (t < 1f) { t += Time.deltaTime / 0.35f; tray.transform.position = Vector3.Lerp(over, down, Ease(t)); yield return null; }
+        glass.transform.SetParent(table.transform, true);
+        glass.transform.position = spot;
+        drinks[pos] = glass; drinkId[pos] = id; serving[pos] = null;
+        Sfx.Clack();
+        // the empty tray goes back the way it came
+        var back0 = tray.transform.position;
+        t = 0;
+        while (t < 1f) { t += Time.deltaTime / 0.7f; tray.transform.position = Vector3.Lerp(back0, from, Ease(t)); yield return null; }
+        Destroy(tray);
+    }
+    static float Ease(float x) { x = Mathf.Clamp01(x); return x * x * (3 - 2 * x); }
 
     void SetChar(int pos, int ch, string hat)
     {
