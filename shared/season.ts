@@ -8,7 +8,7 @@ export const SP_PER_TIER = 100;
 /** Season points: a finished online game, a practice game, a mission, the daily reward. */
 export const SP = { win: 40, loss: 15, practiceWin: 10, practiceLoss: 4, daily: 20 };
 /** The premium track: with coins, or bought on Google Play (a consumable product, once per season). Premium
- * also means no full-screen ads until the season ends. */
+ * unlocks skins only; ads are removed by the separate no-ads plan (NO_ADS, 199 EGP a month). */
 export const SEASON_PASS = { id: 'season_pass', coins: 750_000, egp: 299, enabled: true };   // enabled: the dashboard can switch the season off
 
 export type Reward = { coins: number } | { skin: string };

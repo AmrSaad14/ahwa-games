@@ -16,7 +16,7 @@ function page(title: string, body: string): string {
 <nav><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/delete-account">Delete account</a></nav>${body}</main></body></html>`;
 }
 
-const UPDATED = '5 November 2026';
+const UPDATED = '7 November 2026';
 
 /** The monthly prizes right now (the dashboard's settings). */
 export interface PrizeTerms { enabled: boolean; egp: number; claimDays?: number }
@@ -56,7 +56,7 @@ export function termsPage(c?: PrizeTerms): string {
 <ul><li>Board Battles is a game for fun. Coins can't be sold or traded between players.</li>
 <li><b>Coins have no money value</b>: they can't be bought, sold or cashed out.</li>
 ${c?.enabled ? `<li><b>Monthly prizes:</b> each month, the player with the most points in each game's monthly leaderboard (3 points a win, 1 a game, online games against people or matchmade tables, with a minimum number of games) wins ${fmt(c.egp)} EGP by Vodafone Cash. Winners must be 18 or over, live in Egypt, be signed in (Google, Apple or mobile number) and give their Vodafone Cash number in the game within ${c.claimDays ?? 30} days. Winners are checked by hand before paying; cheating, several accounts or playing against yourself make a prize void. Playing is free: nothing needs to be bought to win. The amount and the rules can change. Google and Apple are not sponsors of the prizes and are not involved in them in any way.</li>` : ''}
-<li>Coins can't be bought. Purchases (the season pass: skins and no ads until the season ends) are digital items for the game, sold through Google Play under its refund rules.</li>
+<li>Coins can't be bought. Purchases (the season pass, which unlocks skins, and the no-ads plan, a monthly subscription you can cancel any time in Google Play) are digital items for the game, sold through Google Play under its refund rules.</li>
 <li>Be decent: no cheating, no abuse in names or chat, no harassment. Players others report are muted automatically, and we may close accounts that break these rules.</li>
 <li>One account per player. Don't use bots or modified apps.</li>
 <li>The game is provided as it is; we do our best to keep it running but can't promise it never stops. We may change or end features and seasons.</li>
@@ -65,7 +65,7 @@ ${c?.enabled ? `<li><b>Monthly prizes:</b> each month, the player with the most 
 <li>بورد باتلز لعبة للتسلية. الكوينز مش بتتباع ولا بتتبادل بين اللاعيبة.</li>
 <li><b>الكوينز ملهاش قيمة فلوس</b>: مش بتتشترى ولا بتتباع ولا بتتسحب.</li>
 ${c?.enabled ? `<li><b>جوايز الشهر:</b> كل شهر، الأول في ترتيب الشهر لكل لعبة (٣ نقط للمكسب ونقطة للعب، ماتشات أونلاين، وبحد أدنى من الماتشات) بيكسب ${fmt(c.egp)} جنيه على فودافون كاش. لازم يكون عندك ١٨ سنة، ساكن في مصر، حسابك متسجل، وتكتب رقم فودافون كاش في اللعبة خلال ${c.claimDays ?? 30} يوم. بنراجع الكسبانين قبل الدفع، والغش أو أكتر من حساب بيلغي الجايزة. اللعب ببلاش ومش محتاج تشتري حاجة عشان تكسب.</li>` : ''}
-<li>الكوينز مش بتتباع. المشتريات (الموسم المميز: سكينز ومن غير إعلانات لآخر الموسم) حاجات رقمية جوه اللعبة، بتتباع من خلال Google Play وبقواعد الاسترجاع بتاعته.</li>
+<li>الكوينز مش بتتباع. المشتريات (الموسم المميز بيفتح سكينز، واشتراك "بدون إعلانات" الشهري اللي تقدر تلغيه في أي وقت من Google Play) حاجات رقمية جوه اللعبة، بتتباع من خلال Google Play وبقواعد الاسترجاع بتاعته.</li>
 <li>خليك محترم: ممنوع الغش والشتيمة والمضايقة. اللي بيتبلغ عنه بيتكتم، وممكن نقفل الحساب اللي بيكسر القواعد.</li>
 <li>حساب واحد لكل لاعب، وممنوع البوتات والنسخ المعدلة. لازم يكون عندك ١٣ سنة أو أكتر.</li></ul></div>`);
 }

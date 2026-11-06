@@ -470,7 +470,7 @@ export class Store {
   publicUser(u: UserRow): PublicUser {
     const now = Date.now(), season = this.seasonState(u.id);
     // no full-screen ads: with the season pass, until the season ends
-    const adFreeUntil = Math.max(u.ad_free_until ?? 0, season.premium ? season.endsAt : 0);
+    const adFreeUntil = u.ad_free_until ?? 0;   // only the no-ads plan (199 EGP a month) removes ads; the season pass doesn't
     return { ...toPublic(u), adFreeUntil, titles: this.titlesOf(u.id, now), title: this.wornTitle(u.id, now), chest: this.chestState(u.id, now), tutorial: !!u.tutorial, prayerPush: u.prayer_push !== 0, xp: u.xp ?? 0, level: levelOf(u.xp ?? 0), streak: u.streak ?? 0, daily: this.dailyState(u), code: this.friendCode(u.id), ratings: this.ratingsOf(u.id),
       adsLeft: Math.max(0, ECONOMY.adsPerDay - this.adsToday(u.id)), skins: this.skinsOf(u.id),
       skinAds: this.skinAdsOf(u.id), skinAdsLeft: Math.max(0, ECONOMY.skinAdsPerDay - this.skinAdsToday(u.id)),

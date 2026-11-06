@@ -487,7 +487,6 @@ export class Hub {
         const billing = this.opts.billing;
         if (!billing?.enabled) return fail('purchases_off');
         if (product === SEASON_PASS.id && !SEASON_PASS.enabled && !this.store.purchase(token)) return fail('season_off');
-        if (product === NO_ADS.id) return fail('bad_product');   // no ad-free plan on its own: it comes with the season pass
         const seen = this.store.purchase(token);
         if (seen && seen.product !== NO_ADS.id) {
           // already credited (the app asks again until it hears back): just confirm
