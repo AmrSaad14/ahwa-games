@@ -455,6 +455,9 @@ public partial class Menus : MonoBehaviour
             Toggle(list, "أصوات القهوة", Music.CafeOn, v => { Music.CafeOn = v; app.game?.RefreshSound(); });
             Toggle(list, "الاهتزاز", Sfx.VibrateOn, v => { Sfx.VibrateOn = v; if (v) Sfx.Buzz(); });
             Toggle(list, "توفير البطارية", Perf.Saver, v => { Perf.Saver = v; });
+            // prayer-time notifications (Cairo times), kept on the server so they follow the account
+            if (user != null && user.ContainsKey("prayerPush"))
+                Toggle(list, "تذكير بمواعيد الصلاة", user.Bool("prayerPush"), v => { user["prayerPush"] = v; app.Send(new Dictionary<string, object> { ["t"] = "prayerPush", ["on"] = v }); });
             // language
             var lr = Row(list, 44, Card);
             At(Ui.Label(lr, "اللغة", 16, Color.white, StartAlign, Ui.Bold).rectTransform, 14, 160, 40);

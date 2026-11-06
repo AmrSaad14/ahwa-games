@@ -47,7 +47,7 @@ public static class Loc
         ["جاري الاتصال…"] = "Connecting…",
         ["متصل"] = "Online",
         ["دومينو"] = "Dominoes", ["طاولة"] = "Backgammon", ["شطرنج"] = "Chess", ["لودو"] = "Ludo",
-        ["اطلب مشروب"] = "Order a drink", ["الجرسون جايبلك"] = "The waiter is bringing your", ["طلب"] = "ordered", ["رصيدك مش كفاية للمشروب ده"] = "Not enough coins for that drink", ["استنى الجرسون يجيب اللي طلبته"] = "Wait for the waiter to bring your order",
+        ["اطلب مشروب"] = "Order a drink", ["تذكير بمواعيد الصلاة"] = "Prayer time reminders", ["الجرسون جايبلك"] = "The waiter is bringing your", ["طلب"] = "ordered", ["رصيدك مش كفاية للمشروب ده"] = "Not enough coins for that drink", ["استنى الجرسون يجيب اللي طلبته"] = "Wait for the waiter to bring your order",
         ["المتجر"] = "Shop", ["المتصدرين"] = "Leaders", ["طريقة اللعب"] = "How to play", ["الإعدادات"] = "Settings",
         ["اتفرج على إعلان"] = "Watch an ad", ["دخول"] = "Sign in", ["ضيف"] = "Guest",
         // errors and notes
