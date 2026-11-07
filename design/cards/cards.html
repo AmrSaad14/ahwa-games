@@ -19,6 +19,8 @@ html,body{margin:0;background:transparent}
 const S=['♠','♥','♦','♣'], R=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
 window.card=id=>{const w=document.getElementById('w');
  if(id<0){w.innerHTML='<div class="back"><span>♦</span></div>';return;}
+ // the joker (konkan)
+ if(id===52){w.innerHTML='<div class="c"><div class="k r tl" style="font:700 24px Kufi">جوكر</div><div class="k b br" style="font:700 24px Kufi">جوكر</div><div class="mid" style="font-size:78px">🃏</div><div style="position:absolute;inset:5px;border:3px solid #6b3fa0;border-radius:11px"></div></div>';return;}
  const s=Math.floor(id/13), r=id%13, red=s===1||s===2, cl=red?'r':'b', sym=S[s], rk=R[r];
  const corner=`<div class="k ${cl} tl"><b>${rk}</b><i>${sym}</i></div><div class="k ${cl} br"><b>${rk}</b><i>${sym}</i></div>`;
  let mid;

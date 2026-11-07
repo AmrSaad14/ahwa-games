@@ -16,6 +16,10 @@ public class App : MonoBehaviour
     public Menus menus;
     public BoardGame boardGame;
     public BasraTable basraTable;
+    public TarneebTable tarneebTable;
+    public KonkanTable konkanTable;
+    /// The card games: drawn flat over the table, their computer players on the server.
+    public static bool CardGame(string g) => g == "basra" || g == "tarneeb" || g == "konkan";
     public Voice voice;
     public TableView view;
     Dictionary<string, object> user;
@@ -39,10 +43,10 @@ public class App : MonoBehaviour
     readonly Dictionary<string, Image> gameButtons = new Dictionary<string, Image>();
 
     /// The games on the home list: the café's four tables, then the card games (no table of their own).
-    public static readonly string[] HomeGames = { "domino", "tawla", "chess", "ludo", "basra" };
+    public static readonly string[] HomeGames = { "domino", "tawla", "chess", "ludo", "basra", "tarneeb", "konkan" };
     public static readonly Dictionary<string, string> GameNames = new Dictionary<string, string>
     {
-        ["domino"] = "دومينو", ["tawla"] = "طاولة", ["chess"] = "شطرنج", ["ludo"] = "لودو", ["basra"] = "بصرة",
+        ["domino"] = "دومينو", ["tawla"] = "طاولة", ["chess"] = "شطرنج", ["ludo"] = "لودو", ["basra"] = "بصرة", ["tarneeb"] = "طرنيب", ["konkan"] = "كونكان",
     };
 
     /// Test mode (GitHub's desktop build, "-shots"): records the run as video frames plus a few stills, then quits.
@@ -116,6 +120,10 @@ public class App : MonoBehaviour
         boardGame.Init(this);
         basraTable = gameObject.AddComponent<BasraTable>();
         basraTable.Init(this);
+        tarneebTable = gameObject.AddComponent<TarneebTable>();
+        tarneebTable.Init(this);
+        konkanTable = gameObject.AddComponent<KonkanTable>();
+        konkanTable.Init(this);
         voice = gameObject.AddComponent<Voice>();
         voice.Init(this);
         BuildHome();
@@ -160,16 +168,20 @@ public class App : MonoBehaviour
         ["tawla"] = new[] { "دورك! دوس على الزهر عشان ترمي", "دوس على قشاط بينوّر، وبعدين على المكان اللي عايز تروحه", "قشاط لوحده ممكن يتضرب: خلّي قشاطين مع بعض عشان تحميهم", "لما تجمّع قشاطك كله في آخر ربع، طلّعه برة. اللي يطلّع الأول يكسب" },
         ["chess"] = new[] { "دورك! دوس على قطعة من قطعك عشان تشوف هتروح فين", "دوس على مربع من اللي بينوّروا عشان تحرّك القطعة", "خلّي بالك على الملك: لو اتحاصر من غير مهرب تبقى كش مات", "كل لاعب ليه ساعة: لو وقتك خلص تخسر" },
         ["basra"] = new[] { "دورك! دوس على ورقة من ورقك عشان ترميها", "الورقة بتاكل اللي زيها من الأرض، والأرقام بتاكل أي ورق مجموعه زيها", "الولد بياكل الأرض كلها، والسبعة الديناري كمان", "لو كنست الأرض كلها تبقى بصرة: ١٠ نقط. أول واحد يوصل ١٠١ يكسب" },
+        ["tarneeb"] = new[] { "اشتري كام لمّة هتجيبها إنت وشريكك (٧ لـ ١٣)، أو قول باص", "اللي يشتري أعلى يختار الطرنيب: النوع اللي بيكسب أي نوع تاني", "لازم تنزل من نفس النوع اللي نزل الأول لو معاك. الورق اللي ينفع ينزل واقف", "لو جبتوا اللي اشتريتوه بتاخدوا لمّاتكم، لو لأ بيتخصم. أول فريق يوصل ٤١ يكسب" },
+        ["konkan"] = new[] { "دورك! اسحب من الكوتشينة، أو خد الورقة اللي اترمت لو هتنزل بيها", "اختار ٣ ورق أو أكتر ودوس «مجموعة»: نفس الرقم بأشكال مختلفة، أو ورا بعض من نفس الشكل", "أول نزلة لازم مجموعها ٥١ أو أكتر. الجوكر بيكمّل أي مجموعة", "في الآخر اختار ورقة ودوس «ارمي». اللي يخلّص ورقه الأول يكسب الدور" },
         ["ludo"] = new[] { "دورك! دوس على الزهر عشان ترمي", "لازم تجيب ٦ عشان تطلّع قطعة من البيت", "دوس على القطعة اللي عايز تحرّكها", "لو وقفت على قطعة منافس بترجّعها البيت. وصّل قطعك الأربعة الأول عشان تكسب" },
     };
     int guideStep; string guideGame;
     void GameGuide(TableView v)
     {
-        if (offline == null || v == null || !Guides.TryGetValue(v.game, out var steps)) return;
+        // practice on the phone, or a card game (those practise on the server) played just for fun
+        if (v == null || (offline == null && !(CardGame(v.game) && v.stake == 0)) || !Guides.TryGetValue(v.game, out var steps)) return;
         if (UnityEngine.PlayerPrefs.GetInt("guide." + v.game, 0) == 1) return;
         if (guideGame != v.id) { guideGame = v.id; guideStep = 0; }
         if (guideStep >= steps.Length) return;
         Toast(Loc.T(steps[guideStep++]), 4.5f);
+        if (guideStep >= steps.Length && CardGame(v.game)) { PlayerPrefs.SetInt("guide." + v.game, 1); PlayerPrefs.Save(); }
     }
     public void StartGuide()
     {
@@ -467,7 +479,7 @@ public class App : MonoBehaviour
         game.ShowHud(false);
         dominoTable.Show(false);
         boardGame.Show(false);
-        basraTable.Hide();
+        basraTable.Hide(); tarneebTable.Hide(); konkanTable.Hide();
         voice.Leave(); voice.Sync(null);
         cafe.SetGame(false);
         Music.Home(true);
@@ -478,8 +490,16 @@ public class App : MonoBehaviour
     {
         if (view == null) return;
         voice.Sync(view);
-        if (view.game == "basra") { dominoTable.Set(view, -1, null); boardGame.Show(false); basraTable.Render(view); game.Render(view, -1, null); return; }
-        basraTable.Hide();
+        if (CardGame(view.game))
+        {
+            dominoTable.Set(view, -1, null); boardGame.Show(false);
+            if (view.game == "basra") basraTable.Render(view); else basraTable.Hide();
+            if (view.game == "tarneeb") tarneebTable.Render(view); else tarneebTable.Hide();
+            if (view.game == "konkan") konkanTable.Render(view); else konkanTable.Hide();
+            game.Render(view, -1, null);
+            return;
+        }
+        basraTable.Hide(); tarneebTable.Hide(); konkanTable.Hide();
         if (view.Board) { dominoTable.Set(view, -1, null); boardGame.Set(view); game.Render(view, -1, null); return; }
         dominoTable.Set(view, sel, choose);
         game.Render(view, sel, choose);
@@ -542,10 +562,10 @@ public class App : MonoBehaviour
         lastMode = mode; lastStake = 0;
         if (view != null) Leave();
         if (searching) CancelQueue();
-        if (g == "basra")
+        if (CardGame(g))
         {
             // the card games' computer players live on the server: practice there (needs the connection)
-            if (net == null || !net.Online) { Toast(Loc.T("البصرة محتاجة نت عشان تتلعب")); return; }
+            if (net == null || !net.Online) { Toast(Loc.T("ألعاب الورق محتاجة نت عشان تتلعب")); return; }
             offline = null;
             Send(new Dictionary<string, object> { ["t"] = "practice", ["mode"] = mode, ["level"] = OfflineGame.Level == 0 ? "easy" : OfflineGame.Level == 2 ? "hard" : "normal" });
             return;
@@ -800,14 +820,14 @@ public class App : MonoBehaviour
         statusText.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(200, 20), new Vector2(-86, -54));
 
         // the four games, down the right side
-        var list = Ui.Rect("Games", root).Place(new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(170, 282), new Vector2(-14, -18));
+        var list = Ui.Rect("Games", root).Place(new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(170, 306), new Vector2(-14, -18));
         var title = Ui.Label(list, "اختار لعبتك", 15, Ui.GoldLight, TextAnchor.MiddleRight, Ui.Bold);
         title.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(170, 24), new Vector2(0, 0));
         for (int i = 0; i < HomeGames.Length; i++)
         {
             var g = HomeGames[i];
             var b = Ui.Button(list, GameNames[g], Ui.Panel, Ui.GoldLight, 18, () => Pick(g));
-            ((RectTransform)b.transform).Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(170, 44), new Vector2(0, -30 - i * 50));
+            ((RectTransform)b.transform).Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(170, 36), new Vector2(0, -28 - i * 40));
             gameButtons[g] = b.GetComponent<Image>();
             var outline = b.gameObject.AddComponent<Outline>(); outline.effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.35f);
         }

@@ -133,7 +133,7 @@ public partial class Menus
         // each game: rating and record
         var pg = c0.Obj("perGame");
         var lines = new List<string>();
-        foreach (var g in new[] { "domino", "tawla", "chess", "ludo", "basra" })
+        foreach (var g in new[] { "domino", "tawla", "chess", "ludo", "basra", "tarneeb", "konkan" })
         {
             var r = pg?.Obj(g); if (r == null) continue;
             int run = (int)r.Num("streak");

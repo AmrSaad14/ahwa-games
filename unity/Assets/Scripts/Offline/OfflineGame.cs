@@ -110,6 +110,8 @@ public static class Modes
         }
         if (m.StartsWith("ludo")) return "ludo";
         if (m.StartsWith("basra")) return "basra";
+        if (m.StartsWith("tarneeb")) return "tarneeb";
+        if (m.StartsWith("konkan")) return "konkan";
         return "domino";
     }
     public static int Players(string m)
@@ -117,13 +119,14 @@ public static class Modes
         switch (m)
         {
             case "ffa2": case "tawla": case "mahbousa": case "tawla31": case "gulbahar": case "ludo2": case "ludoq2": case "ludom2": return 2;
-            case "ffa3": case "ludo3": return 3;
+            case "basra2": case "konkan2": return 2;
+            case "ffa3": case "ludo3": case "konkan3": return 3;
         }
         if (GameOf(m) == "chess") return 2;
         return 4;
     }
     /// How many sides play against each other ("team" dominoes: two teams of two).
-    public static int Sides(string m) => m == "team" ? 2 : Players(m);
+    public static int Sides(string m) => m == "team" || m == "basra4" || m == "tarneeb" ? 2 : Players(m);
     public static int DefaultTarget(string m)
     {
         var g = GameOf(m);

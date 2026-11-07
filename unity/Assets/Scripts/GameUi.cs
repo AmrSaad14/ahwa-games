@@ -181,10 +181,12 @@ public class GameUi : MonoBehaviour
         ["tawla"] = new[] { ("tawla", "عادة"), ("mahbousa", "محبوسة"), ("tawla31", "٣١"), ("gulbahar", "جلبهار") },
         ["chess"] = new[] { ("chess1", "دقيقة"), ("chess3", "٣ دقايق"), ("chess", "٥ دقايق"), ("chess10", "١٠ دقايق") },
         ["basra"] = new[] { ("basra2", "فردي"), ("basra4", "زوجي ٢ ضد ٢") },
+        ["tarneeb"] = new[] { ("tarneeb", "زوجي ٢ ضد ٢") },
+        ["konkan"] = new[] { ("konkan2", "٢ لاعبين"), ("konkan3", "٣ لاعبين"), ("konkan4", "٤ لاعبين") },
         ["ludo"] = new[] { ("ludo2", "٢ لاعبين"), ("ludo3", "٣ لاعبين"), ("ludo4", "٤ لاعبين"), ("ludoq2", "سريع ٢"), ("ludoq4", "سريع ٤"), ("ludom2", "ماستر ٢"), ("ludom4", "ماستر ٤") },
     };
     public static int Players(string mode) =>
-        mode == "ffa3" || mode == "ludo3" ? 3 : mode == "ffa4" || mode == "team" || mode.EndsWith("4") ? 4 : 2;
+        mode == "ffa3" || mode == "ludo3" || mode == "konkan3" ? 3 : mode == "konkan2" ? 2 : mode == "tarneeb" ? 4 : mode == "ffa4" || mode == "team" || mode.EndsWith("4") ? 4 : 2;
 
     void BuildPicker()
     {
@@ -911,7 +913,8 @@ public class GameUi : MonoBehaviour
         ["tawla"] = "طاولة عادة", ["mahbousa"] = "محبوسة", ["tawla31"] = "٣١", ["gulbahar"] = "جلبهار",
         ["chess"] = "شطرنج", ["chess1"] = "شطرنج", ["chess3"] = "شطرنج", ["chess10"] = "شطرنج",
         ["ludo2"] = "لودو", ["ludo3"] = "لودو", ["ludo4"] = "لودو",
-        ["basra2"] = "بصرة", ["basra4"] = "بصرة زوجي",
+        ["basra2"] = "بصرة", ["basra4"] = "بصرة زوجي", ["tarneeb"] = "طرنيب",
+        ["konkan2"] = "كونكان", ["konkan3"] = "كونكان", ["konkan4"] = "كونكان",
         ["ludoq2"] = "لودو سريع", ["ludoq4"] = "لودو سريع", ["ludom2"] = "لودو ماستر", ["ludom4"] = "لودو ماستر",
     };
 
@@ -954,7 +957,7 @@ public class GameUi : MonoBehaviour
         if (mend)
         {
             var m = v.match;
-            bool won = v.you >= 0 && m.team == v.you;
+            bool won = v.you >= 0 && m.team == v.TeamOf(v.you);
             string kind = (v.endKind == "checkmate" || v.endKind == "mate") ? Loc.T("كش مات") : v.endKind == "stalemate" ? Loc.T("بات (تعادل)") : v.endKind == "time" ? Loc.T("الوقت خلص") : "";
             matchTitle.Set(m.team < 0 ? Loc.T("تعادل") : Say(v, m.team, "match"));
             matchSub.Set((kind != "" ? kind + "  ·  " : "") + string.Join("  ·  ", m.scores));
