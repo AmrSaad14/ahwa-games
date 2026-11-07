@@ -78,6 +78,13 @@ export function defaultTarget(m: Mode): number {
 }
 export const HAND_SIZE = 7;
 
+/** A hand dealt with 6 or more tiles of one number (a double counts once) isn't allowed: the tiles are dealt again. */
+export const MAX_OF_A_NUMBER = 5;
+export function crowdedHand(hand: number[]): boolean {
+  for (let v = 0; v <= 6; v++) if (hand.filter(i => TILES[i][0] === v || TILES[i][1] === v).length > MAX_OF_A_NUMBER) return true;
+  return false;
+}
+
 export type End = 'L' | 'R' | 'C';
 /** One tile on an arm of the line: [tileId, inner value (touching), outer value (open)]. */
 export type ArmTile = [number, number, number];

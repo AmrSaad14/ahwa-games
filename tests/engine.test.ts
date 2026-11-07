@@ -1,3 +1,4 @@
+import { crowdedHand } from '../shared/engine';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { GAME_MODES, TILES, endsFor, leftVal, lineTiles, newLine, place, rightVal, shuffled, Line, pipSum } from '../shared/engine';
@@ -79,6 +80,7 @@ for (const mode of GAME_MODES.domino) {
           if (tb.phase === 'play') {
             const total = tb.hands.flat().length + tb.yard.length + lineTiles(tb.line).length;
             if (total !== (mode === 'ffa3' ? 27 : 28)) invariantErrors++;   // three players: the 0|0 is out
+            if (tb.line && lineTiles(tb.line).length === 0 && tb.hands.some(crowdedHand)) invariantErrors++;   // nobody is dealt 6+ tiles of one number
           }
         },
         emote() {},

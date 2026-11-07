@@ -1,6 +1,6 @@
 import { chooseMove } from './bot';
 import {
-  End, HAND_SIZE, Line, MODE_PLAYERS, Mode, TILES, canPlay, endsFor, isDouble, newLine, pipSum, place,
+  End, HAND_SIZE, Line, crowdedHand, MODE_PLAYERS, Mode, TILES, canPlay, endsFor, isDouble, newLine, pipSum, place,
   shuffled, teamCount, teamOf,
   defaultTarget, targetOptions,
 } from './engine';
@@ -237,10 +237,15 @@ export class Table {
     this.round++;
     // Egyptian deal: 7 each; with three players the 0|0 is taken out and all 27 tiles are dealt, 9 each
     const three = this.mode === 'ffa3';
-    const deck = shuffled(TILES.map((_, i) => i).filter(i => !three || i !== 0));
     const size = three ? 9 : HAND_SIZE;
-    // hands stay in the shuffled deal order (not sorted 0|0, 0|1, …), so a player has to read their own tiles
-    this.hands = this.seats.map(() => deck.splice(0, size));
+    // hands stay in the shuffled deal order (not sorted 0|0, 0|1, …), so a player has to read their own tiles;
+    // nobody starts with 6 or more tiles of the same number (dealt again until so)
+    let deck: number[];
+    for (let tries = 0; ; tries++) {
+      deck = shuffled(TILES.map((_, i) => i).filter(i => !three || i !== 0));
+      this.hands = this.seats.map(() => deck.splice(0, size));
+      if (!this.hands.some(crowdedHand) || tries > 200) break;
+    }
     this.yard = deck;
     this.line = newLine();
     this.passes = 0;

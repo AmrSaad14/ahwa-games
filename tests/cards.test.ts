@@ -174,3 +174,10 @@ test('tarneeb and konkan on the server: practice tables play to the end (my turn
     }
   } finally { await app.close(); }
 });
+
+test('dominoes: nobody is dealt 6 or more tiles of the same number', async () => {
+  const { crowdedHand, TILES } = await import('../shared/engine');
+  const six = TILES.map((t, i) => (t[0] === 6 || t[1] === 6 ? i : -1)).filter(i => i >= 0);
+  assert.ok(crowdedHand(six.slice(0, 6)));
+  assert.ok(!crowdedHand(six.slice(0, 5)));
+});

@@ -30,16 +30,28 @@ public class OfflineDomino : OfflineGame
 
     static int Pips(int id) => Domino.Tiles[id][0] + Domino.Tiles[id][1];
     int NextSeat(int s) => (s + 1) % n;
+    /// 6 or more tiles of one number (a double counts once).
+    static bool Crowded(List<int> hand)
+    {
+        for (int v = 0; v <= 6; v++) if (hand.Count(i => Domino.Tiles[i][0] == v || Domino.Tiles[i][1] == v) >= 6) return true;
+        return false;
+    }
 
     void StartRound()
     {
         round++;
         bool three = mode == "ffa3";
-        var deck = Enumerable.Range(0, 28).Where(i => !three || i != 0).ToList();
-        for (int i = deck.Count - 1; i > 0; i--) { int j = rng.Next(i + 1); (deck[i], deck[j]) = (deck[j], deck[i]); }
         int size = three ? 9 : 7;
-        hands = new List<int>[n];
-        for (int s = 0; s < n; s++) { hands[s] = deck.GetRange(0, size); deck.RemoveRange(0, size); }   // left in the shuffled order (not sorted)
+        List<int> deck;
+        // nobody starts with 6 or more tiles of the same number: dealt again until so
+        for (int tries = 0; ; tries++)
+        {
+            deck = Enumerable.Range(0, 28).Where(i => !three || i != 0).ToList();
+            for (int i = deck.Count - 1; i > 0; i--) { int j = rng.Next(i + 1); (deck[i], deck[j]) = (deck[j], deck[i]); }
+            hands = new List<int>[n];
+            for (int s = 0; s < n; s++) { hands[s] = deck.GetRange(0, size); deck.RemoveRange(0, size); }   // left in the shuffled order (not sorted)
+            if (!hands.Any(Crowded) || tries > 200) break;
+        }
         yard = deck;
         line = new Domino.Line();
         passes = 0; result = null;
