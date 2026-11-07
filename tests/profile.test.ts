@@ -19,3 +19,41 @@ test('profile: win streaks per game, head to head, and badges', () => {
   assert.deepEqual(s.headToHead(a.id, b.id), { games: 3, wins: 2, losses: 1 });
   assert.deepEqual(s.headToHead(b.id, a.id), { games: 3, wins: 1, losses: 2 });
 });
+
+test('leagues: points per game and season, the reward for the highest league once the season ends', async () => {
+  const { leagueOf } = await import('../shared/leagues');
+  const s = new Store(':memory:');
+  const a = s.createGuest('A', 0);
+  const nov = Date.parse('2026-11-10T10:00:00Z'), dec = Date.parse('2026-12-02T10:00:00Z');
+  for (let i = 0; i < 12; i++) s.addLeague(a.id, 'tawla', true, nov);   // 360 LP: silver
+  s.addLeague(a.id, 'tawla', false, nov);                                // 345: still silver
+  assert.equal(s.leaguesOf(a.id, nov).tawla.league, 'silver');
+  assert.equal(s.leaguesOf(a.id, nov).tawla.next, 700);
+  assert.equal(leagueOf(1800), 4);
+  assert.deepEqual(s.leagueRewards(a.id, nov), [], 'nothing before the season ends');
+  const before = s.coinsOf(a.id);
+  const r = s.leagueRewards(a.id, dec);
+  assert.deepEqual(r.map(x => [x.game, x.league, x.coins]), [['tawla', 'silver', 15_000]]);
+  assert.equal(s.coinsOf(a.id), before + 15_000);
+  assert.deepEqual(s.leagueRewards(a.id, dec), [], 'paid once');
+  assert.deepEqual(s.leaguesOf(a.id, dec), {}, 'a new season starts from zero');
+});
+
+test('governorates: the weekly board counts the best players, last week\'s winner pays its players once', () => {
+  const s = new Store(':memory:');
+  const a = s.createGuest('A', 0), b = s.createGuest('B', 1), c = s.createGuest('C', 2);
+  s.setGov(a.id, 'alex'); s.setGov(b.id, 'alex'); s.setGov(c.id, 'cairo');
+  const now = Date.parse('2026-11-12T10:00:00Z'), lastWeek = now - 7 * 86_400_000;
+  const { weekKey } = require('../shared/gifts');
+  for (let i = 0; i < 6; i++) { s.addWeekly(a.id, true, weekKey(lastWeek)); s.addWeekly(c.id, false, weekKey(lastWeek)); }
+  s.addWeekly(b.id, true, weekKey(lastWeek));
+  const board = s.govBoard(weekKey(lastWeek));
+  assert.equal(board[0].gov, 'alex'); assert.equal(board[0].points, 21); assert.equal(board[0].players, 2);
+  assert.equal(s.govPlayers('alex', a.id, weekKey(lastWeek))[0].me, true);
+  const before = s.coinsOf(a.id);
+  assert.equal(s.govPrize(a.id, now)?.coins, 10_000);
+  assert.equal(s.coinsOf(a.id), before + 10_000);
+  assert.equal(s.govPrize(a.id, now), null, 'once');
+  assert.equal(s.govPrize(b.id, now), null, 'played too little');
+  assert.equal(s.govPrize(c.id, now), null, 'another governorate');
+});

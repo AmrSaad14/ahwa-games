@@ -6,6 +6,8 @@ import crypto from 'node:crypto';
 import type { PrizeRow, CoinRow, LeaderRow, PublicUser } from '../shared/protocol';
 import type { GameId } from '../shared/engine';
 import { achievementsOf } from '../shared/achievements';
+import { LEAGUES, LP, leagueOf, leagueView } from '../shared/leagues';
+import { GOV_WEEK } from '../shared/govs';
 import { ECONOMY, WEEKLY_PRIZES, WHEEL, wheelCost, cairoDay, levelOf, nextCairoDay, streakBonus, weekKey } from '../shared/gifts';
 import { Equipped, adsForSkin, isFree, skinById } from '../shared/skins';
 import { activeEvent } from '../shared/events';
@@ -23,7 +25,7 @@ export interface UserRow {
   phone: string | null; google_sub: string | null; google_email: string | null; apple_sub?: string | null; apple_email?: string | null;
   pg_id: string | null; friend_code: string | null; streak?: number; xp?: number;
   ref_by?: string | null; ref_paid?: number; muted_until?: number; pid?: string | null; banned?: number; ban_reason?: string | null; title?: string | null;
-  tutorial?: number; nudged?: number; prayer_push?: number; wheel_day?: string; wheel_spins?: number; wheel_ads?: number;
+  tutorial?: number; nudged?: number; prayer_push?: number; gov?: string; wheel_day?: string; wheel_spins?: number; wheel_ads?: number;
 }
 
 export class Store {
@@ -98,6 +100,11 @@ export class Store {
     if (!cols.has('title')) this.db.exec('ALTER TABLE users ADD COLUMN title TEXT');
     // the first-game guide done (its reward paid once), and when a player who stayed away was last nudged
     if (!cols.has('tutorial')) this.db.exec('ALTER TABLE users ADD COLUMN tutorial INTEGER NOT NULL DEFAULT 0; ALTER TABLE users ADD COLUMN nudged INTEGER NOT NULL DEFAULT 0');
+    // the governorate a player plays for, and the weekly prize for the governorate of the week (paid once)
+    if (!cols.has('gov')) this.db.exec("ALTER TABLE users ADD COLUMN gov TEXT NOT NULL DEFAULT ''");
+    this.db.exec('CREATE TABLE IF NOT EXISTS gov_paid (week TEXT NOT NULL, user_id TEXT NOT NULL, PRIMARY KEY (week, user_id))');
+    // leagues: points per player, game and season (a month), the highest reached, and whether its reward was paid
+    this.db.exec('CREATE TABLE IF NOT EXISTS league (user_id TEXT NOT NULL, season TEXT NOT NULL, game TEXT NOT NULL, lp INTEGER NOT NULL DEFAULT 0, peak INTEGER NOT NULL DEFAULT 0, paid INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, season, game))');
     // win streaks per game: the current run of wins and the best ever
     const rcols = new Set((this.db.prepare('PRAGMA table_info(ratings)').all() as { name: string }[]).map(c => c.name));
     if (!rcols.has('streak')) this.db.exec('ALTER TABLE ratings ADD COLUMN streak INTEGER NOT NULL DEFAULT 0');
@@ -222,7 +229,7 @@ export class Store {
     return {
       games, wins, losses: Math.max(0, games - wins), winRate: games ? Math.round(wins / games * 100) : 0,
       coinsWon: money.won, coinsLost: money.lost, net: money.won - money.lost, bestWin: money.best,
-      tourneyCoins: money.tourney, weeklyCoins: money.weekly, perGame, achievements: achievementsOf(nums),
+      tourneyCoins: money.tourney, weeklyCoins: money.weekly, perGame, achievements: achievementsOf(nums), leagues: this.leaguesOf(id),
       level: levelOf(u.xp ?? 0), xp: u.xp ?? 0, streak: u.streak ?? 0, gifts: u.gifts ?? 0, since: u.created,
     };
   }
@@ -464,6 +471,67 @@ export class Store {
     if (weekly) this.addWeekly(id, won);
   }
 
+  setGov(id: string, gov: string) { this.db.prepare('UPDATE users SET gov = ? WHERE id = ?').run(gov, id); }
+  /** The governorates this week: each one's score (its best players' points), players, and its best players. */
+  govBoard(week = weekKey()): { gov: string; points: number; players: number }[] {
+    const rows = this.db.prepare(`SELECT u.gov AS gov, w.points AS points FROM weekly w JOIN users u ON u.id = w.user_id
+      WHERE w.week = ? AND u.gov != '' AND u.banned = 0 ORDER BY w.points DESC`).all(week) as { gov: string; points: number }[];
+    const by = new Map<string, { gov: string; points: number; players: number }>();
+    for (const r of rows) {
+      const g = by.get(r.gov) ?? { gov: r.gov, points: 0, players: 0 };
+      if (g.players < GOV_WEEK.top) g.points += r.points;
+      g.players++;
+      by.set(r.gov, g);
+    }
+    return [...by.values()].sort((a, b) => b.points - a.points || b.players - a.players);
+  }
+  /** A governorate's best players this week. */
+  govPlayers(gov: string, meId: string | null, week = weekKey(), limit = 30) {
+    const rows = this.db.prepare(`SELECT u.id, u.pid, u.name, u.ch, u.photo, w.points, w.games, w.wins FROM weekly w JOIN users u ON u.id = w.user_id
+      WHERE w.week = ? AND u.gov = ? AND u.banned = 0 ORDER BY w.points DESC, w.wins DESC LIMIT ?`).all(week, gov, limit) as { id: string; pid: string; name: string; ch: number; photo: string | null; points: number; games: number; wins: number }[];
+    return rows.map((r, i) => ({ rank: i + 1, pid: r.pid, name: r.name, ch: r.ch, photo: r.photo, points: r.points, games: r.games, wins: r.wins, me: r.id === meId }));
+  }
+  /** Last week's governorate of the week: its players who played enough get the prize, once. */
+  govPrize(id: string, now = Date.now()): { week: string; gov: string; coins: number } | null {
+    const u = this.get(id); if (!u?.gov) return null;
+    const last = weekKey(now - 7 * 86_400_000);
+    const top = this.govBoard(last)[0];
+    if (!top || top.gov !== u.gov) return null;
+    const mine = this.db.prepare('SELECT games FROM weekly WHERE week = ? AND user_id = ?').get(last, id) as { games: number } | undefined;
+    if (!mine || mine.games < GOV_WEEK.minGames) return null;
+    const ins = this.db.prepare('INSERT OR IGNORE INTO gov_paid (week, user_id) VALUES (?, ?)').run(last, id);
+    if (!Number(ins.changes)) return null;
+    this.addCoins(id, GOV_WEEK.prize); this.logCoins(id, 'gov', GOV_WEEK.prize);
+    return { week: last, gov: u.gov, coins: GOV_WEEK.prize };
+  }
+
+  /** League points for a rated online game (this season). */
+  addLeague(id: string, game: string, won: boolean, now = Date.now()) {
+    const season = seasonOf(now), d = won ? LP.win : LP.loss;
+    this.db.prepare(`INSERT INTO league (user_id, season, game, lp, peak) VALUES (?, ?, ?, MAX(0, ?), MAX(0, ?))
+      ON CONFLICT(user_id, season, game) DO UPDATE SET lp = MAX(0, lp + ?), peak = MAX(peak, MAX(0, lp + ?))`).run(id, season, game, d, d, d, d);
+  }
+  /** This season's league in each game the player has played. */
+  leaguesOf(id: string, now = Date.now()): Record<string, ReturnType<typeof leagueView>> {
+    const rows = this.db.prepare('SELECT game, lp, peak FROM league WHERE user_id = ? AND season = ?').all(id, seasonOf(now)) as { game: string; lp: number; peak: number }[];
+    const out: Record<string, ReturnType<typeof leagueView>> = {};
+    for (const r of rows) out[r.game] = leagueView(r.lp, r.peak);
+    return out;
+  }
+  /** Seasons that ended: pays the reward for the highest league reached in each game, once. */
+  leagueRewards(id: string, now = Date.now()): { season: string; game: string; league: string; coins: number }[] {
+    const rows = this.db.prepare('SELECT season, game, peak FROM league WHERE user_id = ? AND season < ? AND paid = 0').all(id, seasonOf(now)) as { season: string; game: string; peak: number }[];
+    const out: { season: string; game: string; league: string; coins: number }[] = [];
+    for (const r of rows) {
+      const L = LEAGUES[leagueOf(r.peak)];
+      const changed = this.db.prepare('UPDATE league SET paid = 1 WHERE user_id = ? AND season = ? AND game = ? AND paid = 0').run(id, r.season, r.game);
+      if (!Number(changed.changes)) continue;
+      this.addCoins(id, L.reward); this.logCoins(id, 'league', L.reward);
+      out.push({ season: r.season, game: r.game, league: L.id, coins: L.reward });
+    }
+    return out;
+  }
+
   /** Head to head: matches two people played against each other (not as partners) and who won how many. */
   headToHead(a: string, b: string): { games: number; wins: number; losses: number } {
     const rows = this.db.prepare("SELECT mode, players, winner_team FROM matches WHERE players LIKE ? AND players LIKE ? ORDER BY ended DESC LIMIT 2000")
@@ -505,7 +573,7 @@ export class Store {
     const now = Date.now(), season = this.seasonState(u.id);
     // no full-screen ads: with the season pass, until the season ends
     const adFreeUntil = u.ad_free_until ?? 0;   // only the no-ads plan (199 EGP a month) removes ads; the season pass doesn't
-    return { ...toPublic(u), adFreeUntil, titles: this.titlesOf(u.id, now), title: this.wornTitle(u.id, now), chest: this.chestState(u.id, now), tutorial: !!u.tutorial, prayerPush: u.prayer_push !== 0, wheel: this.wheelState(u, now), xp: u.xp ?? 0, level: levelOf(u.xp ?? 0), streak: u.streak ?? 0, daily: this.dailyState(u), code: this.friendCode(u.id), ratings: this.ratingsOf(u.id),
+    return { ...toPublic(u), adFreeUntil, titles: this.titlesOf(u.id, now), title: this.wornTitle(u.id, now), chest: this.chestState(u.id, now), tutorial: !!u.tutorial, prayerPush: u.prayer_push !== 0, gov: u.gov || null, leagues: this.leaguesOf(u.id, now), wheel: this.wheelState(u, now), xp: u.xp ?? 0, level: levelOf(u.xp ?? 0), streak: u.streak ?? 0, daily: this.dailyState(u), code: this.friendCode(u.id), ratings: this.ratingsOf(u.id),
       adsLeft: Math.max(0, ECONOMY.adsPerDay - this.adsToday(u.id)), skins: this.skinsOf(u.id),
       skinAds: this.skinAdsOf(u.id), skinAdsLeft: Math.max(0, ECONOMY.skinAdsPerDay - this.skinAdsToday(u.id)),
       missions: this.missions(u.id), missionsAt: nextCairoDay(now), season,

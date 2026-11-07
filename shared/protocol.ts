@@ -203,7 +203,8 @@ export interface PlayerCard {
   coinsWon: number; coinsLost: number; net: number; bestWin: number; tourneyCoins: number; weeklyCoins: number;
   perGame: Record<string, { rating: number; games: number; wins: number; losses: number; streak: number; best: number }>;   // streak: wins in a row now; best: the longest
   achievements: { id: string; ar: string; en: string; icon: string; need: number; have: number; done: boolean }[];
-  vsYou?: { games: number; wins: number; losses: number } | null;   // the viewer's matches against this player (wins = the viewer's)
+  vsYou?: { games: number; wins: number; losses: number } | null;
+  leagues?: Record<string, { league: string; lp: number; peak: string; next: number | null; from: number }>;   // this season, per game   // the viewer's matches against this player (wins = the viewer's)
   gifts: number; streak: number;
   online: boolean; playing: boolean;
   me: boolean;
@@ -278,7 +279,9 @@ export type C2S =
   | { t: 'prizeClaim'; id: number; phone: string }
   | { t: 'tutorialDone' }
   | { t: 'prayerPush'; on: boolean }
-  | { t: 'wheelSpin' }   // spin the lucky wheel (free once a day, then unlocked by ads: adStart with wheel)
+  | { t: 'wheelSpin' }
+  | { t: 'setGov'; gov: string }   // the governorate you play for (shared/govs.ts)
+  | { t: 'govBoard'; gov?: string }   // the governorates this week, and one governorate's best players   // spin the lucky wheel (free once a day, then unlocked by ads: adStart with wheel)
   | { t: 'crashReport'; kind: string; msg: string; where?: string; model?: string; gpu?: string; api?: string; os?: string; mem?: number; gmem?: number; ver?: string }   // the app closed by itself last time, or a script error
   | { t: 'track'; name: string }
   | { t: 'watch'; pid?: string; table?: string }

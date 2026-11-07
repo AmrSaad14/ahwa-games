@@ -2,6 +2,7 @@ import { PlayBilling } from './billing';
 import crypto from 'node:crypto';
 import { GAMES, GameId, MODES, MODE_PLAYERS, Mode, defaultTarget, gameOf, targetOptions, teamOf } from '../shared/engine';
 import type { C2S, Emote, FriendRow, IceServer, PlayerCard, S2C } from '../shared/protocol';
+import { GOV_WEEK, isGov } from '../shared/govs';
 import { ECONOMY, STAKES, giftByKind, drinkOnMenu, isStake, winnings, NO_ADS, XP, WEEKLY_PRIZES, weekKey } from '../shared/gifts';
 import { EMOTES } from '../shared/protocol';
 import { Table, publicId, Player, BotMaker } from '../shared/table';
@@ -756,6 +757,18 @@ export class Hub {
         if (['guide_start', 'guide_skip', 'shop_open', 'season_open', 'groups_open'].includes(name)) this.store.track(uid, name);
         return;
       }
+      case 'setGov': {
+        if (!isGov(m.gov)) return err('bad_gov');
+        this.store.setGov(uid, m.gov);
+        return this.sendUser(uid);
+      }
+      case 'govBoard': {
+        const me = this.store.get(uid);
+        const govs = this.store.govBoard();
+        const gov = typeof m.gov === 'string' && isGov(m.gov) ? m.gov : me?.gov || govs[0]?.gov || '';
+        const last = this.store.govBoard(weekKey(Date.now() - 7 * 86_400_000))[0]?.gov ?? null;
+        return s.conn.send({ t: 'govBoard', govs, gov, players: gov ? this.store.govPlayers(gov, uid) : [], mine: me?.gov || null, lastWinner: last, prize: GOV_WEEK.prize, minGames: GOV_WEEK.minGames });
+      }
       case 'wheelSpin': {
         const r = this.store.wheelSpin(uid);
         if (!r) return err('wheel_not_ready');
@@ -912,6 +925,10 @@ export class Hub {
     this.byUser.set(u.id, s);
     // back after a while away: a gift (before `touch` moves "last seen")
     const back = this.store.comebackGift(u, ECONOMY.comebackDays, ECONOMY.comebackCoins);
+    // a season ended since last time: the league rewards
+    const leagueRewards = this.store.leagueRewards(u.id);
+    // last week's governorate of the week was yours, and you played for it
+    const govPrize = this.store.govPrize(u.id);
     this.store.touch(u.id);
     // the daily reward: newer phones show the track and the player collects it; older ones get it at once
     const daily = (s.v ?? 1) < 2 ? this.store.claimDaily(u.id) : { coins: 0, streak: 0 };
@@ -920,6 +937,8 @@ export class Hub {
       login: { google: !!this.opts.google?.enabled, apple: !!this.opts.apple?.enabled, phone: !!this.opts.phones?.enabled, playGames: this.opts.google?.playGamesEnabled ? this.opts.google.clientId : undefined } });
     this.friendsChanged(u.id);
     this.friendOnlinePush(u);
+    if (leagueRewards.length) s.conn.send({ t: 'leagueRewards', rows: leagueRewards });
+    if (govPrize) s.conn.send({ t: 'govPrize', ...govPrize });
     // a friend invited you while you were away (you got a notification): the invitation, if the room still waits
     const inv = this.pendingInvites.get(u.id);
     if (inv) {
@@ -1309,6 +1328,7 @@ export class Hub {
         const k = played < 20 ? 40 : 28;
         res.deltas[i] = Math.round(k * ((draw ? 0.5 : won ? 1 : 0) - expected));
         this.store.recordResult(s.uid, res.deltas[i], won, game, weekly);
+        if (!draw && !this.tourneyTables.has(t.id)) this.store.addLeague(s.uid, game, won);
         xpFor(s.uid, won);
         this.sendUser(s.uid);
       });
