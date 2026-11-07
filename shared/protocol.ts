@@ -247,7 +247,7 @@ export type C2S =
   | { t: 'cancel' }
   | { t: 'create'; mode: Mode; target: number; stake?: number; block?: boolean }
   /** A free, unrated game against computer players that starts at once. */
-  | { t: 'practice'; mode: Mode }
+  | { t: 'practice'; mode: Mode; level?: 'easy' | 'normal' | 'hard' }   // how well the computer players play
   | { t: 'join'; code: string }
   | { t: 'leave' }
   | { t: 'setup'; mode?: Mode; target?: number; stake?: number; block?: boolean }

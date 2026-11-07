@@ -9,11 +9,11 @@ export type BotMove = { t: 'play'; id: number; e: End } | { t: 'draw' } | { t: '
  * - Prefers leaving ends on numbers that are mostly played already (opponents are unlikely to hold them).
  * - In team games, avoids closing a number its partner just played on when it has a choice.
  */
-export function chooseMove(line: Line, hand: readonly number[], yardCount: number, level: 'easy' | 'normal' = 'normal', partnerLast?: number): BotMove {
+export function chooseMove(line: Line, hand: readonly number[], yardCount: number, level: 'easy' | 'normal' | 'hard' = 'normal', partnerLast?: number, closeOut = false): BotMove {
   const options: { id: number; e: End }[] = [];
   for (const id of hand) for (const e of endsFor(line, id)) options.push({ id, e });
   if (!options.length) return yardCount > 0 ? { t: 'draw' } : { t: 'pass' };
-  if (level === 'easy') {
+  if (level === 'easy' && Math.random() < 0.6) {
     const o = options[Math.floor(Math.random() * options.length)];
     return { t: 'play', ...o };
   }
@@ -40,7 +40,9 @@ export function chooseMove(line: Line, hand: readonly number[], yardCount: numbe
       const v = o.e === 'L' ? leftVal(line) : rightVal(line);
       if (v === partnerLast) s -= 2;               // leave the partner's number open
     }
-    s += Math.random() * 1.5;
+    // hard: plays to close the game (قافلة) when its own hand is the lighter one, and thinks less randomly
+    if (level === 'hard' && closeOut) s += seen[openNew] >= 6 && seen[otherEnd] >= 6 ? 12 : 0;
+    s += Math.random() * (level === 'hard' ? 0.4 : 1.5);
     if (s > bestScore) { bestScore = s; best = o; }
   }
   return { t: 'play', ...best };

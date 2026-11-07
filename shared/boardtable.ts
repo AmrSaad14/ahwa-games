@@ -7,6 +7,7 @@ import { BoardAction, BoardEvent, BoardGameId, GameDef, GameEnd, defFor } from '
 interface Seat extends Player { online: boolean; away: boolean; timeouts: number; lastEmote: number; mic?: boolean; offAt?: number }
 
 export interface BoardTableOptions {
+  botLevel?: 'easy' | 'normal' | 'hard';   // how well computer players play (practice: the player picks)
   id: string;
   code: string | null;
   mode: Mode;
@@ -286,7 +287,7 @@ export class BoardTable {
   }
 
   private botMove(seat: number, flags: { auto?: boolean } = {}) {
-    const a = this.def.auto(this.state, seat);
+    const a = this.def.auto(this.state, seat, this.seats[seat]?.bot && !flags.auto ? this.opts.botLevel ?? 'normal' : 'normal');
     if (this.apply(seat, a, flags)) this.apply(seat, { t: 'pass' }, flags);
     this.bump();
   }

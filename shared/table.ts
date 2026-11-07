@@ -26,6 +26,7 @@ export interface TableOptions {
   humanBots?: boolean;     // computer players take their time like people (matchmade games)
   lobbyAfterMatchMs: number;
   autoMoveMs?: number;     // pause before the game draws or passes for a player with no tile that fits (default 900)
+  botLevel?: 'easy' | 'normal' | 'hard';   // how well computer players play (practice: the player picks)
   block?: boolean;         // the block game (من غير سحب): the tiles left after the deal stay out; no tile that fits means pass
 }
 
@@ -324,10 +325,17 @@ export class Table {
     const partner = this.mode === 'team' ? (seat + 2) % 4 : -1;
     const m = this.line.f === null && this.opening !== null && this.hands[seat].includes(this.opening)
       ? { t: 'play' as const, id: this.opening, e: 'C' as End }
-      : chooseMove(this.line, this.hands[seat], this.block ? 0 : this.yard.length, 'normal', partner >= 0 && this.lastPlayedValue[partner] >= 0 ? this.lastPlayedValue[partner] : undefined);
+      : chooseMove(this.line, this.hands[seat], this.block ? 0 : this.yard.length, this.seats[seat]?.bot ? this.opts.botLevel ?? 'normal' : 'normal', partner >= 0 && this.lastPlayedValue[partner] >= 0 ? this.lastPlayedValue[partner] : undefined, this.lighterHand(seat));
     this.doMove(seat, m.t === 'play' ? { t: 'play', id: m.id, e: m.e } : m);
     if (timedOut && this.last) this.last.auto = true;
     this.bump();
+  }
+
+  /** This seat holds fewer pips than everyone else (closing the game now would win it). */
+  private lighterHand(seat: number): boolean {
+    const pips = (h: number[]) => h.reduce((a, id) => a + TILES[id][0] + TILES[id][1], 0);
+    const mine = pips(this.hands[seat]);
+    return this.hands.every((h, i) => i === seat || pips(h) > mine);
   }
 
   /** The line is closed: none of the tiles still out (in the hands or the boneyard) can be played on it. */

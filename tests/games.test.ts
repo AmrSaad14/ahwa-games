@@ -360,3 +360,19 @@ test('tables variants: either die may be played first (5 then 4, or 4 then 5)', 
     assert.ok(n && V.nextSteps(n).some(x => x.die === 5), `${v}: the 5 follows the 4`);
   }
 });
+
+test('computer players at three levels: easy, normal and hard all make legal moves', async () => {
+  const { chessDef, tawlaDef, defFor } = await import('../shared/games/defs');
+  const { chooseMove } = await import('../shared/bot');
+  const { newLine, place, TILES } = await import('../shared/engine');
+  for (const level of ['easy', 'normal', 'hard'] as const) {
+    let g = chessDef.newGame(2, 0, Math.random);
+    for (let i = 0; i < 6; i++) { const a = chessDef.auto(g, chessDef.toMove(g), level); const r = chessDef.act(g, chessDef.toMove(g), a, Math.random); assert.notEqual(typeof r, 'string'); g = (r as { s: typeof g }).s; }
+    const tid = (a: number, b: number) => TILES.findIndex(t => (t[0] === a && t[1] === b) || (t[0] === b && t[1] === a));
+    const line = newLine(); place(line, tid(6, 6), 'C');
+    const hand = [tid(6, 2), tid(1, 2)];
+    const m = chooseMove(line, hand, 4, level);
+    assert.equal(m.t, 'play');
+    assert.ok(tawlaDef && defFor('ludo4'));
+  }
+});

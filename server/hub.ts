@@ -527,7 +527,8 @@ export class Hub {
         if (!MODES.includes(m.mode)) return err('bad_mode');
         this.dequeue(uid);
         if (table) this.leaveTable(uid);
-        const t = this.newTable(m.mode, defaultTarget(m.mode), true, 0);
+        const level = m.level === 'easy' || m.level === 'hard' ? m.level : 'normal';
+        const t = this.newTable(m.mode, defaultTarget(m.mode), true, 0, false, level);
         t.join(this.player(uid, gameOf(m.mode)));
         this.userTable.set(uid, t);
         t.fillBots();
@@ -1017,7 +1018,7 @@ export class Hub {
   /** Computer players in matchmade games and the tournament get people's names and a rating near the table's. */
   private botMaker(rating: number): BotMaker { return (_seat, used) => botIdentity(used, rating); }
 
-  private newTable(mode: Mode, target: number, isPrivate: boolean, stake: number, humanBots = false): Room {
+  private newTable(mode: Mode, target: number, isPrivate: boolean, stake: number, humanBots = false, botLevel?: 'easy' | 'normal' | 'hard'): Room {
     let code: string | null = null;
     if (isPrivate) {
       do { code = Array.from({ length: 5 }, () => CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)]).join(''); } while (this.byCode.has(code));
@@ -1025,7 +1026,7 @@ export class Hub {
     const opts = {
       id: crypto.randomUUID(), code, mode, target, private: isPrivate, stake,
       turnMs: gameOf(mode) === 'domino' ? this.opts.dominoTurnMs ?? this.opts.turnMs : this.opts.turnMs, nextRoundMs: this.opts.nextRoundMs, botDelay: this.opts.botDelay, offlineGraceMs: this.opts.graceMs ?? 30_000, lobbyAfterMatchMs: this.opts.lobbyAfterMatchMs, humanBots,
-      autoMoveMs: this.opts.autoMoveMs, chessClockMs: this.opts.chessClockMs,
+      autoMoveMs: this.opts.autoMoveMs, chessClockMs: this.opts.chessClockMs, botLevel,
     };
     const hooks = {
       changed: (tb: Room) => this.broadcast(tb),

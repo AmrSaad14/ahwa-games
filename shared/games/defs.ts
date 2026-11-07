@@ -22,6 +22,11 @@ export interface BoardEvent {
   dice?: number[]; hit?: boolean; i?: number; captured?: { seat: number; pawn: number }[]; home?: boolean;
 }
 
+export type BotLevel = 'easy' | 'normal' | 'hard';
+/** Easy computer players often just take any legal move instead of the good one. */
+const sloppy = (level?: BotLevel) => level === 'easy' && Math.random() < 0.55;
+const anyOf = <T>(xs: T[]): T | undefined => xs.length ? xs[Math.floor(Math.random() * xs.length)] : undefined;
+
 export interface GameEnd { winner: number; points: number; kind: string }
 
 export interface GameDef<S> {
@@ -29,8 +34,9 @@ export interface GameDef<S> {
   newGame(players: number, first: number, rnd: () => number): S;
   toMove(s: S): number;
   act(s: S, seat: number, a: BoardAction, rnd: () => number): { s: S; e: BoardEvent } | string;
-  /** The move a computer player (or a timed-out player) makes. */
-  auto(s: S, seat: number): BoardAction;
+  /** The move a computer player (or a timed-out player) makes, as well as the level plays (practice: easy,
+   *  normal, hard; everywhere else normal). */
+  auto(s: S, seat: number, level?: BotLevel): BoardAction;
   /** An action the game makes by itself after a short pause (nothing to choose). */
   forced(s: S, seat: number): BoardAction | null;
   over(s: S): GameEnd | null;
@@ -60,7 +66,12 @@ export const chessDef: GameDef<ChessGame> = {
     return { s: { c, white: g.white, last: { from: m.from, to: m.to }, captured: taken ? [...g.captured, taken] : g.captured },
       e: { t: 'move', s: seat, from: m.from, to: m.to, promo: m.promo, capture: !!taken, check: C.inCheck(c) } };
   },
-  auto: g => { const m = C.bestMove(g.c, 3); return { t: 'move', from: m.from, to: m.to, promo: m.promo }; },
+  auto: (g, _seat, level) => {
+    // easy: one move ahead and sometimes any move; normal: two; hard: three
+    const legal = C.legalMoves(g.c);
+    const m = sloppy(level) ? anyOf(legal)! : C.bestMove(g.c, level === 'easy' ? 1 : level === 'hard' ? 3 : 2);
+    return { t: 'move', from: m.from, to: m.to, promo: m.promo };
+  },
   forced: () => null,
   over(g) {
     const o = C.outcome(g.c); if (!o) return null;
@@ -157,9 +168,9 @@ export const tawlaDef: GameDef<T.TawlaState> = {
     }
     return 'bad_action';
   },
-  auto(s) {
+  auto(s, _seat, level) {
     if (!s.rolled) return { t: 'roll' };
-    const st = T.botStep(s);
+    const st = sloppy(level) ? anyOf(T.nextSteps(s)) ?? T.botStep(s) : T.botStep(s);
     return st ? { t: 'step', from: st.from, to: st.to } : { t: 'pass' };
   },
   forced: s => (s.rolled && T.turnDone(s) ? { t: 'pass' } : null),
@@ -208,9 +219,9 @@ function tablesDef(variant: V.TablesVariant): GameDef<V.TablesState> {
       }
       return 'bad_action';
     },
-    auto(s) {
+    auto(s, _seat, level) {
       if (!s.rolled) return { t: 'roll' };
-      const st = V.botStep(s);
+      const st = sloppy(level) ? anyOf(V.nextSteps(s)) ?? V.botStep(s) : V.botStep(s);
       return st ? { t: 'step', from: st.from, to: st.to } : { t: 'pass' };
     },
     forced: s => (s.rolled && V.turnDone(s) ? { t: 'pass' } : null),
@@ -257,9 +268,9 @@ function ludoDef(variant: L.LudoVariant): GameDef<L.LudoState> { return {
     }
     return 'bad_action';
   },
-  auto(s) {
+  auto(s, _seat, level) {
     if (s.die === null) return { t: 'roll' };
-    const p = s.sixes >= 3 ? null : L.botPawn(s);
+    const p = s.sixes >= 3 ? null : sloppy(level) ? anyOf(L.movable(s)) ?? null : L.botPawn(s);
     return p === null ? { t: 'pass' } : { t: 'pawn', i: p };
   },
   forced(s) {
