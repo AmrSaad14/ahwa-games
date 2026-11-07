@@ -289,6 +289,12 @@ export class BoardTable {
   private botMove(seat: number, flags: { auto?: boolean } = {}) {
     const a = this.def.auto(this.state, seat, this.seats[seat]?.bot && !flags.auto ? this.opts.botLevel ?? 'normal' : 'normal');
     if (this.apply(seat, a, flags)) this.apply(seat, { t: 'pass' }, flags);
+    // out of time in a game whose turn is several actions: the rest of the turn is played at once
+    if (flags.auto && this.def.wholeTurn) {
+      for (let i = 0; i < 30 && this.phase === 'play' && this.state && this.def.toMove(this.state) === seat; i++) {
+        if (this.apply(seat, this.def.auto(this.state, seat, 'normal'), flags)) break;
+      }
+    }
     this.bump();
   }
 

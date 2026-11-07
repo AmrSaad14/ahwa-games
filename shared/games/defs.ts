@@ -4,9 +4,11 @@ import * as T from './tawla';
 import * as L from './ludo';
 import * as V from './tables';
 import * as B from './basra';
+import * as TN from './tarneeb';
+import * as K from './konkan';
 import { CHESS_TIME, Mode, gameOf, ludoVariant, tawlaVariant } from '../engine';
 
-export type BoardGameId = 'chess' | 'tawla' | 'ludo' | 'basra';
+export type BoardGameId = 'chess' | 'tawla' | 'ludo' | 'basra' | 'tarneeb' | 'konkan';
 
 export type BoardAction =
   | { t: 'move'; from: number; to: number; promo?: C.Promo }   // chess
@@ -15,11 +17,19 @@ export type BoardAction =
   | { t: 'pawn'; i: number }                                   // ludo
   | { t: 'pass' }                                               // forced pass with nothing to play
   | { t: 'undo' }                                              // tawla: take back this turn's moves (before the turn ends)
-  | { t: 'card'; id: number };                                 // basra: play a card                                             // tawla: take back this turn's moves (before the turn ends)
+  | { t: 'card'; id: number }                                  // basra, tarneeb: play a card
+  | { t: 'bid'; n: number }                                    // tarneeb: bid 7…13, or 0 to pass
+  | { t: 'trump'; suit: number }                               // tarneeb: name the trump suit
+  | { t: 'draw' } | { t: 'take' } | { t: 'back' }              // konkan: draw from the pack, take the thrown card, put it back
+  | { t: 'down'; melds: number[][] }                           // konkan: lay down melds
+  | { t: 'add'; id: number; meld: number }                     // konkan: add a card to a meld on the table
+  | { t: 'throw'; id: number };                                // konkan: throw a card (ends the turn)
 
 export interface BoardEvent {
-  t: 'start' | 'move' | 'roll' | 'step' | 'pawn' | 'pass' | 'end' | 'undo' | 'card';
+  t: 'start' | 'move' | 'roll' | 'step' | 'pawn' | 'pass' | 'end' | 'undo' | 'card' | 'bid' | 'trump' | 'draw' | 'take' | 'back' | 'down' | 'add' | 'throw';
   card?: number; took?: number[]; basra?: number; deal?: boolean;   // basra: the card played, what it took, a basra, the deal ended
+  n?: number; suit?: number; trick?: number;                         // tarneeb: the bid, the trump, who took the trick (when it ended)
+  melds?: number[][]; meld?: number;                                 // konkan: what was laid down, the meld added to
   s: number;                 // seat
   from?: number; to?: number; promo?: string; capture?: boolean; check?: boolean;
   dice?: number[]; hit?: boolean; i?: number; captured?: { seat: number; pawn: number }[]; home?: boolean;
@@ -46,6 +56,8 @@ export interface GameDef<S> {
   view(s: S, seat: number): unknown;
   /** Chess uses clocks instead of a per-move timer. */
   clockMs?: number;
+  /** A turn is several actions (konkan): a player who runs out of time has the whole turn played for them. */
+  wholeTurn?: boolean;
 }
 
 /* ---------------- chess ---------------- */
@@ -316,11 +328,74 @@ export const basraDef: GameDef<B.BasraState> = {
   }),
 };
 
+/* ---------------- tarneeb ---------------- */
+export interface TarneebView {
+  hand: number[]; legal: number[]; counts: number[]; phase: TN.TarneebPhase; turn: number; you: number;
+  bids: (number | null)[]; bid: number; bidder: number; trump: number; dealer: number;
+  trick: { seat: number; card: number }[]; lastTrick: { seat: number; card: number }[] | null; lastWinner: number;
+  tricks: number[]; scores: number[]; deal: number; target: number; lastDeal: TN.TarneebState['lastDeal'];
+}
+export const tarneebDef: GameDef<TN.TarneebState> = {
+  game: 'tarneeb',
+  newGame: (_n, first, rnd) => TN.newTarneeb(first, rnd),
+  toMove: s => s.turn,
+  act(s, seat, a, rnd) {
+    if (a.t !== 'bid' && a.t !== 'trump' && a.t !== 'card') return 'bad_action';
+    const r = TN.act(s, seat, a, rnd);
+    if (typeof r === 'string') return r;
+    const e: BoardEvent = a.t === 'bid' ? { t: 'bid', s: seat, n: Number(a.n) } : a.t === 'trump' ? { t: 'trump', s: seat, suit: Number(a.suit) }
+      : { t: 'card', s: seat, card: Number(a.id), trick: r.trick?.winner, deal: !!r.dealOver };
+    return { s: r.s, e };
+  },
+  auto: (s, seat, level) => TN.botAction(s, seat, level ?? 'normal'),
+  forced: () => null,
+  over: s => (s.done ? { winner: TN.winnerTeam(s), points: 1, kind: 'win' } : null),
+  view: (s, seat): TarneebView => ({
+    hand: seat >= 0 ? s.hands[seat] : [], legal: seat >= 0 ? TN.legal(s, seat) : [], counts: s.hands.map(h => h.length), phase: s.phase, turn: s.turn, you: seat,
+    bids: s.bids, bid: s.bid, bidder: s.bidder, trump: s.trump, dealer: s.dealer, trick: s.trick, lastTrick: s.lastTrick, lastWinner: s.lastWinner,
+    tricks: s.tricks, scores: s.scores, deal: s.deal, target: s.target, lastDeal: s.lastDeal,
+  }),
+};
+
+/* ---------------- konkan ---------------- */
+export interface KonkanView {
+  hand: number[]; counts: number[]; stock: number; top: number; pileSize: number; melds: K.Meld[]; opened: boolean[];
+  turn: number; you: number; stage: K.KonkanState['stage']; took: number; scores: number[]; deal: number; target: number;
+  lastDeal: K.KonkanState['lastDeal'];
+}
+export const konkanDef: GameDef<K.KonkanState> = {
+  game: 'konkan',
+  wholeTurn: true,
+  newGame: (n, first, rnd) => K.newKonkan(n, first, rnd),
+  toMove: s => s.turn,
+  act(s, seat, a, rnd) {
+    if (!['draw', 'take', 'back', 'down', 'add', 'throw'].includes(a.t)) return 'bad_action';
+    const r = K.act(s, seat, a as K.KonkanAction, rnd);
+    if (typeof r === 'string') return r;
+    const e: BoardEvent = { t: a.t as BoardEvent['t'], s: seat, deal: !!r.dealOver };
+    if (a.t === 'take') e.card = r.took;
+    if (a.t === 'throw') e.card = Number(a.id);
+    if (a.t === 'add') { e.card = Number(a.id); e.meld = Number(a.meld); }
+    if (a.t === 'down') e.melds = a.melds;
+    return { s: r.s, e };
+  },
+  auto: (s, seat, level) => K.botAction(s, seat, level ?? 'normal'),
+  forced: () => null,
+  over: s => (s.done ? { winner: K.winnerSeat(s), points: 1, kind: 'win' } : null),
+  view: (s, seat): KonkanView => ({
+    hand: seat >= 0 ? s.hands[seat] : [], counts: s.hands.map(h => h.length), stock: s.stock.length, top: s.pile.length ? s.pile[s.pile.length - 1] : -1,
+    pileSize: s.pile.length, melds: s.melds, opened: s.opened, turn: s.turn, you: seat, stage: s.stage, took: seat === s.turn ? s.took : -1,
+    scores: s.scores, deal: s.deal, target: s.target, lastDeal: s.lastDeal,
+  }),
+};
+
 export function defFor(mode: Mode): GameDef<any> {
   let d = DEFS.get(mode);
   if (!d) {
     const g = gameOf(mode);
     if (g === 'basra') d = basraDef;
+    else if (g === 'tarneeb') d = tarneebDef;
+    else if (g === 'konkan') d = konkanDef;
     else if (g === 'chess') d = { ...chessDef, clockMs: (CHESS_TIME[mode]?.min ?? 5) * 60_000 };
     else if (g === 'ludo') d = ludoDef(ludoVariant(mode));
     else { const v = tawlaVariant(mode); d = v === 'aada' ? tawlaDef : tablesDef(v); }

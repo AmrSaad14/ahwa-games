@@ -229,7 +229,7 @@ RENDER.overview = async main => {
 };
 
 /* ---------------- analytics ---------------- */
-const MODE_GAME = m => /^(ffa|team)/.test(m) ? 'domino' : /^chess/.test(m) ? 'chess' : /^ludo/.test(m) ? 'ludo' : 'tawla';
+const MODE_GAME = m => /^(ffa|team)/.test(m) ? 'domino' : /^chess/.test(m) ? 'chess' : /^ludo/.test(m) ? 'ludo' : /^basra/.test(m) ? 'basra' : /^tarneeb/.test(m) ? 'tarneeb' : /^konkan/.test(m) ? 'konkan' : 'tawla';
 RENDER.analytics = async main => {
   const days = Number((location.hash.split('/')[1])) || 30;
   const d = await api('/analytics?days=' + days);
@@ -238,7 +238,7 @@ RENDER.analytics = async main => {
   // totals over the cohorts that are old enough
   const sum = (k, r) => d.retention.filter(x => x[r]).reduce((a, x) => a + x[k], 0);
   const joinedFor = r => d.retention.filter(x => x[r]).reduce((a, x) => a + x.joined, 0);
-  const games = { domino: [0, 0], tawla: [0, 0], chess: [0, 0], ludo: [0, 0] };
+  const games = { domino: [0, 0], tawla: [0, 0], chess: [0, 0], ludo: [0, 0], basra: [0, 0], tarneeb: [0, 0], konkan: [0, 0] };
   d.games.online.forEach(r => games[MODE_GAME(r.mode)][0] += r.n);
   d.games.practice.forEach(r => { if (games[r.game]) games[r.game][1] += r.n; });
   const top = Math.max(1, ...d.funnel.map(f => f.n));
@@ -257,7 +257,7 @@ RENDER.analytics = async main => {
     '<h2>Coming back, day by day</h2><div class="sub" style="margin-bottom:8px">Each row: the players who started that day, and how many opened the game again 1, 3 and 7 days later.</div>' +
     '<div class="tablewrap"><table><thead><tr><th>Started</th><th class="num">Players</th><th class="num">Day 1</th><th class="num">Day 3</th><th class="num">Day 7</th></tr></thead><tbody>' +
       d.retention.slice().reverse().map(r => '<tr><td>' + esc(r.day) + '</td><td class="num">' + num(r.joined) + '</td>' + cell(r.d1, r.joined, r.d1Ready) + cell(r.d3, r.joined, r.d3Ready) + cell(r.d7, r.joined, r.d7Ready) + '</tr>').join('') + '</tbody></table></div>' +
-    '<h2>What is played (last ' + Math.min(d.days, 30) + ' days)</h2><div class="grid">' + Object.entries(games).map(([g, [on, pr]]) => '<div class="card kpi"><div class="v">' + num(on) + '</div><div class="l">' + ({ domino: 'Dominoes', tawla: 'Backgammon', chess: 'Chess', ludo: 'Ludo' })[g] + ' online · ' + num(pr) + ' vs the computer</div></div>').join('') + '</div>' +
+    '<h2>What is played (last ' + Math.min(d.days, 30) + ' days)</h2><div class="grid">' + Object.entries(games).map(([g, [on, pr]]) => '<div class="card kpi"><div class="v">' + num(on) + '</div><div class="l">' + ({ domino: 'Dominoes', tawla: 'Backgammon', chess: 'Chess', ludo: 'Ludo', basra: 'Basra', tarneeb: 'Tarneeb', konkan: 'Konkan' })[g] + ' online · ' + num(pr) + ' vs the computer</div></div>').join('') + '</div>' +
     '<div class="tablewrap" style="margin-top:10px"><table><thead><tr><th>Way to play</th><th class="num">Online games</th></tr></thead><tbody>' + d.games.online.sort((a, b) => b.n - a.n).map(r => '<tr><td>' + esc(r.mode) + '</td><td class="num">' + num(r.n) + '</td></tr>').join('') + '</tbody></table></div>' +
     '<h2>When people play (online games by hour, last 14 days)</h2><div class="card"><svg class="chart" viewBox="0 0 640 160" style="max-height:220px">' +
       d.hours.map((n, h) => { const bh = Math.round(n / hmax * 110), x = 14 + h * 26; return '<rect x="' + x + '" y="' + (130 - bh) + '" width="20" height="' + Math.max(1, bh) + '" rx="3" fill="#c9a25a"><title>' + h + ':00 · ' + n + '</title></rect>' + (h % 3 === 0 ? '<text x="' + (x + 10) + '" y="148" fill="#b9a88a" font-size="11" text-anchor="middle">' + h + '</text>' : ''); }).join('') + '</svg>' +
@@ -273,7 +273,7 @@ RENDER.prizes = async main => {
   const rules = d.rules;
   const pend = d.rows.filter(r => r.status === 'pending');
   if (status === 'pending') setPending(pend.length);
-  const GN = { domino: 'Dominoes', tawla: 'Backgammon', chess: 'Chess', ludo: 'Ludo' };
+  const GN = { domino: 'Dominoes', tawla: 'Backgammon', chess: 'Chess', ludo: 'Ludo', basra: 'Basra', tarneeb: 'Tarneeb', konkan: 'Konkan' };
   const monthName = m => { const [y, mo] = m.split('-').map(Number); return new Date(Date.UTC(y, mo - 1, 15)).toLocaleString('en', { month: 'long', year: 'numeric' }); };
   const LABEL = { pending: 'To pay', unclaimed: 'Waiting for a number', paid: 'Paid', rejected: 'Rejected', expired: 'Expired', all: 'All' };
   main.innerHTML = '<h1>Monthly prizes · Vodafone Cash</h1>' +
@@ -492,7 +492,7 @@ RENDER.season = async main => {
 };
 
 /* ---------------- titles ---------------- */
-const GNAME = { domino: 'Dominoes', tawla: 'Backgammon', chess: 'Chess', ludo: 'Ludo' };
+const GNAME = { domino: 'Dominoes', tawla: 'Backgammon', chess: 'Chess', ludo: 'Ludo', basra: 'Basra', tarneeb: 'Tarneeb', konkan: 'Konkan' };
 RENDER.titles = async main => {
   const d = await api('/titles');
   state.catalog.titles = d.list; state.catalog.icons = d.icons;

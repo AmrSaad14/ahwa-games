@@ -541,7 +541,7 @@ export class Store {
       let ps: ({ uid: string | null } | null)[]; try { ps = JSON.parse(r.players); } catch { continue; }
       const ia = ps.findIndex(p => p?.uid === a), ib = ps.findIndex(p => p?.uid === b);
       if (ia < 0 || ib < 0) continue;
-      const team = (i: number) => (r.mode === 'team' || r.mode === 'basra4' ? i % 2 : i);
+      const team = (i: number) => (r.mode === 'team' || r.mode === 'basra4' || r.mode === 'tarneeb' ? i % 2 : i);
       if (team(ia) === team(ib)) continue;   // partners
       games++;
       if (r.winner_team === team(ia)) wins++; else if (r.winner_team === team(ib)) losses++;

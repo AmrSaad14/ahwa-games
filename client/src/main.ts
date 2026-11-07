@@ -5,7 +5,7 @@ import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 import { CHESS_TIME, End, GAMES as ALL_GAMES, GAME_MODES, GameId, MODES, MODE_PLAYERS, Mode, TILES, canPlay, defaultTarget, endsFor, gameOf, targetOptions, teamOf } from '../../shared/engine';
 // the website plays the first four games (basra is in the app only)
-const GAMES = ALL_GAMES.filter(g => g !== 'basra');
+const GAMES = ALL_GAMES.filter(g => g !== 'basra' && g !== 'tarneeb' && g !== 'konkan');   // the card games are in the app only
 import type { Action, AnyView, BoardAction, BoardView, CoinRow, Emote, FriendRow, LeaderRow, PublicUser, S2C, TableView } from '../../shared/protocol';
 import { playGamesCode, playGamesPossible } from './playgames';
 import { ludoColor } from './boards';
