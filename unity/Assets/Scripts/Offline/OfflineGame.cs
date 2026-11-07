@@ -109,6 +109,7 @@ public static class Modes
             case "chess1": case "chess3": case "chess": case "chess10": return "chess";
         }
         if (m.StartsWith("ludo")) return "ludo";
+        if (m.StartsWith("basra")) return "basra";
         return "domino";
     }
     public static int Players(string m)

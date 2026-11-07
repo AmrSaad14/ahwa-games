@@ -15,6 +15,7 @@ public class App : MonoBehaviour
     public GameUi game;
     public Menus menus;
     public BoardGame boardGame;
+    public BasraTable basraTable;
     public Voice voice;
     public TableView view;
     Dictionary<string, object> user;
@@ -37,9 +38,11 @@ public class App : MonoBehaviour
     float toastUntil;
     readonly Dictionary<string, Image> gameButtons = new Dictionary<string, Image>();
 
+    /// The games on the home list: the café's four tables, then the card games (no table of their own).
+    public static readonly string[] HomeGames = { "domino", "tawla", "chess", "ludo", "basra" };
     public static readonly Dictionary<string, string> GameNames = new Dictionary<string, string>
     {
-        ["domino"] = "دومينو", ["tawla"] = "طاولة", ["chess"] = "شطرنج", ["ludo"] = "لودو",
+        ["domino"] = "دومينو", ["tawla"] = "طاولة", ["chess"] = "شطرنج", ["ludo"] = "لودو", ["basra"] = "بصرة",
     };
 
     /// Test mode (GitHub's desktop build, "-shots"): records the run as video frames plus a few stills, then quits.
@@ -111,6 +114,8 @@ public class App : MonoBehaviour
         dominoTable.Show(false);
         boardGame = gameObject.AddComponent<BoardGame>();
         boardGame.Init(this);
+        basraTable = gameObject.AddComponent<BasraTable>();
+        basraTable.Init(this);
         voice = gameObject.AddComponent<Voice>();
         voice.Init(this);
         BuildHome();
@@ -154,6 +159,7 @@ public class App : MonoBehaviour
         ["domino"] = new[] { "دورك! دوس على حجر بينوّر عشان تلعبه", "الحجر لازم رقمه يكون زي رقم طرف من الطرفين", "مفيش حجر يركب؟ اسحب من الكومة", "اللي يخلّص حجارته الأول يكسب نقط الباقيين" },
         ["tawla"] = new[] { "دورك! دوس على الزهر عشان ترمي", "دوس على قشاط بينوّر، وبعدين على المكان اللي عايز تروحه", "قشاط لوحده ممكن يتضرب: خلّي قشاطين مع بعض عشان تحميهم", "لما تجمّع قشاطك كله في آخر ربع، طلّعه برة. اللي يطلّع الأول يكسب" },
         ["chess"] = new[] { "دورك! دوس على قطعة من قطعك عشان تشوف هتروح فين", "دوس على مربع من اللي بينوّروا عشان تحرّك القطعة", "خلّي بالك على الملك: لو اتحاصر من غير مهرب تبقى كش مات", "كل لاعب ليه ساعة: لو وقتك خلص تخسر" },
+        ["basra"] = new[] { "دورك! دوس على ورقة من ورقك عشان ترميها", "الورقة بتاكل اللي زيها من الأرض، والأرقام بتاكل أي ورق مجموعه زيها", "الولد بياكل الأرض كلها، والسبعة الديناري كمان", "لو كنست الأرض كلها تبقى بصرة: ١٠ نقط. أول واحد يوصل ١٠١ يكسب" },
         ["ludo"] = new[] { "دورك! دوس على الزهر عشان ترمي", "لازم تجيب ٦ عشان تطلّع قطعة من البيت", "دوس على القطعة اللي عايز تحرّكها", "لو وقفت على قطعة منافس بترجّعها البيت. وصّل قطعك الأربعة الأول عشان تكسب" },
     };
     int guideStep; string guideGame;
@@ -461,6 +467,7 @@ public class App : MonoBehaviour
         game.ShowHud(false);
         dominoTable.Show(false);
         boardGame.Show(false);
+        basraTable.Hide();
         voice.Leave(); voice.Sync(null);
         cafe.SetGame(false);
         Music.Home(true);
@@ -471,6 +478,8 @@ public class App : MonoBehaviour
     {
         if (view == null) return;
         voice.Sync(view);
+        if (view.game == "basra") { dominoTable.Set(view, -1, null); boardGame.Show(false); basraTable.Render(view); game.Render(view, -1, null); return; }
+        basraTable.Hide();
         if (view.Board) { dominoTable.Set(view, -1, null); boardGame.Set(view); game.Render(view, -1, null); return; }
         dominoTable.Set(view, sel, choose);
         game.Render(view, sel, choose);
@@ -533,6 +542,14 @@ public class App : MonoBehaviour
         lastMode = mode; lastStake = 0;
         if (view != null) Leave();
         if (searching) CancelQueue();
+        if (g == "basra")
+        {
+            // the card games' computer players live on the server: practice there (needs the connection)
+            if (net == null || !net.Online) { Toast(Loc.T("البصرة محتاجة نت عشان تتلعب")); return; }
+            offline = null;
+            Send(new Dictionary<string, object> { ["t"] = "practice", ["mode"] = mode, ["level"] = OfflineGame.Level == 0 ? "easy" : OfflineGame.Level == 2 ? "hard" : "normal" });
+            return;
+        }
         string name = user != null ? user.Str("name") : "";
         int ch = user != null ? (int)user.Num("ch", 0) : 0;
         try { offline = OfflineGame.Create(mode, name, ch); }
@@ -783,12 +800,12 @@ public class App : MonoBehaviour
         statusText.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(200, 20), new Vector2(-86, -54));
 
         // the four games, down the right side
-        var list = Ui.Rect("Games", root).Place(new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(170, 232), new Vector2(-14, -18));
+        var list = Ui.Rect("Games", root).Place(new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(170, 282), new Vector2(-14, -18));
         var title = Ui.Label(list, "اختار لعبتك", 15, Ui.GoldLight, TextAnchor.MiddleRight, Ui.Bold);
         title.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(170, 24), new Vector2(0, 0));
-        for (int i = 0; i < Cafe.Games.Length; i++)
+        for (int i = 0; i < HomeGames.Length; i++)
         {
-            var g = Cafe.Games[i];
+            var g = HomeGames[i];
             var b = Ui.Button(list, GameNames[g], Ui.Panel, Ui.GoldLight, 18, () => Pick(g));
             ((RectTransform)b.transform).Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(170, 44), new Vector2(0, -30 - i * 50));
             gameButtons[g] = b.GetComponent<Image>();

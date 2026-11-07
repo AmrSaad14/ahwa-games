@@ -232,5 +232,13 @@ public static class Loc
         ["العب تاني"] = "Play again", ["اتفرج على إعلان"] = "Watch an ad", ["اختار العسكري اللي هيتحرك"] = "Pick a pawn to move",
         ["بات (تعادل)"] = "Stalemate (draw)", ["قريباً"] = "Coming soon", ["الشراء بالفلوس جاي قريب"] = "Buying with money is coming soon",
         ["تعادل، محدش سجّل"] = "A draw — nobody scores", ["اختار هتحطها فين"] = "Pick where it goes", ["حصلت مشكلة:"] = "Error:",
-    };
+            ["بصرة"] = "Basra", ["بصرة زوجي"] = "Basra (teams)", ["الأرض فاضية"] = "The floor is empty", ["النقط"] = "Points", ["لـ"] = "to",
+        ["الورق"] = "Cards", ["بصرات"] = "Basras", ["الكوتشينة"] = "Pack", ["دور"] = "Deal", ["مترحّل"] = "Carried",
+        ["بصرة!"] = "Basra!", ["بصرة ولد!"] = "Jack basra!", ["خلص الدور"] = "Deal over", ["إنت"] = "You", ["هم"] = "Them", ["ورقة"] = "cards",
+        ["البصرة محتاجة نت عشان تتلعب"] = "Basra needs an internet connection",
+        ["دورك! دوس على ورقة من ورقك عشان ترميها"] = "Your turn! Tap one of your cards to play it",
+        ["الورقة بتاكل اللي زيها من الأرض، والأرقام بتاكل أي ورق مجموعه زيها"] = "A card takes its match from the floor; a number also takes cards adding up to it",
+        ["الولد بياكل الأرض كلها، والسبعة الديناري كمان"] = "The jack takes the whole floor, and so does the 7 of diamonds",
+        ["لو كنست الأرض كلها تبقى بصرة: ١٠ نقط. أول واحد يوصل ١٠١ يكسب"] = "Clear the floor for a basra: 10 points. First to 101 wins",
+};
 }

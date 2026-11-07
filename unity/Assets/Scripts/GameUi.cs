@@ -180,6 +180,7 @@ public class GameUi : MonoBehaviour
         ["domino"] = new[] { ("ffa2", "فردي"), ("ffa3", "٣ لاعبين"), ("ffa4", "٤ لاعبين"), ("team", "زوجي ٢ ضد ٢") },
         ["tawla"] = new[] { ("tawla", "عادة"), ("mahbousa", "محبوسة"), ("tawla31", "٣١"), ("gulbahar", "جلبهار") },
         ["chess"] = new[] { ("chess1", "دقيقة"), ("chess3", "٣ دقايق"), ("chess", "٥ دقايق"), ("chess10", "١٠ دقايق") },
+        ["basra"] = new[] { ("basra2", "فردي"), ("basra4", "زوجي ٢ ضد ٢") },
         ["ludo"] = new[] { ("ludo2", "٢ لاعبين"), ("ludo3", "٣ لاعبين"), ("ludo4", "٤ لاعبين"), ("ludoq2", "سريع ٢"), ("ludoq4", "سريع ٤"), ("ludom2", "ماستر ٢"), ("ludom4", "ماستر ٤") },
     };
     public static int Players(string mode) =>
@@ -910,6 +911,7 @@ public class GameUi : MonoBehaviour
         ["tawla"] = "طاولة عادة", ["mahbousa"] = "محبوسة", ["tawla31"] = "٣١", ["gulbahar"] = "جلبهار",
         ["chess"] = "شطرنج", ["chess1"] = "شطرنج", ["chess3"] = "شطرنج", ["chess10"] = "شطرنج",
         ["ludo2"] = "لودو", ["ludo3"] = "لودو", ["ludo4"] = "لودو",
+        ["basra2"] = "بصرة", ["basra4"] = "بصرة زوجي",
         ["ludoq2"] = "لودو سريع", ["ludoq4"] = "لودو سريع", ["ludom2"] = "لودو ماستر", ["ludom4"] = "لودو ماستر",
     };
 

@@ -44,7 +44,7 @@ public partial class Menus
         info.Set(Loc.T("كل لعبة ليها دوري. اكسب أونلاين عشان تطلع. في آخر الشهر بتاخد جايزة أعلى دوري وصلته، والنقط بتبدأ من الأول"));
         info.horizontalOverflow = HorizontalWrapMode.Wrap;
         info.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(560, 34), Vector2.zero);
-        var games = new[] { "domino", "tawla", "chess", "ludo" };
+        var games = new[] { "domino", "tawla", "chess", "ludo", "basra" };
         for (int i = 0; i < games.Length; i++)
         {
             var g = games[i];
@@ -52,8 +52,9 @@ public partial class Menus
             int idx = l != null ? LeagueIndex(l.Str("league")) : 0;
             double lp = l?.Num("lp") ?? 0;
             var lg = Leagues[idx];
-            int k = Loc.En ? i : 3 - i;
-            var card = Ui.Box(area, "League", Card).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(134, 150), new Vector2((k - 1.5f) * 140, -40));
+            int k = Loc.En ? i : games.Length - 1 - i;
+            var card = Ui.Box(area, "League", Card).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(134, 150), new Vector2((k - (games.Length - 1) / 2f) * 118, -40));
+            card.localScale = Vector3.one * 0.86f;
             Ui.Label(card, Loc.T(App.GameNames[g]), 14, Color.white, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(130, 22), new Vector2(0, -4));
             var medal = Ui.Picture(card, "Medal", Icon("t_medal")); medal.color = lg.color;
             medal.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(54, 54), new Vector2(0, -28));

@@ -1149,7 +1149,7 @@ public partial class Menus : MonoBehaviour
 
     /* ---------- the leaderboard ---------- */
 
-    static readonly string[] GameIds = { "domino", "tawla", "chess", "ludo", "week", "league", "gov" };
+    static readonly string[] GameIds = { "domino", "tawla", "chess", "ludo", "basra", "week", "league", "gov" };
     static readonly long[] WeeklyPrizes = { 1_000_000, 500_000, 300_000, 200_000, 150_000, 100_000, 75_000, 50_000, 40_000, 30_000 };
     double lbEndsAt;
     Dictionary<string, object> lbMonth;   // this month's race for the game's "player of the month" title
@@ -1163,7 +1163,7 @@ public partial class Menus : MonoBehaviour
         refreshOpen = () =>
         {
             foreach (Transform c in body) Destroy(c.gameObject);
-            var area = Tabs(body, new[] { "دومينو", "طاولة", "شطرنج", "لودو", "الأسبوع", "الدوري", "المحافظات" }, lbTab, i => { Close(); OpenLeaders(i); });
+            var area = Tabs(body, new[] { "دومينو", "طاولة", "شطرنج", "لودو", "بصرة", "الأسبوع", "الدوري", "المحافظات" }, lbTab, i => { Close(); OpenLeaders(i); });
             if (lbGame == "league") { DrawLeagues(area); return; }
             if (lbGame == "gov") { DrawGovs(area); return; }
             bool week = lbGame == "week";
