@@ -3,9 +3,10 @@ import * as C from './chess';
 import * as T from './tawla';
 import * as L from './ludo';
 import * as V from './tables';
+import * as B from './basra';
 import { CHESS_TIME, Mode, gameOf, ludoVariant, tawlaVariant } from '../engine';
 
-export type BoardGameId = 'chess' | 'tawla' | 'ludo';
+export type BoardGameId = 'chess' | 'tawla' | 'ludo' | 'basra';
 
 export type BoardAction =
   | { t: 'move'; from: number; to: number; promo?: C.Promo }   // chess
@@ -13,10 +14,12 @@ export type BoardAction =
   | { t: 'step'; from: number; to: number; via?: number[] }    // tawla: one die, or one checker on with both dice (via the points in between)
   | { t: 'pawn'; i: number }                                   // ludo
   | { t: 'pass' }                                               // forced pass with nothing to play
-  | { t: 'undo' };                                             // tawla: take back this turn's moves (before the turn ends)
+  | { t: 'undo' }                                              // tawla: take back this turn's moves (before the turn ends)
+  | { t: 'card'; id: number };                                 // basra: play a card                                             // tawla: take back this turn's moves (before the turn ends)
 
 export interface BoardEvent {
-  t: 'start' | 'move' | 'roll' | 'step' | 'pawn' | 'pass' | 'end' | 'undo';
+  t: 'start' | 'move' | 'roll' | 'step' | 'pawn' | 'pass' | 'end' | 'undo' | 'card';
+  card?: number; took?: number[]; basra?: number; deal?: boolean;   // basra: the card played, what it took, a basra, the deal ended
   s: number;                 // seat
   from?: number; to?: number; promo?: string; capture?: boolean; check?: boolean;
   dice?: number[]; hit?: boolean; i?: number; captured?: { seat: number; pawn: number }[]; home?: boolean;
@@ -288,11 +291,37 @@ function ludoDef(variant: L.LudoVariant): GameDef<L.LudoState> { return {
 
 const DEFS = new Map<Mode, GameDef<any>>();
 /** The rules engine for a mode. */
+/* ---------------- basra ---------------- */
+export interface BasraView {
+  hand: number[]; floor: number[]; counts: number[]; deck: number; turn: number; you: number;
+  taken: number[]; basras: number[]; scores: number[]; carry: number; deal: number; target: number; teams: number;
+  lastDeal: B.BasraState['lastDeal'];
+}
+export const basraDef: GameDef<B.BasraState> = {
+  game: 'basra',
+  newGame: (n, first, rnd) => B.newBasra(n, first, rnd),
+  toMove: s => s.turn,
+  act(s, seat, a, rnd) {
+    if (a.t !== 'card') return 'bad_action';
+    const r = B.play(s, seat, Number(a.id), rnd);
+    if (typeof r === 'string') return r;
+    return { s: r.s, e: { t: 'card', s: seat, card: Number(a.id), took: r.took, basra: r.basra, deal: r.dealOver } };
+  },
+  auto: (s, seat, level) => ({ t: 'card', id: B.botCard(s, seat, level ?? 'normal') }),
+  forced: () => null,
+  over: s => (s.done ? { winner: B.winnerTeam(s), points: 1, kind: 'win' } : null),
+  view: (s, seat): BasraView => ({
+    hand: seat >= 0 ? s.hands[seat] : [], floor: s.floor, counts: s.hands.map(h => h.length), deck: s.deck.length, turn: s.turn, you: seat,
+    taken: s.taken.map(t => t.length), basras: s.basras, scores: s.scores, carry: s.carry, deal: s.deal, target: s.target, teams: s.teams, lastDeal: s.lastDeal,
+  }),
+};
+
 export function defFor(mode: Mode): GameDef<any> {
   let d = DEFS.get(mode);
   if (!d) {
     const g = gameOf(mode);
-    if (g === 'chess') d = { ...chessDef, clockMs: (CHESS_TIME[mode]?.min ?? 5) * 60_000 };
+    if (g === 'basra') d = basraDef;
+    else if (g === 'chess') d = { ...chessDef, clockMs: (CHESS_TIME[mode]?.min ?? 5) * 60_000 };
     else if (g === 'ludo') d = ludoDef(ludoVariant(mode));
     else { const v = tawlaVariant(mode); d = v === 'aada' ? tawlaDef : tablesDef(v); }
     DEFS.set(mode, d);

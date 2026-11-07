@@ -18,15 +18,17 @@ export const TILES: ReadonlyArray<readonly [number, number]> = (() => {
 export type Mode = 'ffa2' | 'ffa3' | 'ffa4' | 'team'
   | 'tawla' | 'mahbousa' | 'tawla31' | 'gulbahar'
   | 'chess1' | 'chess3' | 'chess' | 'chess10'
-  | 'ludo2' | 'ludo3' | 'ludo4' | 'ludoq2' | 'ludoq4' | 'ludom2' | 'ludom4';
-export type GameId = 'domino' | 'tawla' | 'chess' | 'ludo';
-export const GAMES: GameId[] = ['domino', 'tawla', 'chess', 'ludo'];
+  | 'ludo2' | 'ludo3' | 'ludo4' | 'ludoq2' | 'ludoq4' | 'ludom2' | 'ludom4'
+  | 'basra2' | 'basra4';
+export type GameId = 'domino' | 'tawla' | 'chess' | 'ludo' | 'basra';
+export const GAMES: GameId[] = ['domino', 'tawla', 'chess', 'ludo', 'basra'];
 /** The ways to play that the app offers, per game. */
 export const GAME_MODES: Record<GameId, Mode[]> = {
   domino: ['ffa2', 'ffa3', 'ffa4', 'team'],
   tawla: ['tawla', 'mahbousa', 'tawla31', 'gulbahar'],
   chess: ['chess1', 'chess3', 'chess', 'chess10'],
   ludo: ['ludo2', 'ludo3', 'ludo4', 'ludoq2', 'ludoq4', 'ludom2', 'ludom4'],
+  basra: ['basra2', 'basra4'],
 };
 /** Every mode the rules engines understand (including ones no longer offered). */
 const ALL_MODES: Record<GameId, Mode[]> = {
@@ -34,6 +36,7 @@ const ALL_MODES: Record<GameId, Mode[]> = {
   tawla: ['tawla', 'mahbousa', 'tawla31', 'gulbahar'],
   chess: ['chess1', 'chess3', 'chess', 'chess10'],
   ludo: ['ludo2', 'ludo3', 'ludo4', 'ludoq2', 'ludoq4', 'ludom2', 'ludom4'],
+  basra: ['basra2', 'basra4'],
 };
 export const MODES: Mode[] = GAMES.flatMap(g => GAME_MODES[g]);
 export const MODE_PLAYERS: Record<Mode, number> = {
@@ -41,6 +44,7 @@ export const MODE_PLAYERS: Record<Mode, number> = {
   tawla: 2, mahbousa: 2, tawla31: 2, gulbahar: 2,
   chess1: 2, chess3: 2, chess: 2, chess10: 2,
   ludo2: 2, ludo3: 3, ludo4: 4, ludoq2: 2, ludoq4: 4, ludom2: 2, ludom4: 4,
+  basra2: 2, basra4: 4,   // basra4: two teams, partners opposite
 };
 export const gameOf = (m: Mode): GameId => (GAMES.find(g => ALL_MODES[g].includes(m)) ?? 'domino');
 /** Tawla variants. */
@@ -126,5 +130,7 @@ export function shuffled<T>(arr: T[], rnd: () => number = Math.random): T[] {
   return a;
 }
 
-export const teamOf = (mode: Mode, seat: number) => (mode === 'team' ? seat % 2 : seat);
-export const teamCount = (mode: Mode) => (mode === 'team' ? 2 : MODE_PLAYERS[mode]);
+/** Partners: the domino team game and four-player basra (seats 0 and 2 against 1 and 3). */
+export const isTeamMode = (mode: Mode) => mode === 'team' || mode === 'basra4';
+export const teamOf = (mode: Mode, seat: number) => (isTeamMode(mode) ? seat % 2 : seat);
+export const teamCount = (mode: Mode) => (isTeamMode(mode) ? 2 : MODE_PLAYERS[mode]);
