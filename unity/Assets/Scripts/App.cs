@@ -63,6 +63,7 @@ public class App : MonoBehaviour
     void Awake()
     {
         I = this;
+        CrashReport.Begin();   // (did the game close by itself last time?)
         Application.targetFrameRate = 60;
         Screen.sleepTimeout = SleepTimeout.NeverSleep;
         // either way round in landscape: the game turns with the phone (camera on the left or the right)
@@ -238,10 +239,10 @@ public class App : MonoBehaviour
         return false;
     }
 
-    void OnApplicationQuit() { net?.Stop(); }
+    void OnApplicationQuit() { CrashReport.SetMark(false); net?.Stop(); }
 
     /// Back in the app (after a call, the home screen…): reconnect right away; the server puts you back in your game.
-    void OnApplicationPause(bool paused) { if (!paused) net?.Resume(); }
+    void OnApplicationPause(bool paused) { CrashReport.SetMark(!paused); if (!paused) net?.Resume(); }
 
     /* ---------- push reminders (Push.cs) ---------- */
 
@@ -269,6 +270,7 @@ public class App : MonoBehaviour
                 voice.ice.Clear();
                 foreach (var o in m.Arr("ice") ?? new List<object>()) if (o is Dictionary<string, object> d) voice.ice.Add(d);
                 sentPushToken = null;   // (a new connection, maybe a different account)
+                CrashReport.Flush(this);
                 goto case "user";
             case "user":
                 user = m.Obj("user");
@@ -407,6 +409,7 @@ public class App : MonoBehaviour
 
     void EnterGame()
     {
+        CrashReport.At("game " + (view != null ? view.mode : "?"));
         searching = false;
         game.ShowQueue(null);
         game.HidePicker();
@@ -428,6 +431,7 @@ public class App : MonoBehaviour
 
     public void ExitGame()
     {
+        CrashReport.At("home");
         offline = null;
         view = null; sel = -1; choose = null;
         game.ShowHud(false);

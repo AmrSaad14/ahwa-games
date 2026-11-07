@@ -143,6 +143,10 @@ public static class BuildScript
         PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel24;
         PlayerSettings.SetScriptingBackend(NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
         PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
+        // OpenGL ES 3 first, Vulkan only where GLES isn't there: Vulkan drivers on many mid-range phones (Adreno 6xx
+        // like the Galaxy A71's, older Mali) crash Unity apps, while GLES 3 runs everywhere this game needs
+        PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.Android, false);
+        PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, new[] { UnityEngine.Rendering.GraphicsDeviceType.OpenGLES3, UnityEngine.Rendering.GraphicsDeviceType.Vulkan });
         PlayerSettings.Android.forceInternetPermission = true;
         bool signed = Sign();
         EditorUserBuildSettings.buildAppBundle = false;
