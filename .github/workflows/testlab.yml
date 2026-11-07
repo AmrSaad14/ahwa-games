@@ -1,0 +1,60 @@
+# Runs the latest Unity APK on a real phone in Firebase Test Lab (a Robo test that taps around by itself) and
+# publishes what happened: the device log (logcat) and the test's outcome. The repository is public, so the log is
+# encrypted with .github/logs-public-key.pem, like the server logs. Uses the FIREBASE_SERVICE_ACCOUNT secret.
+name: Test Lab
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: 'Test Lab model id (empty: list the Samsung models)'
+        type: string
+        default: ''
+      version:
+        description: 'Android API level'
+        type: string
+        default: ''
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sign in to Google Cloud
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          printf '%s' "$SA" > /tmp/sa.json
+          gcloud auth activate-service-account --key-file=/tmp/sa.json
+          gcloud config set project "$(python3 -c 'import json;print(json.load(open("/tmp/sa.json"))["project_id"])')"
+      - name: Run on the phone
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODEL: ${{ inputs.model }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set +e
+          {
+            echo "--- Samsung phones in Test Lab"
+            gcloud firebase test android models list --filter="brand:samsung" --format="table(id,name,supportedVersionIds.list(),form)" 2>&1
+          } > /tmp/out.txt
+          if [ -n "$MODEL" ]; then
+            gh release download unity-apk --pattern '*.apk' --dir /tmp/apk
+            apk=$(ls /tmp/apk/*.apk | head -1)
+            dev="model=$MODEL"; [ -n "$VERSION" ] && dev="$dev,version=$VERSION"
+            echo "--- Robo test on $dev with $(basename $apk)" >> /tmp/out.txt
+            gcloud firebase test android run --type robo --app "$apk" --device "$dev,locale=ar,orientation=landscape" \
+              --timeout 4m --results-dir "bb-${{ github.run_id }}" --format=json > /tmp/run.json 2>> /tmp/out.txt
+            cat /tmp/run.json >> /tmp/out.txt
+            bucket=$(grep -o 'gs://[^/ ]*' /tmp/out.txt | head -1)
+            if [ -n "$bucket" ]; then
+              gsutil -m cp -r "$bucket/bb-${{ github.run_id }}" /tmp/res >> /tmp/out.txt 2>&1
+              for f in $(find /tmp/res -name 'logcat' -o -name '*.txt' | head -20); do echo "=== $f"; cat "$f"; done >> /tmp/out.txt
+            fi
+          fi
+          openssl rand -out /tmp/k.bin 32
+          openssl enc -aes-256-cbc -pbkdf2 -salt -in /tmp/out.txt -out logs.enc -pass file:/tmp/k.bin
+          openssl pkeyutl -encrypt -pubin -inkey .github/logs-public-key.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out key.enc
+          gh release delete testlab --yes --cleanup-tag 2>/dev/null || true
+          gh release create testlab logs.enc key.enc --title "Test Lab run (encrypted)" --prerelease --notes "Encrypted; see .github/workflows/testlab.yml"
