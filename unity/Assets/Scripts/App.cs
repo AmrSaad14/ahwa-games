@@ -334,8 +334,14 @@ public class App : MonoBehaviour
                 else if (who != null) Toast(who.name + " " + Loc.T("طلب") + " " + Skins.Name(k));
                 break;
             }
+            case "doubled":
+                // the ad after a win was watched: the winnings again
+                Sfx.Coins(); Sfx.Chime();
+                Toast(Loc.T("اتضاعف مكسبك!") + "  +" + Loc.Short((long)m.Num("coins")) + " " + Loc.T("كوين"), 3f);
+                game.HideDouble();
+                break;
             case "payout":
-                game.ShowPayout(m.Str("kind"), m.Num("delta"));
+                game.ShowPayout(m.Str("kind"), m.Num("delta"), m.Num("double"));
                 break;
             case "bought":
                 Billing.OnBought(m);

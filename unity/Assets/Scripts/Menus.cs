@@ -329,6 +329,7 @@ public partial class Menus : MonoBehaviour
             case "slow_down": app.Toast(Loc.T("استنى شوية وجرّب تاني")); return true;
             case "support_empty": app.Toast(Loc.T("اكتب رسالتك الأول")); return true;
             case "chat_muted": app.Toast(Loc.T("الشات مقفول عندك شوية بسبب بلاغات")); return true;
+            case "double_gone": app.Toast(Loc.T("العرض ده خلص")); return true;
             case "mission_not_done": app.Toast(Loc.T("لسه المهمة مخلصتش")); return true;
             case "already_claimed": app.Toast(Loc.T("خدتها خلاص")); return true;
             case "tier_locked": app.Toast(Loc.T("لسه موصلتش للمستوى ده")); return true;

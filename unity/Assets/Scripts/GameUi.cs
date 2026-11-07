@@ -605,13 +605,23 @@ public class GameUi : MonoBehaviour
         ((RectTransform)sh.transform).Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(38, 38), new Vector2(-8, -8));
         var shi = Ui.Picture(sh.transform, "Share", Menus.Icon("share")); shi.rectTransform.Fill(8); shi.color = Ui.GoldLight;
         shareButton = sh.gameObject;
+        // after a win with coins: watch one ad and get the winnings again
+        var db = Ui.Button(matchPanel, "", new Color32(0x2f, 0x9d, 0x6b, 0xff), Color.white, 14, () =>
+        {
+            Sfx.Tap();
+            if (app.net == null || !app.net.Online) { app.Toast(Loc.T("مش متصل بالسيرفر لسه")); return; }
+            app.Send(new Dictionary<string, object> { ["t"] = "adStart", ["double"] = true });
+        });
+        ((RectTransform)db.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(250, 34), new Vector2(0, -128));
+        doubleButton = db.gameObject; doubleText = db.GetComponentInChildren<Text>();
+        doubleButton.SetActive(false);
         matchPanel.gameObject.SetActive(false);
     }
 
     public void ShowHud(bool on)
     {
         hud.gameObject.SetActive(on);
-        if (!on) { matchPanel.gameObject.SetActive(false); resultPanel.gameObject.SetActive(false); lobby.gameObject.SetActive(false); handKey = ""; lobbyKey = ""; }
+        if (!on) { HideDouble(); matchPanel.gameObject.SetActive(false); resultPanel.gameObject.SetActive(false); lobby.gameObject.SetActive(false); handKey = ""; lobbyKey = ""; }
         else ShowMic();
     }
 
@@ -751,8 +761,15 @@ public class GameUi : MonoBehaviour
         if (layer != null) Destroy(layer.gameObject);
     }
 
-    public void ShowPayout(string kind, double delta)
+    GameObject doubleButton; Text doubleText;
+    public void HideDouble() { if (doubleButton != null) doubleButton.SetActive(false); }
+    public void ShowPayout(string kind, double delta, double twice = 0)
     {
+        if (doubleButton != null)
+        {
+            doubleButton.SetActive(twice > 0);
+            if (twice > 0) doubleText.Set("▶ " + Loc.T("ضاعف مكسبك") + "  +" + Short((long)twice));
+        }
         if (delta > 0) Celebrate(Mathf.Clamp(16 + (int)(delta / 2500), 16, 80));
         payoutText.Set(delta > 0 ? "+" + Short((long)delta) + Loc.T(" عملة") : delta < 0 ? "−" + Short((long)-delta) + Loc.T(" عملة") : "");
         payoutText.color = delta >= 0 ? new Color(0.6f, 0.9f, 0.5f) : new Color(1f, 0.6f, 0.5f);
