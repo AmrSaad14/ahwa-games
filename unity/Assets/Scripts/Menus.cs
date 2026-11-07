@@ -51,6 +51,7 @@ public partial class Menus : MonoBehaviour
         railButtons.Add(RailButton(rail, 3, "friends", "صحابك", OpenFriends)); friendsDot = Dot(railButtons[3]);
         railButtons.Add(RailButton(rail, 4, "shop", "المتجر", () => OpenShop(0)));
         railButtons.Add(RailButton(rail, 5, "chest", "مجموعتي", () => OpenCollection(0)));
+        BuildWheelButton(home);
         // along the top, beside the logo: the tournament, the leaderboard, how to play, settings
         var top = Ui.Rect("Top", home).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(240, 54), new Vector2(82, -8));
         topButtons.Add(tourneyButton = TopButton(top, 0, "cup", "البطولة", () => OpenTourney())); tourneyDot = Dot(tourneyButton);
@@ -186,17 +187,21 @@ public partial class Menus : MonoBehaviour
         bool ready = d != null && d.Bool("ready");
         dailyDot.SetActive(ready);
         UpdateDots();
+        UpdateWheelDot();
         // a friend's invite code from Google Play (or a link) waiting: credit them, once the account is new
         // a new player: the first-game guide, offered once (an easy game of dominoes with hints, and a gift)
         // once a session, on the home screen with nothing else open: the season pass, for players who don't have it
         // a new install with no saved account: offer to sign in (and get an existing account back) once
         if (app.FreshInstall && !welcomeAsked && !app.SignedIn && !IsOpen && app.view == null && !App.Recording && !AdFilm.Any) { welcomeAsked = true; AskSignIn(null, true); }
         // (both cards are for signed-in players only: a guest sees neither)
-        if (app.SignedIn && !seasonPromoShown && SeasonOn && dailyShown && !IsOpen && app.view == null && !App.Recording && !AdFilm.Any && u.Obj("season") != null && !u.Obj("season").Bool("premium")) { seasonPromoShown = true; ShowSeasonPromo(); }
+        if (app.SignedIn && !seasonPromoShown && SeasonOn && dailyShown && u.Num("adFreeUntil") > App.LocalMs() && !IsOpen && app.view == null && !App.Recording && !AdFilm.Any && u.Obj("season") != null && !u.Obj("season").Bool("premium")) { seasonPromoShown = true; ShowSeasonPromo(); }
         if (Growth.PendingCode != null && u.Bool("canRefer")) { app.Send(new Dictionary<string, object> { ["t"] = "referral", ["code"] = Growth.PendingCode }); Growth.PendingCode = null; }
         // each time the game opens, the daily rewards first (collect today's, or see when tomorrow's comes),
         // then the season pass card when it's closed
         if (app.SignedIn && !dailyShown && app.view == null && !IsOpen && !App.Recording) { dailyShown = true; OpenDaily(); return; }
+        // then the lucky wheel with today's free spin, then (once a session) the no-ads plan
+        if (MaybeShowWheel(u)) return;
+        if (MaybeShowNoAdsPromo(u)) return;
         refreshOpen?.Invoke();
     }
 
@@ -289,6 +294,13 @@ public partial class Menus : MonoBehaviour
                 app.Toast("+" + ((long)m.Num("coins")).ToString("N0") + " " + Loc.T("عملة"));
                 Sfx.Coins();
                 break;
+            case "wheelResult": WheelResult(m); break;
+            case "wheelAd":
+                pendingAd = null;
+                if (user != null && m.Obj("wheel") != null) user["wheel"] = m.Obj("wheel");
+                Sfx.Chime();
+                refreshOpen?.Invoke(); UpdateWheelDot();
+                break;
             case "skinAd":
                 pendingAd = null;
                 if (m.Bool("won")) { app.Toast(Loc.T("مبروك! السكين بقى بتاعك") + ": " + Skins.Name(m.Str("skin")), 4f); Sfx.Coins(); Sfx.Buzz(); }
@@ -305,6 +317,9 @@ public partial class Menus : MonoBehaviour
         switch (code)
         {
             case "ad_limit": pendingAd = null; app.Toast(Loc.T("خلصت إعلانات النهارده، تعالى بكرة")); return true;
+            case "wheel_not_ready": wheelSpinning = false; refreshOpen?.Invoke(); return true;
+            case "wheel_done": app.Toast(Loc.T("تعالى بكرة للفّة ببلاش")); return true;
+            case "wheel_ready": refreshOpen?.Invoke(); return true;
             case "ticket_expired": app.Toast(Loc.T("انتهت مهلة تسجيل الدخول، جرّب تاني")); return true;
             case "sign_in_first": app.Toast(Loc.T("سجّل دخول الأول عشان تقدر تسحب")); return true;
             case "bad_wallet": app.Toast(Loc.T("اكتب رقم فودافون صحيح يبدأ بـ 010")); return true;
