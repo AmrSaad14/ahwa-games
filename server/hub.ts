@@ -459,6 +459,14 @@ export class Hub {
           if (e) return err(e);
           return s.conn.send({ t: 'adTicket', ticket: this.adTickets.issue(uid, String(m.skin)), ssv: !!this.opts.adsSsv });
         }
+        // an ad towards the next spin of the lucky wheel
+        if (m.wheel) {
+          const me = this.store.get(uid); if (!me) return;
+          const st = this.store.wheelState(me);
+          if (st.spins >= st.max) return err('wheel_done');
+          if (st.ads >= st.cost) return err('wheel_ready');
+          return s.conn.send({ t: 'adTicket', ticket: this.adTickets.issue(uid, { wheel: true }), ssv: !!this.opts.adsSsv, wheel: true });
+        }
         if (this.store.adsToday(uid) >= ECONOMY.adsPerDay) return err('ad_limit');
         return s.conn.send({ t: 'adTicket', ticket: this.adTickets.issue(uid), ssv: !!this.opts.adsSsv });
       }
@@ -737,6 +745,14 @@ export class Hub {
         // a few things only the app knows, for the dashboard's analytics
         const name = String(m.name || '');
         if (['guide_start', 'guide_skip', 'shop_open', 'season_open', 'groups_open'].includes(name)) this.store.track(uid, name);
+        return;
+      }
+      case 'wheelSpin': {
+        const r = this.store.wheelSpin(uid);
+        if (!r) return err('wheel_not_ready');
+        const me = this.store.get(uid);
+        s.conn.send({ t: 'wheelResult', ...r, wheel: me ? this.store.wheelState(me) : null });
+        this.sendUser(uid);
         return;
       }
       case 'crashReport': {
@@ -1093,6 +1109,13 @@ export class Hub {
   rewardAd(uid: string, ticket: string): boolean {
     const tk = this.store.get(uid) ? this.adTickets.take(ticket, uid) : null;
     if (!tk) return false;
+    if (tk.wheel) {
+      if (!this.store.wheelAd(uid)) return false;
+      const me = this.store.get(uid);
+      this.byUser.get(uid)?.conn.send({ t: 'wheelAd', wheel: me ? this.store.wheelState(me) : null });
+      this.sendUser(uid);
+      return true;
+    }
     if (tk.skin) {
       // an ad towards a skin: one step closer, and the skin once enough are watched
       const r = this.store.addSkinAd(uid, tk.skin);

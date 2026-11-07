@@ -99,3 +99,16 @@ export const COIN_PACKS: CoinPack[] = [];
 /** Monthly subscription: no full-screen ads (the optional "watch an ad for coins" button stays). */
 export const NO_ADS = { id: 'no_ads_monthly', egp: 199, days: 30 };
 export const packById = (id: string) => COIN_PACKS.find(p => p.id === id);
+
+/** The lucky wheel: one free spin a day (shown when the game opens); after it, spins are unlocked by watching
+ *  ads: the 2nd costs 1 ad, the 3rd 3 ads, the 4th 4 ads, and so on (n ads for the n-th). Prizes are coins;
+ *  `w` is how often each segment comes up. The app draws the segments in this order. */
+export const WHEEL = {
+  segments: [
+    { coins: 1_000, w: 22 }, { coins: 5_000, w: 12 }, { coins: 2_000, w: 20 }, { coins: 25_000, w: 3 },
+    { coins: 3_000, w: 16 }, { coins: 10_000, w: 7 }, { coins: 1_500, w: 18 }, { coins: 50_000, w: 1 },
+  ],
+  maxSpins: 10,   // a day
+};
+/** How many ads unlock spin number `n` of the day (1 = the free one). */
+export const wheelCost = (n: number) => n <= 1 ? 0 : n === 2 ? 1 : n;

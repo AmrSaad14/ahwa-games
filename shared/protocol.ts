@@ -256,7 +256,7 @@ export type C2S =
   | { t: 'emote'; k: Emote }
   | { t: 'lb'; game?: GameId | 'week' }
   | { t: 'coins' }
-  | { t: 'adStart'; skin?: string }   // skin: the ad counts towards that skin instead of coins
+  | { t: 'adStart'; skin?: string; wheel?: boolean; double?: boolean }   // skin: towards that skin; wheel: towards the next spin; double: the last match's winnings again
   | { t: 'adWatched'; ticket: string }
   /** A Google Play purchase to check and credit: a coin pack or the ad-free plan. */
   | { t: 'buy'; product: string; token: string }
@@ -274,6 +274,7 @@ export type C2S =
   | { t: 'prizeClaim'; id: number; phone: string }
   | { t: 'tutorialDone' }
   | { t: 'prayerPush'; on: boolean }
+  | { t: 'wheelSpin' }   // spin the lucky wheel (free once a day, then unlocked by ads: adStart with wheel)
   | { t: 'crashReport'; kind: string; msg: string; where?: string; model?: string; gpu?: string; api?: string; os?: string; mem?: number; gmem?: number; ver?: string }   // the app closed by itself last time, or a script error
   | { t: 'track'; name: string }
   | { t: 'watch'; pid?: string; table?: string }

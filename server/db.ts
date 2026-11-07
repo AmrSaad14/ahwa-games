@@ -5,7 +5,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import type { PrizeRow, CoinRow, LeaderRow, PublicUser } from '../shared/protocol';
 import type { GameId } from '../shared/engine';
-import { ECONOMY, WEEKLY_PRIZES, cairoDay, levelOf, nextCairoDay, streakBonus, weekKey } from '../shared/gifts';
+import { ECONOMY, WEEKLY_PRIZES, WHEEL, wheelCost, cairoDay, levelOf, nextCairoDay, streakBonus, weekKey } from '../shared/gifts';
 import { Equipped, adsForSkin, isFree, skinById } from '../shared/skins';
 import { activeEvent } from '../shared/events';
 import { CHEST, MISSION_SP, counts, missionById, missionsFor, type MissionEvent } from '../shared/missions';
@@ -22,7 +22,7 @@ export interface UserRow {
   phone: string | null; google_sub: string | null; google_email: string | null; apple_sub?: string | null; apple_email?: string | null;
   pg_id: string | null; friend_code: string | null; streak?: number; xp?: number;
   ref_by?: string | null; ref_paid?: number; muted_until?: number; pid?: string | null; banned?: number; ban_reason?: string | null; title?: string | null;
-  tutorial?: number; nudged?: number; prayer_push?: number;
+  tutorial?: number; nudged?: number; prayer_push?: number; wheel_day?: string; wheel_spins?: number; wheel_ads?: number;
 }
 
 export class Store {
@@ -97,6 +97,10 @@ export class Store {
     if (!cols.has('title')) this.db.exec('ALTER TABLE users ADD COLUMN title TEXT');
     // the first-game guide done (its reward paid once), and when a player who stayed away was last nudged
     if (!cols.has('tutorial')) this.db.exec('ALTER TABLE users ADD COLUMN tutorial INTEGER NOT NULL DEFAULT 0; ALTER TABLE users ADD COLUMN nudged INTEGER NOT NULL DEFAULT 0');
+    // the lucky wheel: the Cairo day, spins used that day, ads watched towards the next spin
+    if (!cols.has('wheel_day')) this.db.exec("ALTER TABLE users ADD COLUMN wheel_day TEXT NOT NULL DEFAULT ''");
+    if (!cols.has('wheel_spins')) this.db.exec('ALTER TABLE users ADD COLUMN wheel_spins INTEGER NOT NULL DEFAULT 0');
+    if (!cols.has('wheel_ads')) this.db.exec('ALTER TABLE users ADD COLUMN wheel_ads INTEGER NOT NULL DEFAULT 0');
     // prayer-time notifications: on unless the player turns them off
     if (!cols.has('prayer_push')) this.db.exec('ALTER TABLE users ADD COLUMN prayer_push INTEGER NOT NULL DEFAULT 1');
     // friends' café groups ("قهوة الشلة")
@@ -471,7 +475,7 @@ export class Store {
     const now = Date.now(), season = this.seasonState(u.id);
     // no full-screen ads: with the season pass, until the season ends
     const adFreeUntil = u.ad_free_until ?? 0;   // only the no-ads plan (199 EGP a month) removes ads; the season pass doesn't
-    return { ...toPublic(u), adFreeUntil, titles: this.titlesOf(u.id, now), title: this.wornTitle(u.id, now), chest: this.chestState(u.id, now), tutorial: !!u.tutorial, prayerPush: u.prayer_push !== 0, xp: u.xp ?? 0, level: levelOf(u.xp ?? 0), streak: u.streak ?? 0, daily: this.dailyState(u), code: this.friendCode(u.id), ratings: this.ratingsOf(u.id),
+    return { ...toPublic(u), adFreeUntil, titles: this.titlesOf(u.id, now), title: this.wornTitle(u.id, now), chest: this.chestState(u.id, now), tutorial: !!u.tutorial, prayerPush: u.prayer_push !== 0, wheel: this.wheelState(u, now), xp: u.xp ?? 0, level: levelOf(u.xp ?? 0), streak: u.streak ?? 0, daily: this.dailyState(u), code: this.friendCode(u.id), ratings: this.ratingsOf(u.id),
       adsLeft: Math.max(0, ECONOMY.adsPerDay - this.adsToday(u.id)), skins: this.skinsOf(u.id),
       skinAds: this.skinAdsOf(u.id), skinAdsLeft: Math.max(0, ECONOMY.skinAdsPerDay - this.skinAdsToday(u.id)),
       missions: this.missions(u.id), missionsAt: nextCairoDay(now), season,
@@ -728,6 +732,35 @@ export class Store {
     this.db.prepare('INSERT INTO push_tokens (token, user_id, lang, platform, ts) VALUES (?, ?, ?, ?, ?) ON CONFLICT(token) DO UPDATE SET user_id = excluded.user_id, lang = excluded.lang, ts = excluded.ts')
       .run(token, uid, lang, platform, Date.now());
   }
+  /** The lucky wheel today: spins used, ads watched towards the next one, what the next one costs. */
+  wheelState(u: UserRow, now = Date.now()): { spins: number; ads: number; cost: number; ready: boolean; max: number } {
+    const today = u.wheel_day === cairoDay(now);
+    const spins = today ? u.wheel_spins ?? 0 : 0, ads = today ? u.wheel_ads ?? 0 : 0;
+    const cost = wheelCost(spins + 1);
+    return { spins, ads, cost, ready: spins < WHEEL.maxSpins && ads >= cost, max: WHEEL.maxSpins };
+  }
+  /** One ad watched towards the next spin. */
+  wheelAd(id: string, now = Date.now()): boolean {
+    const u = this.get(id); if (!u) return false;
+    const st = this.wheelState(u, now);
+    if (st.spins >= WHEEL.maxSpins || st.ads >= st.cost) return false;
+    this.db.prepare('UPDATE users SET wheel_day = ?, wheel_spins = ?, wheel_ads = ? WHERE id = ?').run(cairoDay(now), st.spins, st.ads + 1, id);
+    return true;
+  }
+  /** A spin: picks the prize (by the segments' weights), pays it, and starts counting ads for the next one. */
+  wheelSpin(id: string, now = Date.now(), rnd = Math.random): { index: number; coins: number } | null {
+    const u = this.get(id); if (!u) return null;
+    const st = this.wheelState(u, now);
+    if (!st.ready) return null;
+    const total = WHEEL.segments.reduce((a, s) => a + s.w, 0);
+    let r = rnd() * total, index = 0;
+    for (; index < WHEEL.segments.length - 1; index++) { r -= WHEEL.segments[index].w; if (r < 0) break; }
+    const coins = WHEEL.segments[index].coins;
+    this.db.prepare('UPDATE users SET wheel_day = ?, wheel_spins = ?, wheel_ads = 0, coins = coins + ? WHERE id = ?').run(cairoDay(now), st.spins + 1, coins, id);
+    this.logCoins(id, 'wheel', coins);
+    return { index, coins };
+  }
+
   /** Phones to remind at prayer times: everyone with notifications on who hasn't turned these off. */
   prayerPushTargets(): { token: string; lang: string }[] {
     return this.db.prepare('SELECT p.token, p.lang FROM push_tokens p JOIN users u ON u.id = p.user_id WHERE u.banned = 0 AND u.prayer_push != 0').all() as { token: string; lang: string }[];

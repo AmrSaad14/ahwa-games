@@ -57,21 +57,25 @@ export function verifyUnityS2S(params: URLSearchParams, secret: string): { uid: 
   return { uid: sid.slice(0, i), ticket: sid.slice(i + 1), oid };
 }
 
+export interface AdFor { skin?: string; wheel?: boolean; double?: string }
+
 /** One-time tickets: the app asks for one before showing an ad and passes it to AdMob as custom data. */
 export class AdTickets {
-  private open = new Map<string, { uid: string; exp: number; skin?: string }>();
-  /** skin: this ad counts towards that skin instead of paying coins. */
-  issue(uid: string, skin?: string) {
+  private open = new Map<string, { uid: string; exp: number } & AdFor>();
+  /** What the ad is for: a skin (one step towards it), the lucky wheel (towards the next spin), doubling a
+   *  match's winnings; nothing: coins. A bare string is a skin (as before). */
+  issue(uid: string, what?: string | AdFor) {
     const t = crypto.randomBytes(16).toString('base64url');
     if (this.open.size > 20_000) for (const [k, v] of this.open) if (v.exp < Date.now()) this.open.delete(k);
-    this.open.set(t, { uid, exp: Date.now() + 30 * 60_000, skin });
+    const f: AdFor = typeof what === 'string' ? { skin: what } : (what ?? {});
+    this.open.set(t, { uid, exp: Date.now() + 30 * 60_000, ...f });
     return t;
   }
   /** Uses up a ticket: what it was for if it was issued to this player and hasn't expired, otherwise null. */
-  take(ticket: string, uid: string): { skin?: string } | null {
+  take(ticket: string, uid: string): AdFor | null {
     const t = this.open.get(ticket);
     if (!t) return null;
     this.open.delete(ticket);
-    return t.uid === uid && t.exp > Date.now() ? { skin: t.skin } : null;
+    return t.uid === uid && t.exp > Date.now() ? { skin: t.skin, wheel: t.wheel, double: t.double } : null;
   }
 }
