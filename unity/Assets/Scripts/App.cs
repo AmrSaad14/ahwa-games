@@ -147,6 +147,24 @@ public class App : MonoBehaviour
     public bool Practicing => offline != null;
     /// The first-game guide: an easy practice game of dominoes with hints, for a new player (its reward once).
     bool guided; int guideHints;
+
+    /// The first practice game of each game teaches it, a step on each of your first turns.
+    static readonly Dictionary<string, string[]> Guides = new Dictionary<string, string[]>
+    {
+        ["domino"] = new[] { "دورك! دوس على حجر بينوّر عشان تلعبه", "الحجر لازم رقمه يكون زي رقم طرف من الطرفين", "مفيش حجر يركب؟ اسحب من الكومة", "اللي يخلّص حجارته الأول يكسب نقط الباقيين" },
+        ["tawla"] = new[] { "دورك! دوس على الزهر عشان ترمي", "دوس على قشاط بينوّر، وبعدين على المكان اللي عايز تروحه", "قشاط لوحده ممكن يتضرب: خلّي قشاطين مع بعض عشان تحميهم", "لما تجمّع قشاطك كله في آخر ربع، طلّعه برة. اللي يطلّع الأول يكسب" },
+        ["chess"] = new[] { "دورك! دوس على قطعة من قطعك عشان تشوف هتروح فين", "دوس على مربع من اللي بينوّروا عشان تحرّك القطعة", "خلّي بالك على الملك: لو اتحاصر من غير مهرب تبقى كش مات", "كل لاعب ليه ساعة: لو وقتك خلص تخسر" },
+        ["ludo"] = new[] { "دورك! دوس على الزهر عشان ترمي", "لازم تجيب ٦ عشان تطلّع قطعة من البيت", "دوس على القطعة اللي عايز تحرّكها", "لو وقفت على قطعة منافس بترجّعها البيت. وصّل قطعك الأربعة الأول عشان تكسب" },
+    };
+    int guideStep; string guideGame;
+    void GameGuide(TableView v)
+    {
+        if (offline == null || v == null || !Guides.TryGetValue(v.game, out var steps)) return;
+        if (UnityEngine.PlayerPrefs.GetInt("guide." + v.game, 0) == 1) return;
+        if (guideGame != v.id) { guideGame = v.id; guideStep = 0; }
+        if (guideStep >= steps.Length) return;
+        Toast(Loc.T(steps[guideStep++]), 4.5f);
+    }
     public void StartGuide()
     {
         guided = true; guideHints = 0;
@@ -308,7 +326,7 @@ public class App : MonoBehaviour
                 // a tile going down clacks; your turn chimes (and buzzes the phone)
                 int tilesNow = v.line.Empty ? 0 : 1 + v.line.L.Count + v.line.R.Count;
                 if (view != null && tilesNow > tilesOnTable) Sfx.Slap();
-                if (v.MyTurn && v.phase == "play" && (view == null || !view.MyTurn)) { Sfx.Chime(); Sfx.Buzz(); if (guided && guideHints < 3) { guideHints++; Toast(Loc.T(v.game == "domino" ? "دورك! دوس على حجر بينوّر عشان تلعبه" : "دورك! دوس على اللوح"), 4f); } }
+                if (v.MyTurn && v.phase == "play" && (view == null || !view.MyTurn)) { Sfx.Chime(); Sfx.Buzz(); if (guided && guideHints < 3) { guideHints++; Toast(Loc.T(v.game == "domino" ? "دورك! دوس على حجر بينوّر عشان تلعبه" : "دورك! دوس على اللوح"), 4f); } else GameGuide(v); }
                 tilesOnTable = tilesNow;
                 cafe.SetGameKind(v.game);   // each board framed its own way
                 view = v;
@@ -542,6 +560,8 @@ public class App : MonoBehaviour
                 reportedPractice = view.id;
                 bool won = view.you >= 0 && view.match.team == view.TeamOf(view.you);
                 if (net != null && net.Online) net.Send(new Dictionary<string, object> { ["t"] = "practiceDone", ["game"] = view.game, ["won"] = won });
+                // the first practice game of each game had its guide: not again
+                UnityEngine.PlayerPrefs.SetInt("guide." + view.game, 1); UnityEngine.PlayerPrefs.Save();
                 // the first-game guide is done: its reward (once, the server checks)
                 if (guided && net != null && net.Online) { guided = false; net.Send(new Dictionary<string, object> { ["t"] = "tutorialDone" }); }
             }
