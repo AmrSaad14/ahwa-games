@@ -136,8 +136,12 @@ public partial class Menus
         foreach (var g in new[] { "domino", "tawla", "chess", "ludo" })
         {
             var r = pg?.Obj(g); if (r == null) continue;
-            lines.Add(Loc.T(App.GameNames[g]) + " " + (int)r.Num("rating") + "  (" + (int)r.Num("wins") + "/" + (int)r.Num("games") + ")");
+            int run = (int)r.Num("streak");
+            lines.Add(Loc.T(App.GameNames[g]) + " " + (int)r.Num("rating") + "  (" + (int)r.Num("wins") + "/" + (int)r.Num("games") + ")" + (run >= 2 ? "  " + Loc.T("سلسلة") + " ×" + run : ""));
         }
+        // the viewer against this player
+        var vs = c0.Obj("vsYou");
+        if (vs != null && vs.Num("games") > 0) lines.Insert(0, Loc.T("إنت ضده") + ": " + (int)vs.Num("wins") + " " + Loc.T("فوز") + " – " + (int)vs.Num("losses") + " " + Loc.T("خسارة"));
         long tc = (long)c0.Num("tourneyCoins") + (long)c0.Num("weeklyCoins");
         if (tc > 0) lines.Add(Loc.T("جوايز البطولات") + " " + Loc.Short(tc));
         var per = Ui.Label(stats, lines.Count > 0 ? string.Join("   ·   ", lines) : Loc.T("لسه ملعبش أونلاين"), 12, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Bold);
@@ -148,6 +152,14 @@ public partial class Menus
         var bar = Ui.Rect("Actions", body).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(560, 40), new Vector2(0, 0));
         string pid = c0.Str("pid");
         var buttons = new List<(string label, Color bg, Color fg, Action act)>();
+        // the badges: how many of them, and the list
+        var ach = c0.Arr("achievements");
+        if (ach != null && ach.Count > 0)
+        {
+            int got = 0; foreach (var o in ach) if (o is Dictionary<string, object> d && d.Bool("done")) got++;
+            var cardNow = c0;
+            buttons.Add((Loc.T("الإنجازات") + " " + got + "/" + ach.Count, new Color32(0x6b, 0x3a, 0x22, 0xff), Ui.GoldLight, () => OpenAchievements(cardNow)));
+        }
         if (c0.Bool("me"))
         {
             buttons.Add(("شارك كودك", Ui.Gold, Ui.Ink, () => ShareInvite()));
@@ -166,7 +178,7 @@ public partial class Menus
             buttons.Add(("بلاغ", new Color(1, 1, 1, 0.1f), new Color(1f, 0.65f, 0.55f), () => Report(pid)));
             if (fr == "friend" && c0.Bool("playing") && cardSeat < 0) buttons.Insert(0, ("تفرّج", new Color32(0x2f, 0x6b, 0x3a, 0xff), Color.white, () => { Close(); app.Watch(pid); }));
         }
-        float bw = buttons.Count > 3 ? 132 : 168;
+        float bw = buttons.Count > 4 ? 106 : buttons.Count > 3 ? 132 : 168;
         for (int i = 0; i < buttons.Count; i++)
         {
             var b = buttons[i];
@@ -333,4 +345,42 @@ public partial class Menus
         var no = Ui.Button(body, "بعدين", new Color(1, 1, 1, 0.1f), Ui.GoldLight, 15, () => { Sfx.Tap(); Close(); });
         ((RectTransform)no.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(130, 42), new Vector2(Loc.En ? -90 : 90, 0));
     }
+
+    /// The badges on a player's card: each with its picture, its name and how far along it is.
+    void OpenAchievements(Dictionary<string, object> c0)
+    {
+        var ach = c0?.Arr("achievements"); if (ach == null) return;
+        string who = c0.Str("name");
+        Panel(Loc.T("الإنجازات") + " · " + who, out var body, new Vector2(640, 350));
+        var list = Scroll(body, 6);
+        Dictionary<string, object> row = null; int n = 0;
+        RectTransform line = null;
+        foreach (var o in ach)
+        {
+            if (!(o is Dictionary<string, object> a)) continue;
+            if (n % 2 == 0) line = Row(list, 58);
+            int k = Loc.En ? n % 2 : 1 - n % 2;
+            bool done = a.Bool("done");
+            var cell = Ui.Box(line, "Badge", done ? new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.18f) : Card).rectTransform;
+            cell.anchorMin = new Vector2(k * 0.5f, 0); cell.anchorMax = new Vector2(k * 0.5f + 0.5f, 1); cell.offsetMin = new Vector2(3, 0); cell.offsetMax = new Vector2(-3, 0);
+            var ic = Ui.Picture(cell, "Icon", Icon(BadgeIcon(a.Str("icon")))); ic.color = done ? Ui.Gold : new Color(1, 1, 1, 0.25f);
+            ic.rectTransform.Place(new Vector2(Loc.En ? 0 : 1, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(38, 38), new Vector2(Loc.En ? 28 : -28, 0));
+            var nm = Ui.Label(cell, Loc.En ? a.Str("en") : a.Str("ar"), 13, done ? Color.white : new Color(1, 1, 1, 0.7f), StartAlign, Ui.Bold);
+            nm.rectTransform.anchorMin = new Vector2(0, 0.45f); nm.rectTransform.anchorMax = new Vector2(1, 1);
+            nm.rectTransform.offsetMin = new Vector2(Loc.En ? 56 : 10, 0); nm.rectTransform.offsetMax = new Vector2(Loc.En ? -10 : -56, -4);
+            nm.resizeTextForBestFit = true; nm.resizeTextMinSize = 9; nm.resizeTextMaxSize = 13;
+            // progress
+            double have = a.Num("have"), need = Math.Max(1, a.Num("need"));
+            var barBg = Ui.Box(cell, "Bar", new Color(0, 0, 0, 0.35f)).rectTransform;
+            barBg.anchorMin = new Vector2(0, 0); barBg.anchorMax = new Vector2(1, 0);
+            barBg.offsetMin = new Vector2(Loc.En ? 56 : 70, 9); barBg.offsetMax = new Vector2(Loc.En ? -70 : -56, 17);
+            var fill = Ui.Box(barBg, "Fill", done ? Ui.Gold : new Color(0.6f, 0.92f, 0.55f)).rectTransform;
+            fill.anchorMin = new Vector2(Loc.En ? 0 : 1 - (float)(have / need), 0); fill.anchorMax = new Vector2(Loc.En ? (float)(have / need) : 1, 1); fill.offsetMin = fill.offsetMax = Vector2.zero;
+            var cnt = Ui.Label(cell, done ? "✓" : Loc.Short((long)have) + "/" + Loc.Short((long)need), 11, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Bold);
+            cnt.rectTransform.Place(new Vector2(Loc.En ? 1 : 0, 0), new Vector2(0.5f, 0), new Vector2(64, 20), new Vector2(Loc.En ? -36 : 36, 4));
+            n++;
+        }
+        _ = row;
+    }
+    static string BadgeIcon(string k) => k switch { "trophy" => "t_trophy", "crown" => "t_crown", "domino" => "t_domino", "fire" => "t_flame", "calendar" => "t_crescent", "cup" => "cup", "friends" => "friends", "coins" => "coin", _ => "t_star" };
 }
