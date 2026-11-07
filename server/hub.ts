@@ -89,6 +89,8 @@ export class Hub {
   private giftLimiter = new Limiter(1, 1200);
   private drinkLimiter = new Limiter(1, 5000);
   private reportLimiter = new Limiter(10, 60_000);
+  /** The last win of each player with coins at stake, which one rewarded ad can pay again (once). */
+  private doubles = new Map<string, { coins: number; at: number; used: boolean }>();
   private buyLimiter = new Limiter(20, 60_000);
   private reportLimiter = new Limiter(10, 60 * 60_000);
   private friendLimiter = new Limiter(30, 60 * 60_000);
@@ -458,6 +460,12 @@ export class Hub {
           const e = this.store.skinAdCheck(uid, String(m.skin));
           if (e) return err(e);
           return s.conn.send({ t: 'adTicket', ticket: this.adTickets.issue(uid, String(m.skin)), ssv: !!this.opts.adsSsv });
+        }
+        // an ad that pays your last win again
+        if (m.double) {
+          const d = this.doubles.get(uid);
+          if (!d || d.used || Date.now() - d.at > ECONOMY.doubleMinutes * 60_000) return err('double_gone');
+          return s.conn.send({ t: 'adTicket', ticket: this.adTickets.issue(uid, { double: String(d.at) }), ssv: !!this.opts.adsSsv, double: true });
         }
         // an ad towards the next spin of the lucky wheel
         if (m.wheel) {
@@ -1109,6 +1117,16 @@ export class Hub {
   rewardAd(uid: string, ticket: string): boolean {
     const tk = this.store.get(uid) ? this.adTickets.take(ticket, uid) : null;
     if (!tk) return false;
+    if (tk.double) {
+      const d = this.doubles.get(uid);
+      if (!d || d.used || String(d.at) !== tk.double) return false;
+      d.used = true;
+      this.store.addCoins(uid, d.coins);
+      this.store.logCoins(uid, 'double', d.coins);
+      this.byUser.get(uid)?.conn.send({ t: 'doubled', coins: d.coins });
+      this.sendUser(uid);
+      return true;
+    }
     if (tk.wheel) {
       if (!this.store.wheelAd(uid)) return false;
       const me = this.store.get(uid);
@@ -1177,10 +1195,11 @@ export class Hub {
       if (p.left) continue;
       let kind: string, delta: number, fee = 0;
       if (team < 0) { kind = 'draw'; delta = 0; this.store.addCoins(uid, e.stake); }
-      else if (won(p.seat)) { kind = 'win'; delta = w.net; fee = w.fee; this.store.addCoins(uid, e.stake + w.net); }
+      else if (won(p.seat)) { kind = 'win'; delta = w.net; fee = w.fee; this.store.addCoins(uid, e.stake + w.net); if (w.net > 0) { if (this.doubles.size > 5000) for (const [k, v] of this.doubles) if (Date.now() - v.at > ECONOMY.doubleMinutes * 60_000) this.doubles.delete(k); } if (w.net > 0) this.doubles.set(uid, { coins: Math.min(w.net, ECONOMY.doubleMax), at: Date.now(), used: false }); }
       else { kind = 'loss'; delta = -e.stake; }
       this.store.logCoins(uid, kind, delta, { fee, stake: e.stake, mode: e.mode });
-      this.byUser.get(uid)?.conn.send({ t: 'payout', kind, delta, fee, stake: e.stake });
+      const dbl = kind === 'win' ? this.doubles.get(uid)?.coins ?? 0 : 0;
+      this.byUser.get(uid)?.conn.send({ t: 'payout', kind, delta, fee, stake: e.stake, double: dbl });
       this.sendUser(uid);
     }
   }

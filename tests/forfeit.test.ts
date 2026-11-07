@@ -47,3 +47,30 @@ for (const mode of ['chess', 'ffa2']) {
     a.ws.close(); b.ws.close();
   });
 }
+
+test('double your winnings: one rewarded ad after a win pays the winnings again, once', async () => {
+  const a = await client(), b = await client();
+  a.send({ t: 'create', mode: 'ffa2', stake: 5000 });
+  await a.until(() => !!a.last('table')?.view.code);
+  b.send({ t: 'join', code: a.last('table').view.code });
+  await a.until(() => a.last('table')?.view.seats.filter(Boolean).length === 2);
+  a.send({ t: 'start' });
+  await b.until(() => b.last('table')?.view.phase === 'play');
+  a.send({ t: 'leave' });
+  await b.until(() => b.msgs.some(m => m.t === 'payout' && m.kind === 'win'));
+  const win = b.msgs.find(m => m.t === 'payout' && m.kind === 'win');
+  assert.equal(win.double, win.delta, 'the app is told what the ad would pay');
+  // the loser can't double anything
+  a.send({ t: 'adStart', double: true });
+  await a.until(() => a.last('err')?.code === 'double_gone');
+  b.send({ t: 'adStart', double: true });
+  await b.until(() => !!b.last('adTicket'));
+  const before = b.last('user').user.coins;
+  b.send({ t: 'adWatched', ticket: b.last('adTicket').ticket });
+  await b.until(() => b.last('doubled')?.coins === win.delta);
+  await b.until(() => b.last('user')?.user.coins === before + win.delta);
+  // only once
+  b.send({ t: 'adStart', double: true });
+  await b.until(() => b.last('err')?.code === 'double_gone');
+  a.ws.close(); b.ws.close();
+});

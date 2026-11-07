@@ -32,6 +32,8 @@ export const ECONOMY = {
   tutorialCoins: 10_000,  // finishing the first-game guide
   comebackCoins: 30_000,  // a gift for coming back after a while away…
   comebackDays: 3,        // …of this many days (and one push reminder at that point)
+  doubleMax: 100_000,     // "double your winnings": a rewarded ad after a win pays the match's winnings again, up to this
+  doubleMinutes: 15,      // …if watched within this long of the win
 };
 
 /** The daily bonus grows for each day in a row you come back: day 1 … day 7 (and every day after). */

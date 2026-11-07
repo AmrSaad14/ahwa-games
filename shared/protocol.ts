@@ -318,7 +318,7 @@ export type S2C =
   /** A purchase was checked with the store and credited (or was already credited earlier). */
   | { t: 'bought'; product: string; token: string; coins: number; adFreeUntil: number }
   | { t: 'buyFailed'; product: string; token: string; code: string }
-  | { t: 'payout'; kind: string; delta: number; fee: number; stake: number }
+  | { t: 'payout'; kind: string; delta: number; fee: number; stake: number; double?: number }   // double: what a rewarded ad would pay again (adStart {double})
   | { t: 'table'; view: AnyView }
   | { t: 'left' }
   | { t: 'emote'; seat: number; k: Emote }
