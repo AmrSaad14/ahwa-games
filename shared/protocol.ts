@@ -273,7 +273,8 @@ export type C2S =
   /** Cash out: every 1,000,000 coins pays 10 EGP to a Vodafone Cash number, paid by hand within one working day. */
   | { t: 'prizeClaim'; id: number; phone: string }
   | { t: 'tutorialDone' }
-  | { t: 'prayerPush'; on: boolean }   // prayer-time notifications on or off
+  | { t: 'prayerPush'; on: boolean }
+  | { t: 'crashReport'; kind: string; msg: string; where?: string; model?: string; gpu?: string; api?: string; os?: string; mem?: number; gmem?: number; ver?: string }   // the app closed by itself last time, or a script error
   | { t: 'track'; name: string }
   | { t: 'watch'; pid?: string; table?: string }
   | { t: 'unwatch' }

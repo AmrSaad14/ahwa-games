@@ -88,6 +88,7 @@ export class Hub {
   private authLimiter = new Limiter(10, 60_000);
   private giftLimiter = new Limiter(1, 1200);
   private drinkLimiter = new Limiter(1, 5000);
+  private reportLimiter = new Limiter(10, 60_000);
   private buyLimiter = new Limiter(20, 60_000);
   private reportLimiter = new Limiter(10, 60 * 60_000);
   private friendLimiter = new Limiter(30, 60 * 60_000);
@@ -736,6 +737,13 @@ export class Hub {
         // a few things only the app knows, for the dashboard's analytics
         const name = String(m.name || '');
         if (['guide_start', 'guide_skip', 'shop_open', 'season_open', 'groups_open'].includes(name)) this.store.track(uid, name);
+        return;
+      }
+      case 'crashReport': {
+        // crash and error reports from the app, into the server log (for finding crashes on some phones)
+        if (!this.reportLimiter.allow(uid)) return;
+        const c = (v: unknown, n: number) => String(v ?? '').replace(/[\r\n]+/g, ' | ').slice(0, n);
+        console.log(`[client ${c(m.kind, 10)}] ${c(m.model, 40)} · ${c(m.gpu, 80)} · ${c(m.api, 20)} · ${c(m.os, 60)} · ${Number(m.mem) || 0} MB RAM, ${Number(m.gmem) || 0} MB GPU · v${c(m.ver, 12)} · at ${c(m.where, 30)} · ${c(m.msg, 1500)}`);
         return;
       }
       case 'prayerPush': { this.store.setPrayerPush(uid, !!m.on); this.sendUser(uid); return; }
