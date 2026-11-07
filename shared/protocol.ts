@@ -128,7 +128,9 @@ export interface IceServer { urls: string | string[]; username?: string; credent
 
 export type Action = { t: 'play'; id: number; e?: End } | { t: 'draw' } | { t: 'pass' };
 
-export const EMOTES = ['hi', 'gg', 'nice', 'lol', 'wow', 'clap', 'fire', 'hurry', 'oops', 'think', 'angry', 'love'] as const;
+export const EMOTES = ['hi', 'gg', 'nice', 'lol', 'wow', 'clap', 'fire', 'hurry', 'oops', 'think', 'angry', 'love',
+  // drawn Egyptian stickers (unity/Assets/Resources/UI/Stickers)
+  's_yasater', 's_allem', 's_khalasna', 's_halawa', 's_afla', 's_hazz', 's_rakkez', 's_teesh'] as const;
 export type Emote = typeof EMOTES[number];
 
 /** A friend (or a friend request) in the friends list. */

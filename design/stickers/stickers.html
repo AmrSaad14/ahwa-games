@@ -1,0 +1,11 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@font-face{font-family:Kufi;src:url(../logo/ReemKufi.ttf)}
+html,body{margin:0;background:transparent}
+#s{width:256px;height:256px;display:flex;align-items:center;justify-content:center;position:relative}
+.b{position:relative;padding:18px 22px;border-radius:38px;border:9px solid #fff;box-shadow:0 8px 0 rgba(0,0,0,.25);transform:rotate(var(--r));
+ font:700 var(--fs)/1.05 Kufi;color:#fff;text-align:center;direction:rtl;max-width:180px;text-shadow:0 3px 0 rgba(0,0,0,.28)}
+.b:after{content:"";position:absolute;bottom:-26px;left:46px;width:0;height:0;border:16px solid transparent;border-top:22px solid #fff}
+.b i{position:absolute;bottom:-14px;left:52px;width:0;height:0;border:10px solid transparent;border-top:15px solid var(--c);z-index:2}
+.e{display:block;font-size:44px;line-height:1;margin-bottom:4px;font-family:'Noto Color Emoji',sans-serif;text-shadow:none}
+</style></head><body><div id="s"><div class="b" id="b"><span class="e" id="e"></span><span id="t"></span><i></i></div></div>
+<script>window.show=({t,e,c,r,fs})=>{const b=document.getElementById('b');b.style.background=`linear-gradient(160deg,${c[0]},${c[1]})`;b.style.setProperty('--c',c[1]);b.style.setProperty('--r',r+'deg');b.style.setProperty('--fs',fs+'px');document.getElementById('t').textContent=t;document.getElementById('e').textContent=e;}</script></body></html>
