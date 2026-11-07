@@ -69,6 +69,15 @@ public class GameUi : MonoBehaviour
             if (pos <= 0 || !seatTagBg[pos].gameObject.activeSelf) at = new Vector2(0, root.rect.height / 2 - 110);
             else at = seatTagBg[pos].rectTransform.anchoredPosition + new Vector2(0, 40);
         }
+        if (k.StartsWith("s_"))
+        {
+            // a sticker: the drawing itself, bigger, no bubble
+            var st = Ui.Picture(root, "Sticker", tex).rectTransform;
+            st.anchorMin = st.anchorMax = new Vector2(0.5f, 0.5f);
+            st.sizeDelta = new Vector2(104, 104); st.anchoredPosition = at + new Vector2(0, 26);
+            StartCoroutine(Pop(st));
+            return;
+        }
         bool words = QuickChat.Phrases.TryGetValue(k, out var ph);
         var bub = Ui.Box(root, "Bubble", new Color(1, 1, 1, 0.96f)).rectTransform;
         bub.anchorMin = bub.anchorMax = new Vector2(0.5f, 0.5f);

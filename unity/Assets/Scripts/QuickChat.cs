@@ -16,12 +16,17 @@ public class QuickChat : MonoBehaviour
     };
     static readonly string[] Words = { "hi", "nice", "hurry", "gg", "oops", "think" };
     static readonly string[] Faces = { "lol", "wow", "clap", "fire", "angry", "love" };
+    /// Drawn Egyptian stickers (Resources/UI/Stickers), in their own panel.
+    public static readonly string[] Stickers = { "s_yasater", "s_allem", "s_khalasna", "s_halawa", "s_afla", "s_hazz", "s_rakkez", "s_teesh" };
+    RectTransform stickers;
     // how the computer answers in practice
     static readonly Dictionary<string, string[]> Replies = new Dictionary<string, string[]>
     {
         ["hi"] = new[] { "hi", "love" }, ["nice"] = new[] { "love", "clap" }, ["hurry"] = new[] { "think", "lol" }, ["gg"] = new[] { "gg", "clap" },
         ["oops"] = new[] { "lol", "oops" }, ["think"] = new[] { "hurry" }, ["lol"] = new[] { "lol" }, ["wow"] = new[] { "fire" },
         ["clap"] = new[] { "love" }, ["fire"] = new[] { "wow" }, ["angry"] = new[] { "lol", "oops" }, ["love"] = new[] { "love" },
+        ["s_yasater"] = new[] { "s_hazz", "lol" }, ["s_allem"] = new[] { "s_yasater", "s_rakkez" }, ["s_khalasna"] = new[] { "s_rakkez", "think" }, ["s_halawa"] = new[] { "s_teesh", "love" },
+        ["s_afla"] = new[] { "s_yasater", "s_teesh" }, ["s_hazz"] = new[] { "s_allem", "lol" }, ["s_rakkez"] = new[] { "s_khalasna", "lol" }, ["s_teesh"] = new[] { "s_halawa", "gg" },
     };
     float lastSent;
 
@@ -51,6 +56,22 @@ public class QuickChat : MonoBehaviour
             var e = Ui.Picture(f.transform, "E", Emoji(k)); e.rectTransform.Fill(5);
         }
         panel.gameObject.SetActive(false);
+        // the stickers: their own button (under the drinks) and panel
+        var sb = Ui.Button(hud, "", new Color(0.1f, 0.06f, 0.04f, 0.85f), Color.white, 10, ToggleStickers);
+        ((RectTransform)sb.transform).Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(46, 46), new Vector2(-12, -252));
+        var si = Ui.Picture(sb.transform, "Sticker", Sticker("s_halawa")); si.rectTransform.Fill(3);
+        stickers = Ui.Box(hud, "Stickers", new Color(0.1f, 0.06f, 0.04f, 0.96f)).rectTransform;
+        stickers.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(300, 160), new Vector2(-64, -96));
+        stickers.gameObject.AddComponent<Outline>().effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.45f);
+        stickers.GetComponent<Image>().raycastTarget = true;
+        for (int i = 0; i < Stickers.Length; i++)
+        {
+            var k = Stickers[i];
+            var f = Ui.Button(stickers, "", new Color(1, 1, 1, 0.05f), Color.white, 10, () => { stickers.gameObject.SetActive(false); Send(k); });
+            ((RectTransform)f.transform).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(68, 68), new Vector2(8 + (i % 4) * 72, -8 - (i / 4) * 74));
+            Ui.Picture(f.transform, "S", Sticker(k)).rectTransform.Fill(2);
+        }
+        stickers.gameObject.SetActive(false);
         Loc.Changed += Relabel;
     }
 
@@ -61,10 +82,12 @@ public class QuickChat : MonoBehaviour
             if (t.name.StartsWith("Word ")) { var k = t.name.Substring(5); t.GetComponentInChildren<Text>().Set(Loc.En ? Phrases[k].en : Phrases[k].ar); }
     }
 
-    public static Texture2D Emoji(string k) => Resources.Load<Texture2D>("UI/Emoji/" + k);
+    public static Texture2D Emoji(string k) => k.StartsWith("s_") ? Sticker(k) : Resources.Load<Texture2D>("UI/Emoji/" + k);
+    public static Texture2D Sticker(string k) => Resources.Load<Texture2D>("UI/Stickers/" + k);
 
-    void Toggle() { Sfx.Tap(); panel.gameObject.SetActive(!panel.gameObject.activeSelf); }
-    public void Hide() { if (panel != null) panel.gameObject.SetActive(false); }
+    void Toggle() { Sfx.Tap(); if (stickers != null) stickers.gameObject.SetActive(false); panel.gameObject.SetActive(!panel.gameObject.activeSelf); }
+    void ToggleStickers() { Sfx.Tap(); panel.gameObject.SetActive(false); stickers.gameObject.SetActive(!stickers.gameObject.activeSelf); }
+    public void Hide() { if (panel != null) panel.gameObject.SetActive(false); if (stickers != null) stickers.gameObject.SetActive(false); }
 
     void Send(string k)
     {
