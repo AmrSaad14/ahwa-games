@@ -295,6 +295,19 @@ public partial class Menus : MonoBehaviour
                 Sfx.Coins();
                 break;
             case "wheelResult": WheelResult(m); break;
+            case "govBoard": govData = m; if (lbGame == "gov") refreshOpen?.Invoke(); break;
+            case "govPrize":
+                Sfx.Coins(); Sfx.Chime();
+                ShowCard(Loc.T("محافظتك كسبت!"), GovName(m.Str("gov")) + " " + Loc.T("كانت محافظة الأسبوع") + "\n+" + Loc.Short((long)m.Num("coins")) + " " + Loc.T("كوين"), null, false);
+                break;
+            case "leagueRewards":
+            {
+                long total = 0; var parts = new List<string>();
+                foreach (var o in m.Arr("rows") ?? new List<object>()) if (o is Dictionary<string, object> r) { total += (long)r.Num("coins"); parts.Add(Loc.T(App.GameNames[r.Str("game")]) + ": " + LeagueName(r.Str("league"))); }
+                Sfx.Coins(); Sfx.Chime();
+                ShowCard(Loc.T("خلص الموسم!"), string.Join("  ·  ", parts) + "\n" + Loc.T("جايزة الدوري") + ": +" + Loc.Short(total) + " " + Loc.T("كوين"), null, false);
+                break;
+            }
             case "wheelAd":
                 pendingAd = null;
                 if (user != null && m.Obj("wheel") != null) user["wheel"] = m.Obj("wheel");
@@ -471,6 +484,11 @@ public partial class Menus : MonoBehaviour
             Toggle(list, "أصوات القهوة", Music.CafeOn, v => { Music.CafeOn = v; app.game?.RefreshSound(); });
             Toggle(list, "الاهتزاز", Sfx.VibrateOn, v => { Sfx.VibrateOn = v; if (v) Sfx.Buzz(); });
             Toggle(list, "توفير البطارية", Perf.Saver, v => { Perf.Saver = v; });
+            // the governorate you play for (the governorate leaderboard)
+            var gr = Row(list, 44, Card);
+            At(Ui.Label(gr, "محافظتك", 16, Color.white, StartAlign, Ui.Bold).rectTransform, 14, 160, 40);
+            var gb = Ui.Button(gr, GovName(user?.Str("gov")) ?? Loc.T("اختار"), Ui.Panel, Ui.GoldLight, 14, () => { Sfx.Tap(); OpenGovPicker(); });
+            ((RectTransform)gb.transform).Place(new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(170, 34), new Vector2(Loc.En ? -100 : 100, 0));
             // prayer-time notifications (Cairo times), kept on the server so they follow the account
             if (user != null && user.ContainsKey("prayerPush"))
                 Toggle(list, "تذكير بمواعيد الصلاة", user.Bool("prayerPush"), v => { user["prayerPush"] = v; app.Send(new Dictionary<string, object> { ["t"] = "prayerPush", ["on"] = v }); });
@@ -1131,7 +1149,7 @@ public partial class Menus : MonoBehaviour
 
     /* ---------- the leaderboard ---------- */
 
-    static readonly string[] GameIds = { "domino", "tawla", "chess", "ludo", "week" };
+    static readonly string[] GameIds = { "domino", "tawla", "chess", "ludo", "week", "league", "gov" };
     static readonly long[] WeeklyPrizes = { 1_000_000, 500_000, 300_000, 200_000, 150_000, 100_000, 75_000, 50_000, 40_000, 30_000 };
     double lbEndsAt;
     Dictionary<string, object> lbMonth;   // this month's race for the game's "player of the month" title
@@ -1139,13 +1157,15 @@ public partial class Menus : MonoBehaviour
     public void OpenLeaders(int tab)
     {
         lbTab = tab; lbGame = GameIds[tab]; lbRows = null; lbMe = null; lbMonth = null;
-        app.Send(new Dictionary<string, object> { ["t"] = "lb", ["game"] = lbGame });
-        StartCoroutine(AskAgain(lbGame));
+        if (lbGame == "gov") { govData = null; app.Send(new Dictionary<string, object> { ["t"] = "govBoard" }); }
+        else if (lbGame != "league") { app.Send(new Dictionary<string, object> { ["t"] = "lb", ["game"] = lbGame }); StartCoroutine(AskAgain(lbGame)); }
         Panel(Loc.T("المتصدرين"), out var body, new Vector2(600, 340));
         refreshOpen = () =>
         {
             foreach (Transform c in body) Destroy(c.gameObject);
-            var area = Tabs(body, new[] { "دومينو", "طاولة", "شطرنج", "لودو", "الأسبوع" }, lbTab, i => { Close(); OpenLeaders(i); });
+            var area = Tabs(body, new[] { "دومينو", "طاولة", "شطرنج", "لودو", "الأسبوع", "الدوري", "المحافظات" }, lbTab, i => { Close(); OpenLeaders(i); });
+            if (lbGame == "league") { DrawLeagues(area); return; }
+            if (lbGame == "gov") { DrawGovs(area); return; }
             bool week = lbGame == "week";
             float top = 0;
             if (week)
