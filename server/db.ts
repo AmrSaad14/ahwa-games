@@ -5,6 +5,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import type { PrizeRow, CoinRow, LeaderRow, PublicUser } from '../shared/protocol';
 import type { GameId } from '../shared/engine';
+import { achievementsOf } from '../shared/achievements';
 import { ECONOMY, WEEKLY_PRIZES, WHEEL, wheelCost, cairoDay, levelOf, nextCairoDay, streakBonus, weekKey } from '../shared/gifts';
 import { Equipped, adsForSkin, isFree, skinById } from '../shared/skins';
 import { activeEvent } from '../shared/events';
@@ -97,6 +98,10 @@ export class Store {
     if (!cols.has('title')) this.db.exec('ALTER TABLE users ADD COLUMN title TEXT');
     // the first-game guide done (its reward paid once), and when a player who stayed away was last nudged
     if (!cols.has('tutorial')) this.db.exec('ALTER TABLE users ADD COLUMN tutorial INTEGER NOT NULL DEFAULT 0; ALTER TABLE users ADD COLUMN nudged INTEGER NOT NULL DEFAULT 0');
+    // win streaks per game: the current run of wins and the best ever
+    const rcols = new Set((this.db.prepare('PRAGMA table_info(ratings)').all() as { name: string }[]).map(c => c.name));
+    if (!rcols.has('streak')) this.db.exec('ALTER TABLE ratings ADD COLUMN streak INTEGER NOT NULL DEFAULT 0');
+    if (!rcols.has('best')) this.db.exec('ALTER TABLE ratings ADD COLUMN best INTEGER NOT NULL DEFAULT 0');
     // the lucky wheel: the Cairo day, spins used that day, ads watched towards the next spin
     if (!cols.has('wheel_day')) this.db.exec("ALTER TABLE users ADD COLUMN wheel_day TEXT NOT NULL DEFAULT ''");
     if (!cols.has('wheel_spins')) this.db.exec('ALTER TABLE users ADD COLUMN wheel_spins INTEGER NOT NULL DEFAULT 0');
@@ -207,12 +212,17 @@ export class Store {
         COALESCE(SUM(CASE WHEN kind = 'weekly' THEN delta ELSE 0 END), 0) AS weekly
       FROM coin_log WHERE user_id = ?`).get(id) as { won: number; lost: number; best: number; tourney: number; weekly: number };
     const games = u.games ?? 0, wins = u.wins ?? 0;
-    const perGame: Record<string, { rating: number; games: number; wins: number; losses: number }> = {};
-    for (const [g, r] of Object.entries(ratings)) if (r) perGame[g] = { rating: r.rating, games: r.games, wins: r.wins, losses: r.games - r.wins };
+    const perGame: Record<string, { rating: number; games: number; wins: number; losses: number; streak: number; best: number }> = {};
+    const runs = this.db.prepare('SELECT game, streak, best FROM ratings WHERE user_id = ?').all(id) as { game: string; streak: number; best: number }[];
+    for (const [g, r] of Object.entries(ratings)) if (r) { const x = runs.find(q => q.game === g); perGame[g] = { rating: r.rating, games: r.games, wins: r.wins, losses: r.games - r.wins, streak: x?.streak ?? 0, best: x?.best ?? 0 }; }
+    // the numbers the badges are worked out from
+    const nums: Record<string, number> = { wins, games, streak: u.streak ?? 0, coinsWon: money.won, gamesWon: Object.values(perGame).filter(p => p.wins > 0).length,
+      friends: this.friendLinks(id).filter(l => l.status === 'friend').length };
+    for (const [g, p] of Object.entries(perGame)) { nums[g + '.wins'] = p.wins; nums[g + '.best'] = p.best; }
     return {
       games, wins, losses: Math.max(0, games - wins), winRate: games ? Math.round(wins / games * 100) : 0,
       coinsWon: money.won, coinsLost: money.lost, net: money.won - money.lost, bestWin: money.best,
-      tourneyCoins: money.tourney, weeklyCoins: money.weekly, perGame,
+      tourneyCoins: money.tourney, weeklyCoins: money.weekly, perGame, achievements: achievementsOf(nums),
       level: levelOf(u.xp ?? 0), xp: u.xp ?? 0, streak: u.streak ?? 0, gifts: u.gifts ?? 0, since: u.created,
     };
   }
@@ -446,9 +456,29 @@ export class Store {
     this.db.prepare(`INSERT INTO ratings (user_id, game, rating, games, wins) VALUES (?, ?, MAX(100, 1000 + ?), 1, ?)
       ON CONFLICT(user_id, game) DO UPDATE SET rating = MAX(100, rating + excluded.rating - 1000), games = games + 1, wins = wins + excluded.wins`)
       .run(id, game, delta ?? 0, won ? 1 : 0);
+    // the run of wins in a row (a loss or a draw ends it) and the best one
+    this.db.prepare('UPDATE ratings SET streak = CASE WHEN ? THEN streak + 1 ELSE 0 END WHERE user_id = ? AND game = ?').run(won ? 1 : 0, id, game);
+    this.db.prepare('UPDATE ratings SET best = MAX(best, streak) WHERE user_id = ? AND game = ?').run(id, game);
     this.db.prepare('UPDATE users SET games = games + 1, wins = wins + ? WHERE id = ?').run(won ? 1 : 0, id);
     if (game === 'domino') this.db.prepare('UPDATE users SET rating = MAX(100, rating + ?) WHERE id = ?').run(delta ?? 0, id);
     if (weekly) this.addWeekly(id, won);
+  }
+
+  /** Head to head: matches two people played against each other (not as partners) and who won how many. */
+  headToHead(a: string, b: string): { games: number; wins: number; losses: number } {
+    const rows = this.db.prepare("SELECT mode, players, winner_team FROM matches WHERE players LIKE ? AND players LIKE ? ORDER BY ended DESC LIMIT 2000")
+      .all(`%"${a}"%`, `%"${b}"%`) as { mode: string; players: string; winner_team: number }[];
+    let games = 0, wins = 0, losses = 0;
+    for (const r of rows) {
+      let ps: ({ uid: string | null } | null)[]; try { ps = JSON.parse(r.players); } catch { continue; }
+      const ia = ps.findIndex(p => p?.uid === a), ib = ps.findIndex(p => p?.uid === b);
+      if (ia < 0 || ib < 0) continue;
+      const team = (i: number) => (r.mode === 'team' ? i % 2 : i);
+      if (team(ia) === team(ib)) continue;   // partners
+      games++;
+      if (r.winner_team === team(ia)) wins++; else if (r.winner_team === team(ib)) losses++;
+    }
+    return { games, wins, losses };
   }
 
   saveMatch(m: { id: string; mode: string; private: boolean; players: unknown; scores: number[]; team: number }) {

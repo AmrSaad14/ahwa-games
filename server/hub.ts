@@ -826,7 +826,8 @@ export class Hub {
     if (!u || !st) return null;
     const t = this.userTable.get(u.id);
     return { pid, name: u.name, ch: u.ch, photo: u.photo ?? null, title: this.store.wornTitle(u.id), ...st, online: this.byUser.has(u.id), playing: !!t && !t.closed && t.phase !== 'lobby',
-      me: viewer === u.id, friend: viewer && viewer !== u.id ? this.store.friendStatus(viewer, u.id) : null };
+      me: viewer === u.id, friend: viewer && viewer !== u.id ? this.store.friendStatus(viewer, u.id) : null,
+      vsYou: viewer && viewer !== u.id ? this.store.headToHead(viewer, u.id) : null };
   }
 
   /** Lets a player's open app know their friends list changed (after the HTTP API changed it). */

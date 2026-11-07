@@ -201,7 +201,9 @@ export interface PlayerCard {
   pid: string; name: string; ch: number; photo?: string | null; level: number; xp: number; since: number; title?: string | null;
   games: number; wins: number; losses: number; winRate: number;
   coinsWon: number; coinsLost: number; net: number; bestWin: number; tourneyCoins: number; weeklyCoins: number;
-  perGame: Record<string, { rating: number; games: number; wins: number; losses: number }>;
+  perGame: Record<string, { rating: number; games: number; wins: number; losses: number; streak: number; best: number }>;   // streak: wins in a row now; best: the longest
+  achievements: { id: string; ar: string; en: string; icon: string; need: number; have: number; done: boolean }[];
+  vsYou?: { games: number; wins: number; losses: number } | null;   // the viewer's matches against this player (wins = the viewer's)
   gifts: number; streak: number;
   online: boolean; playing: boolean;
   me: boolean;
