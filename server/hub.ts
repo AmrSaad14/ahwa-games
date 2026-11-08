@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { GAMES, GameId, MODES, MODE_PLAYERS, Mode, defaultTarget, gameOf, isTeamMode, targetOptions, teamOf } from '../shared/engine';
 import type { C2S, Emote, FriendRow, IceServer, PlayerCard, S2C } from '../shared/protocol';
 import { GOV_WEEK, isGov } from '../shared/govs';
-import { ECONOMY, STAKES, giftByKind, drinkOnMenu, isStake, winnings, NO_ADS, XP, WEEKLY_PRIZES, weekKey } from '../shared/gifts';
+import { ECONOMY, STAKES, giftByKind, drinkOnMenu, isStake, winnings, NO_ADS, XP, WEEKLY_PRIZES, MONTHLY_EARNER_PRIZES, weekKey } from '../shared/gifts';
 import { EMOTES } from '../shared/protocol';
 import { Table, publicId, Player, BotMaker } from '../shared/table';
 import { botIdentity } from '../shared/botnames';
@@ -136,13 +136,35 @@ export class Hub {
     this.ticker = setInterval(() => {
       this.matchmake(); this.sweep();
       try { this.tourney.tick(); } catch (e) { console.error('[tourney]', (e as Error).message); }
-      if (++this.ticks % 60 === 0) { this.weeklyPrizes(); try { this.monthlyTitles(); } catch (e) { console.error('[titles]', (e as Error).message); } }
+      if (++this.ticks % 60 === 0) { this.weeklyPrizes(); try { this.monthlyTitles(); } catch (e) { console.error('[titles]', (e as Error).message); } try { this.monthlyEarners(); } catch (e) { console.error('[earners]', (e as Error).message); } }
       if (this.ticks % 3600 === 0) { this.store.expirePrizes(this.prizeCfg.claimDays); this.nudgeAway(); }
     }, 1000);
   }
 
   private ticks = 0;
-  /** After a week ends, its top ten get their prizes (once). */
+  /** After a month ends, the whole game's top three earners of that month get coins (once). */
+  monthlyEarners(now = Date.now()): { uid: string; rank: number; coins: number; month: string }[] {
+    const d = new Date(now);
+    const thisStart = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1), prevStart = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1);
+    const pd = new Date(prevStart), month = `${pd.getUTCFullYear()}-${String(pd.getUTCMonth() + 1).padStart(2, '0')}`;
+    if (this.store.metaGet('earners_paid_' + month)) return [];
+    this.store.metaSet('earners_paid_' + month, String(now));
+    const top = this.store.coinsBoard(null, prevStart, MONTHLY_EARNER_PRIZES.length, thisStart).rows;
+    const out: { uid: string; rank: number; coins: number; month: string }[] = [];
+    top.forEach((r, i) => {
+      const uid = this.store.byPid(r.pid!)?.id; if (!uid) return;
+      const coins = MONTHLY_EARNER_PRIZES[i];
+      this.store.addCoins(uid, coins); this.store.logCoins(uid, 'monthly', coins);
+      out.push({ uid, rank: i + 1, coins, month });
+      console.log(`[earners] ${month}: #${i + 1} ${r.name} +${coins}`);
+      this.byUser.get(uid)?.conn.send({ t: 'monthlyPrize', rank: i + 1, coins, month });
+      this.sendUser(uid);
+      this.opts.push?.([uid], ['مبروك! 🏆', `جيت المركز ${i + 1} في الأكثر كسبًا الشهر اللي فات وكسبت ${coins.toLocaleString('en')} كوين`], ['Congratulations! 🏆', `You were #${i + 1} top earner last month and won ${coins.toLocaleString('en')} coins`]);
+    });
+    return out;
+  }
+
+  /** After a week ends, its first gets the prize (once). */
   weeklyPrizes(): { uid: string; rank: number; coins: number }[] {
     const last = weekKey(Date.now() - 7 * 86_400_000);
     const paid = this.store.payWeekly(last);
@@ -163,14 +185,14 @@ export class Hub {
     const prev = mo === 1 ? `${y - 1}-12` : `${y}-${String(mo - 1).padStart(2, '0')}`;
     if (this.store.metaGet('potm_' + prev)) return [];
     this.store.metaSet('potm_' + prev, String(now));
-    if (!cfg.monthly && !this.prizeCfg.enabled) return [];
+    if (!cfg.monthly) return [];
     const until = seasonEndsAt(now), won: { uid: string; game: string; title: string; month: string; prize: number | null }[] = [];
     const pz = this.prizeCfg;
     for (const game of GAMES) {
       const t = this.titles.monthlyFor(game); if (!t) continue;
       const top = this.store.monthlyBoard(game, prev, 1, cfg.minGames)[0]; if (!top) continue;
       if (cfg.monthly) this.store.grantTitle(top.id, t.id, until, prev);
-      const prize = pz.enabled && pz.egp > 0 ? this.store.createPrize(top.id, prev, game, pz.egp, now) : null;
+      const prize: number | null = null;   // no money prizes any more: the title only (prizes won before can still be claimed)
       won.push({ uid: top.id, game, title: t.id, month: prev, prize });
       console.log(`[titles] ${prev} ${game}: ${top.name}${prize ? ` (prize #${prize}, ${pz.egp} EGP)` : ''}`);
       if (cfg.monthly) this.byUser.get(top.id)?.conn.send({ t: 'titleWon', id: t.id, month: prev });
@@ -1018,7 +1040,7 @@ export class Hub {
   /** A player as the app sees them, with their monthly prizes and what the prizes are this month. */
   private pub(u: UserRow) {
     const c = this.prizeCfg;
-    return { ...this.store.publicUser(u), prizes: this.store.prizesOf(u.id), prize: { on: c.enabled, egp: c.egp, claimDays: c.claimDays }, adReward: ECONOMY.adReward, tutorialCoins: ECONOMY.tutorialCoins,
+    return { ...this.store.publicUser(u), prizes: this.store.prizesOf(u.id), prize: { on: false, egp: c.egp, claimDays: c.claimDays }, adReward: ECONOMY.adReward, tutorialCoins: ECONOMY.tutorialCoins,
       // what the dashboard switched on: the tournament section and the season pass
       features: { tourney: TOURNEY.enabled !== false, season: SEASON_PASS.enabled },
       event: this.eventFor(u.id) };

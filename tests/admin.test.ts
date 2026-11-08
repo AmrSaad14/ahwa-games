@@ -126,7 +126,10 @@ test('titles: the designs, giving one, wearing it, and player of the month', asy
   assert.deepEqual(won.map(w => [w.uid, w.title]), [[a.user.id, 'potm_domino']]);
   assert.equal(app.store.wornTitle(a.user.id), 'potm_domino');
   assert.deepEqual(app.hub.monthlyTitles(), [], 'once a month');
-  // and 500 EGP: the winner gives a Vodafone Cash number, the team pays it
+  // no money prizes any more: the title only, even with prizes switched on in the dashboard
+  assert.equal(app.store.prizesOf(a.user.id).length, 0);
+  // a prize won before still goes through: the winner gives a Vodafone Cash number, the team pays it
+  app.store.createPrize(a.user.id, prev, 'domino', 500, Date.now());
   const pz = app.store.prizesOf(a.user.id)[0];
   assert.deepEqual([pz.egp, pz.status, pz.game, pz.month], [500, 'unclaimed', 'domino', prev]);
   assert.equal(app.store.claimPrize(b.user.id, pz.id, '01012345678'), 'prize_gone', 'not theirs');
@@ -140,6 +143,17 @@ test('titles: the designs, giving one, wearing it, and player of the month', asy
   assert.equal(app.store.prizesOf(a.user.id)[0].status, 'paid');
   assert.equal((await adm('POST', '/prizes/' + pz.id, { action: 'paid' })).status, 409, 'paid once');
   assert.equal((await adm('GET', '/overview')).json.prizePaidEgp, 500);
+  // the whole game's top three earners of last month get coins, once
+  const { MONTHLY_EARNER_PRIZES } = await import('../shared/gifts');
+  const d = new Date(), lastMonth = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 10);
+  const e1 = { user: app.store.createGuest('Earner One', 1) }, e2 = { user: app.store.createGuest('Earner Two', 2) };
+  app.store.db.prepare("INSERT INTO coin_log (user_id, ts, kind, delta, balance) VALUES (?, ?, 'win', ?, 0)").run(e1.user.id, lastMonth, 9_000_000);
+  app.store.db.prepare("INSERT INTO coin_log (user_id, ts, kind, delta, balance) VALUES (?, ?, 'win', ?, 0)").run(e2.user.id, lastMonth, 8_000_000);
+  const before = app.store.coinsOf(e1.user.id);
+  const paid = app.hub.monthlyEarners();
+  assert.deepEqual(paid.slice(0, 2).map(p => [p.uid, p.rank, p.coins]), [[e1.user.id, 1, MONTHLY_EARNER_PRIZES[0]], [e2.user.id, 2, MONTHLY_EARNER_PRIZES[1]]]);
+  assert.equal(app.store.coinsOf(e1.user.id), before + MONTHLY_EARNER_PRIZES[0]);
+  assert.deepEqual(app.hub.monthlyEarners(), [], 'once a month');
 });
 
 test('admin: the season pass and the tournament can be switched off', async () => {

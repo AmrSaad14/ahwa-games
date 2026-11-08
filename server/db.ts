@@ -369,12 +369,12 @@ export class Store {
 
   /** The whole game's richest winners: coins won in games (every game together), all time or since a moment
    *  (this month). `rating` carries the coins, `wins` the games won. Worked out at most once a minute. */
-  coinsBoard(meId: string | null, since = 0, limit = 50): { rows: LeaderRow[]; me: LeaderRow | null } {
-    const key = String(since);
+  coinsBoard(meId: string | null, since = 0, limit = 50, until = Number.MAX_SAFE_INTEGER): { rows: LeaderRow[]; me: LeaderRow | null } {
+    const key = since + '-' + until;
     let c = this.coinsCache.get(key);
     if (!c || Date.now() - c.at > 60_000) {
       const top = this.db.prepare(`SELECT c.user_id AS id, SUM(c.delta) AS coins, COUNT(*) AS wins FROM coin_log c JOIN users u ON u.id = c.user_id
-        WHERE c.kind = 'win' AND c.ts >= ? AND u.banned = 0 GROUP BY c.user_id ORDER BY coins DESC LIMIT ?`).all(since, limit) as { id: string; coins: number; wins: number }[];
+        WHERE c.kind = 'win' AND c.ts >= ? AND c.ts < ? AND u.banned = 0 GROUP BY c.user_id ORDER BY coins DESC, MIN(c.ts) ASC LIMIT ?`).all(since, until, limit) as { id: string; coins: number; wins: number }[];
       c = { at: Date.now(), top };
       this.coinsCache.set(key, c);
     }
@@ -386,9 +386,9 @@ export class Store {
     let me: LeaderRow | null = null;
     const u = meId ? this.get(meId) : undefined;
     if (u) {
-      const mine = this.db.prepare("SELECT COALESCE(SUM(delta), 0) AS coins, COUNT(*) AS wins FROM coin_log WHERE user_id = ? AND kind = 'win' AND ts >= ?").get(u.id, since) as { coins: number; wins: number };
+      const mine = this.db.prepare("SELECT COALESCE(SUM(delta), 0) AS coins, COUNT(*) AS wins FROM coin_log WHERE user_id = ? AND kind = 'win' AND ts >= ? AND ts < ?").get(u.id, since, until) as { coins: number; wins: number };
       if (Number(mine.coins) > 0) {
-        const above = this.db.prepare(`SELECT COUNT(*) AS c FROM (SELECT user_id, SUM(delta) AS s FROM coin_log WHERE kind = 'win' AND ts >= ? GROUP BY user_id) WHERE s > ?`).get(since, mine.coins) as { c: number };
+        const above = this.db.prepare(`SELECT COUNT(*) AS c FROM (SELECT user_id, SUM(delta) AS s FROM coin_log WHERE kind = 'win' AND ts >= ? AND ts < ? GROUP BY user_id) WHERE s > ?`).get(since, until, mine.coins) as { c: number };
         me = { rank: Number(above.c) + 1, name: u.name, ch: u.ch, photo: u.photo ?? null, rating: Number(mine.coins), games: 0, wins: Number(mine.wins), me: true, level: levelOf(u.xp ?? 0) };
       }
     }

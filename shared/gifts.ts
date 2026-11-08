@@ -57,7 +57,9 @@ export const levelOf = (xp: number) => Math.max(1, Math.floor((1 + Math.sqrt(1 +
 export const xpForLevel = (level: number) => 50 * level * (level - 1);
 
 /** The week's top ten (most points: 3 a win, 1 a game, online only) share these prizes every Monday. */
-export const WEEKLY_PRIZES: number[] = [1_000_000, 500_000, 300_000, 200_000, 150_000, 100_000, 75_000, 50_000, 40_000, 30_000];
+export const WEEKLY_PRIZES: number[] = [1_000_000];   // the week's first only
+/** The whole game's top earners of each month (coins won in games, all games together): 1st, 2nd, 3rd. */
+export const MONTHLY_EARNER_PRIZES: number[] = [3_000_000, 2_000_000, 1_000_000];
 /** The week a moment belongs to, as "2026-W43" (ISO weeks, Monday to Sunday, UTC). */
 export function weekKey(ms = Date.now()): string {
   const d = new Date(ms); d.setUTCHours(0, 0, 0, 0);
