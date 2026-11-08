@@ -1,3 +1,4 @@
+import { chooseColors } from './games/ludo';
 import { CHESS_TIME, MODE_PLAYERS, Mode, defaultTarget, gameOf, targetOptions, teamOf } from './engine';
 import { BOT_NAMES, BotMaker, Player, publicId } from './table';
 import type { BoardView, Emote, MatchResult } from './protocol';
@@ -219,6 +220,8 @@ export class BoardTable {
     this.result = null;
     const first = this.lastWinner >= 0 ? this.lastWinner : Math.floor(this.rnd() * this.n);
     this.state = this.def.newGame(this.n, this.game === 'chess' ? first % 2 : first, this.rnd);
+    // ludo: the colours the players chose (computer players take what's left)
+    if (this.game === 'ludo' && this.state?.colors) this.state.colors = chooseColors(this.n, this.seats.map(s => (s && !s.bot && typeof s.ludoColor === 'number' ? s.ludoColor : -1)));
     this.phase = 'play';
     if (this.def.clockMs) { this.clocks = this.seats.map(() => this.clockMs()); }
     this.last = { t: 'start', s: this.def.toMove(this.state), k: ++this.v };

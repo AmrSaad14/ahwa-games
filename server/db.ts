@@ -25,7 +25,7 @@ export interface UserRow {
   phone: string | null; google_sub: string | null; google_email: string | null; apple_sub?: string | null; apple_email?: string | null;
   pg_id: string | null; friend_code: string | null; streak?: number; xp?: number;
   ref_by?: string | null; ref_paid?: number; muted_until?: number; pid?: string | null; banned?: number; ban_reason?: string | null; title?: string | null;
-  tutorial?: number; nudged?: number; prayer_push?: number; gov?: string; wheel_day?: string; wheel_spins?: number; wheel_ads?: number;
+  tutorial?: number; nudged?: number; prayer_push?: number; gov?: string; ludo_color?: number; wheel_day?: string; wheel_spins?: number; wheel_ads?: number;
 }
 
 export class Store {
@@ -102,6 +102,8 @@ export class Store {
     if (!cols.has('tutorial')) this.db.exec('ALTER TABLE users ADD COLUMN tutorial INTEGER NOT NULL DEFAULT 0; ALTER TABLE users ADD COLUMN nudged INTEGER NOT NULL DEFAULT 0');
     // the governorate a player plays for, and the weekly prize for the governorate of the week (paid once)
     if (!cols.has('gov')) this.db.exec("ALTER TABLE users ADD COLUMN gov TEXT NOT NULL DEFAULT ''");
+    // the ludo colour a player likes to play (-1: any)
+    if (!cols.has('ludo_color')) this.db.exec('ALTER TABLE users ADD COLUMN ludo_color INTEGER NOT NULL DEFAULT -1');
     this.db.exec('CREATE TABLE IF NOT EXISTS gov_paid (week TEXT NOT NULL, user_id TEXT NOT NULL, PRIMARY KEY (week, user_id))');
     // leagues: points per player, game and season (a month), the highest reached, and whether its reward was paid
     this.db.exec('CREATE TABLE IF NOT EXISTS league (user_id TEXT NOT NULL, season TEXT NOT NULL, game TEXT NOT NULL, lp INTEGER NOT NULL DEFAULT 0, peak INTEGER NOT NULL DEFAULT 0, paid INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, season, game))');
@@ -471,6 +473,7 @@ export class Store {
     if (weekly) this.addWeekly(id, won);
   }
 
+  setLudoColor(id: string, c: number) { this.db.prepare('UPDATE users SET ludo_color = ? WHERE id = ?').run(c, id); }
   setGov(id: string, gov: string) { this.db.prepare('UPDATE users SET gov = ? WHERE id = ?').run(gov, id); }
   /** The governorates this week: each one's score (its best players' points), players, and its best players. */
   govBoard(week = weekKey()): { gov: string; points: number; players: number }[] {
@@ -573,7 +576,7 @@ export class Store {
     const now = Date.now(), season = this.seasonState(u.id);
     // no full-screen ads: with the season pass, until the season ends
     const adFreeUntil = u.ad_free_until ?? 0;   // only the no-ads plan (199 EGP a month) removes ads; the season pass doesn't
-    return { ...toPublic(u), adFreeUntil, titles: this.titlesOf(u.id, now), title: this.wornTitle(u.id, now), chest: this.chestState(u.id, now), tutorial: !!u.tutorial, prayerPush: u.prayer_push !== 0, gov: u.gov || null, leagues: this.leaguesOf(u.id, now), wheel: this.wheelState(u, now), xp: u.xp ?? 0, level: levelOf(u.xp ?? 0), streak: u.streak ?? 0, daily: this.dailyState(u), code: this.friendCode(u.id), ratings: this.ratingsOf(u.id),
+    return { ...toPublic(u), adFreeUntil, titles: this.titlesOf(u.id, now), title: this.wornTitle(u.id, now), chest: this.chestState(u.id, now), tutorial: !!u.tutorial, prayerPush: u.prayer_push !== 0, gov: u.gov || null, ludoColor: u.ludo_color ?? -1, leagues: this.leaguesOf(u.id, now), wheel: this.wheelState(u, now), xp: u.xp ?? 0, level: levelOf(u.xp ?? 0), streak: u.streak ?? 0, daily: this.dailyState(u), code: this.friendCode(u.id), ratings: this.ratingsOf(u.id),
       adsLeft: Math.max(0, ECONOMY.adsPerDay - this.adsToday(u.id)), skins: this.skinsOf(u.id),
       skinAds: this.skinAdsOf(u.id), skinAdsLeft: Math.max(0, ECONOMY.skinAdsPerDay - this.skinAdsToday(u.id)),
       missions: this.missions(u.id), missionsAt: nextCairoDay(now), season,

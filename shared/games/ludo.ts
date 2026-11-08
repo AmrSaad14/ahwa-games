@@ -28,6 +28,24 @@ export interface LudoState {
   finished: number[];      // seats in the order they got all pawns home
 }
 
+/** The colours for the seats with the players' choices (-1 none), in seat order: a choice is kept when it's
+ *  still free; two players always sit opposite each other, so the second takes the colour across from the first. */
+export function chooseColors(players: number, prefs: number[]): number[] {
+  const ok = (c: number | undefined): c is number => typeof c === 'number' && c >= 0 && c <= 3;
+  if (players === 2) {
+    const first = ok(prefs[0]) ? 0 : ok(prefs[1]) ? 1 : -1;
+    if (first < 0) return [0, 2];
+    const c = prefs[first];
+    return first === 0 ? [c, (c + 2) % 4] : [(c + 2) % 4, c];
+  }
+  const colors: number[] = new Array(players).fill(-1);
+  const used = new Set<number>();
+  for (let s = 0; s < players; s++) if (ok(prefs[s]) && !used.has(prefs[s])) { colors[s] = prefs[s]; used.add(prefs[s]); }
+  const free = [0, 1, 2, 3].filter(c => !used.has(c));
+  for (let s = 0; s < players; s++) if (colors[s] < 0) colors[s] = free.shift()!;
+  return colors;
+}
+
 export function newLudo(players: number, variant: LudoVariant = 'classic'): LudoState {
   const colors = players === 2 ? [0, 2] : players === 3 ? [0, 1, 2] : [0, 1, 2, 3];
   const start = variant === 'quick' ? [0, -1, -1, -1] : [-1, -1, -1, -1];

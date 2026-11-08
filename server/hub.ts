@@ -757,6 +757,12 @@ export class Hub {
         if (['guide_start', 'guide_skip', 'shop_open', 'season_open', 'groups_open'].includes(name)) this.store.track(uid, name);
         return;
       }
+      case 'setLudoColor': {
+        const c = Number(m.color);
+        if (!Number.isInteger(c) || c < -1 || c > 3) return err('bad_color');
+        this.store.setLudoColor(uid, c);
+        return this.sendUser(uid);
+      }
       case 'setGov': {
         if (!isGov(m.gov)) return err('bad_gov');
         this.store.setGov(uid, m.gov);
@@ -1032,7 +1038,8 @@ export class Hub {
     const u = this.store.get(uid)!;
     const eq = parseEquip(u.equip), owned = this.store.skinsOf(uid);
     return { uid, name: u.name, ch: u.ch, photo: u.photo ?? null, bot: false, rating: this.store.ratingOf(uid, game),
-      hat: skinFor('hat', eq, owned), drink: skinFor('drink', eq, owned), muted: (u.muted_until ?? 0) > Date.now(), title: this.store.wornTitle(uid) ?? undefined, win: skinFor('win', eq, owned) };
+      hat: skinFor('hat', eq, owned), drink: skinFor('drink', eq, owned), muted: (u.muted_until ?? 0) > Date.now(), title: this.store.wornTitle(uid) ?? undefined, win: skinFor('win', eq, owned),
+      ludoColor: typeof u.ludo_color === 'number' && u.ludo_color >= 0 ? u.ludo_color : undefined };
   }
 
   /** Computer players in matchmade games and the tournament get people's names and a rating near the table's. */

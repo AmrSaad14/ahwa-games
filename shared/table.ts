@@ -7,7 +7,7 @@ import {
 import type { Action, Emote, LastAction, MatchResult, RoundResult, TableView } from './protocol';
 import { EMOTES } from './protocol';
 
-export interface Player { uid: string; name: string; ch: number; photo?: string | null; bot: boolean; rating: number; hat?: string; drink?: string; served?: string; muted?: boolean; title?: string; win?: string }
+export interface Player { uid: string; name: string; ch: number; photo?: string | null; bot: boolean; rating: number; hat?: string; drink?: string; served?: string; muted?: boolean; title?: string; win?: string; ludoColor?: number }
 interface Seat extends Player { online: boolean; away: boolean; timeouts: number; lastEmote: number; mic?: boolean; offAt?: number }
 /** A computer player's name and looks when it fills a seat (matchmaking gives them people's names). */
 export type BotMaker = (seat: number, usedCh: number[]) => { name: string; ch: number; rating: number };

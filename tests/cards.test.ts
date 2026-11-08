@@ -181,3 +181,38 @@ test('dominoes: nobody is dealt 6 or more tiles of the same number', async () =>
   assert.ok(crowdedHand(six.slice(0, 6)));
   assert.ok(!crowdedHand(six.slice(0, 5)));
 });
+
+test('ludo: players choose their colours (two sit opposite; a colour taken goes to the next free one)', async () => {
+  const { chooseColors } = await import('../shared/games/ludo');
+  assert.deepEqual(chooseColors(2, [-1, -1]), [0, 2]);
+  assert.deepEqual(chooseColors(2, [3, -1]), [3, 1]);
+  assert.deepEqual(chooseColors(2, [-1, 1]), [3, 1]);
+  assert.deepEqual(chooseColors(2, [2, 0]), [2, 0]);
+  assert.deepEqual(chooseColors(4, [2, 2, -1, 0]), [2, 1, 3, 0]);
+  assert.deepEqual(chooseColors(3, [-1, 3, -1]), [0, 3, 1]);
+});
+
+test('ludo on the server: the colour you chose is yours at the table', async () => {
+  const { createServer } = await import('../server/index');
+  const { config } = await import('../server/config');
+  const WebSocket = (await import('ws')).default;
+  const app = createServer({ ...config, port: 0, host: '127.0.0.1', dbPath: ':memory:', staticDir: '/nonexistent', botFillMs: 300, msgsPer5s: 10000, botDelay: [1, 2],
+    guestsOnline: true, login: { ...config.login, sms: 'console' } } as typeof config);
+  const port = await app.listen();
+  try {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    const msgs: any[] = []; ws.on('message', d => msgs.push(JSON.parse(d.toString())));
+    await new Promise<void>(r => ws.once('open', () => r()));
+    const until = async (fn: () => boolean) => { const end = Date.now() + 20000; while (!fn()) { if (Date.now() > end) throw new Error('timeout'); await new Promise(r => setTimeout(r, 20)); } };
+    ws.send(JSON.stringify({ t: 'hello' }));
+    await until(() => msgs.some(m => m.t === 'welcome'));
+    ws.send(JSON.stringify({ t: 'setLudoColor', color: 1 }));
+    await until(() => msgs.some(m => m.t === 'user' && m.user.ludoColor === 1));
+    ws.send(JSON.stringify({ t: 'practice', mode: 'ludo2' }));
+    const v = async () => { await until(() => msgs.some(m => m.t === 'table' && m.view.ludo)); return [...msgs].reverse().find(m => m.t === 'table' && m.view.ludo).view; };
+    const view = await v();
+    assert.equal(view.ludo.colors[view.ludo.you], 1);
+    assert.equal(view.ludo.colors[1 - view.ludo.you], 3);
+    ws.close();
+  } finally { await app.close(); }
+});
