@@ -425,7 +425,7 @@ export class Hub {
         // a team game: the friend is invited to be your partner (the seat across from you is kept for them)
         if (isTeamMode(room.mode) && room.n === 4) { const mine = room.seatOf(uid); if (mine >= 0) room.reserve(id, (mine + 2) % 4); }
         const me = this.store.get(uid)!;
-        const msg: S2C = { t: 'invited', from: { id: uid, name: me.name, ch: me.ch }, code: room.code!, mode: room.mode, stake: room.stake };
+        const msg: S2C = { t: 'invited', from: { id: uid, name: me.name, ch: me.ch, photo: me.photo ?? null }, code: room.code!, mode: room.mode, stake: room.stake };
         if (to) return to.conn.send(msg);
         this.pendingInvites.set(id, { msg, code: room.code!, from: uid, at: Date.now() });
         const g = GAME_NAMES[gameOf(room.mode)] ?? { ar: '', en: 'game' };
@@ -747,7 +747,7 @@ export class Hub {
         for (const o of members) {
           if (o === uid) continue;
           const to = this.byUser.get(o); if (!to) continue;
-          to.conn.send({ t: 'invited', from: { id: uid, name: me.name, ch: me.ch }, code: room.code!, mode: room.mode, stake: 0, group: g.name });
+          to.conn.send({ t: 'invited', from: { id: uid, name: me.name, ch: me.ch, photo: me.photo ?? null }, code: room.code!, mode: room.mode, stake: 0, group: g.name });
           n++;
         }
         this.opts.push?.(members.filter(o => o !== uid && !this.byUser.has(o)), [g.name + ' ☕', `${me.name} فاتح ترابيزة للشلة، تعالى العب`], [g.name + ' ☕', `${me.name} opened a table for the group: come and play`]);

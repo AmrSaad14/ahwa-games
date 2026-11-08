@@ -567,7 +567,7 @@ export class Store {
     const mine = meId ? this.db.prepare('SELECT rating, games, wins FROM ratings WHERE user_id = ? AND game = ?').get(meId, game) as { rating: number; games: number; wins: number } | undefined : undefined;
     if (u && mine && mine.games >= 3) {
       const above = this.db.prepare('SELECT COUNT(*) AS c FROM ratings WHERE game = ? AND games >= 3 AND rating > ?').get(game, mine.rating) as { c: number };
-      me = { rank: Number(above.c) + 1, name: u.name, ch: u.ch, rating: mine.rating, games: mine.games, wins: mine.wins, me: true };
+      me = { rank: Number(above.c) + 1, name: u.name, ch: u.ch, photo: u.photo ?? null, rating: mine.rating, games: mine.games, wins: mine.wins, me: true };
     }
     return { rows: out, me };
   }

@@ -307,7 +307,7 @@ export type S2C =
   | { t: 'welcome'; user: PublicUser; token: string; now: number; ice: IceServer[]; guestsOnline?: boolean; login?: { google: boolean; apple?: boolean; phone: boolean; playGames?: string } }
   | { t: 'friends'; rows: FriendRow[] }
   | { t: 'friendNews'; kind: 'request' | 'accepted' | 'added' | 'sent'; name: string }
-  | { t: 'invited'; from: { id: string; name: string; ch: number }; code: string; mode: Mode; stake: number; group?: string }
+  | { t: 'invited'; from: { id: string; name: string; ch: number; photo?: string | null }; code: string; mode: Mode; stake: number; group?: string }
   | { t: 'otp'; phone: string }
   | { t: 'signedIn'; via: 'phone' | 'google' | 'playgames' | 'apple'; fresh: boolean }
   | { t: 'bonus'; coins: number; streak?: number }
