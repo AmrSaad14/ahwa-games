@@ -317,7 +317,7 @@ public class ChessBoard : Board
             float x = s.z, y = s.y + 0.31f, z = -s.x;
             float front = Mathf.Clamp01((z + 0.05f) / 0.45f), top = Mathf.Clamp01((y - 1.05f) / 0.3f);
             x *= (1 - 0.5f * front) * (1 - 0.35f * top);
-            vs[i] = new Vector3(x, y, z);
+            vs[i] = new Vector3(-z, y, x);   // then a quarter turn, so from your chair you see the horse side on
         }
         m.vertices = vs;   // (x, y, z) → (z, y, −x) is a turn, not a mirror: the triangles still face out
         m.RecalculateNormals(); m.RecalculateBounds();
