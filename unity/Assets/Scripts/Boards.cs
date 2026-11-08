@@ -172,23 +172,6 @@ public class ChessBoard : Board
             }
         // the piece you picked stands up off the board
         if (sel >= 0 && bySq.TryGetValue(sel, out var picked)) { picked.transform.localPosition += Vector3.up * 0.16f; picked.AddComponent<Bob>(); }
-        // the pieces taken so far, lined up beside the board: each side's catch on its own right
-        var taken = c.Arr("captured");
-        if (taken != null)
-        {
-            int nw = 0, nb = 0;
-            var list = new List<string>(); foreach (var o in taken) if (o is string t0) list.Add(t0);
-            list.Sort((a, b) => Worth(b).CompareTo(Worth(a)));
-            float side = S * 4 + FrameW + 0.42f;
-            foreach (var t in list)
-            {
-                bool whiteLost = t == t.ToUpperInvariant();      // a white piece taken: black's catch, on black's right
-                int n = whiteLost ? nb++ : nw++;
-                var g = Piece(t, pieces);
-                g.transform.localScale = Vector3.one * PS * 0.5f;
-                g.transform.localPosition = whiteLost ? new Vector3(-side - (n / 8) * 0.42f, 0.0f, S * 3.6f - (n % 8) * 0.5f) : new Vector3(side + (n / 8) * 0.42f, 0.0f, -S * 3.6f + (n % 8) * 0.5f);
-            }
-        }
         // the move just made slides in (a knight jumps); anything it took tips over and goes
         if (v.last != null && v.last.k != lastK)
         {
@@ -220,7 +203,7 @@ public class ChessBoard : Board
         if (board != null) { prevBoard = new string[64]; for (int sq = 0; sq < 64 && sq < board.Count; sq++) prevBoard[sq] = board[sq] as string; }
     }
 
-    static int Worth(string p) { switch (p.ToLowerInvariant()) { case "q": return 9; case "r": return 5; case "b": return 3; case "n": return 3; default: return 1; } }
+    public static int Worth(string p) { switch (p.ToLowerInvariant()) { case "q": return 9; case "r": return 5; case "b": return 3; case "n": return 3; default: return 1; } }
 
     static readonly Vector2[] Base = { V(0, 0), V(0.36f, 0), V(0.385f, 0.015f), V(0.385f, 0.055f), V(0.365f, 0.075f), V(0.335f, 0.09f), V(0.345f, 0.115f), V(0.33f, 0.135f), V(0.28f, 0.16f) };
     static Vector2 V(float r, float y) => new Vector2(r, y);

@@ -5,6 +5,7 @@
 // The server checks every move; it also plays a forced pass by itself.
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class BoardGame : MonoBehaviour
 {
@@ -27,6 +28,7 @@ public class BoardGame : MonoBehaviour
     public void Show(bool on)
     {
         if (promoPanel != null) { Destroy(promoPanel); promoPanel = null; }
+        if (!on && takenCanvas != null) takenCanvas.SetActive(false);
         if (!on && board != null) { Destroy(board.root); board = null; }
         view = null; sel = -1000; targets.Clear();
     }
@@ -42,6 +44,7 @@ public class BoardGame : MonoBehaviour
         view = v;
         if (turnChanged) Validate();
         board.Render(v, sel, targets, Movable());
+        Taken(v);
         // a move was just made: a sound, and the player's hand goes out to where it landed
         if (v.last != null && v.last.k != lastK)
         {
@@ -230,6 +233,60 @@ public class BoardGame : MonoBehaviour
         app.game.Render(view, -1, null);   // the hint under the board changes with the selection
     }
 
+    /* ---------- chess: the pieces each side has taken, down the sides of the screen ---------- */
+    GameObject takenCanvas;
+    RectTransform takenMine, takenTheirs;
+    Text advMine, advTheirs;
+    string takenKey;
+    public static Texture2D PieceIcon(string p) => Resources.Load<Texture2D>("UI/Chess/" + (p == p.ToUpperInvariant() ? "w_" : "b_") + p.ToLowerInvariant());
+
+    void Taken(TableView v)
+    {
+        var c = v.game == "chess" ? v.chess : null;
+        if (c == null) { if (takenCanvas != null) takenCanvas.SetActive(false); return; }
+        if (takenCanvas == null)
+        {
+            var cv = Ui.MakeCanvas("ChessTaken", 14);
+            takenCanvas = cv.gameObject;
+            var root = Ui.Rect("Root", cv.transform).Safe();
+            RectTransform Column(string name, bool right, out Text adv)
+            {
+                var bg = Ui.Box(root, name, new Color(0.1f, 0.06f, 0.04f, 0.55f));
+                var rt = bg.rectTransform.Place(new Vector2(right ? 1 : 0, 0.5f), new Vector2(right ? 1 : 0, 0.5f), new Vector2(64, 214), new Vector2(right ? -10 : 10, -78));
+                adv = Ui.Label(rt, "", 13, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Bold);
+                adv.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(64, 20), new Vector2(0, -2));
+                return rt;
+            }
+            takenMine = Column("Mine", true, out advMine);      // what you took, on your right
+            takenTheirs = Column("Theirs", false, out advTheirs); // what they took, on the left
+        }
+        takenCanvas.SetActive(true);
+        bool white = c.Str("you") != "b";
+        var mine = new List<string>(); var theirs = new List<string>();
+        foreach (var o in c.Arr("captured") ?? new List<object>())
+            if (o is string p && p.Length > 0) { bool whitePiece = p == p.ToUpperInvariant(); if (whitePiece != white) mine.Add(p); else theirs.Add(p); }
+        string key = string.Join("", mine) + "|" + string.Join("", theirs) + "|" + white;
+        if (key == takenKey) return;
+        takenKey = key;
+        int Sum(List<string> l) { int t = 0; foreach (var p in l) t += ChessBoard.Worth(p); return t; }
+        int lead = Sum(mine) - Sum(theirs);
+        void FillCol(RectTransform col, List<string> list, Text adv, int ahead)
+        {
+            for (int i = col.childCount - 1; i >= 0; i--) if (col.GetChild(i) != adv.transform) Destroy(col.GetChild(i).gameObject);
+            list.Sort((a, b) => ChessBoard.Worth(b).CompareTo(ChessBoard.Worth(a)));
+            adv.Set(ahead > 0 ? "+" + ahead : "");
+            for (int i = 0; i < list.Count; i++)
+            {
+                var img = Ui.Picture(col, "Piece", PieceIcon(list[i])).rectTransform;
+                img.anchorMin = img.anchorMax = new Vector2(0.5f, 1); img.sizeDelta = new Vector2(26, 26);
+                img.anchoredPosition = new Vector2((i % 2 == 0 ? -14 : 14), -34 - (i / 2) * 24);
+            }
+            col.gameObject.SetActive(true);
+        }
+        FillCol(takenMine, mine, advMine, lead);
+        FillCol(takenTheirs, theirs, advTheirs, -lead);
+    }
+
     /// A pawn reaching the last rank: what it becomes (a queen, unless you choose otherwise).
     GameObject promoPanel;
     void AskPromotion(Dictionary<string, object> move)
@@ -242,16 +299,19 @@ public class BoardGame : MonoBehaviour
         box.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(380, 130), Vector2.zero);
         Ui.Label(box.rectTransform, "العسكري وصل! يبقى إيه؟", 16, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(360, 30), new Vector2(0, -6));
         bool white = view.chess?.Str("you") != "b";
-        var opts = new[] { ("q", white ? "♕" : "♛", "وزير"), ("r", white ? "♖" : "♜", "طابية"), ("b", white ? "♗" : "♝", "فيل"), ("n", white ? "♘" : "♞", "حصان") };
+        var opts = new[] { ("q", "وزير"), ("r", "طابية"), ("b", "فيل"), ("n", "حصان") };
         for (int i = 0; i < opts.Length; i++)
         {
-            var (code, sym, name) = opts[i];
-            var b = Ui.Button(box.rectTransform, sym + "\n" + name, i == 0 ? Ui.Gold : new Color(0.98f, 0.94f, 0.86f), Ui.Ink, 15, () =>
+            var (code, name) = opts[i];
+            var b = Ui.Button(box.rectTransform, "", i == 0 ? Ui.Gold : new Color(0.98f, 0.94f, 0.86f), Ui.Ink, 13, () =>
             {
                 move["promo"] = code; Sfx.Tap(); Act(move);
                 Destroy(promoPanel); promoPanel = null;
             });
             ((RectTransform)b.transform).Place(new Vector2(0, 0), new Vector2(0, 0), new Vector2(80, 76), new Vector2(12 + i * 90, 10));
+            var pic = Ui.Picture(b.transform, "Piece", PieceIcon(white ? code.ToUpperInvariant() : code)).rectTransform;
+            pic.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(50, 50), new Vector2(0, -2));
+            Ui.Label(b.transform, name, 13, Ui.Ink, TextAnchor.LowerCenter, Ui.Bold).rectTransform.Fill(3);
         }
     }
 
