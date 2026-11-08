@@ -240,6 +240,7 @@ public partial class Menus : MonoBehaviour
                 Sfx.Coins(); Sfx.Buzz();
                 break;
             case "lb":
+                if (m.Str("game") == "coins" && m.Str("period") != lbPeriod) break;   // an answer for the other period, overtaken
                 lbRows = m.Arr("rows") ?? new List<object>(); lbMe = m.Obj("me");
                 if (m.Str("game") == "week") lbEndsAt = m.Num("endsAt");
                 lbMonth = m.Obj("month");
@@ -1175,26 +1176,47 @@ public partial class Menus : MonoBehaviour
 
     /* ---------- the leaderboard ---------- */
 
-    static readonly string[] GameIds = { "domino", "tawla", "chess", "ludo", "basra", "tarneeb", "konkan", "week", "league", "gov" };
+    static readonly string[] GameIds = { "coins", "domino", "tawla", "chess", "ludo", "basra", "tarneeb", "konkan", "week", "league", "gov" };
     static readonly long[] WeeklyPrizes = { 1_000_000, 500_000, 300_000, 200_000, 150_000, 100_000, 75_000, 50_000, 40_000, 30_000 };
     double lbEndsAt;
     Dictionary<string, object> lbMonth;   // this month's race for the game's "player of the month" title
 
+    string lbPeriod = "all";   // the whole game's board: all time, or this month
     public void OpenLeaders(int tab)
     {
         lbTab = tab; lbGame = GameIds[tab]; lbRows = null; lbMe = null; lbMonth = null;
         if (lbGame == "gov") { govData = null; app.Send(new Dictionary<string, object> { ["t"] = "govBoard" }); }
+        else if (lbGame == "coins") app.Send(new Dictionary<string, object> { ["t"] = "lb", ["game"] = "coins", ["period"] = lbPeriod });
         else if (lbGame != "league") { app.Send(new Dictionary<string, object> { ["t"] = "lb", ["game"] = lbGame }); StartCoroutine(AskAgain(lbGame)); }
         Panel(Loc.T("المتصدرين"), out var body, new Vector2(600, 340));
         refreshOpen = () =>
         {
             foreach (Transform c in body) Destroy(c.gameObject);
-            var area = Tabs(body, new[] { "دومينو", "طاولة", "شطرنج", "لودو", "بصرة", "طرنيب", "كونكان", "الأسبوع", "الدوري", "المحافظات" }, lbTab, i => { Close(); OpenLeaders(i); });
+            var area = Tabs(body, new[] { "الأكثر كسبًا", "دومينو", "طاولة", "شطرنج", "لودو", "بصرة", "طرنيب", "كونكان", "الأسبوع", "الدوري", "المحافظات" }, lbTab, i => { Close(); OpenLeaders(i); });
             if (lbGame == "league") { DrawLeagues(area); return; }
             if (lbGame == "gov") { DrawGovs(area); return; }
-            bool week = lbGame == "week";
+            bool week = lbGame == "week", coins = lbGame == "coins";
             float top = 0;
-            if (week)
+            if (coins)
+            {
+                // the whole game: who won the most coins, all the games together — all time, or this month
+                var info = Ui.Label(area, Loc.T("أكتر لاعيبة كسبوا كوينز في كل الألعاب"), 12, Ui.Gold, StartAlign, Ui.Bold);
+                At(info.rectTransform, 10, 330, 24); info.rectTransform.anchoredPosition = new Vector2(info.rectTransform.anchoredPosition.x, -12);
+                for (int k = 0; k < 2; k++)
+                {
+                    string per = k == 0 ? "all" : "month";
+                    var b = Ui.Button(area, k == 0 ? "كل الوقت" : "الشهر ده", lbPeriod == per ? Ui.Gold : Ui.Panel, lbPeriod == per ? Ui.Ink : Ui.GoldLight, 12, () =>
+                    {
+                        if (lbPeriod == per) return;
+                        Sfx.Tap(); lbPeriod = per; lbRows = null; lbMe = null;
+                        app.Send(new Dictionary<string, object> { ["t"] = "lb", ["game"] = "coins", ["period"] = per });
+                        refreshOpen?.Invoke();
+                    });
+                    ((RectTransform)b.transform).Place(new Vector2(Loc.En ? 1 : 0, 1), new Vector2(Loc.En ? 1 : 0, 1), new Vector2(90, 24), new Vector2((Loc.En ? -1 : 1) * (10 + (1 - k) * 96), 0));
+                }
+                top = 28;
+            }
+            else if (week)
             {
                 // the weekly prizes, and how long is left
                 double left = lbEndsAt > 0 ? lbEndsAt - App.LocalMs() : 0;
@@ -1221,7 +1243,7 @@ public partial class Menus : MonoBehaviour
             }
             // the column heads
             var head = Ui.Rect("Head", area).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(560, 22), new Vector2(0, -top));
-            LbCells(head, Loc.T("الترتيب"), "", Loc.T(week ? "نقط" : "التقييم"), Loc.T(week ? "الجايزة" : "مكسب"), new Color(1, 1, 1, 0.5f), 12);
+            LbCells(head, Loc.T("الترتيب"), "", Loc.T(coins ? "الكوينز" : week ? "نقط" : "التقييم"), Loc.T(week ? "الجايزة" : "مكسب"), new Color(1, 1, 1, 0.5f), 12);
             var listArea = Ui.Rect("List", area); listArea.anchorMin = Vector2.zero; listArea.anchorMax = Vector2.one; listArea.offsetMin = new Vector2(0, lbMe != null ? 40 : 0); listArea.offsetMax = new Vector2(0, -24 - top);
             if (lbRows == null || lbRows.Count == 0)
             {
@@ -1237,7 +1259,8 @@ public partial class Menus : MonoBehaviour
                 var row = Row(list, 32, me ? new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.22f) : Card);
                 string lvl = r.Num("level") > 0 ? "  ·  " + Loc.T("مستوى") + " " + (int)r.Num("level") : "";
                 string last = week ? (rank <= WeeklyPrizes.Length ? Loc.Short(WeeklyPrizes[rank - 1]) : "—") : ((int)r.Num("wins")).ToString();
-                var nameCell = LbCells(row, rank.ToString(), r.Str("name") + lvl, ((int)r.Num("rating")).ToString(), last, rank == 1 ? Ui.Gold : Color.white, 14, true);
+                string score = coins ? Loc.Short((long)r.Num("rating")) : ((int)r.Num("rating")).ToString();
+                var nameCell = LbCells(row, rank.ToString(), r.Str("name") + lvl, score, last, rank == 1 ? Ui.Gold : Color.white, 14, true);
                 Avatar(row, (int)r.Num("ch"), r.Str("photo"), 58, 28);
                 // their title, after the name
                 var tb = Titles.Badge(row, r.Str("title"), 9);
@@ -1251,7 +1274,7 @@ public partial class Menus : MonoBehaviour
                 var mine = Ui.Box(area, "Me", new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.25f)).rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(560, 34), Vector2.zero);
                 int myRank = (int)lbMe.Num("rank");
                 string myLast = week ? (myRank <= WeeklyPrizes.Length ? Loc.Short(WeeklyPrizes[myRank - 1]) : "—") : ((int)lbMe.Num("wins")).ToString();
-                LbCells(mine, myRank.ToString(), Loc.T("مركزك") + " · " + lbMe.Str("name"), ((int)lbMe.Num("rating")).ToString(), myLast, Ui.Gold, 14, true);
+                LbCells(mine, myRank.ToString(), Loc.T("مركزك") + " · " + lbMe.Str("name"), coins ? Loc.Short((long)lbMe.Num("rating")) : ((int)lbMe.Num("rating")).ToString(), myLast, Ui.Gold, 14, true);
                 Avatar(mine, (int)lbMe.Num("ch"), user?.Str("photo"), 58, 28);
             }
         };
