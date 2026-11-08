@@ -213,7 +213,7 @@ public class ChessBoard : Board
     static Vector2 V(float r, float y) => new Vector2(r, y);
     static Vector2[] With(params Vector2[] rest) { var l = new List<Vector2>(Base); l.AddRange(rest); return l.ToArray(); }
     /// A ball on the axis: radius r, centre at height y (closed at the bottom so it sits on what's under it).
-    static Mesh Ball(float r, float y, int seg = 24)
+    public static Mesh Ball(float r, float y, int seg = 24)
     {
         var pr = new List<Vector2> { V(0, y - r) };
         for (int a = -80; a <= 90; a += 10) pr.Add(V(Mathf.Cos(a * Mathf.Deg2Rad) * r, y + Mathf.Sin(a * Mathf.Deg2Rad) * r));
@@ -326,7 +326,7 @@ public class ChessBoard : Board
 
     /// A copy of a mesh pushed out along its normals and turned inside out: drawn behind the piece, only its rim
     /// shows, as an outline.
-    static Mesh Shell(Mesh src, float d)
+    public static Mesh Shell(Mesh src, float d)
     {
         var m = new Mesh();
         var vs = src.vertices; var ns = src.normals;
@@ -588,8 +588,9 @@ public class LudoBoard : Board
     static readonly Vector2[] BaseSpots = { new Vector2(1.5f, 1.5f), new Vector2(3.5f, 1.5f), new Vector2(1.5f, 3.5f), new Vector2(3.5f, 3.5f) };
     static List<Vector2Int> path;
     static Vector2Int[][] homeCol;
-    static Mesh pawnMesh;
+    static Mesh pawnMesh, pawnHead, pawnBand, pawnEdge, headEdge;
     static Material[] pawnMats;
+    static Material pawnWhite, pawnOutline;
     readonly List<(GameObject go, int i)> movableNow = new List<(GameObject, int)>();
     static Material shadowMat;
     float rolledAt = -10;
@@ -761,9 +762,18 @@ public class LudoBoard : Board
         Clear(pieces); Clear(marks); movableNow.Clear();
         if (pawnMesh == null)
         {
-            pawnMesh = Art.Lathe(new[] { new Vector2(0, 0), new Vector2(0.25f, 0), new Vector2(0.265f, 0.02f), new Vector2(0.26f, 0.05f), new Vector2(0.2f, 0.09f), new Vector2(0.14f, 0.16f), new Vector2(0.105f, 0.26f), new Vector2(0.1f, 0.32f), new Vector2(0.16f, 0.34f), new Vector2(0.165f, 0.365f), new Vector2(0.1f, 0.38f), new Vector2(0.09f, 0.4f), new Vector2(0.13f, 0.43f), new Vector2(0.15f, 0.49f), new Vector2(0.13f, 0.56f), new Vector2(0.07f, 0.6f), new Vector2(0, 0.61f) }, 36);
+            // the pawn: a broad flared foot, a cone, a collar with a white band, a big ball head, in glossy
+            // plastic with a dark outline, so each one reads at a glance from the chair
+            pawnMesh = Art.Lathe(new[] { new Vector2(0, 0), new Vector2(0.27f, 0), new Vector2(0.285f, 0.02f), new Vector2(0.28f, 0.06f), new Vector2(0.24f, 0.085f), new Vector2(0.2f, 0.1f), new Vector2(0.17f, 0.16f), new Vector2(0.14f, 0.26f), new Vector2(0.115f, 0.36f), new Vector2(0.1f, 0.42f), new Vector2(0.17f, 0.44f), new Vector2(0.18f, 0.47f), new Vector2(0.11f, 0.5f), new Vector2(0, 0.5f) }, 40);
+            pawnHead = ChessBoard.Ball(0.16f, 0.61f, 28);
+            var ring = new List<Vector2>();
+            for (int a = 0; a <= 360; a += 30) ring.Add(new Vector2(0.172f + Mathf.Cos(a * Mathf.Deg2Rad) * 0.022f, 0.455f + Mathf.Sin(a * Mathf.Deg2Rad) * 0.022f));
+            pawnBand = Art.Lathe(ring.ToArray(), 40);
+            pawnEdge = ChessBoard.Shell(pawnMesh, 0.02f); headEdge = ChessBoard.Shell(pawnHead, 0.02f);
             pawnMats = new Material[4];
-            for (int c = 0; c < 4; c++) pawnMats[c] = Art.Mat(Colors[c], 0.85f, 0.05f);
+            for (int c = 0; c < 4; c++) pawnMats[c] = Art.Mat(Colors[c], 0.82f, 0.05f);
+            pawnWhite = Art.Mat(Art.Hex("#fbf6ea"), 0.7f);
+            pawnOutline = new Material(TileArt.Clear) { color = Art.Hex("#1a120c") }; pawnOutline.renderQueue = 2450;
         }
         bool newMove = v.last != null && v.last.k != lastK;
         // a pawn just moved: it walks the squares; anyone it knocked off goes home once it gets there
@@ -808,8 +818,12 @@ public class LudoBoard : Board
                 bySpot.TryGetValue(key, out int k); bySpot[key] = k + 1;
                 if (k > 0 && pawns[seat][i] != -1) pos += new Vector3((k % 2 == 1 ? 1 : -1) * 0.14f, 0, k > 1 ? 0.14f : -0.14f);
                 var g = Art.Obj("Pawn", pieces, pawnMesh, pawnMats[colors[seat]]);
+                Art.Obj("Head", g.transform, pawnHead, pawnMats[colors[seat]]);
+                Art.Obj("Band", g.transform, pawnBand, pawnWhite, false);
+                Art.Obj("Edge", g.transform, pawnEdge, pawnOutline, false);
+                Art.Obj("HeadEdge", g.transform, headEdge, pawnOutline, false);
                 g.transform.localPosition = pos;
-                g.transform.localScale = Vector3.one * 1.12f;
+                g.transform.localScale = Vector3.one * 1.25f;
                 // a soft shadow under it, so it reads against the card
                 var sh = Art.Obj("Shadow", g.transform, Art.Disc(0.27f), shadowMat ??= Art.Glow(new Color(0, 0, 0, 0.28f)), false);
                 sh.transform.localPosition = Vector3.up * 0.003f;
