@@ -66,10 +66,10 @@ public abstract class Board
 public class ChessBoard : Board
 {
     public const float S = 1.15f;                       // one square
-    const float FrameW = 0.55f, PS = 0.98f;              // frame width, piece scale
+    const float FrameW = 0.55f, PS = 1.1f;              // frame width, piece scale
     static Material whiteMat, blackMat, felt;
     static string pieceSkin;
-    static readonly Dictionary<string, Mesh[]> meshes = new Dictionary<string, Mesh[]>();
+    static readonly Dictionary<string, (Mesh mesh, bool accent)[]> meshes = new Dictionary<string, (Mesh, bool)[]>();
     readonly Dictionary<int, GameObject> bySq = new Dictionary<int, GameObject>();
     string[] prevBoard;
 
@@ -205,43 +205,75 @@ public class ChessBoard : Board
 
     public static int Worth(string p) { switch (p.ToLowerInvariant()) { case "q": return 9; case "r": return 5; case "b": return 3; case "n": return 3; default: return 1; } }
 
-    static readonly Vector2[] Base = { V(0, 0), V(0.36f, 0), V(0.385f, 0.015f), V(0.385f, 0.055f), V(0.365f, 0.075f), V(0.335f, 0.09f), V(0.345f, 0.115f), V(0.33f, 0.135f), V(0.28f, 0.16f) };
+    // The pieces, drawn to read at a glance from the chair like the pictures on the screens: a broad base, a
+    // clear outline round each piece (dark round the light ones, gold round the dark), and big, simple tops —
+    // the pawn's ball, the rook's battlements, the bishop's mitre with its notch, the queen's crown of balls,
+    // the king's cross, the horse's head.
+    static readonly Vector2[] Base = { V(0, 0), V(0.4f, 0), V(0.42f, 0.02f), V(0.42f, 0.07f), V(0.39f, 0.095f), V(0.35f, 0.11f), V(0.36f, 0.14f), V(0.33f, 0.165f), V(0.27f, 0.19f) };
     static Vector2 V(float r, float y) => new Vector2(r, y);
     static Vector2[] With(params Vector2[] rest) { var l = new List<Vector2>(Base); l.AddRange(rest); return l.ToArray(); }
-
-    static Mesh[] MeshesFor(string t)
+    /// A ball on the axis: radius r, centre at height y (closed at the bottom so it sits on what's under it).
+    static Mesh Ball(float r, float y, int seg = 24)
     {
-        if (meshes.TryGetValue(t, out var m)) return m;
-        var list = new List<Mesh>();
+        var pr = new List<Vector2> { V(0, y - r) };
+        for (int a = -80; a <= 90; a += 10) pr.Add(V(Mathf.Cos(a * Mathf.Deg2Rad) * r, y + Mathf.Sin(a * Mathf.Deg2Rad) * r));
+        pr[pr.Count - 1] = V(0, y + r);
+        return Art.Lathe(pr.ToArray(), seg);
+    }
+    static Mesh Block(Vector3 at, Vector3 size, float turn = 0)
+    {
+        var m = new Mesh();
+        m.CombineMeshes(new[] { new CombineInstance { mesh = Art.Prim(PrimitiveType.Cube), transform = Matrix4x4.TRS(at, Quaternion.Euler(0, turn, 0), size) } }, true, true);
+        m.RecalculateBounds();
+        return m;
+    }
+
+    /// The parts of a piece; an accent part is in the outline's colour (the bishop's notch).
+    static (Mesh mesh, bool accent)[] MeshesFor(string t)
+    {
+        if (meshes.TryGetValue(t, out var cached)) return cached;
+        var list = new List<(Mesh, bool)>();
         switch (t)
         {
-            case "p": list.Add(Art.Lathe(With(V(0.22f, 0.2f), V(0.15f, 0.3f), V(0.12f, 0.38f), V(0.2f, 0.41f), V(0.21f, 0.435f), V(0.11f, 0.46f), V(0.1f, 0.48f), V(0.15f, 0.51f), V(0.175f, 0.58f), V(0.15f, 0.66f), V(0.08f, 0.7f), V(0, 0.71f)))); break;
+            case "p":
+                list.Add((Art.Lathe(With(V(0.24f, 0.22f), V(0.17f, 0.3f), V(0.12f, 0.38f), V(0.21f, 0.41f), V(0.22f, 0.44f), V(0.12f, 0.47f), V(0.11f, 0.5f), V(0, 0.5f))), false));
+                list.Add((Ball(0.18f, 0.64f), false)); break;
             case "r":
-                list.Add(Art.Lathe(With(V(0.27f, 0.22f), V(0.25f, 0.4f), V(0.235f, 0.58f), V(0.25f, 0.64f), V(0.3f, 0.68f), V(0.3f, 0.71f), V(0.27f, 0.73f), V(0.29f, 0.76f), V(0.3f, 0.88f), V(0.22f, 0.88f), V(0.21f, 0.84f), V(0, 0.84f))));
-                list.Add(Crenels()); break;
+                list.Add((Art.Lathe(With(V(0.29f, 0.22f), V(0.26f, 0.32f), V(0.24f, 0.62f), V(0.27f, 0.66f), V(0.33f, 0.7f), V(0.33f, 0.84f), V(0.24f, 0.84f), V(0.23f, 0.79f), V(0, 0.79f))), false));
+                list.Add((Crenels(), false)); break;
             case "n":
-                list.Add(Art.Lathe(With(V(0.27f, 0.22f), V(0.25f, 0.27f), V(0.3f, 0.3f), V(0.3f, 0.33f), V(0, 0.33f))));
-                list.Add(KnightHead()); break;
-            case "b": list.Add(Art.Lathe(With(V(0.24f, 0.22f), V(0.17f, 0.36f), V(0.13f, 0.52f), V(0.12f, 0.6f), V(0.21f, 0.63f), V(0.22f, 0.66f), V(0.12f, 0.69f), V(0.11f, 0.71f), V(0.16f, 0.76f), V(0.19f, 0.86f), V(0.165f, 0.97f), V(0.1f, 1.04f), V(0.05f, 1.08f), V(0.06f, 1.1f), V(0.07f, 1.14f), V(0.04f, 1.18f), V(0, 1.19f)))); break;
+                list.Add((Art.Lathe(With(V(0.3f, 0.22f), V(0.28f, 0.27f), V(0.33f, 0.3f), V(0.33f, 0.34f), V(0, 0.34f))), false));
+                list.Add((KnightHead(), false)); break;
+            case "b":
+                list.Add((Art.Lathe(With(V(0.26f, 0.22f), V(0.18f, 0.34f), V(0.13f, 0.5f), V(0.12f, 0.6f), V(0.23f, 0.63f), V(0.24f, 0.67f), V(0.13f, 0.7f),
+                    V(0.17f, 0.74f), V(0.215f, 0.82f), V(0.22f, 0.9f), V(0.2f, 0.98f), V(0.15f, 1.06f), V(0.08f, 1.12f), V(0, 1.14f))), false));
+                list.Add((Ball(0.075f, 1.19f), false));
+                // the mitre's notch: a dark cut across the front
+                list.Add((Block(new Vector3(0, 0.95f, 0.13f), new Vector3(0.05f, 0.2f, 0.16f), 0), true)); break;
             case "q":
-                list.Add(Art.Lathe(With(V(0.27f, 0.22f), V(0.19f, 0.38f), V(0.14f, 0.58f), V(0.13f, 0.72f), V(0.23f, 0.75f), V(0.24f, 0.78f), V(0.14f, 0.81f), V(0.14f, 0.84f), V(0.2f, 0.9f), V(0.27f, 1.0f), V(0.25f, 1.02f), V(0.14f, 1.03f), V(0.12f, 1.08f), V(0.06f, 1.12f), V(0, 1.13f))));
-                list.Add(Art.Lathe(new[] { V(0, 1.11f), V(0.05f, 1.12f), V(0.07f, 1.18f), V(0.05f, 1.24f), V(0, 1.25f) }, 16)); break;
+                list.Add((Art.Lathe(With(V(0.29f, 0.22f), V(0.2f, 0.38f), V(0.15f, 0.58f), V(0.14f, 0.72f), V(0.25f, 0.75f), V(0.26f, 0.79f), V(0.15f, 0.82f),
+                    V(0.16f, 0.86f), V(0.24f, 0.96f), V(0.3f, 1.04f), V(0.27f, 1.06f), V(0.17f, 1.08f), V(0.16f, 1.13f), V(0.08f, 1.17f), V(0, 1.18f))), false));
+                for (int i = 0; i < 9; i++) { float a = i * 40f * Mathf.Deg2Rad; var b = Ball(0.06f, 0, 12); var mm = new Mesh(); mm.CombineMeshes(new[] { new CombineInstance { mesh = b, transform = Matrix4x4.Translate(new Vector3(Mathf.Cos(a) * 0.27f, 1.08f, Mathf.Sin(a) * 0.27f)) } }, true, true); list.Add((mm, false)); }
+                list.Add((Ball(0.085f, 1.25f), false)); break;
             default:   // king
-                list.Add(Art.Lathe(With(V(0.28f, 0.22f), V(0.2f, 0.38f), V(0.15f, 0.6f), V(0.14f, 0.76f), V(0.24f, 0.79f), V(0.25f, 0.82f), V(0.15f, 0.85f), V(0.15f, 0.88f), V(0.22f, 0.96f), V(0.25f, 1.03f), V(0.2f, 1.06f), V(0.13f, 1.09f), V(0.09f, 1.13f), V(0, 1.14f))));
-                list.Add(Cross()); break;
+                list.Add((Art.Lathe(With(V(0.3f, 0.22f), V(0.21f, 0.38f), V(0.16f, 0.6f), V(0.15f, 0.76f), V(0.26f, 0.79f), V(0.27f, 0.83f), V(0.16f, 0.86f),
+                    V(0.17f, 0.9f), V(0.25f, 0.99f), V(0.28f, 1.07f), V(0.23f, 1.11f), V(0.14f, 1.14f), V(0.1f, 1.18f), V(0, 1.19f))), false));
+                list.Add((Cross(), false)); break;
         }
-        return meshes[t] = list.ToArray();
+        var arr = list.ToArray();
+        meshes[t] = arr;
+        return arr;
     }
 
     static Mesh Crenels()
     {
-        // six blocks round the top of the rook
+        // four big battlements round the top of the rook, gaps between them
         var combine = new List<CombineInstance>();
         var cube = Art.Prim(PrimitiveType.Cube);
-        for (int i = 0; i < 6; i++)
+        for (int i = 0; i < 4; i++)
         {
-            float a = i * 60f + 30f;
-            var mtx = Matrix4x4.TRS(Quaternion.Euler(0, a, 0) * new Vector3(0.26f, 0.925f, 0), Quaternion.Euler(0, a, 0), new Vector3(0.09f, 0.09f, 0.13f));
+            float a = i * 90f + 45f;
+            var mtx = Matrix4x4.TRS(Quaternion.Euler(0, a, 0) * new Vector3(0.255f, 0.9f, 0), Quaternion.Euler(0, a, 0), new Vector3(0.12f, 0.14f, 0.22f));
             combine.Add(new CombineInstance { mesh = cube, transform = mtx });
         }
         var m = new Mesh(); m.CombineMeshes(combine.ToArray(), true, true); m.RecalculateBounds();
@@ -254,8 +286,8 @@ public class ChessBoard : Board
         var m = new Mesh();
         m.CombineMeshes(new[]
         {
-            new CombineInstance { mesh = cube, transform = Matrix4x4.TRS(new Vector3(0, 1.27f, 0), Quaternion.identity, new Vector3(0.075f, 0.28f, 0.075f)) },
-            new CombineInstance { mesh = cube, transform = Matrix4x4.TRS(new Vector3(0, 1.3f, 0), Quaternion.identity, new Vector3(0.22f, 0.075f, 0.075f)) },
+            new CombineInstance { mesh = cube, transform = Matrix4x4.TRS(new Vector3(0, 1.33f, 0), Quaternion.identity, new Vector3(0.1f, 0.34f, 0.1f)) },
+            new CombineInstance { mesh = cube, transform = Matrix4x4.TRS(new Vector3(0, 1.37f, 0), Quaternion.identity, new Vector3(0.3f, 0.1f, 0.1f)) },
         }, true, true);
         return m;
     }
@@ -276,7 +308,7 @@ public class ChessBoard : Board
         var pts = new List<Vector2>();
         foreach (var p in o) if (pts.Count == 0 || (pts[pts.Count - 1] - p).sqrMagnitude > 1e-5f) pts.Add(p);
         if ((pts[0] - pts[pts.Count - 1]).sqrMagnitude < 1e-5f) pts.RemoveAt(pts.Count - 1);
-        var m = Art.Extrude(pts, 0.26f);
+        var m = Art.Extrude(pts, 0.3f);
         // turn it so the muzzle (shape -x) faces +z, the thickness runs along x; then carve it narrower to the front and top
         var vs = m.vertices;
         for (int i = 0; i < vs.Length; i++)
@@ -292,6 +324,22 @@ public class ChessBoard : Board
         return m;
     }
 
+    /// A copy of a mesh pushed out along its normals and turned inside out: drawn behind the piece, only its rim
+    /// shows, as an outline.
+    static Mesh Shell(Mesh src, float d)
+    {
+        var m = new Mesh();
+        var vs = src.vertices; var ns = src.normals;
+        for (int i = 0; i < vs.Length; i++) vs[i] += (i < ns.Length ? ns[i] : Vector3.zero) * d;
+        m.vertices = vs;
+        var tr = src.triangles;
+        for (int i = 0; i < tr.Length; i += 3) { int x = tr[i + 1]; tr[i + 1] = tr[i + 2]; tr[i + 2] = x; }
+        m.triangles = tr; m.RecalculateNormals(); m.RecalculateBounds();
+        return m;
+    }
+    static readonly Dictionary<Mesh, Mesh> shells = new Dictionary<Mesh, Mesh>();
+    static Material edgeLight, edgeDark, accentLight, accentDark;
+
     public static GameObject Piece(string p, Transform parent)
     {
         bool white = p == p.ToUpperInvariant();
@@ -302,11 +350,20 @@ public class ChessBoard : Board
             var (w, b) = Skins.Pieces(skin);
             whiteMat = Skins.Mat(skin + ":w", w, 1); blackMat = Skins.Mat(skin + ":b", b, 2);
             felt = Art.Mat(Art.Hex("#1f4a2c"), 0.05f);
+            // the outlines: dark brown round the light pieces, gold round the dark ones
+            Material Edge(Color c) { var m = new Material(TileArt.Clear) { color = c }; m.renderQueue = 2450; return m; }
+            edgeLight = Edge(Art.Hex("#2a1a10")); edgeDark = Edge(Art.Hex("#d9b46a"));
+            accentLight = Art.Mat(Art.Hex("#3a2a20"), 0.3f); accentDark = Art.Mat(Art.Hex("#d9b46a"), 0.6f, 0.6f);
         }
         var g = new GameObject("Piece " + p); g.transform.SetParent(parent, false);
-        var ms = MeshesFor(p.ToLowerInvariant());
-        for (int i = 0; i < ms.Length; i++) Art.Obj("Part", g.transform, ms[i], white ? whiteMat : blackMat);
-        var baize = Art.Obj("Felt", g.transform, Art.Disc(0.35f), felt, false); baize.transform.localPosition = Vector3.up * 0.002f; baize.transform.localRotation = Quaternion.Euler(180, 0, 0);
+        foreach (var (mesh, accent) in MeshesFor(p.ToLowerInvariant()))
+        {
+            Art.Obj("Part", g.transform, mesh, accent ? (white ? accentLight : accentDark) : white ? whiteMat : blackMat);
+            if (accent) continue;
+            if (!shells.TryGetValue(mesh, out var sh)) shells[mesh] = sh = Shell(mesh, 0.022f);
+            Art.Obj("Edge", g.transform, sh, white ? edgeLight : edgeDark, false);
+        }
+        var baize = Art.Obj("Felt", g.transform, Art.Disc(0.38f), felt, false); baize.transform.localPosition = Vector3.up * 0.002f; baize.transform.localRotation = Quaternion.Euler(180, 0, 0);
         g.transform.localScale = Vector3.one * PS;
         if (!white) g.transform.localRotation = Quaternion.Euler(0, 180, 0);   // knights face the other side
         return g;
