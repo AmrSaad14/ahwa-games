@@ -98,7 +98,7 @@ public class Person : MonoBehaviour
         var g = Instantiate(prefab, new Vector3(at.x, FloorY, at.z), Quaternion.identity);
         g.name = name;
         g.transform.localScale = Vector3.one * Scale;
-        foreach (var r in g.GetComponentsInChildren<SkinnedMeshRenderer>(true)) { r.updateWhenOffscreen = true; r.quality = SkinQuality.Bone4; }
+        foreach (var r in g.GetComponentsInChildren<SkinnedMeshRenderer>(true)) { r.updateWhenOffscreen = true; r.quality = SkinQuality.Auto; }   // follows the level (two bones on cheaper phones)
         return g.AddComponent<Person>();
     }
 

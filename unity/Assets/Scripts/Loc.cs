@@ -304,5 +304,11 @@ public static class Loc
         ["آخر كل شهر: الأول"] = "End of each month: 1st",
         ["التالت"] = "3rd",
         ["في الأكثر كسبًا الشهر اللي فات"] = "in last month's top earners",
+        ["الرسوم"] = "Graphics",
+        ["تلقائي"] = "Auto",
+        ["موفّرة"] = "Saver",
+        ["متوسطة"] = "Medium",
+        ["عالية"] = "High",
+        ["الرسوم العالية ممكن تبقى تقيلة على موبايلك"] = "High graphics may be heavy for your phone",
 };
 }

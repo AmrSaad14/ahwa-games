@@ -79,6 +79,7 @@ public class Cafe : MonoBehaviour
 
         yield return null;
         SettleProps(room.transform);
+        Batch(room.transform);
         Lights();
         yield return null;
         foreach (var _ in People(room.transform)) yield return null;
@@ -86,6 +87,7 @@ public class Cafe : MonoBehaviour
         camPos = camPosTo = Overview(out camLook); camLookTo = camLook;
         Apply();
         ready = true;
+        if (probeRes > 0) Reflections(probeRes);
     }
 
     /// Each table's game (its board, or the domino tiles) sits in the middle of that table's top, resting on it.
@@ -113,6 +115,67 @@ public class Cafe : MonoBehaviour
             board.position += move;
             Debug.Log($"[cafe] {g}: board moved by {move}");
         }
+    }
+
+    /// The room never moves: its pieces are drawn together in a few big batches instead of one by one (much less
+    /// work for the phone each frame). The model chair is left out (it's copied for the big table), and so is any
+    /// mesh the importer kept unreadable.
+    void Batch(Transform room)
+    {
+        var gos = new List<GameObject>();
+        foreach (var mf in room.GetComponentsInChildren<MeshFilter>(true))
+        {
+            if (mf.sharedMesh == null || !mf.sharedMesh.isReadable) continue;
+            if (chairModel != null && mf.transform.IsChildOf(chairModel)) continue;
+            if (mf.GetComponent<MeshRenderer>() == null) continue;
+            gos.Add(mf.gameObject);
+        }
+        if (gos.Count > 1)
+        {
+            try { StaticBatchingUtility.Combine(gos.ToArray(), room.gameObject); Debug.Log($"[cafe] {gos.Count} pieces batched"); }
+            catch (System.Exception e) { Debug.LogWarning("[cafe] batching: " + e.Message); }
+        }
+        // a light's cost is counted per object it touches: the lamps light only what's under them
+        roomBounds = default; bool any = false;
+        foreach (var r in room.GetComponentsInChildren<Renderer>()) { if (!any) { roomBounds = r.bounds; any = true; } else roomBounds.Encapsulate(r.bounds); }
+    }
+    Bounds roomBounds;
+
+    ReflectionProbe probe;
+    int probeRes = -1;
+    /// The café reflected in the glossy things (pieces, tiles, glasses): one picture of the room taken once (and
+    /// again when the big table comes in), at the resolution the phone's level allows; none on the cheapest.
+    public void Reflections(int res)
+    {
+        if (!ready && res > 0) { probeRes = res; return; }
+        probeRes = res;
+        if (res <= 0)
+        {
+            if (probe != null) probe.enabled = false;
+            RenderSettings.reflectionIntensity = 0.35f;   // no café picture: keep the default sky's reflection faint
+            return;
+        }
+        RenderSettings.reflectionIntensity = 1f;
+        if (probe == null)
+        {
+            probe = new GameObject("Café reflections").AddComponent<ReflectionProbe>();
+            probe.mode = UnityEngine.Rendering.ReflectionProbeMode.Realtime;
+            probe.refreshMode = UnityEngine.Rendering.ReflectionProbeRefreshMode.ViaScripting;
+            probe.timeSlicingMode = UnityEngine.Rendering.ReflectionProbeTimeSlicingMode.IndividualFaces;   // spread over a few frames: no hitch
+            probe.boxProjection = true;
+            probe.hdr = false;
+            probe.shadowDistance = 0;
+            probe.clearFlags = UnityEngine.Rendering.ReflectionProbeClearFlags.SolidColor;
+            probe.backgroundColor = new Color(0.12f, 0.08f, 0.05f);
+            probe.importance = 1;
+        }
+        probe.enabled = true;
+        var b = roomBounds.size == Vector3.zero ? new Bounds(center, Vector3.one * 80) : roomBounds;
+        probe.transform.position = center + Vector3.up * 4f;
+        probe.size = b.size + Vector3.one * 2f;
+        probe.center = b.center - probe.transform.position;
+        probe.resolution = res;
+        probe.RenderProbe();
     }
 
     void Lights()
@@ -290,6 +353,7 @@ public class Cafe : MonoBehaviour
         Crowd();
         GameLight(on); ResetZoom();
         if (on) camPosTo = GameShot(out camLookTo); else Focus(focus);
+        if (probe != null && probe.enabled) probe.RenderProbe();   // the room changed (the big table in, or out)
     }
 
     // ---------- the light while a game is on: even, neutral, from above, with no glare ----------
@@ -490,6 +554,9 @@ public class Cafe : MonoBehaviour
         var jolt = sh > 0 ? new Vector3(Mathf.Sin(Time.time * 61f), Mathf.Sin(Time.time * 47f + 1f), 0) * sh * 0.5f : Vector3.zero;
         cam.transform.position = camPos + sway + jolt;
         cam.transform.LookAt(camLook + jolt * 0.5f);
+        // shadows only as far as the camera looks (plus a margin): the one shadow map stays sharp where it matters
+        float sd = Vector3.Distance(camPos, camLook) + 28f;
+        if (Mathf.Abs(sd - QualitySettings.shadowDistance) > 3f) QualitySettings.shadowDistance = sd;
     }
 
     float shakeUntil;

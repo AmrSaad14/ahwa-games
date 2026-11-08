@@ -71,6 +71,8 @@ public class ChessBoard : Board
     static string pieceSkin;
     static readonly Dictionary<string, (Mesh mesh, bool accent)[]> meshes = new Dictionary<string, (Mesh, bool)[]>();
     readonly Dictionary<int, GameObject> bySq = new Dictionary<int, GameObject>();
+    readonly Dictionary<int, (string p, GameObject go)> kept = new Dictionary<int, (string, GameObject)>();
+    string keptSkin;
     string[] prevBoard;
 
     public ChessBoard(Transform parent) : base("chess", parent)
@@ -146,19 +148,31 @@ public class ChessBoard : Board
         bool black = c.Str("you") == "b";
         spin.localRotation = Quaternion.Euler(0, black ? 180 : 0, 0);
         Coords(black);
-        Clear(pieces); Clear(marks); bySq.Clear();
+        Clear(marks);
         var board = c.Arr("board");
         var last = c.Obj("last");
         int lastFrom = last != null ? (int)last.Num("from") : -1, lastTo = last != null ? (int)last.Num("to") : -1;
-        if (board != null)
-            for (int sq = 0; sq < board.Count && sq < 64; sq++)
+        // the pieces are kept from one drawing to the next: only the ones that changed square are made again
+        // (each piece is a dozen parts with their outlines; making all 32 on every update was the costly part)
+        string skin = Skins.Worn("pieces");
+        if (skin != keptSkin) { foreach (var kv in kept) if (kv.Value.go != null) Object.Destroy(kv.Value.go); kept.Clear(); keptSkin = skin; }
+        bySq.Clear();
+        for (int sq = 0; sq < 64; sq++)
+        {
+            var p = board != null && sq < board.Count ? board[sq] as string : null;
+            kept.TryGetValue(sq, out var k);
+            if (string.IsNullOrEmpty(p)) { if (k.go != null) Object.Destroy(k.go); kept.Remove(sq); continue; }
+            if (k.go != null && k.p == p)
             {
-                var p = board[sq] as string;
-                if (string.IsNullOrEmpty(p)) continue;
-                var g = Piece(p, pieces);
-                g.transform.localPosition = Pos(sq);
-                bySq[sq] = g;
+                var bob = k.go.GetComponent<Bob>(); if (bob != null) Object.DestroyImmediate(bob);
+                if (k.go.GetComponent<Hop>() == null) k.go.transform.localPosition = Pos(sq);
+                bySq[sq] = k.go; continue;
             }
+            if (k.go != null) Object.Destroy(k.go);
+            var g = Piece(p, pieces);
+            g.transform.localPosition = Pos(sq);
+            kept[sq] = (p, g); bySq[sq] = g;
+        }
         if (lastFrom >= 0) { Mark(QuadUp, new Color(0.95f, 0.76f, 0.3f, 0.35f), Pos(lastFrom) + Vector3.up * 0.006f, S); Mark(QuadUp, new Color(0.95f, 0.76f, 0.3f, 0.45f), Pos(lastTo) + Vector3.up * 0.006f, S); }
         int check = (int)c.Num("check", -1);
         if (check >= 0) Mark(QuadUp, new Color(0.83f, 0.23f, 0.17f, 0.6f), Pos(check) + Vector3.up * 0.007f, S);
@@ -171,7 +185,7 @@ public class ChessBoard : Board
                 else Mark(Art.Disc(0.17f), new Color(0.12f, 0.43f, 0.39f, 0.8f), Pos(t) + Vector3.up * 0.01f);
             }
         // the piece you picked stands up off the board
-        if (sel >= 0 && bySq.TryGetValue(sel, out var picked)) { picked.transform.localPosition += Vector3.up * 0.16f; picked.AddComponent<Bob>(); }
+        if (sel >= 0 && bySq.TryGetValue(sel, out var picked) && picked.GetComponent<Hop>() == null) { picked.transform.localPosition = Pos(sel) + Vector3.up * 0.16f; picked.AddComponent<Bob>(); }
         // the move just made slides in (a knight jumps); anything it took tips over and goes
         if (v.last != null && v.last.k != lastK)
         {
@@ -253,7 +267,12 @@ public class ChessBoard : Board
             case "q":
                 list.Add((Art.Lathe(With(V(0.29f, 0.22f), V(0.2f, 0.38f), V(0.15f, 0.58f), V(0.14f, 0.72f), V(0.25f, 0.75f), V(0.26f, 0.79f), V(0.15f, 0.82f),
                     V(0.16f, 0.86f), V(0.24f, 0.96f), V(0.3f, 1.04f), V(0.27f, 1.06f), V(0.17f, 1.08f), V(0.16f, 1.13f), V(0.08f, 1.17f), V(0, 1.18f))), false));
-                for (int i = 0; i < 9; i++) { float a = i * 40f * Mathf.Deg2Rad; var b = Ball(0.06f, 0, 12); var mm = new Mesh(); mm.CombineMeshes(new[] { new CombineInstance { mesh = b, transform = Matrix4x4.Translate(new Vector3(Mathf.Cos(a) * 0.27f, 1.08f, Mathf.Sin(a) * 0.27f)) } }, true, true); list.Add((mm, false)); }
+                {
+                    // the crown's nine balls as one mesh (one draw, one outline)
+                    var b = Ball(0.06f, 0, 12); var ci = new CombineInstance[9];
+                    for (int i = 0; i < 9; i++) { float a = i * 40f * Mathf.Deg2Rad; ci[i] = new CombineInstance { mesh = b, transform = Matrix4x4.Translate(new Vector3(Mathf.Cos(a) * 0.27f, 1.08f, Mathf.Sin(a) * 0.27f)) }; }
+                    var mm = new Mesh(); mm.CombineMeshes(ci, true, true); mm.RecalculateBounds(); list.Add((mm, false));
+                }
                 list.Add((Ball(0.085f, 1.25f), false)); break;
             default:   // king
                 list.Add((Art.Lathe(With(V(0.3f, 0.22f), V(0.21f, 0.38f), V(0.16f, 0.6f), V(0.15f, 0.76f), V(0.26f, 0.79f), V(0.27f, 0.83f), V(0.16f, 0.86f),
@@ -359,7 +378,7 @@ public class ChessBoard : Board
         foreach (var (mesh, accent) in MeshesFor(p.ToLowerInvariant()))
         {
             Art.Obj("Part", g.transform, mesh, accent ? (white ? accentLight : accentDark) : white ? whiteMat : blackMat);
-            if (accent) continue;
+            if (accent || Perf.Level < Perf.Balanced2) continue;   // the outlines: a second drawing of each part, kept for phones that can afford it
             if (!shells.TryGetValue(mesh, out var sh)) shells[mesh] = sh = Shell(mesh, 0.022f);
             Art.Obj("Edge", g.transform, sh, white ? edgeLight : edgeDark, false);
         }
@@ -393,7 +412,7 @@ public class TawlaBoard : Board
         Color field0 = L.field[0], field1 = L.field[1], field2 = L.field[2];
         Color ptA0 = L.ptA[0], ptA1 = L.ptA[1], ptA2 = L.ptA[2];
         Color ptB0 = L.ptB[0], ptB1 = L.ptB[1], ptB2 = L.ptB[2];
-        const int W = 1024, H = 688;
+        int W = Mathf.RoundToInt(1024 * Perf.PaintScale), H = Mathf.RoundToInt(688 * Perf.PaintScale);
         var tex = Art.Paint(W, H, (px, py) =>
         {
             float x = (px + 0.5f) / W * TW - TW / 2;              // board x
@@ -593,7 +612,9 @@ public class LudoBoard : Board
     static Material pawnWhite, pawnOutline;
     readonly List<(GameObject go, int i)> movableNow = new List<(GameObject, int)>();
     static Material shadowMat;
+    static Mesh shadowDisc;
     float rolledAt = -10;
+    readonly Dictionary<string, (GameObject go, int color)> pawnGo = new Dictionary<string, (GameObject, int)>();
     GameObject die;
 
     static List<Vector2Int> Path
@@ -639,7 +660,9 @@ public class LudoBoard : Board
         Color track = Art.Hex("#f7f1e3"), line = Art.Hex("#3a2a20"), star = Art.Hex("#b9a68a");
         for (int i = 0; i < path.Count; i++) { int st = System.Array.IndexOf(COLOR_OFFSET, i); cellOf[path[i]] = st >= 0 ? Colors[st] : track; }
         for (int c = 0; c < 4; c++) foreach (var h in homeCol[c]) cellOf[h] = Colors[c];
-        const int PX = 1050; float cpx = PX / 15f;
+        int PX = Mathf.RoundToInt(1050 * Perf.PaintScale / 15f) * 15; float cpx = PX / 15f;   // finer on good phones
+        var pathIndex = new Dictionary<Vector2Int, int>();
+        for (int i = 0; i < path.Count; i++) pathIndex[path[i]] = i;
         var tex = Art.Paint(PX, PX, (px, py) =>
         {
             float gx = (px + 0.5f) / cpx, gy = (PX - 1 - py + 0.5f) / cpx;   // grid coordinates, row 0 at the top (far side)
@@ -672,8 +695,7 @@ public class LudoBoard : Board
                 c = cc;
                 float fx = gx - cx, fy = gy - cy;
                 if (fx < 0.03f || fy < 0.03f || fx > 0.97f || fy > 0.97f) c = line;
-                int idx = path.IndexOf(new Vector2Int(cx, cy));
-                if (idx >= 0 && Stars.Contains(idx) && Star(fx - 0.5f, fy - 0.5f, 0.32f)) c = star;
+                if (pathIndex.TryGetValue(new Vector2Int(cx, cy), out int idx) && Stars.Contains(idx) && Star(fx - 0.5f, fy - 0.5f, 0.32f)) c = star;
             }
             return c * (0.97f + Mathf.PerlinNoise(px * 0.15f, py * 0.15f) * 0.05f);
         });
@@ -759,7 +781,9 @@ public class LudoBoard : Board
         int you = (int)s.Num("you", -1), turn = (int)s.Num("turn", -1);
         int myColor = you >= 0 && you < colors.Count ? colors[you] : 3;
         spin.localRotation = Quaternion.Euler(0, -90 * new[] { 1, 2, 3, 0 }[myColor], 0);   // your base at the bottom-left
-        Clear(pieces); Clear(marks); movableNow.Clear();
+        Clear(marks); movableNow.Clear();
+        if (die != null) { Object.Destroy(die); die = null; }
+        var seen = new HashSet<string>();
         if (pawnMesh == null)
         {
             // the pawn: a broad flared foot, a cone, a collar with a white band, a big ball head, in glossy
@@ -817,17 +841,26 @@ public class LudoBoard : Board
                 string key = Mathf.RoundToInt(pos.x * 10) + "," + Mathf.RoundToInt(pos.z * 10);
                 bySpot.TryGetValue(key, out int k); bySpot[key] = k + 1;
                 if (k > 0 && pawns[seat][i] != -1) pos += new Vector3((k % 2 == 1 ? 1 : -1) * 0.14f, 0, k > 1 ? 0.14f : -0.14f);
-                var g = Art.Obj("Pawn", pieces, pawnMesh, pawnMats[colors[seat]]);
-                Art.Obj("Head", g.transform, pawnHead, pawnMats[colors[seat]]);
-                Art.Obj("Band", g.transform, pawnBand, pawnWhite, false);
-                Art.Obj("Edge", g.transform, pawnEdge, pawnOutline, false);
-                Art.Obj("HeadEdge", g.transform, headEdge, pawnOutline, false);
-                g.transform.localPosition = pos;
-                g.transform.localScale = Vector3.one * 1.25f;
-                // a soft shadow under it, so it reads against the card
-                var sh = Art.Obj("Shadow", g.transform, Art.Disc(0.27f), shadowMat ??= Art.Glow(new Color(0, 0, 0, 0.28f)), false);
-                sh.transform.localPosition = Vector3.up * 0.003f;
+                // the pawns are kept from one drawing to the next (made once, moved after)
                 string id = seat + ":" + i;
+                seen.Add(id);
+                if (!pawnGo.TryGetValue(id, out var kept) || kept.go == null || kept.color != colors[seat])
+                {
+                    if (kept.go != null) Object.Destroy(kept.go);
+                    var ng = Art.Obj("Pawn", pieces, pawnMesh, pawnMats[colors[seat]]);
+                    Art.Obj("Head", ng.transform, pawnHead, pawnMats[colors[seat]]);
+                    Art.Obj("Band", ng.transform, pawnBand, pawnWhite, false);
+                    if (Perf.Level >= Perf.Balanced2) { Art.Obj("Edge", ng.transform, pawnEdge, pawnOutline, false); Art.Obj("HeadEdge", ng.transform, headEdge, pawnOutline, false); }
+                    ng.transform.localScale = Vector3.one * 1.25f;
+                    // a soft shadow under it, so it reads against the card
+                    var sh = Art.Obj("Shadow", ng.transform, shadowDisc ??= Art.Disc(0.27f), shadowMat ??= Art.Glow(new Color(0, 0, 0, 0.28f)), false);
+                    sh.transform.localPosition = Vector3.up * 0.003f;
+                    kept = (ng, colors[seat]); pawnGo[id] = kept;
+                }
+                var g = kept.go;
+                foreach (var old in g.GetComponents<HopPath>()) Object.DestroyImmediate(old);
+                foreach (var old in g.GetComponents<Bob>()) Object.DestroyImmediate(old);
+                g.transform.localPosition = pos;
                 bool walking = false;
                 if (walks.TryGetValue(id, out var wk))
                 {
@@ -857,6 +890,7 @@ public class LudoBoard : Board
                     }
                 }
             }
+        foreach (var key in new List<string>(pawnGo.Keys)) if (!seen.Contains(key)) { if (pawnGo[key].go != null) Object.Destroy(pawnGo[key].go); pawnGo.Remove(key); }
         die = null;
         bool showDie = s.TryGetValue("die", out var dv) && dv is double || (v.last != null && (v.last.t == "roll" || v.last.t == "pass"));
         if (showDie)

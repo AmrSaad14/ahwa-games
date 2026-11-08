@@ -495,7 +495,25 @@ public partial class Menus : MonoBehaviour
             Toggle(list, "الموسيقى", Music.On, v => { Music.On = v; app.game?.RefreshSound(); });
             Toggle(list, "أصوات القهوة", Music.CafeOn, v => { Music.CafeOn = v; app.game?.RefreshSound(); });
             Toggle(list, "الاهتزاز", Sfx.VibrateOn, v => { Sfx.VibrateOn = v; if (v) Sfx.Buzz(); });
-            Toggle(list, "توفير البطارية", Perf.Saver, v => { Perf.Saver = v; });
+            // the graphics: automatic (the phone decides and adjusts), or a level the player picks
+            var qr = Row(list, 44, Card);
+            At(Ui.Label(qr, "الرسوم", 16, Color.white, StartAlign, Ui.Bold).rectTransform, 14, 120, 40);
+            var qBtns = new List<Image>();
+            string[] qNames = { "تلقائي", "موفّرة", "متوسطة", "عالية" };
+            int[] qLevels = { -1, Perf.Saver1, Perf.Balanced2, Perf.High3 };
+            for (int qi = 0; qi < qNames.Length; qi++)
+            {
+                int lvl = qLevels[qi], idx = qi;
+                bool on = Perf.Chosen == lvl;
+                var qb = Ui.Button(qr, qNames[qi], on ? Ui.Gold : new Color(1, 1, 1, 0.08f), on ? Ui.Ink : Ui.GoldLight, 13, () =>
+                {
+                    Sfx.Tap(); Perf.Choose(lvl);
+                    for (int j = 0; j < qBtns.Count; j++) { qBtns[j].color = j == idx ? Ui.Gold : new Color(1, 1, 1, 0.08f); qBtns[j].GetComponentInChildren<Text>().color = j == idx ? Ui.Ink : Ui.GoldLight; }
+                    if (lvl == Perf.High3 && Perf.Detected < Perf.Balanced2) app.Toast(Loc.T("الرسوم العالية ممكن تبقى تقيلة على موبايلك"));
+                });
+                At((RectTransform)qb.transform, 140 + qi * 92, 86, 32);
+                qBtns.Add(qb.GetComponent<Image>());
+            }
             // the governorate you play for (the governorate leaderboard)
             var gr = Row(list, 44, Card);
             At(Ui.Label(gr, "محافظتك", 16, Color.white, StartAlign, Ui.Bold).rectTransform, 14, 160, 40);

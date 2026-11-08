@@ -22,7 +22,7 @@ public static class Art
     /// A Standard (physically based) material: colour or texture, how glossy, how metallic.
     public static Material Mat(Color c, float smooth = 0.5f, float metal = 0f, Texture tex = null)
     {
-        var m = new Material(Std) { color = c };
+        var m = new Material(Std) { color = c, enableInstancing = true };   // repeated pieces drawn together
         if (tex != null) m.mainTexture = tex;
         if (m.HasProperty("_Glossiness")) m.SetFloat("_Glossiness", smooth);
         if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", metal);
@@ -33,17 +33,21 @@ public static class Art
     /// See-through overlay (highlights, rings): unlit-looking, drawn over the board.
     public static Material Glow(Color c)
     {
-        var m = new Material(TileArt.Clear) { color = c };
+        // one per colour, shared: the marks are made again on every move, and a material isn't freed with its object
+        var key = (Color32)c; int k = key.r | key.g << 8 | key.b << 16 | key.a << 24;
+        if (glows.TryGetValue(k, out var m) && m != null) return m;
+        m = new Material(TileArt.Clear) { color = c, enableInstancing = true };
         m.renderQueue = 3100;
-        return m;
+        return glows[k] = m;
     }
+    static readonly System.Collections.Generic.Dictionary<int, Material> glows = new System.Collections.Generic.Dictionary<int, Material>();
 
     public static Texture2D Paint(int w, int h, Func<int, int, Color> f, bool mips = true)
     {
         var t = new Texture2D(w, h, TextureFormat.RGBA32, mips) { wrapMode = TextureWrapMode.Clamp, anisoLevel = 4 };
         var px = new Color[w * h];
         for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) px[y * w + x] = f(x, y);
-        t.SetPixels(px); t.Apply(mips);
+        t.SetPixels(px); t.Apply(mips, true);   // and the CPU copy is let go: half the memory
         return t;
     }
 
