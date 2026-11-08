@@ -367,6 +367,35 @@ export class Store {
     return { rows: out, me };
   }
 
+  /** The whole game's richest winners: coins won in games (every game together), all time or since a moment
+   *  (this month). `rating` carries the coins, `wins` the games won. Worked out at most once a minute. */
+  coinsBoard(meId: string | null, since = 0, limit = 50): { rows: LeaderRow[]; me: LeaderRow | null } {
+    const key = String(since);
+    let c = this.coinsCache.get(key);
+    if (!c || Date.now() - c.at > 60_000) {
+      const top = this.db.prepare(`SELECT c.user_id AS id, SUM(c.delta) AS coins, COUNT(*) AS wins FROM coin_log c JOIN users u ON u.id = c.user_id
+        WHERE c.kind = 'win' AND c.ts >= ? AND u.banned = 0 GROUP BY c.user_id ORDER BY coins DESC LIMIT ?`).all(since, limit) as { id: string; coins: number; wins: number }[];
+      c = { at: Date.now(), top };
+      this.coinsCache.set(key, c);
+    }
+    const rows: LeaderRow[] = [];
+    c.top.forEach((r, i) => {
+      const u = this.get(r.id); if (!u) return;
+      rows.push({ rank: i + 1, name: u.name, ch: u.ch, photo: u.photo ?? null, rating: Number(r.coins), games: 0, wins: Number(r.wins), me: r.id === meId, level: levelOf(u.xp ?? 0), pid: u.pid, title: this.wornTitle(r.id) });
+    });
+    let me: LeaderRow | null = null;
+    const u = meId ? this.get(meId) : undefined;
+    if (u) {
+      const mine = this.db.prepare("SELECT COALESCE(SUM(delta), 0) AS coins, COUNT(*) AS wins FROM coin_log WHERE user_id = ? AND kind = 'win' AND ts >= ?").get(u.id, since) as { coins: number; wins: number };
+      if (Number(mine.coins) > 0) {
+        const above = this.db.prepare(`SELECT COUNT(*) AS c FROM (SELECT user_id, SUM(delta) AS s FROM coin_log WHERE kind = 'win' AND ts >= ? GROUP BY user_id) WHERE s > ?`).get(since, mine.coins) as { c: number };
+        me = { rank: Number(above.c) + 1, name: u.name, ch: u.ch, photo: u.photo ?? null, rating: Number(mine.coins), games: 0, wins: Number(mine.wins), me: true, level: levelOf(u.xp ?? 0) };
+      }
+    }
+    return { rows, me };
+  }
+  private coinsCache = new Map<string, { at: number; top: { id: string; coins: number; wins: number }[] }>();
+
   /** Pays last week's top ten once (WEEKLY_PRIZES). Returns who got what. */
   payWeekly(week: string): { uid: string; rank: number; coins: number }[] {
     if (this.db.prepare("SELECT v FROM meta WHERE k = 'weekly_paid_' || ?").get(week)) return [];

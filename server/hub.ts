@@ -629,6 +629,13 @@ export class Hub {
         table.emote(uid, m.k); return;
       }
       case 'lb': {
+        if (m.game === 'coins') {
+          // the whole game: the most coins won in games, every game together (all time, or this month)
+          const month = m.period === 'month';
+          const d = new Date(); const since = month ? Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) : 0;
+          const lb = this.store.coinsBoard(uid, since);
+          return s.conn.send({ t: 'lb', game: 'coins', period: month ? 'month' : 'all', rows: lb.rows, me: lb.me });
+        }
         if (m.game === 'week') {
           const lb = this.store.weeklyBoard(uid);
           return s.conn.send({ t: 'lb', game: 'week', rows: lb.rows, me: lb.me, week: weekKey(), endsAt: weekEndsAt(), prizes: [...WEEKLY_PRIZES] });

@@ -260,7 +260,7 @@ export type C2S =
   | { t: 'start' }
   | { t: 'act'; a: Action | BoardAction }
   | { t: 'emote'; k: Emote }
-  | { t: 'lb'; game?: GameId | 'week' }
+  | { t: 'lb'; game?: GameId | 'week' | 'coins'; period?: 'all' | 'month' }   // coins: the whole game's biggest winners
   | { t: 'coins' }
   | { t: 'adStart'; skin?: string; wheel?: boolean; double?: boolean }   // skin: towards that skin; wheel: towards the next spin; double: the last match's winnings again
   | { t: 'adWatched'; ticket: string }
@@ -331,7 +331,7 @@ export type S2C =
   | { t: 'table'; view: AnyView }
   | { t: 'left' }
   | { t: 'emote'; seat: number; k: Emote }
-  | { t: 'lb'; game: GameId | 'week'; rows: LeaderRow[]; me: LeaderRow | null; week?: string; endsAt?: number; prizes?: number[];
+  | { t: 'lb'; game: GameId | 'week' | 'coins'; period?: 'all' | 'month'; rows: LeaderRow[]; me: LeaderRow | null; week?: string; endsAt?: number; prizes?: number[];
       /** this month's race for "<game> player of the month": the title, the leader, your place and points, when it ends */
       month?: { title: string; on: boolean; leader: string | null; leaderPoints: number; place: number; points: number; endsAt: number; minGames: number; holder: string | null } }
   | { t: 'titles'; list: TitleDef[] }

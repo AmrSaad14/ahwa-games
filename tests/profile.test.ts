@@ -57,3 +57,15 @@ test('governorates: the weekly board counts the best players, last week\'s winne
   assert.equal(s.govPrize(b.id, now), null, 'played too little');
   assert.equal(s.govPrize(c.id, now), null, 'another governorate');
 });
+
+test('the whole game leaderboard: most coins won in games, all games together', async () => {
+  const st = new Store(':memory:');
+  const a = st.createGuest('Aya', 0), b = st.createGuest('Bassem', 1), c = st.createGuest('Camal', 2);
+  st.logCoins(a.id, 'win', 500, { mode: 'ffa2' }); st.logCoins(a.id, 'win', 700, { mode: 'basra2' });
+  st.logCoins(b.id, 'win', 2000, { mode: 'chess' });
+  st.logCoins(c.id, 'loss', -900, { mode: 'tarneeb' });
+  const lb = st.coinsBoard(a.id);
+  assert.deepEqual(lb.rows.map(r => [r.name, r.rating, r.wins]), [['Bassem', 2000, 1], ['Aya', 1200, 2]]);
+  assert.equal(lb.me!.rank, 2); assert.equal(lb.me!.rating, 1200);
+  assert.equal(st.coinsBoard(c.id).me, null);
+});
