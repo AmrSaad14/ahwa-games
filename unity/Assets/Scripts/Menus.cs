@@ -452,6 +452,12 @@ public partial class Menus : MonoBehaviour
         return content;
     }
 
+    /// The ludo colour you like (-1 any): the account's, else what this phone remembers.
+    public static int LudoColor(Dictionary<string, object> user)
+    {
+        if (user != null && user.ContainsKey("ludoColor")) return (int)user.Num("ludoColor", -1);
+        return PlayerPrefs.GetInt("ludo.color", -1);
+    }
     static RectTransform Row(RectTransform list, float h, Color? bg = null)
     {
         var r = bg.HasValue ? Ui.Box(list, "Row", bg.Value).rectTransform : Ui.Rect("Row", list);
@@ -489,6 +495,26 @@ public partial class Menus : MonoBehaviour
             At(Ui.Label(gr, "محافظتك", 16, Color.white, StartAlign, Ui.Bold).rectTransform, 14, 160, 40);
             var gb = Ui.Button(gr, GovName(user?.Str("gov")) ?? Loc.T("اختار"), Ui.Panel, Ui.GoldLight, 14, () => { Sfx.Tap(); OpenGovPicker(); });
             ((RectTransform)gb.transform).Place(new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(170, 34), new Vector2(Loc.En ? -100 : 100, 0));
+            // your colour in ludo (kept on the server for online games, and on the phone for practice)
+            var lc = Row(list, 44, Card);
+            At(Ui.Label(lc, "لونك في اللودو", 16, Color.white, StartAlign, Ui.Bold).rectTransform, 14, 160, 40);
+            int cur = LudoColor(user);
+            var chips = new List<Image>();
+            for (int c = -1; c < 4; c++)
+            {
+                int col = c;
+                var b = Ui.Button(lc, c < 0 ? "أي" : "", c < 0 ? new Color(1, 1, 1, 0.1f) : LudoBoard.Colors[c], Ui.GoldLight, 12, () =>
+                {
+                    Sfx.Tap();
+                    PlayerPrefs.SetInt("ludo.color", col); PlayerPrefs.Save();
+                    if (user != null) user["ludoColor"] = (double)col;
+                    app.Send(new Dictionary<string, object> { ["t"] = "setLudoColor", ["color"] = col });
+                    for (int i = 0; i < chips.Count; i++) chips[i].GetComponent<Outline>().enabled = i == col + 1;
+                });
+                At((RectTransform)b.transform, 200 + (c + 1) * 46, 38, 32);
+                var ol = b.gameObject.AddComponent<Outline>(); ol.effectColor = Color.white; ol.effectDistance = new Vector2(3, 3); ol.enabled = c == cur;
+                chips.Add(b.GetComponent<Image>());
+            }
             // prayer-time notifications (Cairo times), kept on the server so they follow the account
             if (user != null && user.ContainsKey("prayerPush"))
                 Toggle(list, "تذكير بمواعيد الصلاة", user.Bool("prayerPush"), v => { user["prayerPush"] = v; app.Send(new Dictionary<string, object> { ["t"] = "prayerPush", ["on"] = v }); });

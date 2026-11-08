@@ -186,7 +186,22 @@ class LudoDef : BoardRules
 {
     readonly string variant; LudoState s;
     public LudoDef(string variant) { this.variant = variant; }
-    public override void NewGame(int players, int first, Random rnd) { s = LudoState.New(players, variant, first); }
+    public override void NewGame(int players, int first, Random rnd)
+    {
+        s = LudoState.New(players, variant, first);
+        // your colour, if you chose one (you're seat 0; two players sit opposite, the others take what's left)
+        int c = UnityEngine.PlayerPrefs.GetInt("ludo.color", -1);
+        if (c >= 0 && c <= 3)
+        {
+            if (players == 2) s.colors = new[] { c, (c + 2) % 4 };
+            else
+            {
+                var cols = new List<int> { c };
+                for (int k = 0; k < 4 && cols.Count < players; k++) if (k != c) cols.Add(k);
+                s.colors = cols.ToArray();
+            }
+        }
+    }
     public override int ToMove() => s.turn;
 
     public override string Act(int seat, Dictionary<string, object> a, Random rnd, out Dictionary<string, object> ev)
