@@ -299,5 +299,10 @@ public static class Loc
         ["أكتر لاعيبة كسبوا كوينز في كل الألعاب"] = "Most coins won, all games together",
         ["كل الوقت"] = "All time",
         ["الشهر ده"] = "This month",
+        ["الأول بيكسب"] = "First place wins",
+        ["كوين كل يوم اتنين"] = "coins every Monday",
+        ["آخر كل شهر: الأول"] = "End of each month: 1st",
+        ["التالت"] = "3rd",
+        ["في الأكثر كسبًا الشهر اللي فات"] = "in last month's top earners",
 };
 }

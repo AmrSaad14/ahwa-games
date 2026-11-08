@@ -234,6 +234,11 @@ public partial class Menus : MonoBehaviour
                 if (m.Bool("levelUp")) { app.Toast(Loc.T("مستوى جديد!") + "  " + Loc.T("مستوى") + " " + (int)m.Num("level")); Sfx.Coins(); }
                 else app.Toast("+" + (int)m.Num("gained") + " XP");
                 break;
+            case "monthlyPrize":
+                if (app.view == null) ShowCard(Loc.T("مبروك!"), Loc.T("جيت المركز") + " " + (int)m.Num("rank") + " " + Loc.T("في الأكثر كسبًا الشهر اللي فات") + "  ·  +" + Loc.Short((long)m.Num("coins")) + " " + Loc.T("كوين"), null, true);
+                else app.Toast(Loc.T("مبروك! جيت المركز") + " " + (int)m.Num("rank") + "  +" + Loc.Short((long)m.Num("coins")));
+                Sfx.Coins(); Sfx.Buzz();
+                break;
             case "weeklyPrize":
                 if (app.view == null) ShowCard(Loc.T("مبروك!"), Loc.T("جيت المركز") + " " + (int)m.Num("rank") + " " + Loc.T("في ترتيب الأسبوع") + "  ·  +" + Loc.Short((long)m.Num("coins")) + " " + Loc.T("كوين"), null, true);
                 else app.Toast(Loc.T("مبروك! جيت المركز") + " " + (int)m.Num("rank") + "  +" + Loc.Short((long)m.Num("coins")));
@@ -1177,7 +1182,8 @@ public partial class Menus : MonoBehaviour
     /* ---------- the leaderboard ---------- */
 
     static readonly string[] GameIds = { "coins", "domino", "tawla", "chess", "ludo", "basra", "tarneeb", "konkan", "week", "league", "gov" };
-    static readonly long[] WeeklyPrizes = { 1_000_000, 500_000, 300_000, 200_000, 150_000, 100_000, 75_000, 50_000, 40_000, 30_000 };
+    static readonly long[] WeeklyPrizes = { 1_000_000 };   // the week's first only
+    static readonly long[] MonthlyEarnerPrizes = { 3_000_000, 2_000_000, 1_000_000 };   // the top earners of the month
     double lbEndsAt;
     Dictionary<string, object> lbMonth;   // this month's race for the game's "player of the month" title
 
@@ -1200,7 +1206,7 @@ public partial class Menus : MonoBehaviour
             if (coins)
             {
                 // the whole game: who won the most coins, all the games together — all time, or this month
-                var info = Ui.Label(area, Loc.T("أكتر لاعيبة كسبوا كوينز في كل الألعاب"), 12, Ui.Gold, StartAlign, Ui.Bold);
+                var info = Ui.Label(area, Loc.T("آخر كل شهر: الأول") + " " + Loc.Short(MonthlyEarnerPrizes[0]) + "  ·  " + Loc.T("التاني") + " " + Loc.Short(MonthlyEarnerPrizes[1]) + "  ·  " + Loc.T("التالت") + " " + Loc.Short(MonthlyEarnerPrizes[2]) + " " + Loc.T("كوين"), 12, Ui.Gold, StartAlign, Ui.Bold);
                 At(info.rectTransform, 10, 330, 24); info.rectTransform.anchoredPosition = new Vector2(info.rectTransform.anchoredPosition.x, -12);
                 for (int k = 0; k < 2; k++)
                 {
@@ -1221,7 +1227,7 @@ public partial class Menus : MonoBehaviour
                 // the weekly prizes, and how long is left
                 double left = lbEndsAt > 0 ? lbEndsAt - App.LocalMs() : 0;
                 int d = (int)(left / 86_400_000), h = (int)(left % 86_400_000 / 3_600_000);
-                var info = Ui.Label(area, Loc.T("أول ١٠ بيكسبوا كوينز كل يوم اتنين") + "  ·  " + Loc.T("الأول") + " " + Loc.Short(WeeklyPrizes[0])
+                var info = Ui.Label(area, Loc.T("الأول بيكسب") + " " + Loc.Short(WeeklyPrizes[0]) + " " + Loc.T("كوين كل يوم اتنين")
                     + (left > 0 ? "  ·  " + Loc.T("فاضل") + " " + d + Loc.T("ي") + " " + h + Loc.T("س") : ""), 12, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold);
                 info.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(560, 20), Vector2.zero);
                 top = 22;
