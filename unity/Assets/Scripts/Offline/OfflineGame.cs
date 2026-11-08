@@ -126,7 +126,7 @@ public static class Modes
         return 4;
     }
     /// How many sides play against each other ("team" dominoes: two teams of two).
-    public static int Sides(string m) => m == "team" || m == "basra4" || m == "tarneeb" ? 2 : Players(m);
+    public static int Sides(string m) => m == "team" || m == "basra4" || m == "tarneeb" || m == "konkanT" ? 2 : Players(m);
     public static int DefaultTarget(string m)
     {
         var g = GameOf(m);

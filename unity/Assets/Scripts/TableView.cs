@@ -129,7 +129,7 @@ public class TableView
 
     public bool MyTurn => phase == "play" && you >= 0 && turn == you;
     public SeatView Me => you >= 0 && you < seats.Count ? seats[you] : null;
-    public int TeamOf(int seat) => game == "domino" ? Domino.TeamOf(mode, seat) : mode == "basra4" || mode == "tarneeb" ? seat % 2 : seat;
-    public int TeamCount => mode == "team" || mode == "basra4" || mode == "tarneeb" ? 2 : seats.Count;
+    public int TeamOf(int seat) => game == "domino" ? Domino.TeamOf(mode, seat) : mode == "basra4" || mode == "tarneeb" || mode == "konkanT" ? seat % 2 : seat;
+    public int TeamCount => mode == "team" || mode == "basra4" || mode == "tarneeb" || mode == "konkanT" ? 2 : seats.Count;
     public static List<int> IntList(List<object> a) => Ints(a);
 }

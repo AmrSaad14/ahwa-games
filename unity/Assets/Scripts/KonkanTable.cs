@@ -31,6 +31,7 @@ public class KonkanTable : MonoBehaviour
         app = a;
         canvas = Ui.MakeCanvas("Konkan", 15);
         root = Ui.Rect("Konkan", canvas.transform).Safe();
+        BasraTable.Cloth(root);
         handArea = Ui.Rect("Hand", root).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(560, 84), new Vector2(0, 2));
         stageArea = Ui.Rect("Staged", root).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(520, 46), new Vector2(0, 92));
         stageText = Ui.Label(root, "", 12, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Bold);
@@ -285,7 +286,13 @@ public class KonkanTable : MonoBehaviour
 
         // the score: points against each player (the lowest wins), the target
         string sc = "";
-        for (int s = 0; s < scores.Count; s++) sc += (s == v.you ? Loc.T("إنت") : v.seats.Count > s && v.seats[s] != null ? First(v.seats[s].name) : "") + " " + scores[s] + "\n";
+        bool teams = (int)k.Num("teams") == 2 && v.seats.Count == 4;
+        if (teams)
+        {
+            int us = (v.you >= 0 ? v.you : 0) % 2;
+            sc = Loc.T("إنتو") + " " + (scores.Count > us ? scores[us] : 0) + "\n" + Loc.T("هم") + " " + (scores.Count > 1 - us ? scores[1 - us] : 0) + "\n";
+        }
+        else for (int s = 0; s < scores.Count; s++) sc += (s == v.you ? Loc.T("إنت") : v.seats.Count > s && v.seats[s] != null ? First(v.seats[s].name) : "") + " " + scores[s] + "\n";
         infoText.Set(sc + Loc.T("لـ") + " " + (int)k.Num("target") + "  ·  " + Loc.T("دور") + " " + dl);
     }
 
@@ -398,8 +405,11 @@ public class KonkanTable : MonoBehaviour
         var d = v?.konkan?.Obj("lastDeal"); if (d == null) return;
         int w = (int)d.Num("winner", -1); var pts = TableView.IntList(d.Arr("points"));
         string s = (w == v.you ? Loc.T("خلّصت ورقك! كسبت الدور") : Name(v, w) + " " + Loc.T("خلّص ورقه"));
-        if (v.you >= 0 && v.you < pts.Count && w != v.you) s += "  ·  " + Loc.T("عليك") + " " + pts[v.you];
+        bool teams = (int)v.konkan.Num("teams") == 2 && v.seats.Count == 4;
+        int mine = teams ? (v.you >= 0 ? v.you : 0) % 2 : v.you;
+        if (teams && w >= 0 && w % 2 == mine && w != v.you) s = Name(v, w) + " " + Loc.T("شريكك خلّص! كسبتوا الدور");
+        if (mine >= 0 && mine < pts.Count && pts[mine] > 0) s += "  ·  " + Loc.T("عليك") + " " + pts[mine];
         app.Toast(s, 4.5f);
-        if (w == v.you) { Sfx.Coins(); Sfx.Chime(); }
+        if (w == v.you || (teams && w >= 0 && w % 2 == mine)) { Sfx.Coins(); Sfx.Chime(); }
     }
 }

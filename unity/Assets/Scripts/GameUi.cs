@@ -182,11 +182,11 @@ public class GameUi : MonoBehaviour
         ["chess"] = new[] { ("chess1", "دقيقة"), ("chess3", "٣ دقايق"), ("chess", "٥ دقايق"), ("chess10", "١٠ دقايق") },
         ["basra"] = new[] { ("basra2", "فردي"), ("basra4", "زوجي ٢ ضد ٢") },
         ["tarneeb"] = new[] { ("tarneeb", "زوجي ٢ ضد ٢") },
-        ["konkan"] = new[] { ("konkan2", "٢ لاعبين"), ("konkan3", "٣ لاعبين"), ("konkan4", "٤ لاعبين") },
+        ["konkan"] = new[] { ("konkan2", "٢ لاعبين"), ("konkan3", "٣ لاعبين"), ("konkan4", "٤ لاعبين"), ("konkanT", "زوجي ٢ ضد ٢") },
         ["ludo"] = new[] { ("ludo2", "٢ لاعبين"), ("ludo3", "٣ لاعبين"), ("ludo4", "٤ لاعبين"), ("ludoq2", "سريع ٢"), ("ludoq4", "سريع ٤"), ("ludom2", "ماستر ٢"), ("ludom4", "ماستر ٤") },
     };
     public static int Players(string mode) =>
-        mode == "ffa3" || mode == "ludo3" || mode == "konkan3" ? 3 : mode == "konkan2" ? 2 : mode == "tarneeb" ? 4 : mode == "ffa4" || mode == "team" || mode.EndsWith("4") ? 4 : 2;
+        mode == "ffa3" || mode == "ludo3" || mode == "konkan3" ? 3 : mode == "konkan2" ? 2 : mode == "tarneeb" || mode == "konkanT" ? 4 : mode == "ffa4" || mode == "team" || mode.EndsWith("4") ? 4 : 2;
 
     void BuildPicker()
     {
@@ -360,12 +360,13 @@ public class GameUi : MonoBehaviour
         bool full = true;
         var key = new System.Text.StringBuilder(v.id + "|" + Loc.En);
         for (int i = 0; i < v.seats.Count; i++) { var s = v.seats[i]; key.Append(s == null ? "-" : s.name + s.bot + s.ch); if (s == null) full = false; }
+        key.Append("|" + v.you);
         lobbyCode.text = (v.code ?? "").ToUpperInvariant();
         rulesButton.gameObject.SetActive(v.game == "domino");
         rulesText.Set(Loc.T(v.block ? "من غير سحب" : "بالسحب") + (host ? "  ⇄" : ""));
         startButton.SetActive(host);
         startButton.GetComponent<Button>().interactable = full;
-        lobbyNote.Set(host ? (full ? Loc.T("كله جاهز، ابدأ") : Loc.T("ابعت الكود لصحابك، أو حط الكمبيوتر مكانهم")) : Loc.T("مستنيين صاحب الغرفة يبدأ"));
+        lobbyNote.Set(host ? (full ? Loc.T("كله جاهز، ابدأ") : v.TeamCount == 2 && v.seats.Count == 4 ? Loc.T("صاحبك اللي تدعيه بيقعد قصادك ويبقى شريكك") : Loc.T("ابعت الكود لصحابك، أو حط الكمبيوتر مكانهم")) : Loc.T("مستنيين صاحب الغرفة يبدأ"));
         if (key.ToString() == lobbyKey) return;
         lobbyKey = key.ToString();
         for (int i = lobbySeats.childCount - 1; i >= 0; i--) Destroy(lobbySeats.GetChild(i).gameObject);
@@ -375,12 +376,27 @@ public class GameUi : MonoBehaviour
             var row = Ui.Box(lobbySeats, "Seat", new Color(1, 1, 1, 0.06f));
             row.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(390, 32), new Vector2(0, -i * 37));
             string name = s == null ? Loc.T("مكان فاضي…") : NameOf(v, i) + (s.bot ? "  ·  " + Loc.T("كمبيوتر") : "") + (s.host ? "  ·  " + Loc.T("صاحب الغرفة") : "");
+            // team games: which side each seat plays for (partners sit opposite), and your partner's seat
+            bool teamGame = v.TeamCount == 2 && v.seats.Count == 4;
+            if (teamGame)
+            {
+                int team = i % 2;
+                row.color = team == 0 ? new Color(0.85f, 0.55f, 0.2f, 0.18f) : new Color(0.25f, 0.55f, 0.85f, 0.18f);
+                bool partner = v.you >= 0 && i != v.you && i % 2 == v.you % 2;
+                name = (team == 0 ? Loc.T("فريق ١") : Loc.T("فريق ٢")) + "  ·  " + name + (partner ? "  ·  " + Loc.T("شريكك") : "");
+            }
             var lt = Ui.Label(row.transform, name, 14, s == null ? new Color(1, 1, 1, 0.5f) : Color.white, Loc.En ? TextAnchor.MiddleLeft : TextAnchor.MiddleRight, Ui.Bold);
             lt.rectTransform.Fill(10);
             if (s == null && host)
             {
                 var b = Ui.Button(row.transform, "+ كمبيوتر", Ui.Gold, Ui.Ink, 12, () => { Sfx.Tap(); app.AddBot(seat); });
                 ((RectTransform)b.transform).Place(new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(92, 26), new Vector2(Loc.En ? -4 : 4, 0));
+            }
+            // an empty seat: sit there (in a team game, to play with the partner you want)
+            if (s == null && v.you >= 0 && teamGame)
+            {
+                var sb = Ui.Button(row.transform, "اقعد هنا", new Color32(0x2f, 0x6b, 0x3a, 0xff), Color.white, 12, () => { Sfx.Tap(); app.Send(new Dictionary<string, object> { ["t"] = "sit", ["seat"] = (double)seat }); });
+                ((RectTransform)sb.transform).Place(new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(84, 26), new Vector2(Loc.En ? (host ? -100 : -4) : (host ? 100 : 4), 0));
             }
         }
     }
@@ -914,7 +930,7 @@ public class GameUi : MonoBehaviour
         ["chess"] = "شطرنج", ["chess1"] = "شطرنج", ["chess3"] = "شطرنج", ["chess10"] = "شطرنج",
         ["ludo2"] = "لودو", ["ludo3"] = "لودو", ["ludo4"] = "لودو",
         ["basra2"] = "بصرة", ["basra4"] = "بصرة زوجي", ["tarneeb"] = "طرنيب",
-        ["konkan2"] = "كونكان", ["konkan3"] = "كونكان", ["konkan4"] = "كونكان",
+        ["konkan2"] = "كونكان", ["konkan3"] = "كونكان", ["konkan4"] = "كونكان", ["konkanT"] = "كونكان زوجي",
         ["ludoq2"] = "لودو سريع", ["ludoq4"] = "لودو سريع", ["ludom2"] = "لودو ماستر", ["ludom4"] = "لودو ماستر",
     };
 

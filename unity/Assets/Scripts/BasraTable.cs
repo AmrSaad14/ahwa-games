@@ -26,11 +26,23 @@ public class BasraTable : MonoBehaviour
         return t;
     }
 
+    /// The café tablecloth the cards are dealt on (green baize, a gold-embroidered border), under everything.
+    public static void Cloth(RectTransform root)
+    {
+        var tex = Resources.Load<Texture2D>("UI/Cards/cloth");
+        if (tex == null) return;
+        var c = Ui.Picture(root, "Cloth", tex).rectTransform;
+        c.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(790, 345), new Vector2(0, -8));
+        c.GetComponent<RawImage>().raycastTarget = false;
+        c.SetAsFirstSibling();
+    }
+
     public void Init(App a)
     {
         app = a;
         canvas = Ui.MakeCanvas("Basra", 15);
         root = Ui.Rect("Basra", canvas.transform).Safe();
+        BasraTable.Cloth(root);
         floorArea = Ui.Rect("Floor", root).Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(520, 190), new Vector2(0, 22));
         handArea = Ui.Rect("Hand", root).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(420, 120), new Vector2(0, 6));
         for (int i = 1; i < 4; i++) backs[i] = Ui.Rect("Backs" + i, root);

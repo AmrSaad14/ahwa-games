@@ -287,5 +287,13 @@ public static class Loc
         ["العسكري وصل! يبقى إيه؟"] = "Your pawn made it! Promote to:",
         ["لونك في اللودو"] = "Your ludo colour",
         ["أي"] = "Any",
+        ["كونكان زوجي"] = "Konkan (teams)",
+        ["شريكك خلّص! كسبتوا الدور"] = "your partner went out! Your side wins the deal",
+        ["فريق ١"] = "Team 1",
+        ["فريق ٢"] = "Team 2",
+        ["شريكك"] = "your partner",
+        ["اقعد هنا"] = "Sit here",
+        ["صاحبك اللي تدعيه بيقعد قصادك ويبقى شريكك"] = "A friend you invite sits across from you as your partner",
+        ["بستوني"] = "Spades",
 };
 }

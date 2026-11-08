@@ -18,7 +18,7 @@ public class TarneebTable : MonoBehaviour
     string key = "";
     bool showingTrick;
     static readonly string[] SuitSym = { "♠", "♥", "♦", "♣" };
-    static readonly string[] SuitName = { "سبيت", "كبة", "ديناري", "سباتي" };
+    static readonly string[] SuitName = { "بستوني", "كبة", "ديناري", "سباتي" };   // the Egyptian names
     public static Color SuitColor(int s) => s == 1 || s == 2 ? new Color(0.78f, 0.15f, 0.18f) : new Color(0.1f, 0.1f, 0.14f);
 
     public void Init(App a)
@@ -26,6 +26,7 @@ public class TarneebTable : MonoBehaviour
         app = a;
         canvas = Ui.MakeCanvas("Tarneeb", 15);
         root = Ui.Rect("Tarneeb", canvas.transform).Safe();
+        BasraTable.Cloth(root);
         trickArea = Ui.Rect("Trick", root).Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(240, 180), new Vector2(0, 26));
         handArea = Ui.Rect("Hand", root).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(520, 96), new Vector2(0, 4));
         for (int i = 1; i < 4; i++) backs[i] = Ui.Rect("Backs" + i, root);

@@ -1,0 +1,144 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@font-face{font-family:Kufi;src:url(../logo/ReemKufi.ttf)}
+html,body{margin:0;background:transparent}
+svg{display:block}
+</style></head><body><div id="w"></div>
+<script>
+// A classic deck, the kind sold in every Egyptian kiosk: white cards with a thin border, corner indices (rank
+// over suit) at two corners, the number cards with their pips in the traditional places, aces with one big pip,
+// and the picture cards (شايب، بنت، ولد) as double-ended half-figures in red, blue, yellow and black robes.
+// Drawn here from simple shapes (no copied artwork). window.card(id): id = suit*13 + rank-1, suits ♠ ♥ ♦ ♣;
+// -1 the back, 52 the joker. 150×210.
+const W = 150, H = 210;
+const RED = '#c4202b', BLACK = '#1b1b22', GOLD = '#e9b632', BLUE = '#1f4fa3', SKIN = '#f6d7b0';
+const SUIT = [
+  // spade
+  s => `<path d="M0,-${s} C${s*.55},-${s*.45} ${s},-${s*.1} ${s*.95},${s*.3} C${s*.9},${s*.72} ${s*.35},${s*.8} ${s*.12},${s*.42} L${s*.32},${s} L-${s*.32},${s} L-${s*.12},${s*.42} C-${s*.35},${s*.8} -${s*.9},${s*.72} -${s*.95},${s*.3} C-${s},-${s*.1} -${s*.55},-${s*.45} 0,-${s} Z"/>`,
+  // heart
+  s => `<path d="M0,${s} C-${s*.5},${s*.5} -${s},${s*.05} -${s},-${s*.38} C-${s},-${s*.85} -${s*.42},-${s*1.02} 0,-${s*.55} C${s*.42},-${s*1.02} ${s},-${s*.85} ${s},-${s*.38} C${s},${s*.05} ${s*.5},${s*.5} 0,${s} Z"/>`,
+  // diamond
+  s => `<path d="M0,-${s} Q${s*.38},-${s*.38} ${s*.78},0 Q${s*.38},${s*.38} 0,${s} Q-${s*.38},${s*.38} -${s*.78},0 Q-${s*.38},-${s*.38} 0,-${s} Z"/>`,
+  // club
+  s => `<g><circle cx="0" cy="-${s*.48}" r="${s*.42}"/><circle cx="-${s*.5}" cy="${s*.12}" r="${s*.42}"/><circle cx="${s*.5}" cy="${s*.12}" r="${s*.42}"/><path d="M-${s*.1},0 L${s*.1},0 L${s*.3},${s} L-${s*.3},${s} Z"/></g>`,
+];
+const colorOf = suit => (suit === 1 || suit === 2 ? RED : BLACK);
+const pip = (suit, x, y, s, flip = false) => `<g transform="translate(${x},${y}) rotate(${flip ? 180 : 0})" fill="${colorOf(suit)}">${SUIT[suit](s)}</g>`;
+const RANK = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+
+// the traditional pip places, in a 3-column grid: x in {L, C, R}, y in 0..1 down the field
+const L = 48, C = 75, R = 102, T = 38, B = 172;
+const Y = f => T + (B - T) * f;
+const LAYOUT = {
+  2: [[C, 0], [C, 1]],
+  3: [[C, 0], [C, .5], [C, 1]],
+  4: [[L, 0], [R, 0], [L, 1], [R, 1]],
+  5: [[L, 0], [R, 0], [C, .5], [L, 1], [R, 1]],
+  6: [[L, 0], [R, 0], [L, .5], [R, .5], [L, 1], [R, 1]],
+  7: [[L, 0], [R, 0], [C, .25], [L, .5], [R, .5], [L, 1], [R, 1]],
+  8: [[L, 0], [R, 0], [C, .25], [L, .5], [R, .5], [C, .75], [L, 1], [R, 1]],
+  9: [[L, 0], [R, 0], [L, 1 / 3], [R, 1 / 3], [C, .5], [L, 2 / 3], [R, 2 / 3], [L, 1], [R, 1]],
+  10: [[L, 0], [R, 0], [C, 1 / 6], [L, 1 / 3], [R, 1 / 3], [L, 2 / 3], [R, 2 / 3], [C, 5 / 6], [L, 1], [R, 1]],
+};
+
+function corners(rank, suit) {
+  const col = colorOf(suit), r = RANK[rank - 1];
+  const one = `<text x="0" y="0" text-anchor="middle" font-family="Georgia,'DejaVu Serif',serif" font-weight="700" font-size="${r === '10' ? 21 : 24}" fill="${col}" letter-spacing="${r === '10' ? -2 : 0}">${r}</text>${pip(suit, 0, 15, 8)}`;
+  return `<g transform="translate(15,26)">${one}</g><g transform="translate(${W - 15},${H - 26}) rotate(180)">${one}</g>`;
+}
+
+// one half of a picture card: the figure from the chest up, looking out, holding its sign; drawn in the top half
+// (y 0..105 of the card) and repeated upside down for the bottom half
+function courtHalf(rank, suit) {
+  const robeA = suit % 2 === 0 ? BLUE : RED, robeB = suit % 2 === 0 ? RED : BLUE;
+  const ink = BLACK;
+  const face = `<ellipse cx="75" cy="58" rx="15" ry="18" fill="${SKIN}" stroke="${ink}" stroke-width="1.6"/>
+    <path d="M68,55 q2,-2 4,0 M78,55 q2,-2 4,0" stroke="${ink}" stroke-width="1.6" fill="none"/>
+    <path d="M75,58 q-2,5 0,6" stroke="${ink}" stroke-width="1.2" fill="none"/>`;
+  let head = '', extra = '', hold = '';
+  if (rank === 13) {          // شايب: crown, beard, sword
+    head = `<path d="M58,42 L60,24 L67,34 L75,20 L83,34 L90,24 L92,42 Z" fill="${GOLD}" stroke="${ink}" stroke-width="1.6"/>
+      <circle cx="75" cy="27" r="2.6" fill="${RED}"/><rect x="58" y="40" width="34" height="5" fill="${robeB}" stroke="${ink}" stroke-width="1.2"/>`;
+    extra = `<path d="M61,62 q14,26 28,0 q-2,16 -14,18 q-12,-2 -14,-18 Z" fill="#fbf3e6" stroke="${ink}" stroke-width="1.4"/>
+      <path d="M69,68 q6,3 12,0" stroke="${ink}" stroke-width="1.4" fill="none"/>`;
+    hold = `<g stroke="${ink}" stroke-width="1.5"><rect x="104" y="20" width="5" height="62" fill="#d7dce4"/><rect x="97" y="78" width="19" height="5" fill="${GOLD}"/><rect x="104" y="83" width="5" height="12" fill="${robeB}"/></g>`;
+  } else if (rank === 12) {   // بنت: crown on long hair, a flower
+    head = `<path d="M58,48 q-4,20 2,40 l8,-4 q-8,-18 -2,-36 Z M92,48 q4,20 -2,40 l-8,-4 q8,-18 2,-36 Z" fill="${GOLD}" stroke="${ink}" stroke-width="1.4"/>
+      <path d="M60,42 q15,-16 30,0 l-2,-12 l-6,6 l-7,-10 l-7,10 l-6,-6 Z" fill="${GOLD}" stroke="${ink}" stroke-width="1.6"/>
+      <circle cx="75" cy="26" r="2.4" fill="${BLUE}"/>`;
+    extra = `<path d="M70,66 q5,3 10,0" stroke="${RED}" stroke-width="2" fill="none"/>`;
+    hold = `<g stroke="${ink}" stroke-width="1.3"><path d="M44,96 q4,-30 8,-48" fill="none" stroke="#2f7a3a" stroke-width="2"/>
+      <circle cx="52" cy="44" r="6" fill="${RED}"/><circle cx="52" cy="44" r="2.4" fill="${GOLD}"/><path d="M47,70 q-6,-4 -7,-10 q7,2 7,10 Z" fill="#2f7a3a"/></g>`;
+  } else {                    // ولد: a cap with a feather, curls, a staff
+    head = `<path d="M58,46 q2,-18 17,-20 q15,2 17,20 Z" fill="${robeA}" stroke="${ink}" stroke-width="1.6"/>
+      <rect x="57" y="42" width="36" height="6" rx="2" fill="${GOLD}" stroke="${ink}" stroke-width="1.2"/>
+      <path d="M64,30 q-16,-14 -26,-6 q12,0 22,12 Z" fill="${robeB}" stroke="${ink}" stroke-width="1.2"/>
+      <path d="M59,52 q-6,10 0,18 M91,52 q6,10 0,18" stroke="${GOLD}" stroke-width="5" fill="none" stroke-linecap="round"/>`;
+    hold = `<g stroke="${ink}" stroke-width="1.5"><rect x="104" y="24" width="4" height="72" fill="#a9733d"/><path d="M106,12 l7,12 h-14 Z" fill="#d7dce4"/></g>`;
+  }
+  // the robe: shoulders and chest in two colours with a gold collar and trim
+  const robe = `<path d="M38,105 q2,-26 22,-30 l15,8 l15,-8 q20,4 22,30 Z" fill="${robeA}" stroke="${ink}" stroke-width="1.6"/>
+    <path d="M60,75 l15,8 l15,-8 l-3,30 h-24 Z" fill="${robeB}" stroke="${ink}" stroke-width="1.4"/>
+    <path d="M60,75 l15,8 l15,-8 l-2,6 l-13,8 l-13,-8 Z" fill="${GOLD}" stroke="${ink}" stroke-width="1.2"/>
+    <path d="M64,92 h22 M65,99 h20" stroke="${GOLD}" stroke-width="2.5"/>
+    <g fill="${GOLD}" stroke="${ink}" stroke-width=".8"><circle cx="48" cy="95" r="3"/><circle cx="102" cy="95" r="3"/></g>`;
+  return robe + hold + face + extra + head;
+}
+
+function court(rank, suit) {
+  const half = courtHalf(rank, suit);
+  const clip = `<clipPath id="half"><rect x="30" y="14" width="90" height="91"/></clipPath>`;
+  return `<defs>${clip}</defs>
+    <rect x="30" y="14" width="90" height="182" fill="#fffaf0" stroke="${BLACK}" stroke-width="1.4"/>
+    <g clip-path="url(#half)">${half}</g>
+    <g transform="rotate(180 75 105)"><g clip-path="url(#half)">${half}</g></g>
+    <line x1="30" y1="105" x2="120" y2="105" stroke="${BLACK}" stroke-width="1"/>
+    ${pip(suit, 40, 28, 7)}${pip(suit, 110, 182, 7, true)}`;
+}
+
+function face(id) {
+  const suit = Math.floor(id / 13), rank = (id % 13) + 1;
+  let body = '';
+  if (rank === 1) {
+    body = pip(suit, 75, 105, suit === 0 ? 34 : 26);
+    if (suit === 0) body += `<g fill="none" stroke="${GOLD}" stroke-width="1.4"><circle cx="75" cy="105" r="46"/><circle cx="75" cy="105" r="50" stroke-dasharray="3 3"/></g>`;
+  } else if (rank <= 10) {
+    body = LAYOUT[rank].map(([x, f]) => pip(suit, x, Y(f), rank >= 9 ? 11 : 12.5, f > .5)).join('');
+  } else body = court(rank, suit);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+    <rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="12" fill="#fffdf8" stroke="#bfb6a3" stroke-width="2"/>
+    ${body}${corners(rank, suit)}</svg>`;
+}
+
+function back() {
+  // the classic back: a red lattice with a white margin and an oval in the middle
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+    <defs><pattern id="p" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="12" height="12" fill="#a3172a"/><path d="M0,6 H12 M6,0 V12" stroke="#d9a441" stroke-width="1.2"/><circle cx="6" cy="6" r="1.8" fill="#fbe7b2"/></pattern></defs>
+    <rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="12" fill="#fffdf8" stroke="#bfb6a3" stroke-width="2"/>
+    <rect x="9" y="9" width="${W - 18}" height="${H - 18}" rx="7" fill="url(#p)" stroke="#7a0f1d" stroke-width="2"/>
+    <ellipse cx="75" cy="105" rx="30" ry="40" fill="#a3172a" stroke="#d9a441" stroke-width="3"/>
+    <g transform="translate(75,105)" fill="#fbe7b2">${SUIT[2](16)}</g></svg>`;
+}
+
+function joker() {
+  const hat = `<path d="M50,92 q4,-36 25,-40 q-6,-22 -26,-26 q20,-6 32,18 q12,-26 32,-18 q-20,6 -24,26 q20,6 22,40 Z" fill="${RED}" stroke="${BLACK}" stroke-width="1.6"/>
+    <path d="M75,52 q-6,-22 -26,-26 M75,52 q6,-22 26,-26" stroke="${BLACK}" stroke-width="1.2" fill="none"/>
+    <circle cx="49" cy="26" r="4" fill="${GOLD}" stroke="${BLACK}"/><circle cx="101" cy="26" r="4" fill="${GOLD}" stroke="${BLACK}"/><circle cx="75" cy="14" r="4" fill="${GOLD}" stroke="${BLACK}"/>
+    <path d="M75,52 l-2,-36" stroke="${BLACK}" stroke-width="1.2"/>`;
+  const jface = `<ellipse cx="75" cy="104" rx="20" ry="22" fill="${SKIN}" stroke="${BLACK}" stroke-width="1.6"/>
+    <path d="M65,100 q3,-3 6,0 M79,100 q3,-3 6,0" stroke="${BLACK}" stroke-width="1.6" fill="none"/>
+    <path d="M64,110 q11,12 22,0" stroke="${RED}" stroke-width="2.4" fill="none"/>
+    <circle cx="64" cy="108" r="3" fill="#f2a0a0"/><circle cx="86" cy="108" r="3" fill="#f2a0a0"/>`;
+  const ruff = `<path d="M40,140 q8,-14 16,0 q8,-14 16,0 q8,-14 16,0 q8,-14 16,0 q8,-14 16,0 l0,8 h-80 Z" fill="#fbf3e6" stroke="${BLACK}" stroke-width="1.4"/>
+    <path d="M44,148 q-4,30 6,46 h50 q10,-16 6,-46 Z" fill="${BLUE}" stroke="${BLACK}" stroke-width="1.6"/>
+    <path d="M75,148 v46" stroke="${GOLD}" stroke-width="3"/>`;
+  const label = `<text x="18" y="70" font-family="Kufi" font-size="17" fill="${RED}" transform="rotate(-90 18 70)" text-anchor="middle">جوكر</text>
+    <text x="132" y="140" font-family="Kufi" font-size="17" fill="${BLACK}" transform="rotate(90 132 140)" text-anchor="middle">جوكر</text>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+    <rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="12" fill="#fffdf8" stroke="#bfb6a3" stroke-width="2"/>
+    ${ruff}${hat}${jface}${label}</svg>`;
+}
+
+window.card = id => { document.getElementById('w').innerHTML = id < 0 ? back() : id === 52 ? joker() : face(id); };
+window.card(51);
+</script></body></html>
