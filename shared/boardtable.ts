@@ -80,12 +80,38 @@ export class BoardTable {
 
   /* ---------------- seating (same behaviour as the domino table) ---------------- */
 
+  /** Seats kept for people invited to them (a partner in a team game): uid → seat. */
+  reserved = new Map<string, number>();
+  /** Keep a seat for someone (while it's free and the table is gathering). */
+  reserve(uid: string, seat: number) {
+    if (this.phase !== 'lobby' || seat < 0 || seat >= this.n || this.seats[seat]) return false;
+    for (const [u, k] of this.reserved) if (k === seat) this.reserved.delete(u);
+    this.reserved.set(uid, seat);
+    return true;
+  }
+  /** Move to an empty seat while the table is gathering (to sit with the partner you want). */
+  sit(uid: string, seat: number): string | null {
+    if (this.phase !== 'lobby') return 'in_progress';
+    const cur = this.seatOf(uid); if (cur < 0) return 'no_table';
+    if (seat < 0 || seat >= this.n || this.seats[seat]) return 'bad_seat';
+    for (const [u, k] of this.reserved) if (k === seat && u !== uid) return 'seat_kept';
+    this.seats[seat] = this.seats[cur]; this.seats[cur] = null;
+    this.bump();
+    return null;
+  }
+
   join(p: Player): number | string {
     const cur = this.seatOf(p.uid);
     if (cur >= 0) { const s = this.seats[cur]!; s.online = true; s.offAt = undefined; s.name = p.name; s.ch = p.ch; s.hat = p.hat; s.drink = p.drink; s.muted = p.muted; s.title = p.title; s.win = p.win; this.bump(); return cur; }
     if (this.phase !== 'lobby') return 'in_progress';
-    const i = this.seats.findIndex(s => !s);
+    // a seat kept for you (a partner's invitation), else the first free one not kept for someone else
+    const want = this.reserved.get(p.uid);
+    const kept = new Set([...this.reserved].filter(([u]) => u !== p.uid).map(([, k]) => k));
+    let i = want !== undefined && !this.seats[want] ? want : this.seats.findIndex((s, k) => !s && !kept.has(k));
+    if (i < 0) i = this.seats.findIndex(s => !s);
     if (i < 0) return 'room_full';
+    this.reserved.delete(p.uid);
+    for (const [u, k] of this.reserved) if (k === i) this.reserved.delete(u);
     this.seats[i] = { ...p, online: true, away: false, timeouts: 0, lastEmote: 0 };
     if (!this.hostUid && !p.bot) this.hostUid = p.uid;
     this.bump();

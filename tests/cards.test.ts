@@ -216,3 +216,33 @@ test('ludo on the server: the colour you chose is yours at the table', async () 
     ws.close();
   } finally { await app.close(); }
 });
+
+test('konkan in teams: partners opposite, the side that goes out scores nothing, the other both hands', () => {
+  const rnd = seeded(77);
+  let s = K.newKonkan(4, 0, rnd, 201, true);
+  assert.equal(s.teams, 2); assert.equal(s.scores.length, 2);
+  let guard = 0, deals = 0;
+  while (!s.done && guard++ < 80000) {
+    const r = K.act(s, s.turn, K.botAction(s, s.turn, 'normal', rnd), rnd);
+    assert.ok(typeof r !== 'string', String(r));
+    if (r.dealOver) { deals++; const w = K.konkanTeam(r.s, r.winner!); assert.equal(r.s.lastDeal!.points[w], 0); }
+    s = r.s;
+  }
+  assert.ok(s.done); assert.ok(Math.max(...s.scores) >= 201);
+  assert.ok([0, 1].includes(K.winnerSeat(s)));
+});
+
+test('a team table: the friend you invite gets the seat across from you; players can change seats while it gathers', async () => {
+  const { BoardTable } = await import('../shared/boardtable');
+  const hooks = { changed() {}, emote() {}, matchEnd() {}, closed() {} } as any;
+  const t = new BoardTable({ id: 't', code: 'abc', mode: 'tarneeb', target: 41, private: true, turnMs: 1000, nextRoundMs: 10, botDelay: [1, 2], offlineGraceMs: 10, lobbyAfterMatchMs: 10, autoMoveMs: 10 } as any, hooks);
+  const P = (uid: string) => ({ uid, name: uid, ch: 0, bot: false, rating: 1000 });
+  assert.equal(t.join(P('me')), 0);
+  assert.ok(t.reserve('friend', 2));
+  assert.equal(t.join(P('stranger')), 1, 'a stranger does not take the kept seat');
+  assert.equal(t.join(P('friend')), 2, 'the friend sits across from me');
+  assert.equal(t.sit('stranger', 2), 'bad_seat');
+  assert.equal(t.sit('stranger', 3), null);
+  assert.equal(t.seatOf('stranger'), 3);
+  t.close?.();
+});

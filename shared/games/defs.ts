@@ -360,13 +360,13 @@ export const tarneebDef: GameDef<TN.TarneebState> = {
 /* ---------------- konkan ---------------- */
 export interface KonkanView {
   hand: number[]; counts: number[]; stock: number; top: number; pileSize: number; melds: K.Meld[]; opened: boolean[];
-  turn: number; you: number; stage: K.KonkanState['stage']; took: number; scores: number[]; deal: number; target: number;
+  turn: number; you: number; stage: K.KonkanState['stage']; took: number; scores: number[]; teams: number; deal: number; target: number;
   lastDeal: K.KonkanState['lastDeal'];
 }
 export const konkanDef: GameDef<K.KonkanState> = {
   game: 'konkan',
   wholeTurn: true,
-  newGame: (n, first, rnd) => K.newKonkan(n, first, rnd),
+  newGame: (n, first, rnd) => K.newKonkan(n, first, rnd, 101, false),
   toMove: s => s.turn,
   act(s, seat, a, rnd) {
     if (!['draw', 'take', 'back', 'down', 'add', 'throw'].includes(a.t)) return 'bad_action';
@@ -385,9 +385,12 @@ export const konkanDef: GameDef<K.KonkanState> = {
   view: (s, seat): KonkanView => ({
     hand: seat >= 0 ? s.hands[seat] : [], counts: s.hands.map(h => h.length), stock: s.stock.length, top: s.pile.length ? s.pile[s.pile.length - 1] : -1,
     pileSize: s.pile.length, melds: s.melds, opened: s.opened, turn: s.turn, you: seat, stage: s.stage, took: seat === s.turn ? s.took : -1,
-    scores: s.scores, deal: s.deal, target: s.target, lastDeal: s.lastDeal,
+    scores: s.scores, teams: s.teams, deal: s.deal, target: s.target, lastDeal: s.lastDeal,
   }),
 };
+
+/** Konkan in two teams of two (partners opposite): to 201, the side with fewer points wins. */
+export const konkanTeamDef: GameDef<K.KonkanState> = { ...konkanDef, newGame: (n, first, rnd) => K.newKonkan(n, first, rnd, 201, true) };
 
 export function defFor(mode: Mode): GameDef<any> {
   let d = DEFS.get(mode);
@@ -395,7 +398,7 @@ export function defFor(mode: Mode): GameDef<any> {
     const g = gameOf(mode);
     if (g === 'basra') d = basraDef;
     else if (g === 'tarneeb') d = tarneebDef;
-    else if (g === 'konkan') d = konkanDef;
+    else if (g === 'konkan') d = mode === 'konkanT' ? konkanTeamDef : konkanDef;
     else if (g === 'chess') d = { ...chessDef, clockMs: (CHESS_TIME[mode]?.min ?? 5) * 60_000 };
     else if (g === 'ludo') d = ludoDef(ludoVariant(mode));
     else { const v = tawlaVariant(mode); d = v === 'aada' ? tawlaDef : tablesDef(v); }

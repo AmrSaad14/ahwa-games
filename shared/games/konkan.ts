@@ -29,11 +29,12 @@ export interface KonkanState {
   stage: 'draw' | 'play';       // draw first, then lay down and throw
   took: number;                 // the card taken from the pile this turn (must be used), or -1
   dealer: number;
-  scores: number[];             // penalty points over the deals
+  teams: number;                // 2 in the team game (4 players, partners opposite), else one per player
+  scores: number[];             // penalty points over the deals, per team (per player when no teams)
   deal: number;
   target: number;
   done: boolean;
-  lastDeal: { winner: number; points: number[] } | null;
+  lastDeal: { winner: number; points: number[] } | null;   // points per team
 }
 
 function shuffle(a: number[], rnd: () => number) {
@@ -41,10 +42,14 @@ function shuffle(a: number[], rnd: () => number) {
   return a;
 }
 
-export function newKonkan(players: number, first: number, rnd: () => number, target = 101): KonkanState {
+/** The team a seat plays for: partners sit opposite in the team game. */
+export const konkanTeam = (s: { teams: number; players: number }, seat: number) => (s.teams === 2 && s.players === 4 ? seat % 2 : seat);
+
+export function newKonkan(players: number, first: number, rnd: () => number, target = 101, teams = false): KonkanState {
+  const nt = teams && players === 4 ? 2 : players;
   const s: KonkanState = {
     players, stock: [], pile: [], hands: [], melds: [], opened: [], turn: first, stage: 'play', took: -1,
-    dealer: (first + players - 1) % players, scores: new Array(players).fill(0), deal: 0, target, done: false, lastDeal: null,
+    dealer: (first + players - 1) % players, teams: nt, scores: new Array(nt).fill(0), deal: 0, target, done: false, lastDeal: null,
   };
   startDeal(s, rnd);
   return s;
@@ -214,19 +219,28 @@ function refill(s: KonkanState, rnd: () => number) {
 }
 
 function endDeal(s: KonkanState, winner: number, rnd: () => number) {
-  const points = s.hands.map((h, i) => (i === winner ? 0 : !s.opened[i] ? 100 : h.reduce((t, c) => t + cardPenalty(c), 0)));
-  for (let i = 0; i < s.players; i++) s.scores[i] += points[i];
+  // what each player is left holding (100 if they never laid down); in the team game the side that went out
+  // scores nothing, the other side both its hands
+  const wt = konkanTeam(s, winner);
+  const points = new Array(s.teams).fill(0);
+  s.hands.forEach((h, i) => {
+    const t = konkanTeam(s, i);
+    if (t === wt) return;
+    points[t] += !s.opened[i] ? 100 : h.reduce((a, c) => a + cardPenalty(c), 0);
+  });
+  for (let i = 0; i < s.teams; i++) s.scores[i] += points[i];
   s.lastDeal = { winner, points };
   if (Math.max(...s.scores) >= s.target) { s.done = true; return; }
   s.dealer = (s.dealer + 1) % s.players;
   startDeal(s, rnd);
 }
 
-/** The lowest score wins (a tie: the one who won the last deal, else the first in seat order). */
+/** The lowest score wins: the seat (or, in the team game, the team). A tie: whoever won the last deal, else the
+ *  first in order. */
 export function winnerSeat(s: KonkanState): number {
   if (!s.done) return -1;
   const low = Math.min(...s.scores);
-  if (s.lastDeal && s.scores[s.lastDeal.winner] === low) return s.lastDeal.winner;
+  if (s.lastDeal) { const t = konkanTeam(s, s.lastDeal.winner); if (s.scores[t] === low) return t; }
   return s.scores.indexOf(low);
 }
 

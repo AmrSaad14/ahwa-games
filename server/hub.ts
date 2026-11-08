@@ -1,6 +1,6 @@
 import { PlayBilling } from './billing';
 import crypto from 'node:crypto';
-import { GAMES, GameId, MODES, MODE_PLAYERS, Mode, defaultTarget, gameOf, targetOptions, teamOf } from '../shared/engine';
+import { GAMES, GameId, MODES, MODE_PLAYERS, Mode, defaultTarget, gameOf, isTeamMode, targetOptions, teamOf } from '../shared/engine';
 import type { C2S, Emote, FriendRow, IceServer, PlayerCard, S2C } from '../shared/protocol';
 import { GOV_WEEK, isGov } from '../shared/govs';
 import { ECONOMY, STAKES, giftByKind, drinkOnMenu, isStake, winnings, NO_ADS, XP, WEEKLY_PRIZES, weekKey } from '../shared/gifts';
@@ -422,6 +422,8 @@ export class Hub {
           this.userTable.set(uid, room);
           this.pushView(room, uid);
         }
+        // a team game: the friend is invited to be your partner (the seat across from you is kept for them)
+        if (isTeamMode(room.mode) && room.n === 4) { const mine = room.seatOf(uid); if (mine >= 0) room.reserve(id, (mine + 2) % 4); }
         const me = this.store.get(uid)!;
         const msg: S2C = { t: 'invited', from: { id: uid, name: me.name, ch: me.ch }, code: room.code!, mode: room.mode, stake: room.stake };
         if (to) return to.conn.send(msg);
@@ -561,6 +563,11 @@ export class Hub {
         if (typeof r === 'string') return err(r);
         this.userTable.set(uid, t);
         return this.pushView(t, uid);
+      }
+      case 'sit': {
+        if (!table) return err('no_table');
+        const e = table.sit(uid, Number(m.seat));
+        return e ? err(e) : undefined;
       }
       case 'leave': {
         this.dequeue(uid);

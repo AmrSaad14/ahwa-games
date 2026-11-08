@@ -252,6 +252,7 @@ export type C2S =
   /** A free, unrated game against computer players that starts at once. */
   | { t: 'practice'; mode: Mode; level?: 'easy' | 'normal' | 'hard' }   // how well the computer players play
   | { t: 'join'; code: string }
+  | { t: 'sit'; seat: number }   // move to an empty seat while the table gathers (team games: choose your partner)
   | { t: 'leave' }
   | { t: 'setup'; mode?: Mode; target?: number; stake?: number; block?: boolean }
   | { t: 'bot'; seat: number }
