@@ -29,9 +29,9 @@ public class TarneebTable : MonoBehaviour
         trickArea = Ui.Rect("Trick", root).Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(240, 180), new Vector2(0, 26));
         handArea = Ui.Rect("Hand", root).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(520, 96), new Vector2(0, 4));
         for (int i = 1; i < 4; i++) backs[i] = Ui.Rect("Backs" + i, root);
-        backs[1].Place(new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(60, 150), new Vector2(-90, 24));
+        backs[1].Place(new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(60, 150), new Vector2(-112, 24));
         backs[2].Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(240, 54), new Vector2(0, -56));
-        backs[3].Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(60, 150), new Vector2(90, 24));
+        backs[3].Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(60, 150), new Vector2(122, 24));
         for (int i = 0; i < 4; i++)
         {
             var b = Ui.Box(root, "Bid" + i, new Color(0.98f, 0.93f, 0.8f, 0.95f));
@@ -150,7 +150,7 @@ public class TarneebTable : MonoBehaviour
             }
         // your hand: the cards you may play stand up
         foreach (Transform c in handArea) Destroy(c.gameObject);
-        const float W = 56, H = 78; float step = Mathf.Min(38, (500 - W) / Mathf.Max(1, hand.Count - 1));
+        const float W = 56, H = 78; float step = Mathf.Min(38, (430 - W) / Mathf.Max(1, hand.Count - 1));   // clear of the score box on the left
         for (int i = 0; i < hand.Count; i++)
         {
             int id = hand[i]; bool can = myTurn && phase == "play" && legal.Contains(id);

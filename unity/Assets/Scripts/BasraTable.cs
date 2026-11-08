@@ -34,9 +34,9 @@ public class BasraTable : MonoBehaviour
         floorArea = Ui.Rect("Floor", root).Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(520, 190), new Vector2(0, 22));
         handArea = Ui.Rect("Hand", root).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(420, 120), new Vector2(0, 6));
         for (int i = 1; i < 4; i++) backs[i] = Ui.Rect("Backs" + i, root);
-        backs[1].Place(new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(70, 160), new Vector2(-96, 20));   // to your right
+        backs[1].Place(new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(70, 160), new Vector2(-116, 20));   // to your right
         backs[2].Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(200, 70), new Vector2(0, -62));    // across
-        backs[3].Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(70, 160), new Vector2(96, 20));    // to your left
+        backs[3].Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(70, 160), new Vector2(124, 20));    // to your left
         var ib = Ui.Box(root, "Info", new Color(0.1f, 0.06f, 0.04f, 0.82f));
         info = ib.rectTransform.Place(new Vector2(0, 0), new Vector2(0, 0), new Vector2(178, 86), new Vector2(12, 12));
         infoText = Ui.Label(info, "", 12, Color.white, TextAnchor.MiddleCenter, Ui.Bold); infoText.rectTransform.Fill(6);

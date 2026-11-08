@@ -35,12 +35,12 @@ public class KonkanTable : MonoBehaviour
         stageArea = Ui.Rect("Staged", root).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(520, 46), new Vector2(0, 92));
         stageText = Ui.Label(root, "", 12, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Bold);
         stageText.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(400, 18), new Vector2(0, 140));
-        meldArea = Ui.Rect("Melds", root).Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(470, 150), new Vector2(40, 40));
-        pileArea = Ui.Rect("Piles", root).Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(130, 80), new Vector2(-250, 40));
+        meldArea = Ui.Rect("Melds", root).Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(380, 150), new Vector2(95, 40));
+        pileArea = Ui.Rect("Piles", root).Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(130, 80), new Vector2(-185, 40));
         for (int i = 1; i < 4; i++) backs[i] = Ui.Rect("Backs" + i, root);
-        backs[1].Place(new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(50, 120), new Vector2(-84, 30));
+        backs[1].Place(new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(50, 120), new Vector2(-112, 30));
         backs[2].Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(200, 46), new Vector2(0, -54));
-        backs[3].Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(50, 120), new Vector2(84, 30));
+        backs[3].Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(50, 120), new Vector2(120, 30));
         for (int i = 0; i < 4; i++)
         {
             tags[i] = Ui.Label(root, "", 11, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Bold);
@@ -185,7 +185,7 @@ public class KonkanTable : MonoBehaviour
         foreach (Transform c in meldArea) Destroy(c.gameObject);
         var melds = k.Arr("melds") ?? new List<object>();
         const float MW = 30, MH = 42, MS = 15;
-        float x = 0, y = 0, rowH = MH + 8, width = meldArea.rect.width > 0 ? meldArea.rect.width : 470;
+        float x = 0, y = 0, rowH = MH + 8, width = meldArea.rect.width > 0 ? meldArea.rect.width : 380;
         float scale = melds.Count > 12 ? 0.8f : 1f;
         for (int i = 0; i < melds.Count; i++)
         {
