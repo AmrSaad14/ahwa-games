@@ -124,7 +124,8 @@ public partial class Menus
             var row = Row(pl, 30, r.Bool("me") ? new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.22f) : Card);
             var t = Ui.Label(row, "", 13, Color.white, StartAlign, Ui.Bold);
             t.Set((int)r.Num("rank") + ".  " + r.Str("name"));
-            t.rectTransform.Fill(); t.rectTransform.offsetMin = new Vector2(10, 0); t.rectTransform.offsetMax = new Vector2(-10, 0);
+            t.rectTransform.Fill(); t.rectTransform.offsetMin = new Vector2(Loc.En ? 38 : 10, 0); t.rectTransform.offsetMax = new Vector2(Loc.En ? -10 : -38, 0);
+            Avatar(row, (int)r.Num("ch"), r.Str("photo"), 6, 24);
             var p = Ui.Label(row, ((int)r.Num("points")).ToString(), 13, Ui.GoldLight, Loc.En ? TextAnchor.MiddleRight : TextAnchor.MiddleLeft, Ui.Bold);
             p.rectTransform.Fill(); p.rectTransform.offsetMin = new Vector2(10, 0); p.rectTransform.offsetMax = new Vector2(-10, 0);
             string rpid = r.Str("pid"), rname = r.Str("name"); int rch = (int)r.Num("ch");

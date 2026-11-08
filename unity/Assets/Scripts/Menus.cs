@@ -1237,10 +1237,11 @@ public partial class Menus : MonoBehaviour
                 var row = Row(list, 32, me ? new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.22f) : Card);
                 string lvl = r.Num("level") > 0 ? "  ·  " + Loc.T("مستوى") + " " + (int)r.Num("level") : "";
                 string last = week ? (rank <= WeeklyPrizes.Length ? Loc.Short(WeeklyPrizes[rank - 1]) : "—") : ((int)r.Num("wins")).ToString();
-                var nameCell = LbCells(row, rank.ToString(), r.Str("name") + lvl, ((int)r.Num("rating")).ToString(), last, rank == 1 ? Ui.Gold : Color.white, 14);
+                var nameCell = LbCells(row, rank.ToString(), r.Str("name") + lvl, ((int)r.Num("rating")).ToString(), last, rank == 1 ? Ui.Gold : Color.white, 14, true);
+                Avatar(row, (int)r.Num("ch"), r.Str("photo"), 58, 28);
                 // their title, after the name
                 var tb = Titles.Badge(row, r.Str("title"), 9);
-                if (tb != null) { float nx = 66 + Mathf.Min(nameCell.preferredWidth, 280 - tb.sizeDelta.x - 6) + 6; At(tb, nx, tb.sizeDelta.x, tb.sizeDelta.y); }
+                if (tb != null) { float nx = 92 + Mathf.Min(nameCell.preferredWidth, 254 - tb.sizeDelta.x - 6) + 6; At(tb, nx, tb.sizeDelta.x, tb.sizeDelta.y); }
                 // tap a row: the player's card
                 string rpid = r.Str("pid"), rname = r.Str("name"); int rch = (int)r.Num("ch");
                 if (!string.IsNullOrEmpty(rpid)) { var hit = row.gameObject.AddComponent<Button>(); hit.transition = Selectable.Transition.None; hit.onClick.AddListener(() => { Sfx.Tap(); OpenCard(rpid, rname, rch); }); }
@@ -1250,7 +1251,8 @@ public partial class Menus : MonoBehaviour
                 var mine = Ui.Box(area, "Me", new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.25f)).rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(560, 34), Vector2.zero);
                 int myRank = (int)lbMe.Num("rank");
                 string myLast = week ? (myRank <= WeeklyPrizes.Length ? Loc.Short(WeeklyPrizes[myRank - 1]) : "—") : ((int)lbMe.Num("wins")).ToString();
-                LbCells(mine, myRank.ToString(), Loc.T("مركزك") + " · " + lbMe.Str("name"), ((int)lbMe.Num("rating")).ToString(), myLast, Ui.Gold, 14);
+                LbCells(mine, myRank.ToString(), Loc.T("مركزك") + " · " + lbMe.Str("name"), ((int)lbMe.Num("rating")).ToString(), myLast, Ui.Gold, 14, true);
+                Avatar(mine, (int)lbMe.Num("ch"), user?.Str("photo"), 58, 28);
             }
         };
         refreshOpen();
@@ -1263,11 +1265,11 @@ public partial class Menus : MonoBehaviour
         if (lbRows == null && lbGame == game && open != null) { Debug.Log("[menus] asking for the leaderboard again"); app.Send(new Dictionary<string, object> { ["t"] = "lb", ["game"] = game }); }
     }
 
-    static Text LbCells(RectTransform row, string rank, string name, string rating, string wins, Color c, int size)
+    static Text LbCells(RectTransform row, string rank, string name, string rating, string wins, Color c, int size, bool face = false)
     {
         At(Ui.Label(row, rank, size, c, TextAnchor.MiddleCenter, Ui.Bold).rectTransform, 6, 50, 30);
         var n = Ui.Label(row, name, size, c, StartAlign, Ui.Bold);
-        At(n.rectTransform, 66, 280, 30);
+        At(n.rectTransform, face ? 92 : 66, face ? 254 : 280, 30);
         At(Ui.Label(row, rating, size, c, TextAnchor.MiddleCenter, Ui.Bold).rectTransform, 360, 90, 30);
         At(Ui.Label(row, wins, size, c, TextAnchor.MiddleCenter, Ui.Bold).rectTransform, 460, 90, 30);
         return n;

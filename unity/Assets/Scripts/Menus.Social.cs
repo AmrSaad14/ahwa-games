@@ -11,6 +11,17 @@ public partial class Menus
     static readonly string[] Faces = { "AmFathi", "CaptainSami", "Ziko", "Mona", "Nada", "HajjMahmoud" };
     /// Your friend code (shared in invites and results).
     public string MyCode => user?.Str("code") ?? "";
+    /// A player's picture in a list: their photo, or their character's face until it loads (or if they have none),
+    /// in a small gold-rimmed square at x (from the row's start side).
+    public static RawImage Avatar(RectTransform row, int ch, string photo, float x, float size)
+    {
+        var rim = Ui.Box(row, "Rim", Ui.Gold);
+        At(rim.rectTransform, x, size, size);
+        var img = Ui.Picture(rim.transform, "Face", Face(ch)); img.rectTransform.Fill(1.5f);
+        Photo.Into(img, photo);
+        rim.raycastTarget = false; img.raycastTarget = false;
+        return img;
+    }
     public static Texture2D Face(int ch) => Resources.Load<Texture2D>("UI/Faces/" + Faces[Mathf.Clamp(ch, 0, Faces.Length - 1)]);
 
     /* ---------- muting a player (on this phone) ---------- */
@@ -331,6 +342,7 @@ public partial class Menus
         refreshOpen = null;
         var face = Ui.Picture(body, "Face", Face((int)from.Num("ch")));
         face.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(72, 90), new Vector2(0, 0));
+        Photo.Into(face, from.Str("photo"));
         Ui.Label(body, from.Str("name") + " " + Loc.T("بيدعوك تلعب") + " " + Loc.T(App.GameNames[game]), 17, Color.white, TextAnchor.MiddleCenter, Ui.Bold).rectTransform
             .Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(420, 28), new Vector2(0, -96));
         if (!string.IsNullOrEmpty(m.Str("group")))

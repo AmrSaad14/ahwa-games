@@ -387,6 +387,14 @@ public class GameUi : MonoBehaviour
             }
             var lt = Ui.Label(row.transform, name, 14, s == null ? new Color(1, 1, 1, 0.5f) : Color.white, Loc.En ? TextAnchor.MiddleLeft : TextAnchor.MiddleRight, Ui.Bold);
             lt.rectTransform.Fill(10);
+            if (s != null)
+            {
+                // their photo (or their character's face) at the start of the row
+                var pic = Ui.Picture(row.transform, "Face", Menus.Face(s.ch));
+                pic.rectTransform.Place(new Vector2(Loc.En ? 0 : 1, 0.5f), new Vector2(Loc.En ? 0 : 1, 0.5f), new Vector2(26, 26), new Vector2(Loc.En ? 16 : -16, 0));
+                Photo.Into(pic, s.photo);
+                if (Loc.En) lt.rectTransform.offsetMin = new Vector2(36, lt.rectTransform.offsetMin.y); else lt.rectTransform.offsetMax = new Vector2(-36, lt.rectTransform.offsetMax.y);
+            }
             if (s == null && host)
             {
                 var b = Ui.Button(row.transform, "+ كمبيوتر", Ui.Gold, Ui.Ink, 12, () => { Sfx.Tap(); app.AddBot(seat); });
