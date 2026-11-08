@@ -1052,6 +1052,13 @@ public class GameUi : MonoBehaviour
             // on screen, and clear of the top bar
             float halfH = root.rect.height / 2, halfW = root.rect.width / 2;
             local.y = Mathf.Min(local.y, halfH - 66); local.x = Mathf.Clamp(local.x, -halfW + 104, halfW - 150);   // clear of the screen edge and the mic / chat / sound buttons on the right
+            // a board (ludo, chess, tawla) fills the middle: the names go to the sides instead of over it
+            if (v.Board && !App.CardGame(v.game))
+            {
+                if (pos == 2) local = new Vector2(-halfW + 110, halfH - 66);
+                else if (pos == 1) local = new Vector2(halfW - 150, -halfH * 0.25f);
+                else if (pos == 3) local = new Vector2(-halfW + 104, -halfH * 0.45f);
+            }
             rt.anchoredPosition = local;
             string extra = "";
             if (!s.bot && s.back > 0) extra = "  ·  " + Loc.T("بيرجع") + " " + Mathf.Max(0, Mathf.CeilToInt((float)((s.back - app.ServerNow()) / 1000))) + Loc.T("ث");

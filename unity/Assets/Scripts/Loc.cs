@@ -284,5 +284,6 @@ public static class Loc
         ["اختار ٣ ورق أو أكتر ودوس «مجموعة»: نفس الرقم بأشكال مختلفة، أو ورا بعض من نفس الشكل"] = "Pick 3+ cards and tap Group: one rank in different suits, or a run in one suit",
         ["أول نزلة لازم مجموعها ٥١ أو أكتر. الجوكر بيكمّل أي مجموعة"] = "Your first lay-down must total 51+. A joker completes any meld",
         ["في الآخر اختار ورقة ودوس «ارمي». اللي يخلّص ورقه الأول يكسب الدور"] = "Finish by picking a card and tapping Throw. The first to run out wins the deal",
+        ["العسكري وصل! يبقى إيه؟"] = "Your pawn made it! Promote to:",
 };
 }

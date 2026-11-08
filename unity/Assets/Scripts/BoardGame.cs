@@ -26,6 +26,7 @@ public class BoardGame : MonoBehaviour
 
     public void Show(bool on)
     {
+        if (promoPanel != null) { Destroy(promoPanel); promoPanel = null; }
         if (!on && board != null) { Destroy(board.root); board = null; }
         view = null; sel = -1000; targets.Clear();
     }
@@ -53,6 +54,17 @@ public class BoardGame : MonoBehaviour
                 // a big double in tawla: a little cheer from whoever threw it
                 var d = v.last.dice;
                 if (v.game == "tawla" && d.Count == 2 && d[0] == d[1] && d[0] >= 5) { var c = app.dominoTable.CharAtSeat(v.last.s); if (c != null) app.StartCoroutine(Later(0.6f, c.Cheer)); }
+            }
+            else if (t == "move" && v.game == "chess")
+            {
+                if (v.last.capture) Sfx.Slap(); else Sfx.Clack();
+                if (v.last.check) app.StartCoroutine(Later(0.25f, Sfx.Alert));
+            }
+            else if (t == "pawn" && v.game == "ludo")
+            {
+                // the pawn counts its squares (ticks as it walks); a pawn knocked home gets a slap when it lands
+                if (v.last.knocked) app.StartCoroutine(Later(1.1f, Sfx.Slap));
+                if (v.last.home) app.StartCoroutine(Later(1.1f, Sfx.Chime));
             }
             else if (t == "move" || t == "step" || t == "pawn") Sfx.Clack();
             var who = app.dominoTable.CharAtSeat(v.last.s);
@@ -188,11 +200,13 @@ public class BoardGame : MonoBehaviour
             if (view.game == "chess")
             {
                 var a = new Dictionary<string, object> { ["t"] = "move", ["from"] = (double)sel, ["to"] = (double)p };
+                bool promo = false;
                 foreach (var m in view.chess?.Arr("legal") ?? new List<object>())
                 {
                     var l = m as List<object>;
-                    if (l != null && l.Count >= 3 && (int)(double)l[0] == sel && (int)(double)l[1] == p) a["promo"] = "q";
+                    if (l != null && l.Count >= 3 && (int)(double)l[0] == sel && (int)(double)l[1] == p) promo = true;
                 }
+                if (promo) { AskPromotion(a); sel = -1000; targets.Clear(); board.Render(view, sel, targets, Movable()); return; }
                 Act(a);
             }
             else
@@ -214,6 +228,31 @@ public class BoardGame : MonoBehaviour
         else { sel = -1000; targets.Clear(); }
         board.Render(view, sel, targets, Movable());
         app.game.Render(view, -1, null);   // the hint under the board changes with the selection
+    }
+
+    /// A pawn reaching the last rank: what it becomes (a queen, unless you choose otherwise).
+    GameObject promoPanel;
+    void AskPromotion(Dictionary<string, object> move)
+    {
+        if (promoPanel != null) Destroy(promoPanel);
+        var canvas = Ui.MakeCanvas("Promotion", 40);
+        promoPanel = canvas.gameObject;
+        var dim = Ui.Box(canvas.transform, "Dim", new Color(0, 0, 0, 0.45f)); dim.rectTransform.Fill();
+        var box = Ui.Box(canvas.transform, "Box", new Color(0.12f, 0.07f, 0.04f, 0.97f));
+        box.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(380, 130), Vector2.zero);
+        Ui.Label(box.rectTransform, "العسكري وصل! يبقى إيه؟", 16, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(360, 30), new Vector2(0, -6));
+        bool white = view.chess?.Str("you") != "b";
+        var opts = new[] { ("q", white ? "♕" : "♛", "وزير"), ("r", white ? "♖" : "♜", "طابية"), ("b", white ? "♗" : "♝", "فيل"), ("n", white ? "♘" : "♞", "حصان") };
+        for (int i = 0; i < opts.Length; i++)
+        {
+            var (code, sym, name) = opts[i];
+            var b = Ui.Button(box.rectTransform, sym + "\n" + name, i == 0 ? Ui.Gold : new Color(0.98f, 0.94f, 0.86f), Ui.Ink, 15, () =>
+            {
+                move["promo"] = code; Sfx.Tap(); Act(move);
+                Destroy(promoPanel); promoPanel = null;
+            });
+            ((RectTransform)b.transform).Place(new Vector2(0, 0), new Vector2(0, 0), new Vector2(80, 76), new Vector2(12 + i * 90, 10));
+        }
     }
 
     /// The test run plays by itself: roll, or make the first move there is.

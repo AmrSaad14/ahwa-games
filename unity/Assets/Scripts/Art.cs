@@ -322,6 +322,45 @@ public class Hop : MonoBehaviour
     }
 }
 
+/// Walks a piece square by square along a path (a ludo pawn counting out the die), a little hop and a tick on
+/// each square. It runs on the clock it was started with, so a board drawn again mid-walk carries on from where it was.
+public class HopPath : MonoBehaviour
+{
+    public List<Vector3> points;          // the squares, the first one where it starts
+    public float start, delay, step = 0.17f, height = 0.32f;
+    public bool sound = true;
+    int lastStep = -2;
+    public float Duration => delay + (points != null ? (points.Count - 1) * step : 0);
+    void Update()
+    {
+        if (points == null || points.Count == 0) { Destroy(this); return; }
+        float t = Time.time - start - delay;
+        if (t < 0) { transform.localPosition = points[0]; return; }
+        float f = t / step; int i = Mathf.FloorToInt(f);
+        if (i >= points.Count - 1) { transform.localPosition = points[points.Count - 1]; if (sound && lastStep != points.Count - 1 && lastStep != -2) Sfx.Tick(); Destroy(this); return; }
+        float k = f - i;
+        transform.localPosition = Vector3.Lerp(points[i], points[i + 1], k) + Vector3.up * Mathf.Sin(k * Mathf.PI) * height;
+        if (lastStep == -2) lastStep = i;                       // joined mid-walk: no ticks for squares already passed
+        else if (i != lastStep) { lastStep = i; if (sound) Sfx.Tick(); }
+    }
+}
+
+/// A taken piece: it tips over, sinks and fades away where it stood.
+public class Fall : MonoBehaviour
+{
+    float t; Vector3 p0; Quaternion r0; Vector3 s0;
+    void Start() { p0 = transform.localPosition; r0 = transform.localRotation; s0 = transform.localScale; }
+    void Update()
+    {
+        t += Time.deltaTime / 0.55f;
+        float k = Mathf.Clamp01(t);
+        transform.localRotation = r0 * Quaternion.Euler(k * 80, 0, k * 25);
+        transform.localPosition = p0 + new Vector3(0, -0.2f * k, 0.25f * k);
+        transform.localScale = s0 * (1 - 0.6f * k);
+        if (t >= 1) Destroy(gameObject);
+    }
+}
+
 /// A die tumbling as it lands, then settling face up.
 public class Tumble : MonoBehaviour
 {

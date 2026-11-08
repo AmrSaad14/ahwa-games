@@ -18,7 +18,7 @@ public class LastAction
     // the board games
     public int from = -1000, to = -1000, i = -1;
     public List<int> dice = new List<int>();
-    public bool capture, check, hit, home;
+    public bool capture, check, hit, home, knocked;   // knocked: a ludo pawn sent home
     // basra: the card played, what it took, the basra points, the deal ended
     public int card = -1, basra;
     public List<int> took = new List<int>();
@@ -105,7 +105,7 @@ public class TableView
             var e = last.Str("e");
             v.last = new LastAction { t = last.Str("t"), s = I(last, "s", -1), id = I(last, "id", -1), k = I(last, "k"), e = e.Length > 0 ? e[0] : ' ', auto = last.Bool("auto"), forced = last.Bool("forced"),
                 from = I(last, "from", -1000), to = I(last, "to", -1000), i = I(last, "i", -1), dice = Ints(last.Arr("dice")),
-                capture = last.Bool("capture"), check = last.Bool("check"), hit = last.Bool("hit"), home = last.Bool("home"),
+                capture = last.Bool("capture"), check = last.Bool("check"), hit = last.Bool("hit"), home = last.Bool("home"), knocked = last.Arr("captured") is List<object> kc && kc.Count > 0,
                 card = I(last, "card", -1), took = Ints(last.Arr("took")), basra = I(last, "basra"), deal = last.Bool("deal"),
                 trick = I(last, "trick", -1), n = I(last, "n", -1), suit = I(last, "suit", -1), meld = I(last, "meld", -1) };
         }

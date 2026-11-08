@@ -71,6 +71,7 @@ public class ChessBoard : Board
     static string pieceSkin;
     static readonly Dictionary<string, Mesh[]> meshes = new Dictionary<string, Mesh[]>();
     readonly Dictionary<int, GameObject> bySq = new Dictionary<int, GameObject>();
+    string[] prevBoard;
 
     public ChessBoard(Transform parent) : base("chess", parent)
     {
@@ -169,16 +170,57 @@ public class ChessBoard : Board
                 if (occupied) Mark(Art.Ring(0.38f, 0.5f), new Color(0.12f, 0.43f, 0.39f, 0.85f), Pos(t) + Vector3.up * 0.01f);
                 else Mark(Art.Disc(0.17f), new Color(0.12f, 0.43f, 0.39f, 0.8f), Pos(t) + Vector3.up * 0.01f);
             }
-        // the move just made slides in
+        // the piece you picked stands up off the board
+        if (sel >= 0 && bySq.TryGetValue(sel, out var picked)) { picked.transform.localPosition += Vector3.up * 0.16f; picked.AddComponent<Bob>(); }
+        // the pieces taken so far, lined up beside the board: each side's catch on its own right
+        var taken = c.Arr("captured");
+        if (taken != null)
+        {
+            int nw = 0, nb = 0;
+            var list = new List<string>(); foreach (var o in taken) if (o is string t0) list.Add(t0);
+            list.Sort((a, b) => Worth(b).CompareTo(Worth(a)));
+            float side = S * 4 + FrameW + 0.42f;
+            foreach (var t in list)
+            {
+                bool whiteLost = t == t.ToUpperInvariant();      // a white piece taken: black's catch, on black's right
+                int n = whiteLost ? nb++ : nw++;
+                var g = Piece(t, pieces);
+                g.transform.localScale = Vector3.one * PS * 0.5f;
+                g.transform.localPosition = whiteLost ? new Vector3(-side - (n / 8) * 0.42f, 0.0f, S * 3.6f - (n % 8) * 0.5f) : new Vector3(side + (n / 8) * 0.42f, 0.0f, -S * 3.6f + (n % 8) * 0.5f);
+            }
+        }
+        // the move just made slides in (a knight jumps); anything it took tips over and goes
         if (v.last != null && v.last.k != lastK)
         {
             lastK = v.last.k;
             if (v.last.t == "move" && v.last.from >= 0 && bySq.TryGetValue(v.last.to, out var moved))
             {
-                var h = moved.AddComponent<Hop>(); h.from = Pos(v.last.from); h.to = Pos(v.last.to); h.height = 0.5f;
+                bool knight = board != null && v.last.to < board.Count && (board[v.last.to] as string ?? "").ToLowerInvariant() == "n";
+                var h = moved.AddComponent<Hop>(); h.from = Pos(v.last.from); h.to = Pos(v.last.to); h.height = knight ? 0.7f : 0.06f; h.time = knight ? 0.38f : 0.3f;
+                // castling: the rook comes across too
+                if ((board[v.last.to] as string ?? "").ToLowerInvariant() == "k" && Mathf.Abs((v.last.to & 7) - (v.last.from & 7)) == 2)
+                {
+                    int rank = v.last.to & ~7, rf = (v.last.to & 7) == 6 ? rank + 7 : rank, rt = (v.last.to & 7) == 6 ? rank + 5 : rank + 3;
+                    if (bySq.TryGetValue(rt, out var rook)) { var rh = rook.AddComponent<Hop>(); rh.from = Pos(rf); rh.to = Pos(rt); rh.height = 0.06f; rh.time = 0.3f; }
+                }
+                if (v.last.capture && prevBoard != null)
+                {
+                    // what stood where it landed (or, en passant, beside it)
+                    int at = !string.IsNullOrEmpty(prevBoard[v.last.to]) ? v.last.to : (v.last.from & ~7) | (v.last.to & 7);
+                    if (at >= 0 && at < 64 && !string.IsNullOrEmpty(prevBoard[at]))
+                    {
+                        var ghost = Piece(prevBoard[at], pieces);
+                        ghost.transform.localPosition = Pos(at);
+                        var f = ghost.AddComponent<Fall>();
+                        Object.Destroy(ghost, 0.7f);
+                    }
+                }
             }
         }
+        if (board != null) { prevBoard = new string[64]; for (int sq = 0; sq < 64 && sq < board.Count; sq++) prevBoard[sq] = board[sq] as string; }
     }
+
+    static int Worth(string p) { switch (p.ToLowerInvariant()) { case "q": return 9; case "r": return 5; case "b": return 3; case "n": return 3; default: return 1; } }
 
     static readonly Vector2[] Base = { V(0, 0), V(0.36f, 0), V(0.385f, 0.015f), V(0.385f, 0.055f), V(0.365f, 0.075f), V(0.335f, 0.09f), V(0.345f, 0.115f), V(0.33f, 0.135f), V(0.28f, 0.16f) };
     static Vector2 V(float r, float y) => new Vector2(r, y);
@@ -509,7 +551,8 @@ public class LudoBoard : Board
     static Mesh pawnMesh;
     static Material[] pawnMats;
     readonly List<(GameObject go, int i)> movableNow = new List<(GameObject, int)>();
-    readonly Dictionary<string, Vector3> prevPos = new Dictionary<string, Vector3>();
+    static Material shadowMat;
+    float rolledAt = -10;
     GameObject die;
 
     static List<Vector2Int> Path
@@ -603,9 +646,9 @@ public class LudoBoard : Board
         return d < Mathf.Lerp(r * 0.45f, r, Mathf.Abs(k - 0.5f) * 2);
     }
 
-    Vector3 PawnPos(List<int> colors, List<List<int>> pawns, int seat, int i)
+    /// Where a pawn of a colour stands at a progress (-1 base, 0…50 track, LAP, 51…55 home column, 56 home).
+    static Vector3 ProgPos(int color, int prog, int i)
     {
-        int color = colors[seat], prog = pawns[seat][i];
         if (prog == LAP) { var c = path[(COLOR_OFFSET[color] + 51) % TRACK]; return CellPos(c.x, c.y); }
         if (prog < 0) { var o = BaseOrigin[color]; var s = BaseSpots[i]; return CellPos(o.x + s.x, o.y + s.y); }
         if (prog <= 50) { var c = path[(COLOR_OFFSET[color] + prog) % TRACK]; return CellPos(c.x, c.y); }
@@ -614,6 +657,43 @@ public class LudoBoard : Board
         var dir = new[] { new Vector2(-1, 0), new Vector2(0, -1), new Vector2(1, 0), new Vector2(0, 1) }[color];
         return ctr + new Vector3(dir.x * 0.55f + (i - 1.5f) * 0.12f * (dir.y != 0 ? 1 : 0), 0, -(dir.y * 0.55f + (i - 1.5f) * 0.12f * (dir.x != 0 ? 1 : 0)));
     }
+    Vector3 PawnPos(List<int> colors, List<List<int>> pawns, int seat, int i) => ProgPos(colors[seat], pawns[seat][i], i);
+
+    /// The squares a pawn walks through from one progress to the next, one per pip of the die.
+    static List<Vector3> Walk(int color, int from, int to, int i)
+    {
+        var pts = new List<Vector3> { ProgPos(color, from, i) };
+        if (from < 0 && from != LAP) { pts.Add(ProgPos(color, to, i)); return pts; }          // out of the base: one hop
+        int rf = from == LAP ? 51 : from;
+        if (to != LAP && to > rf && to - rf <= 6)
+            for (int p = rf + 1; p <= to; p++) pts.Add(ProgPos(color, p, i));              // straight on (the track, then the home column)
+        else
+        {
+            // going round again (master): count on round the track
+            int rt = to == LAP ? 51 : to, n = ((rt - rf) % 52 + 52) % 52;
+            if (n == 0 || n > 6) { pts.Add(ProgPos(color, to, i)); return pts; }
+            for (int k2 = 1; k2 <= n; k2++) { int r = (rf + k2) % 52; pts.Add(ProgPos(color, r == 51 ? LAP : r, i)); }
+        }
+        return pts;
+    }
+
+    /// Where a pawn would land with this die (to show you before you choose).
+    static int Dest(int prog, int die, bool circling)
+    {
+        if (prog == -1) return 0;
+        if (circling && (prog == LAP || (prog >= 0 && prog <= 50)))
+        {
+            int rel = (prog == LAP ? 51 : prog) + die;
+            if (rel <= 50) return rel;
+            int r = rel % 52; return r == 51 ? LAP : r;
+        }
+        return prog + die;
+    }
+
+    // the walks under way: pawn → its path, when it started, and how long it waits first (a taken pawn waits for
+    // the one that took it to arrive)
+    readonly Dictionary<string, (List<Vector3> pts, float start, float delay)> walks = new Dictionary<string, (List<Vector3>, float, float)>();
+    readonly Dictionary<string, int> prevProg = new Dictionary<string, int>();
 
     public override Pick PickAt(Vector3 l)
     {
@@ -635,7 +715,7 @@ public class LudoBoard : Board
         var colors = TableView.IntList(s.Arr("colors"));
         var pawns = new List<List<int>>();
         foreach (var a in s.Arr("pawns") ?? new List<object>()) pawns.Add(TableView.IntList(a as List<object>));
-        int you = (int)s.Num("you", -1);
+        int you = (int)s.Num("you", -1), turn = (int)s.Num("turn", -1);
         int myColor = you >= 0 && you < colors.Count ? colors[you] : 3;
         spin.localRotation = Quaternion.Euler(0, -90 * new[] { 1, 2, 3, 0 }[myColor], 0);   // your base at the bottom-left
         Clear(pieces); Clear(marks); movableNow.Clear();
@@ -643,9 +723,42 @@ public class LudoBoard : Board
         {
             pawnMesh = Art.Lathe(new[] { new Vector2(0, 0), new Vector2(0.25f, 0), new Vector2(0.265f, 0.02f), new Vector2(0.26f, 0.05f), new Vector2(0.2f, 0.09f), new Vector2(0.14f, 0.16f), new Vector2(0.105f, 0.26f), new Vector2(0.1f, 0.32f), new Vector2(0.16f, 0.34f), new Vector2(0.165f, 0.365f), new Vector2(0.1f, 0.38f), new Vector2(0.09f, 0.4f), new Vector2(0.13f, 0.43f), new Vector2(0.15f, 0.49f), new Vector2(0.13f, 0.56f), new Vector2(0.07f, 0.6f), new Vector2(0, 0.61f) }, 36);
             pawnMats = new Material[4];
-            for (int c = 0; c < 4; c++) pawnMats[c] = Art.Mat(Colors[c], 0.85f);
+            for (int c = 0; c < 4; c++) pawnMats[c] = Art.Mat(Colors[c], 0.85f, 0.05f);
         }
         bool newMove = v.last != null && v.last.k != lastK;
+        // a pawn just moved: it walks the squares; anyone it knocked off goes home once it gets there
+        if (newMove && v.last.t == "pawn" && v.last.s >= 0 && v.last.s < pawns.Count && v.last.s < colors.Count)
+        {
+            int seat = v.last.s, i = v.last.i;
+            string id = seat + ":" + i;
+            if (i >= 0 && i < pawns[seat].Count && prevProg.TryGetValue(id, out int from) && from != pawns[seat][i])
+            {
+                var w = Walk(colors[seat], from, pawns[seat][i], i);
+                // a move made straight after the throw (the only pawn that could go): let the die land first
+                float wait = Mathf.Max(0, 0.6f - (Time.time - rolledAt));
+                walks[id] = (w, Time.time, wait);
+                float arrive = wait + (w.Count - 1) * 0.17f;
+                for (int os = 0; os < pawns.Count && os < colors.Count; os++)
+                    for (int oi = 0; oi < pawns[os].Count; oi++)
+                    {
+                        string oid = os + ":" + oi;
+                        if (os == seat || pawns[os][oi] != -1 || !prevProg.TryGetValue(oid, out int was) || was == -1) continue;
+                        walks[oid] = (new List<Vector3> { ProgPos(colors[os], was, oi), ProgPos(colors[os], -1, oi) }, Time.time, arrive);
+                    }
+            }
+        }
+        // the turn: a glow round the base of whoever is playing
+        if (turn >= 0 && turn < colors.Count)
+        {
+            var o = BaseOrigin[colors[turn]]; var cc = Colors[colors[turn]];
+            var ctr = CellPos(o.x + 2.5f, o.y + 2.5f) + Vector3.up * 0.004f;
+            float side = CELL * 6, th = 0.09f;
+            foreach (var (dx, dz, sx, sz) in new[] { (0f, side / 2, side, th), (0f, -side / 2, side, th), (side / 2, 0f, th, side), (-side / 2, 0f, th, side) })
+            {
+                var g = Mark(QuadUp, new Color(1f, 0.9f, 0.55f, 0.85f), ctr + new Vector3(dx, 0, dz));
+                g.transform.localScale = new Vector3(sx, 1, sz);
+            }
+        }
         var bySpot = new Dictionary<string, int>();
         for (int seat = 0; seat < pawns.Count && seat < colors.Count; seat++)
             for (int i = 0; i < pawns[seat].Count; i++)
@@ -656,14 +769,38 @@ public class LudoBoard : Board
                 if (k > 0 && pawns[seat][i] != -1) pos += new Vector3((k % 2 == 1 ? 1 : -1) * 0.14f, 0, k > 1 ? 0.14f : -0.14f);
                 var g = Art.Obj("Pawn", pieces, pawnMesh, pawnMats[colors[seat]]);
                 g.transform.localPosition = pos;
+                g.transform.localScale = Vector3.one * 1.12f;
+                // a soft shadow under it, so it reads against the card
+                var sh = Art.Obj("Shadow", g.transform, Art.Disc(0.27f), shadowMat ??= Art.Glow(new Color(0, 0, 0, 0.28f)), false);
+                sh.transform.localPosition = Vector3.up * 0.003f;
                 string id = seat + ":" + i;
-                if (newMove && prevPos.TryGetValue(id, out var prev) && (prev - pos).sqrMagnitude > 0.0001f) { var h = g.AddComponent<Hop>(); h.from = prev; h.to = pos; h.height = 0.7f; h.time = 0.4f; }
-                prevPos[id] = pos;
+                bool walking = false;
+                if (walks.TryGetValue(id, out var wk))
+                {
+                    var hp = g.AddComponent<HopPath>();
+                    hp.points = new List<Vector3>(wk.pts); hp.points[hp.points.Count - 1] = pos; hp.start = wk.start; hp.delay = wk.delay;
+                    if (wk.pts.Count == 2 && pawns[seat][i] == -1) { hp.height = 0.9f; hp.step = 0.4f; hp.sound = false; }   // knocked home
+                    if (Time.time - wk.start >= hp.Duration) { walks.Remove(id); Object.Destroy(hp); }
+                    else walking = true;
+                }
+                prevProg[id] = pawns[seat][i];
                 if (seat == you && movable != null && movable.Contains(i))
                 {
                     movableNow.Add((g, i));
-                    if (g.GetComponent<Hop>() == null) g.AddComponent<Bob>();
-                    Mark(Art.Ring(0.24f, 0.32f), new Color(1f, 0.81f, 0.43f, 0.9f), new Vector3(pos.x, 0.31f, pos.z));
+                    if (!walking) g.AddComponent<Bob>();
+                    Mark(Art.Ring(0.26f, 0.36f), new Color(1f, 0.81f, 0.43f, 0.95f), new Vector3(pos.x, 0.31f, pos.z));
+                    // where it would land
+                    if (s.TryGetValue("die", out var dvv) && dvv is double dd0)
+                    {
+                        bool circling = s.Str("variant") == "master" && TableView.IntList(s.Arr("captures")).Count > seat && TableView.IntList(s.Arr("captures"))[seat] == 0;
+                        int to = Dest(pawns[seat][i], (int)dd0, circling);
+                        if (to <= HOME)
+                        {
+                            var dst = ProgPos(colors[seat], to, i);
+                            Mark(Art.Disc(0.22f), new Color(Colors[colors[seat]].r, Colors[colors[seat]].g, Colors[colors[seat]].b, 0.55f), new Vector3(dst.x, 0.312f, dst.z));
+                            Mark(Art.Ring(0.22f, 0.27f), new Color(1f, 1f, 1f, 0.8f), new Vector3(dst.x, 0.313f, dst.z));
+                        }
+                    }
                 }
             }
         die = null;
@@ -673,9 +810,19 @@ public class LudoBoard : Board
             int val = dv is double dd ? (int)dd : v.last != null && v.last.dice.Count > 0 ? v.last.dice[0] : 1;
             var dsk = Skins.Worn("dice");
             var (lFace, lPip) = Skins.Dice(dsk);
-            die = Art.Die(pieces, Mathf.Clamp(val, 1, 6), 0.55f, lFace, dsk == "dice_ivory" ? Art.Hex("#c8402f") : lPip);
-            die.transform.localPosition = CellPos(7, 7) + Vector3.up * 0.3f;
-            if (newMove && v.last.t == "roll") die.AddComponent<Tumble>();
+            die = Art.Die(pieces, Mathf.Clamp(val, 1, 6), 0.62f, lFace, dsk == "dice_ivory" ? Art.Hex("#c8402f") : lPip);
+            die.transform.localPosition = CellPos(7, 7) + Vector3.up * 0.32f;
+            if (newMove && v.last.t == "roll") { die.AddComponent<Tumble>(); rolledAt = Time.time; }
+        }
+        else if (you >= 0 && turn == you)
+        {
+            // your throw: the die waits in the middle, glowing, for a tap
+            var dsk = Skins.Worn("dice");
+            var (lFace, lPip) = Skins.Dice(dsk);
+            die = Art.Die(pieces, 6, 0.62f, lFace, dsk == "dice_ivory" ? Art.Hex("#c8402f") : lPip);
+            die.transform.localPosition = CellPos(7, 7) + Vector3.up * 0.32f;
+            die.AddComponent<Bob>();
+            Mark(Art.Ring(0.5f, 0.62f), new Color(1f, 0.85f, 0.45f, 0.9f), CellPos(7, 7) + Vector3.up * 0.01f);
         }
         if (newMove) lastK = v.last.k;
     }
