@@ -197,7 +197,7 @@ public class GameUi : MonoBehaviour
         card.raycastTarget = true;
         pickerTitle = Ui.Label(picker, "", 24, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold);
         pickerTitle.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 34), new Vector2(0, -8));
-        var x = Ui.Button(picker, "", new Color(1, 1, 1, 0.08f), Color.white, 10, () => { Sfx.Tap(); HidePicker(); app.cafe.Shot(null); });
+        var x = Ui.Button(picker, "", new Color(1, 1, 1, 0.08f), Color.white, 10, () => { app.Unpick(); });
         ((RectTransform)x.transform).Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(32, 32), new Vector2(-8, -8));
         Ui.Picture(x.transform, "X", Menus.Icon("close")).rectTransform.Fill(8);
         modeRow = Ui.Rect("Modes", picker).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(380, 40), new Vector2(0, -50));

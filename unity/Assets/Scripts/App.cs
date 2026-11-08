@@ -251,15 +251,42 @@ public class App : MonoBehaviour
                 }
             }
         }
+        // on the café floor: a tap on a table picks its game; a tap anywhere else (not a drag or a pinch) zooms back
+        // out to the whole café
+        if (view == null && cafe != null && cafe.ready && homeTapping)
+        {
+            if (Input.touchCount >= 2) homeTapPinched = true;
+            if (Input.GetMouseButtonUp(0))
+            {
+                homeTapping = false;
+                Vector2 up = Input.mousePosition;
+                if (!homeTapPinched && (up - homeTapFrom).magnitude < Screen.height * 0.04f)
+                {
+                    var t = cafe.TableAt(homeTapFrom);
+                    if (t != null) Pick(t);
+                    else if (picked != null) Unpick();
+                }
+            }
+        }
         if (cafe == null || !cafe.ready || !Input.GetMouseButtonDown(0) || OverUi()) return;
         if (view != null)
         {
             boardDragFrom = Input.mousePosition; boardDragging = true; boardPinched = Input.touchCount >= 2;
             return;
         }
-        // on the café floor, taps pick a table
-        var t = cafe.TableAt(Input.mousePosition);
-        if (t != null) Pick(t);
+        homeTapFrom = Input.mousePosition; homeTapping = true; homeTapPinched = Input.touchCount >= 2;
+    }
+    Vector2 homeTapFrom; bool homeTapping, homeTapPinched;
+
+    /// Back to the whole café: the game's choices close and the camera pulls out.
+    public void Unpick()
+    {
+        picked = null;
+        game.HidePicker();
+        cafe.Focus(null);
+        foreach (var kv in gameButtons) kv.Value.color = Ui.Panel;
+        foreach (var kv in gameButtons) kv.Value.GetComponentInChildren<Text>().color = Ui.GoldLight;
+        Sfx.Tap();
     }
 
     /// Is the finger (or mouse) on a button or panel? On a phone each touch has its own pointer id, so the plain
