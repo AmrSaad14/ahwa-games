@@ -148,6 +148,11 @@ public static class BuildScript
         PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.Android, false);
         PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, new[] { UnityEngine.Rendering.GraphicsDeviceType.OpenGLES3, UnityEngine.Rendering.GraphicsDeviceType.Vulkan });
         PlayerSettings.Android.forceInternetPermission = true;
+        // R8 on the release build: unused Java code removed, the rest optimised and renamed (Play Console's "DEX code
+        // optimization"): a smaller app that starts quicker and uses less memory. Keep rules: Editor/PushGradle.cs.
+        // The mapping file goes inside the .aab by itself, so Play's crash reports stay readable.
+        PlayerSettings.Android.minifyRelease = true;
+        PlayerSettings.Android.minifyDebug = false;
         bool signed = Sign();
         EditorUserBuildSettings.buildAppBundle = false;
         bool ok = Build(BuildTarget.Android, BuildTargetGroup.Android, "../build/android/BoardBattles.apk");

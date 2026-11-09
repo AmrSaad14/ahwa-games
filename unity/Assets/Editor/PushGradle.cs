@@ -29,6 +29,18 @@ public class PushGradle : IPostGenerateGradleAndroidProject
             File.AppendAllText(gradle, "\n// Google Play purchases: coin packs, the season pass, the ad-free month (Plugins/Android/BBBilling.java)\ndependencies {\n    implementation 'com.android.billingclient:billing:8.3.0'\n}\n");
         if (!g.Contains("app-update"))
             File.AppendAllText(gradle, "\n// the forced update: Play's in-app update (Plugins/Android/BBUpdate.java)\ndependencies {\n    implementation 'com.google.android.play:app-update:2.1.0'\n}\n");
+        // R8 (code shrinking and optimising, BuildScript: minifyRelease): the classes C# calls by name stay whole.
+        // The libraries (Firebase, Play, billing, Unity Ads) bring their own rules; Unity keeps its player classes.
+        File.WriteAllText(Path.Combine(path, "proguard-bb.txt"),
+            "# Board Battles (Editor/PushGradle.cs): the Java helpers called from C# through JNI, by class and method name\n" +
+            "-keep class com.ahwa.** { *; }\n" +
+            "-keep class com.unity3d.player.** { *; }\n" +
+            "-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod,SourceFile,LineNumberTable\n" +
+            "-renamesourcefileattribute SourceFile\n" +
+            "-dontwarn com.unity3d.**\n" +
+            "-ignorewarnings\n");
+        if (!g.Contains("proguard-bb.txt"))
+            File.AppendAllText(gradle, "\n// the keep rules for R8 (Editor/PushGradle.cs)\nandroid {\n    defaultConfig {\n        consumerProguardFiles 'proguard-bb.txt'\n    }\n}\n");
         var props = Path.Combine(Path.GetDirectoryName(path), "gradle.properties");
         if (File.Exists(props))
         {
