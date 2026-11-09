@@ -254,3 +254,31 @@ test('push from the dashboard: off without Firebase, and it says so', async () =
   assert.equal(st.json.on, false);
   assert.equal((await adm('POST', '/push', { bodyAr: 'x', audience: 'all' })).status, 400);
 });
+
+test('admin: minimum app version — older apps get the update dialog and no new games; newer apps and the website play', async () => {
+  const { WebSocket } = await import('ws');
+  const open = async (hello: Record<string, unknown>) => {
+    const ws = new WebSocket(base.replace('http', 'ws') + '/ws');
+    const msgs: { t: string; code?: string; min?: number }[] = [];
+    await new Promise(r => ws.once('open', r));
+    ws.on('message', d => msgs.push(JSON.parse(d.toString())));
+    ws.send(JSON.stringify({ t: 'hello', ...hello }));
+    const until = async (f: () => boolean) => { for (let i = 0; i < 200 && !f(); i++) await new Promise(r => setTimeout(r, 25)); assert.ok(f()); };
+    await until(() => msgs.some(m => m.t === 'welcome'));
+    return { ws, msgs, until, send: (m: unknown) => ws.send(JSON.stringify(m)) };
+  };
+  const s = await adm('PUT', '/settings', { update: { minBuild: 130 } });
+  assert.equal(s.json.update.minBuild, 130);
+  const old = await open({ v: 2, build: 122 }), legacy = await open({ v: 2 }), fresh = await open({ v: 2, build: 130 }), web = await open({ v: 1 });
+  await old.until(() => old.msgs.some(m => m.t === 'mustUpdate' && m.min === 130));
+  await legacy.until(() => legacy.msgs.some(m => m.t === 'mustUpdate') && legacy.msgs.some(m => m.t === 'notice'));
+  old.send({ t: 'create', mode: 'ffa2', target: 51 });
+  await old.until(() => old.msgs.some(m => m.t === 'err' && m.code === 'update'));
+  for (const c of [fresh, web]) {
+    c.send({ t: 'create', mode: 'ffa2', target: 51 });
+    await c.until(() => c.msgs.some(m => m.t === 'table'));
+    assert.ok(!c.msgs.some(m => m.t === 'mustUpdate'));
+  }
+  await adm('PUT', '/settings', { update: { minBuild: 0 } });
+  for (const c of [old, legacy, fresh, web]) c.ws.close();
+});

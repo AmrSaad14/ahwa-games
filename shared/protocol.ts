@@ -213,7 +213,7 @@ export interface PlayerCard {
 
 /** Client → server */
 export type C2S =
-  | { t: 'hello'; token?: string; v?: number }
+  | { t: 'hello'; token?: string; v?: number; build?: number }
   /** Collect today's daily reward (clients from v2 on; older ones get it as soon as they connect). */
   | { t: 'daily' }
   /** After a matchmade game: play again with the same people. */
@@ -337,6 +337,7 @@ export type S2C =
   | { t: 'titles'; list: TitleDef[] }
   | { t: 'titleWon'; id: string; month: string }
   | { t: 'notice'; text: string }
+  | { t: 'mustUpdate'; min: number }
   | { t: 'prizeClaimed'; id: number }
   | { t: 'chestOpened'; step: number; coins: number; xp: number }
   | { t: 'comeback'; coins: number; days: number }

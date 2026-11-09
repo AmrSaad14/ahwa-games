@@ -661,6 +661,8 @@ RENDER.settings = async main => {
   main.innerHTML = '<h1>Game settings</h1><div class="sub">Changes reach the game at once, without a restart. Every change is in the activity log.</div>' +
     '<h2>Maintenance</h2><div class="card"><div class="form"><label class="f">Maintenance mode<span class="switch"><input type="checkbox" id="mo"' + (s.maintenance.on ? ' checked' : '') + '> no new games start</span></label>' +
       '<label class="f" style="grid-column:span 2">Message players see<input id="mm" value="' + esc(s.maintenance.message) + '"></label></div></div>' +
+    '<h2>Forced update</h2><div class="card"><div class="form">' + n('ub', 'Minimum app version (build number, 0: any)', (s.update && s.update.minBuild) || 0, ' min="0"') + '</div>' +
+      '<div class="sub" style="margin-top:8px">Phones from Google Play are asked to update by themselves as soon as Play has a newer version. Set this only to stop an old version at once: apps with a lower build number get an update screen they can\'t close and can\'t start games. The build number is the AAB\'s version code (board-battles-<b>122</b>.aab). Raise it only once that version is live on Play, or those players can\'t update yet.</div></div>' +
     '<h2>Monthly prizes: Vodafone Cash</h2><div class="card"><div class="form">' +
       '<label class="f">Monthly prizes<span class="switch"><input type="checkbox" id="co"' + (s.prizes.enabled ? ' checked' : '') + '> the top player of each game wins money</span></label>' +
       n('ce', 'EGP for each game\'s winner', s.prizes.egp) + n('cd', 'Days to give a number', s.prizes.claimDays) +
@@ -677,6 +679,7 @@ RENDER.settings = async main => {
     const vals = cls => [...main.querySelectorAll('.' + cls)].map(i => Number(i.value));
     await act(() => api('/settings', { method: 'PUT', body: {
       maintenance: { on: $('#mo').checked, message: $('#mm').value },
+      update: { minBuild: Number($('#ub').value) },
       prizes: { enabled: $('#co').checked, egp: Number($('#ce').value), claimDays: Number($('#cd').value), prefixes: $('#cp').value.split(/[ ,]+/).filter(Boolean) },
       titles: { minGames: Number($('#cg').value) },
       economy: { startCoins: Number($('#es').value), adReward: Number($('#ea').value), adsPerDay: Number($('#ed').value), skinAdsPerDay: Number($('#esa').value), tutorialCoins: Number($('#et').value), comebackCoins: Number($('#eb').value), comebackDays: Number($('#ey').value), streak: vals('ek'), weeklyPrizes: vals('ew') },

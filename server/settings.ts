@@ -23,6 +23,8 @@ export interface GameSettings {
   economy: { startCoins: number; adReward: number; adsPerDay: number; skinAdsPerDay: number; streak: number[]; weeklyPrizes: number[]; tutorialCoins: number; comebackCoins: number; comebackDays: number };
   play: { botFillSeconds: number; turnSeconds: number; dominoTurnSeconds: number };   // turnSeconds: tawla and ludo
   maintenance: { on: boolean; message: string };
+  /** The oldest app build that may still play (0: any). Older apps get the update dialog and can't start games. */
+  update: { minBuild: number };
   notice: { text: string; until: number };
   /** "<game> player of the month": given by itself when a month ends, to the best of each game with enough games. */
   titles: { monthly: boolean; minGames: number };
@@ -39,6 +41,7 @@ function defaults(): GameSettings {
     economy: { startCoins: ECONOMY.startCoins, adReward: ECONOMY.adReward, adsPerDay: ECONOMY.adsPerDay, skinAdsPerDay: ECONOMY.skinAdsPerDay, tutorialCoins: ECONOMY.tutorialCoins, comebackCoins: ECONOMY.comebackCoins, comebackDays: ECONOMY.comebackDays, streak: [...STREAK], weeklyPrizes: [...WEEKLY_PRIZES] },
     play: { botFillSeconds: 60, turnSeconds: 10, dominoTurnSeconds: 20 },
     maintenance: { on: false, message: 'السيرفر في صيانة دلوقتي، ارجع كمان شوية · Maintenance, back soon' },
+    update: { minBuild: 0 },
     notice: { text: '', until: 0 },
     titles: { monthly: true, minGames: 10 },
     events: [],
@@ -103,6 +106,7 @@ export function sanitize(input: unknown, cur: GameSettings): GameSettings {
     },
     play: { botFillSeconds: int(p.botFillSeconds, 2, 120, cur.play.botFillSeconds), turnSeconds: int(p.turnSeconds, 5, 60, cur.play.turnSeconds), dominoTurnSeconds: int(p.dominoTurnSeconds, 5, 60, cur.play.dominoTurnSeconds ?? SHIPPED.play.dominoTurnSeconds) },
     maintenance: { on: bool(m.on, cur.maintenance.on), message: text(m.message, 300, cur.maintenance.message) },
+    update: { minBuild: int((i.update ?? {}).minBuild, 0, 1_000_000, cur.update?.minBuild ?? 0) },
     notice: { text: text(n.text, 400, cur.notice.text), until: int(n.until, 0, 4_102_444_800_000, cur.notice.until) },
     titles: { monthly: bool(ti.monthly, curTi.monthly), minGames: int(ti.minGames, 0, 10_000, curTi.minGames) },
     events: Array.isArray((input as { events?: unknown })?.events) ? ((input as { events: unknown[] }).events.map(e => cleanEvent(e)).filter((e): e is EventDef => !!e).slice(0, 20)) : (cur.events ?? []),

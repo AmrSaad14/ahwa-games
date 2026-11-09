@@ -32,7 +32,7 @@ export interface Conn {
   ip: string;
 }
 
-interface Session { conn: Conn; uid: string | null; msgs: Limiter; v?: number }
+interface Session { conn: Conn; uid: string | null; msgs: Limiter; v?: number; build?: number }
 interface QEntry { uid: string; since: number; rating: number; coins: number }
 /** Coins on a table for the match being played: who paid in, from which seat, and who has walked away. */
 interface Escrow { stake: number; mode: Mode; paid: Map<string, { seat: number; left: boolean }> }
@@ -258,7 +258,7 @@ export class Hub {
     try { m = JSON.parse(raw); } catch { return; }
     if (!m || typeof m !== 'object' || typeof (m as { t?: unknown }).t !== 'string') return;
     if (m.t === 'ping') return s.conn.send({ t: 'pong', c: Number(m.c) || 0, now: Date.now() });
-    if (m.t === 'hello') { s.v = typeof m.v === 'number' ? m.v : 1; return this.hello(s, m.token); }
+    if (m.t === 'hello') { s.v = typeof m.v === 'number' ? m.v : 1; s.build = typeof m.build === 'number' ? m.build : 0; return this.hello(s, m.token); }
     if (!s.uid) return s.conn.send({ t: 'err', code: 'not_ready' });
     const uid = s.uid;
     const err = (code: string) => s.conn.send({ t: 'err', code });
@@ -271,6 +271,8 @@ export class Hub {
     const table = this.userTable.get(uid);
     // maintenance (dashboard): no new games start; games already on finish
     if (this.opts.settings?.value.maintenance.on && ['quick', 'create', 'join', 'tourneyJoin', 'rematch'].includes(m.t)) return err('maintenance');
+    // an app older than the dashboard's minimum: no new games until it's updated
+    if (this.outdated(s) && ['quick', 'create', 'join', 'tourneyJoin', 'rematch', 'invite', 'practice', 'groupPlay'].includes(m.t)) return err('update');
     if (['quick', 'create', 'join', 'practice', 'tourneyGo', 'groupPlay'].includes(m.t)) this.unwatch(uid);   // off to play: stop watching
     switch (m.t) {
       case 'daily': {
@@ -947,6 +949,12 @@ export class Hub {
     s.conn.send({ t: 'signedIn', via, fresh: true });
   }
 
+  /** The phone app is older than the dashboard's minimum build (the website, which has no build, never is). */
+  private outdated(s: Session): boolean {
+    const min = this.opts.settings?.value.update?.minBuild ?? 0;
+    return min > 0 && (s.v ?? 1) >= 2 && (s.build ?? 0) < min;
+  }
+
   private hello(s: Session, token: unknown) {
     if (s.uid) return;
     const id = this.tokens.verify(token);
@@ -957,6 +965,11 @@ export class Hub {
     const st = this.opts.settings?.value;
     if (st?.notice.text && st.notice.until > Date.now()) s.conn.send({ t: 'notice', text: st.notice.text });
     if (st?.maintenance.on) s.conn.send({ t: 'notice', text: st.maintenance.message });
+    // too old: the app's update dialog (apps from before the dialog read the notice)
+    if (this.outdated(s)) {
+      s.conn.send({ t: 'mustUpdate', min: st!.update.minBuild });
+      if (!s.build) s.conn.send({ t: 'notice', text: 'لازم تحدّث اللعبة من جوجل بلاي عشان تكمل لعب · Please update the game on Google Play to keep playing' });
+    }
     s.conn.send({ t: 'titles', list: this.titles.list });
   }
 
