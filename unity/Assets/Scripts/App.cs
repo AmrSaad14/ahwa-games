@@ -71,6 +71,7 @@ public class App : MonoBehaviour
     {
         I = this;
         CrashReport.Begin();   // (did the game close by itself last time?)
+        gameObject.AddComponent<Updater>();   // the forced update (Play's in-app update, or the server's minimum)
         Application.targetFrameRate = 60;
         Screen.sleepTimeout = SleepTimeout.NeverSleep;
         // either way round in landscape: the game turns with the phone (camera on the left or the right)
@@ -425,6 +426,10 @@ public class App : MonoBehaviour
                 Sfx.Coins();
                 break;
             }
+            case "mustUpdate":
+                // this version is below the minimum the dashboard set: the update dialog
+                Updater.Need();
+                break;
             case "notice":
                 // a message from the team (the dashboard): a notice, a gift, maintenance
                 Toast(m.Str("text"), 7f);
@@ -455,6 +460,7 @@ public class App : MonoBehaviour
         switch (code)
         {
             case "maintenance": return Loc.T("السيرفر في صيانة دلوقتي، ارجع كمان شوية");
+            case "update": Updater.Need(); return Loc.T("لازم تحدّث عشان تكمل لعب");
             case "not_enough_coins": return Loc.T("رصيدك مش كفاية للرهان ده");
             case "drink_no_coins": return Loc.T("رصيدك مش كفاية للمشروب ده");
             case "not_your_turn": return Loc.T("مش دورك");

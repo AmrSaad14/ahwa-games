@@ -310,5 +310,10 @@ public static class Loc
         ["متوسطة"] = "Medium",
         ["عالية"] = "High",
         ["الرسوم العالية ممكن تبقى تقيلة على موبايلك"] = "High graphics may be heavy for your phone",
+        ["في تحديث جديد للعبة!"] = "A new version is out!",
+        ["حدّث اللعبة عشان تكمل لعب"] = "Update the game to keep playing",
+        ["فيها حاجات جديدة وتصليحات"] = "New things and fixes inside",
+        ["حدّث دلوقتي"] = "Update now",
+        ["لازم تحدّث عشان تكمل لعب"] = "You need to update to keep playing",
 };
 }

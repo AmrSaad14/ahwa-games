@@ -27,6 +27,8 @@ public class PushGradle : IPostGenerateGradleAndroidProject
             File.AppendAllText(gradle, "\n// Unity Ads: the interstitial and the rewarded video (Plugins/Android/BBAds.java)\ndependencies {\n    implementation 'com.unity3d.ads:unity-ads:4.18.0'\n}\n");
         if (!g.Contains("billingclient"))
             File.AppendAllText(gradle, "\n// Google Play purchases: coin packs, the season pass, the ad-free month (Plugins/Android/BBBilling.java)\ndependencies {\n    implementation 'com.android.billingclient:billing:8.3.0'\n}\n");
+        if (!g.Contains("app-update"))
+            File.AppendAllText(gradle, "\n// the forced update: Play's in-app update (Plugins/Android/BBUpdate.java)\ndependencies {\n    implementation 'com.google.android.play:app-update:2.1.0'\n}\n");
         var props = Path.Combine(Path.GetDirectoryName(path), "gradle.properties");
         if (File.Exists(props))
         {
