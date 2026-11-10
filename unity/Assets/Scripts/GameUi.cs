@@ -7,7 +7,8 @@ using UnityEngine.UI;
 
 public class GameUi : MonoBehaviour
 {
-    public static readonly int[] Stakes = { 5000, 20000, 50000, 100000, 250000, 500000, 1000000 };
+    /// The table stakes to choose from (the control room can change them: App.ApplyConfig).
+    public static int[] Stakes = { 5000, 20000, 50000, 100000, 250000, 500000, 1000000 };
     static readonly string[] DominoModes = { "ffa2", "ffa3", "ffa4", "team" };
     static readonly Dictionary<string, string> ModeNames = new Dictionary<string, string>
     {

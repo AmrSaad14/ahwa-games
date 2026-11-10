@@ -66,6 +66,18 @@ public static class Ads
         return false;
     }
 
+    /// One full-screen ad in every `Every` games (the control room sets it; 0: none): the 1st game shows it, the
+    /// 2nd doesn't, the 3rd does… A game finished or left counts. The count is kept across restarts.
+    public static int Every = 2;
+    public static void BetweenGames(Action done)
+    {
+        int n = PlayerPrefs.GetInt("ads.games", 0);
+        PlayerPrefs.SetInt("ads.games", n + 1); PlayerPrefs.Save();
+        bool show = Every > 0 && n % Every == 0;
+        Debug.Log($"[ads] game {n + 1}: {(show ? "an ad" : "no ad")} (1 in {Every})");
+        if (show) Interstitial(done); else done?.Invoke();
+    }
+
     /// The between-games ad, then `done` (straight away when there is no ad to show).
     public static void Interstitial(Action done)
     {

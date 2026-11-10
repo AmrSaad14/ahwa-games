@@ -315,5 +315,6 @@ public static class Loc
         ["فيها حاجات جديدة وتصليحات"] = "New things and fixes inside",
         ["حدّث دلوقتي"] = "Update now",
         ["لازم تحدّث عشان تكمل لعب"] = "You need to update to keep playing",
+        ["اللعبة دي مقفولة شوية، جرّب لعبة تانية"] = "This game is closed for a while, try another one",
 };
 }

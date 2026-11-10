@@ -329,8 +329,12 @@ public class App : MonoBehaviour
         menus?.OnMessage(m);
         switch (m.Str("t"))
         {
+            case "config":
+                ApplyConfig(m);
+                break;
             case "welcome":
                 guestsOnline = m.Bool("guestsOnline");
+                ApplyConfig(m.Obj("config"));
                 voice.ice.Clear();
                 foreach (var o in m.Arr("ice") ?? new List<object>()) if (o is Dictionary<string, object> d) voice.ice.Add(d);
                 sentPushToken = null;   // (a new connection, maybe a different account)
@@ -460,6 +464,7 @@ public class App : MonoBehaviour
         switch (code)
         {
             case "maintenance": return Loc.T("السيرفر في صيانة دلوقتي، ارجع كمان شوية");
+            case "game_off": return Loc.T("اللعبة دي مقفولة شوية، جرّب لعبة تانية");
             case "update": Updater.Need(); return Loc.T("لازم تحدّث عشان تكمل لعب");
             case "not_enough_coins": return Loc.T("رصيدك مش كفاية للرهان ده");
             case "drink_no_coins": return Loc.T("رصيدك مش كفاية للمشروب ده");
@@ -548,9 +553,26 @@ public class App : MonoBehaviour
 
     /* ---------- actions ---------- */
 
+    /* ---------- what the control room sets for the app ---------- */
+    /// Games switched off in the control room (no online or server games of them for now).
+    public static readonly HashSet<string> GamesOff = new HashSet<string>();
+    /// The control room's part of the settings: ads between games, games off, the table stakes and the wheel's prizes.
+    void ApplyConfig(Dictionary<string, object> c)
+    {
+        if (c == null) return;
+        Ads.Every = (int)c.Num("adEvery", 2);
+        GamesOff.Clear();
+        foreach (var g in c.Arr("gamesOff") ?? new List<object>()) GamesOff.Add(g as string ?? "");
+        var st = c.Arr("stakes");
+        if (st != null && st.Count > 0) { var a = new int[st.Count]; for (int i = 0; i < a.Length; i++) a[i] = System.Convert.ToInt32(st[i]); GameUi.Stakes = a; }
+        var wh = c.Arr("wheel");
+        if (wh != null && wh.Count == Menus.WheelCoins.Length) for (int i = 0; i < wh.Count; i++) Menus.WheelCoins[i] = System.Convert.ToInt64(wh[i]);
+    }
+
     string picked;
     void Pick(string g)
     {
+        if (GamesOff.Contains(g)) { Sfx.Tap(); Toast(Loc.T("اللعبة دي مقفولة شوية، جرّب لعبة تانية")); return; }
         PlayerPrefs.SetString("lastGame", g);
         if (g == picked && game.PickerOpen) return;   // already showing this game's choices
         picked = g;
@@ -716,10 +738,11 @@ public class App : MonoBehaviour
         if (Watching) { Watching = false; if (view != null) leftTableId = view.id; Send(new Dictionary<string, object> { ["t"] = "unwatch" }); ExitGame(); return; }
         if (view != null) leftTableId = view.id;
         bool finished = view != null && view.phase == "mend";
+        bool played = view != null && view.you >= 0;
         if (view != null && !finished) Send(new Dictionary<string, object> { ["t"] = "leave" });
         ExitGame();
-        // after every finished game, an ad on the way out too (the player can skip it), not only before "play again"
-        if (finished && !AdFree() && !Recording) Ads.Interstitial(null);
+        // a game finished or left counts towards the ad between games (one game in every two by default)
+        if (played && !AdFree() && !Recording) Ads.BetweenGames(null);
     }
     bool AdFree() => user != null && user.Num("adFreeUntil") > LocalMs();
 
@@ -730,7 +753,7 @@ public class App : MonoBehaviour
         // an ad between games (not for players on the ad-free plan), then the next game
         bool adFree = AdFree();
         System.Action next = () => { if (lastStake == 0) Practice(lastMode); else Quick(lastMode, lastStake); };
-        if (adFree || Recording) next(); else Ads.Interstitial(next);
+        if (adFree || Recording) next(); else Ads.BetweenGames(next);
     }
 
     public void TapTile(int id)

@@ -8,7 +8,8 @@ using UnityEngine.UI;
 
 public partial class Menus
 {
-    static readonly long[] WheelCoins = { 1_000, 5_000, 2_000, 25_000, 3_000, 10_000, 1_500, 50_000 };
+    /// The prizes on the wheel, in order (the control room can change them: App.ApplyConfig).
+    public static readonly long[] WheelCoins = { 1_000, 5_000, 2_000, 25_000, 3_000, 10_000, 1_500, 50_000 };
     static readonly Color[] WheelColors =
     {
         new Color(0.62f, 0.11f, 0.18f), new Color(0.93f, 0.71f, 0.29f), new Color(0.16f, 0.45f, 0.34f), new Color(0.93f, 0.71f, 0.29f),
