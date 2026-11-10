@@ -31,6 +31,12 @@ public static class Tutorial
             ("دوس على العسكري اللي بينوّر يتحرك. لو وقفت على عسكري حد يرجع بيته.", "Tap a glowing pawn to move it. Land on someone else's pawn to send it home."),
             ("دخّل الـ٤ عساكر البيت الأول تكسب.", "Get all 4 pawns home first to win."),
         },
+        ["estimation"] = new[] {
+            ("اطلب كام لمّة هتاخدها وإيه الطرنيب، أو قول باص. الطلب الأعلى يكسب.", "Call how many tricks you'll take and the trump, or pass. The highest call wins."),
+            ("بعد الطلب، كل واحد يقول هياخد كام. المجموع ماينفعش يبقى ١٣.", "Then everyone says how many tricks they'll take. The total can't be 13."),
+            ("دوس على ورقة من اللي واقفين عشان تنزلها. لازم تنزل من نفس النوع لو معاك.", "Tap a raised card to play it. Follow suit if you can."),
+            ("خد بالظبط اللي قلته تكسب نقط. بعد ٥ أدوار الأعلى نقط يكسب.", "Take exactly what you said to score. After 5 deals the highest score wins."),
+        },
     };
 
     public static bool Seen(string game) => PlayerPrefs.GetInt("tut." + game, 0) == 1;

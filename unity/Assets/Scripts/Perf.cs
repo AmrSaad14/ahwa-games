@@ -152,6 +152,10 @@ public static class Perf
         QualitySettings.particleRaycastBudget = s ? 16 : 256;
         QualitySettings.realtimeReflectionProbes = !s;
         QualitySettings.softParticles = high;
+        // textures and meshes reach the graphics chip a little each frame (no hitch when a board or a menu opens)
+        QualitySettings.asyncUploadTimeSlice = 4;
+        QualitySettings.asyncUploadBufferSize = 16;
+        QualitySettings.asyncUploadPersistentBuffer = true;
         var app = App.I;
         if (app != null && app.cafe != null && app.cafe.cam != null)
         {
@@ -187,7 +191,7 @@ public static class Perf
             float fps = frames / t; t = 0; frames = 0;
             int l = Level;
             float target = l >= Balanced2 ? 60f : 30f;
-            if (fps < target * 0.72f) { slowFor += 2f; smoothFor = 0; }
+            if (fps < target * 0.8f) { slowFor += 2f; smoothFor = 0; }   // an uneven 40-something stutters: a steady 30 plays smoother
             else if (fps > target * 0.95f) { smoothFor += 2f; slowFor = 0; }
             else { slowFor = 0; smoothFor = 0; }
             if (slowFor >= 6f && l > Lowest0)

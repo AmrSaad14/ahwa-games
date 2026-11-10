@@ -309,7 +309,7 @@ public partial class Menus : MonoBehaviour
             case "leagueRewards":
             {
                 long total = 0; var parts = new List<string>();
-                foreach (var o in m.Arr("rows") ?? new List<object>()) if (o is Dictionary<string, object> r) { total += (long)r.Num("coins"); parts.Add(Loc.T(App.GameNames[r.Str("game")]) + ": " + LeagueName(r.Str("league"))); }
+                foreach (var o in m.Arr("rows") ?? new List<object>()) if (o is Dictionary<string, object> r) { total += (long)r.Num("coins"); parts.Add(Loc.T(App.GameName(r.Str("game"))) + ": " + LeagueName(r.Str("league"))); }
                 Sfx.Coins(); Sfx.Chime();
                 ShowCard(Loc.T("خلص الموسم!"), string.Join("  ·  ", parts) + "\n" + Loc.T("جايزة الدوري") + ": +" + Loc.Short(total) + " " + Loc.T("كوين"), null, false);
                 break;
@@ -1199,7 +1199,7 @@ public partial class Menus : MonoBehaviour
 
     /* ---------- the leaderboard ---------- */
 
-    static readonly string[] GameIds = { "coins", "domino", "tawla", "chess", "ludo", "basra", "tarneeb", "konkan", "week", "league", "gov" };
+    static readonly string[] GameIds = { "coins", "domino", "tawla", "chess", "ludo", "estimation", "week", "league", "gov" };
     static readonly long[] WeeklyPrizes = { 1_000_000 };   // the week's first only
     static readonly long[] MonthlyEarnerPrizes = { 3_000_000, 2_000_000, 1_000_000 };   // the top earners of the month
     double lbEndsAt;
@@ -1216,7 +1216,7 @@ public partial class Menus : MonoBehaviour
         refreshOpen = () =>
         {
             foreach (Transform c in body) Destroy(c.gameObject);
-            var area = Tabs(body, new[] { "الأكثر كسبًا", "دومينو", "طاولة", "شطرنج", "لودو", "بصرة", "طرنيب", "كونكان", "الأسبوع", "الدوري", "المحافظات" }, lbTab, i => { Close(); OpenLeaders(i); });
+            var area = Tabs(body, new[] { "الأكثر كسبًا", "دومينو", "طاولة", "شطرنج", "لودو", "استيميشن", "الأسبوع", "الدوري", "المحافظات" }, lbTab, i => { Close(); OpenLeaders(i); });
             if (lbGame == "league") { DrawLeagues(area); return; }
             if (lbGame == "gov") { DrawGovs(area); return; }
             bool week = lbGame == "week", coins = lbGame == "coins";
@@ -1361,6 +1361,15 @@ public partial class Menus : MonoBehaviour
             "• الخانات المعلّمة بنجمة آمنة.",
             "• أول من يدخّل قطعه الأربعة النُّص يكسب.",
         },
+        new[] {
+            "• ٤ لاعبين، كل واحد لنفسه، و١٣ ورقة لكل واحد.",
+            "• الطلب: اطلب من ٤ لـ ١٣ لمّة بطرنيب (♣ ♦ ♥ ♠ وأعلاهم صن: من غير طرنيب)، أو قول باص.",
+            "• كل طلب لازم يكون أعلى: لمّات أكتر، أو نفس العدد بطرنيب أعلى.",
+            "• الباقيين يقولوا كل واحد هياخد كام. المجموع ماينفعش يبقى ١٣.",
+            "• لازم تنزل من نفس النوع لو معاك. أعلى طرنيب ياخد اللمّة، وإلا أعلى ورقة من النوع اللي نزل.",
+            "• جبت بالظبط اللي قلته: ١٠ + عددهم (والطالب ١٠ زيادة). غلطت: بيتخصم الفرق.",
+            "• بعد ٥ أدوار، الأعلى نقط يكسب.",
+        },
     };
     static readonly string[][] HowEn =
     {
@@ -1399,6 +1408,15 @@ public partial class Menus : MonoBehaviour
             "• Star squares are safe.",
             "• The first to get all 4 pieces home wins.",
         },
+        new[] {
+            "• 4 players, each on their own, 13 cards each.",
+            "• The call: 4 to 13 tricks with a trump (♣ ♦ ♥ ♠, highest no trump), or pass.",
+            "• Each call must be higher: more tricks, or as many with a higher trump.",
+            "• The others say how many tricks they'll take. The total can't be 13.",
+            "• Follow suit if you can. The highest trump takes the trick, else the highest of the suit led.",
+            "• Take exactly what you said: 10 + that many (the caller 10 more). Miss: lose the difference.",
+            "• After 5 deals, the highest score wins.",
+        },
     };
 
     public void OpenHowTo(int tab)
@@ -1408,7 +1426,7 @@ public partial class Menus : MonoBehaviour
         refreshOpen = () =>
         {
             foreach (Transform c in body) Destroy(c.gameObject);
-            var area = Tabs(body, new[] { "دومينو", "طاولة", "شطرنج", "لودو" }, howTab, i => { howTab = i; refreshOpen(); });
+            var area = Tabs(body, new[] { "دومينو", "طاولة", "شطرنج", "لودو", "استيميشن" }, howTab, i => { howTab = i; refreshOpen(); });
             var list = Scroll(area, 2);
             foreach (var line in (Loc.En ? HowEn : HowAr)[howTab])
             {

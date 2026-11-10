@@ -44,7 +44,7 @@ public partial class Menus
         info.Set(Loc.T("كل لعبة ليها دوري. اكسب أونلاين عشان تطلع. في آخر الشهر بتاخد جايزة أعلى دوري وصلته، والنقط بتبدأ من الأول"));
         info.horizontalOverflow = HorizontalWrapMode.Wrap;
         info.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(560, 34), Vector2.zero);
-        var games = new[] { "domino", "tawla", "chess", "ludo", "basra", "tarneeb", "konkan" };
+        var games = new[] { "domino", "tawla", "chess", "ludo", "estimation" };
         for (int i = 0; i < games.Length; i++)
         {
             var g = games[i];

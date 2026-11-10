@@ -15,11 +15,9 @@ public class App : MonoBehaviour
     public GameUi game;
     public Menus menus;
     public BoardGame boardGame;
-    public BasraTable basraTable;
-    public TarneebTable tarneebTable;
-    public KonkanTable konkanTable;
-    /// The card games: drawn flat over the table, their computer players on the server.
-    public static bool CardGame(string g) => g == "basra" || g == "tarneeb" || g == "konkan";
+    public EstimationTable estimationTable;
+    /// The card game (estimation): drawn flat over the table, its computer players on the server.
+    public static bool CardGame(string g) => g == "estimation";
     public Voice voice;
     public TableView view;
     Dictionary<string, object> user;
@@ -42,12 +40,15 @@ public class App : MonoBehaviour
     float toastUntil;
     readonly Dictionary<string, Image> gameButtons = new Dictionary<string, Image>();
 
-    /// The games on the home list: the café's four tables, then the card games (no table of their own).
-    public static readonly string[] HomeGames = { "domino", "tawla", "chess", "ludo", "basra", "tarneeb", "konkan" };
+    /// The games on the home list: the café's five tables.
+    public static readonly string[] HomeGames = { "domino", "tawla", "chess", "ludo", "estimation" };
     public static readonly Dictionary<string, string> GameNames = new Dictionary<string, string>
     {
-        ["domino"] = "دومينو", ["tawla"] = "طاولة", ["chess"] = "شطرنج", ["ludo"] = "لودو", ["basra"] = "بصرة", ["tarneeb"] = "طرنيب", ["konkan"] = "كونكان",
+        ["domino"] = "دومينو", ["tawla"] = "طاولة", ["chess"] = "شطرنج", ["ludo"] = "لودو", ["estimation"] = "استيميشن",
     };
+
+    /// A game's name (older games, no longer offered, by their own name).
+    public static string GameName(string g) => g != null && GameNames.TryGetValue(g, out var n) ? n : g == "basra" ? "بصرة" : g == "tarneeb" ? "طرنيب" : g == "konkan" ? "كونكان" : g ?? "";
 
     /// Test mode (GitHub's desktop build, "-shots"): records the run as video frames plus a few stills, then quits.
     public static readonly bool Recording = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-shots") >= 0;
@@ -119,12 +120,8 @@ public class App : MonoBehaviour
         dominoTable.Show(false);
         boardGame = gameObject.AddComponent<BoardGame>();
         boardGame.Init(this);
-        basraTable = gameObject.AddComponent<BasraTable>();
-        basraTable.Init(this);
-        tarneebTable = gameObject.AddComponent<TarneebTable>();
-        tarneebTable.Init(this);
-        konkanTable = gameObject.AddComponent<KonkanTable>();
-        konkanTable.Init(this);
+        estimationTable = gameObject.AddComponent<EstimationTable>();
+        estimationTable.Init(this);
         voice = gameObject.AddComponent<Voice>();
         voice.Init(this);
         BuildHome();
@@ -159,6 +156,9 @@ public class App : MonoBehaviour
 
     /// A practice game against the computer is running on the phone.
     public bool Practicing => offline != null;
+    /// A practice game against the computer (on the phone, or the card game's on the server): no drinks, no stakes.
+    public bool PracticeGame => offline != null || serverPractice;
+    bool serverPractice;
     /// The first-game guide: an easy practice game of dominoes with hints, for a new player (its reward once).
     bool guided; int guideHints;
 
@@ -168,9 +168,7 @@ public class App : MonoBehaviour
         ["domino"] = new[] { "دورك! دوس على حجر بينوّر عشان تلعبه", "الحجر لازم رقمه يكون زي رقم طرف من الطرفين", "مفيش حجر يركب؟ اسحب من الكومة", "اللي يخلّص حجارته الأول يكسب نقط الباقيين" },
         ["tawla"] = new[] { "دورك! دوس على الزهر عشان ترمي", "دوس على قشاط بينوّر، وبعدين على المكان اللي عايز تروحه", "قشاط لوحده ممكن يتضرب: خلّي قشاطين مع بعض عشان تحميهم", "لما تجمّع قشاطك كله في آخر ربع، طلّعه برة. اللي يطلّع الأول يكسب" },
         ["chess"] = new[] { "دورك! دوس على قطعة من قطعك عشان تشوف هتروح فين", "دوس على مربع من اللي بينوّروا عشان تحرّك القطعة", "خلّي بالك على الملك: لو اتحاصر من غير مهرب تبقى كش مات", "كل لاعب ليه ساعة: لو وقتك خلص تخسر" },
-        ["basra"] = new[] { "دورك! دوس على ورقة من ورقك عشان ترميها", "الورقة بتاكل اللي زيها من الأرض، والأرقام بتاكل أي ورق مجموعه زيها", "الولد بياكل الأرض كلها، والسبعة الديناري كمان", "لو كنست الأرض كلها تبقى بصرة: ١٠ نقط. أول واحد يوصل ١٠١ يكسب" },
-        ["tarneeb"] = new[] { "اشتري كام لمّة هتجيبها إنت وشريكك (٧ لـ ١٣)، أو قول باص", "اللي يشتري أعلى يختار الطرنيب: النوع اللي بيكسب أي نوع تاني", "لازم تنزل من نفس النوع اللي نزل الأول لو معاك. الورق اللي ينفع ينزل واقف", "لو جبتوا اللي اشتريتوه بتاخدوا لمّاتكم، لو لأ بيتخصم. أول فريق يوصل ٤١ يكسب" },
-        ["konkan"] = new[] { "دورك! اسحب من الكوتشينة، أو خد الورقة اللي اترمت لو هتنزل بيها", "اختار ٣ ورق أو أكتر ودوس «مجموعة»: نفس الرقم بأشكال مختلفة، أو ورا بعض من نفس الشكل", "أول نزلة لازم مجموعها ٥١ أو أكتر. الجوكر بيكمّل أي مجموعة", "في الآخر اختار ورقة ودوس «ارمي». اللي يخلّص ورقه الأول يكسب الدور" },
+        ["estimation"] = new[] { "اطلب كام لمّة هتاخدها وإيه الطرنيب (♣ ♦ ♥ ♠ صن)، أو قول باص", "اللي طلب أعلى بيبدأ، والباقيين يقولوا كل واحد هياخد كام: المجموع ماينفعش يبقى ١٣", "لازم تنزل من نفس النوع اللي نزل الأول لو معاك. الورق اللي ينفع ينزل واقف", "خد بالظبط اللي قلته عشان تكسب نقط. بعد ٥ أدوار الأعلى نقط يكسب" },
         ["ludo"] = new[] { "دورك! دوس على الزهر عشان ترمي", "لازم تجيب ٦ عشان تطلّع قطعة من البيت", "دوس على القطعة اللي عايز تحرّكها", "لو وقفت على قطعة منافس بترجّعها البيت. وصّل قطعك الأربعة الأول عشان تكسب" },
     };
     int guideStep; string guideGame;
@@ -201,7 +199,7 @@ public class App : MonoBehaviour
         if (!CanPlayOnline()) return;
         if (net == null || !net.Online) { Toast(Loc.T("مش متصل بالسيرفر لسه")); return; }
         if (offline != null) StopPractice();
-        string g = PlayerPrefs.GetString("lastGame", "domino");
+        string g = LastGame;
         string mode = PlayerPrefs.GetString("mode." + g, GameUi.GameModes[g][0].mode);
         Send(new Dictionary<string, object> { ["t"] = "invite", ["id"] = id, ["mode"] = mode });
         Toast(Loc.T("الدعوة اتبعتت، استنى صاحبك في الغرفة"));
@@ -454,11 +452,14 @@ public class App : MonoBehaviour
                     break;
                 }
                 if (menus != null && menus.OnError(m.Str("code"))) break;
+                errorsSeen++;
+                Debug.Log("[app] error " + m.Str("code"));
                 Toast(ErrorText(m.Str("code")));
                 break;
         }
     }
 
+    int errorsSeen;
     static string ErrorText(string code)
     {
         switch (code)
@@ -482,6 +483,10 @@ public class App : MonoBehaviour
             case "already_rolled": return Loc.T("انت رميت الزهر خلاص");
             case "must_move": return Loc.T("لسه عندك لعب، حرّك");
             case "not_playing": case "no_tile": case "bad_action": return Loc.T("الحركة دي مش هينفع دلوقتي");
+            case "must_follow": return Loc.T("لازم تنزل من نفس النوع");
+            case "call_higher": case "bad_call": return Loc.T("اطلب أعلى أو قول باص");
+            case "not_13": return Loc.T("إنت الأخير: المجموع ماينفعش يبقى ١٣");
+            case "bad_est": case "not_in_hand": case "game_over": return Loc.T("الحركة دي مش هينفع دلوقتي");
             case "illegal_move": return Loc.T("الحجر ده مش هينفع هنا");
             default: return Loc.T("حصلت مشكلة: ") + code;
         }
@@ -512,12 +517,12 @@ public class App : MonoBehaviour
     public void ExitGame()
     {
         CrashReport.At("home");
-        offline = null;
+        offline = null; serverPractice = false;
         view = null; sel = -1; choose = null;
         game.ShowHud(false);
         dominoTable.Show(false);
         boardGame.Show(false);
-        basraTable.Hide(); tarneebTable.Hide(); konkanTable.Hide();
+        estimationTable.Hide();
         voice.Leave(); voice.Sync(null);
         cafe.SetGame(false);
         Music.Home(true);
@@ -531,13 +536,11 @@ public class App : MonoBehaviour
         if (CardGame(view.game))
         {
             dominoTable.Set(view, -1, null); boardGame.Show(false);
-            if (view.game == "basra") basraTable.Render(view); else basraTable.Hide();
-            if (view.game == "tarneeb") tarneebTable.Render(view); else tarneebTable.Hide();
-            if (view.game == "konkan") konkanTable.Render(view); else konkanTable.Hide();
+            estimationTable.Render(view);
             game.Render(view, -1, null);
             return;
         }
-        basraTable.Hide(); tarneebTable.Hide(); konkanTable.Hide();
+        estimationTable.Hide();
         if (view.Board) { dominoTable.Set(view, -1, null); boardGame.Set(view); game.Render(view, -1, null); return; }
         dominoTable.Set(view, sel, choose);
         game.Render(view, sel, choose);
@@ -569,9 +572,16 @@ public class App : MonoBehaviour
         if (wh != null && wh.Count == Menus.WheelCoins.Length) for (int i = 0; i < wh.Count; i++) Menus.WheelCoins[i] = System.Convert.ToInt64(wh[i]);
     }
 
+    /// The game played last (dominoes at first, or when that game is no longer offered or is switched off).
+    public static string LastGame
+    {
+        get { var g = PlayerPrefs.GetString("lastGame", "domino"); return GameUi.GameModes.ContainsKey(g) && !GamesOff.Contains(g) ? g : "domino"; }
+    }
+
     string picked;
     void Pick(string g)
     {
+        if (!GameUi.GameModes.ContainsKey(g)) return;
         if (GamesOff.Contains(g)) { Sfx.Tap(); Toast(Loc.T("اللعبة دي مقفولة شوية، جرّب لعبة تانية")); return; }
         PlayerPrefs.SetString("lastGame", g);
         if (g == picked && game.PickerOpen) return;   // already showing this game's choices
@@ -602,7 +612,7 @@ public class App : MonoBehaviour
         if (offline != null) { offline = null; if (view != null) ExitGame(); }
         if (net == null || !net.Online) { Toast(Loc.T("مش متصل بالسيرفر لسه")); return; }
         if (user != null && user.Num("coins") < stake) { Toast(Loc.T("رصيدك مش كفاية للرهان ده")); return; }
-        lastMode = mode; lastStake = stake;
+        lastMode = mode; lastStake = stake; serverPractice = false;
         Send(new Dictionary<string, object> { ["t"] = "quick", ["mode"] = mode, ["stake"] = (double)stake });
         searching = true;
         game.ShowQueue(new Dictionary<string, object> { ["count"] = 1.0, ["need"] = (double)GameUi.Players(mode), ["botsAt"] = 0.0, ["now"] = 0.0 });
@@ -621,7 +631,7 @@ public class App : MonoBehaviour
         {
             // the card games' computer players live on the server: practice there (needs the connection)
             if (net == null || !net.Online) { Toast(Loc.T("ألعاب الورق محتاجة نت عشان تتلعب")); return; }
-            offline = null;
+            offline = null; serverPractice = true;
             Send(new Dictionary<string, object> { ["t"] = "practice", ["mode"] = mode, ["level"] = OfflineGame.Level == 0 ? "easy" : OfflineGame.Level == 2 ? "hard" : "normal" });
             return;
         }
@@ -895,9 +905,10 @@ public class App : MonoBehaviour
         var now = Ui.Button(root, "العب دلوقتي", Ui.Gold, Ui.Ink, 20, () =>
         {
             Sfx.Tap();
-            string g = PlayerPrefs.GetString("lastGame", "domino");
+            string g = LastGame;
             var modes = GameUi.GameModes[g];
             string mode = PlayerPrefs.GetString("mode." + g, modes[0].mode);
+            if (System.Array.FindIndex(modes, m => m.mode == mode) < 0) mode = modes[0].mode;
             // signed in: straight into an online game (real people, the computer fills empty seats after a few
             // seconds); a guest plays the computer on the phone
             if ((SignedIn || guestsOnline) && net != null && net.Online) Quick(mode, GameUi.Stakes[Mathf.Clamp(PlayerPrefs.GetInt("ahwa.stake", 0), 0, GameUi.Stakes.Length - 1)]);
@@ -1006,6 +1017,43 @@ public class App : MonoBehaviour
             menus.OpenHowTo(0); yield return new WaitForSeconds(0.8f); Still("m10-howto-en.png");
             menus.OpenSettings(); yield return new WaitForSeconds(0.8f); Still("m11-settings-en.png"); menus.OpenSupport(); yield return new WaitForSeconds(0.8f); Still("m12-support-en.png");
             menus.Close(); Loc.Set(false);
+            // the café's five tables, then estimation against the computer (it runs on the server): pass or call,
+            // say a number, play the cards that may be played
+            game.HidePicker(); cafe.Focus(null); yield return new WaitForSeconds(2.5f); Still("e0-cafe.png");
+            Pick("estimation"); yield return new WaitForSeconds(2.5f); Still("e1-picker.png");
+            Practice("estimation");
+            t0 = Time.realtimeSinceStartup;
+            while ((view == null || view.game != "estimation") && Time.realtimeSinceStartup - t0 < 30) yield return null;
+            Debug.Log("[test] estimation: " + (view == null ? "no table" : view.game + " " + view.phase));
+            if (view != null && view.game == "estimation")
+            {
+                float pe = 0; int lastVe = -1; var phases = new HashSet<string>();
+                while (pe < 45f && view != null && view.phase != "mend")
+                {
+                    var g = view.estimation;
+                    if (g != null && view.MyTurn && view.v != lastVe)
+                    {
+                        lastVe = view.v;
+                        yield return new WaitForSeconds(1.1f);
+                        pe += 1.1f;
+                        g = view?.estimation;
+                        if (view == null || g == null || !view.MyTurn) continue;
+                        string ph = g.Str("phase");
+                        if (phases.Add(ph)) Still("e2-" + ph + ".png");
+                        var ok = TableView.IntList(g.Arr(ph == "est" ? "estOptions" : "legal"));
+                        var a = ph == "call" ? new Dictionary<string, object> { ["t"] = "call", ["n"] = 0 }
+                            : ph == "est" ? new Dictionary<string, object> { ["t"] = "est", ["n"] = ok.Count > 0 ? ok[0] : 0 }
+                            : new Dictionary<string, object> { ["t"] = "card", ["id"] = ok.Count > 0 ? ok[0] : -1 };
+                        Send(new Dictionary<string, object> { ["t"] = "act", ["a"] = a });
+                    }
+                    pe += Time.deltaTime;
+                    yield return null;
+                }
+                Still("e3-estimation-later.png");
+                if (errorsSeen > 0) Debug.Log("[test] estimation: " + errorsSeen + " errors");
+                Leave();
+                yield return new WaitForSeconds(1f);
+            }
             recordOn = false;
             Practice("team");      // practice runs on the phone: no server needed
             t0 = Time.realtimeSinceStartup;

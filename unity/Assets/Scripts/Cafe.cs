@@ -1,11 +1,13 @@
-// The café: the room and its four game tables (exported from the web game), warm lights, the regulars at
-// their tables, and the camera that looks over the floor or moves in on one table.
+// The café: the room and its five game tables, laid out like the five on a die (dominoes, tawla, chess, ludo in
+// the corners, estimation in the middle; the room model only has the floor, walls and counter, see
+// tools/cafe-declutter.py), warm lights, the regulars at their tables, and the camera that looks over the floor or
+// moves in on one table.
 using System.Collections.Generic;
 using UnityEngine;
 
 public class Cafe : MonoBehaviour
 {
-    public static readonly string[] Games = { "domino", "tawla", "chess", "ludo" };
+    public static readonly string[] Games = { "domino", "tawla", "chess", "ludo", "estimation" };
     public readonly Dictionary<string, Transform> tables = new Dictionary<string, Transform>();
     public Camera cam;
     public string focus;            // the table the camera has moved in on (null: the whole floor)
@@ -67,15 +69,16 @@ public class Cafe : MonoBehaviour
         }
         lobby = Find(room.transform, "Tables");
         chairModel = Find(room.transform, "Seat_domino_0");
-        Debug.Log($"[cafe] room loaded, {tables.Count} tables, {room.GetComponentsInChildren<Renderer>().Length} renderers");
-        if (tables.Count == 4)
+        if (tables.ContainsKey("domino") && tables.ContainsKey("tawla") && tables.ContainsKey("chess") && tables.ContainsKey("ludo"))
         {
-            center = Vector3.zero; foreach (var t in tables.Values) center += t.position; center /= 4;
             var backMid = (tables["domino"].position + tables["tawla"].position) * 0.5f;
             var frontMid = (tables["chess"].position + tables["ludo"].position) * 0.5f;
             front = frontMid - backMid; front.y = 0; front.Normalize();
+            center = (backMid + frontMid) * 0.5f;
+            Layout(room.transform);
         }
         else { center = Vector3.zero; front = Vector3.forward; }
+        Debug.Log($"[cafe] room loaded, {tables.Count} tables, {room.GetComponentsInChildren<Renderer>().Length} renderers");
 
         yield return null;
         SettleProps(room.transform);
@@ -88,6 +91,71 @@ public class Cafe : MonoBehaviour
         Apply();
         ready = true;
         if (probeRes > 0) Reflections(probeRes);
+    }
+
+    /// The five tables like the five on a die, well apart (no table in front of another, from any screen): the
+    /// four game tables of the model move to the corners, and a fifth (a copy of the domino table with four
+    /// chairs, the cards of a game of estimation on its cloth) stands in the middle.
+    void Layout(Transform room)
+    {
+        var side = tables["tawla"].position - tables["domino"].position; side.y = 0; side.Normalize();
+        const float W = 14f, D = 8.5f;   // half the distance between the corner tables: across, and front to back
+        void Move(string g, Vector3 to)
+        {
+            var t = tables[g]; var by = to - t.position; by.y = 0;
+            t.position += by;
+            var b = Find(room, "Board_" + g); if (b != null) b.position += by;
+        }
+        Move("domino", center - side * W - front * D);
+        Move("tawla", center + side * W - front * D);
+        Move("chess", center - side * W + front * D);
+        Move("ludo", center + side * W + front * D);
+        // the estimation table: the domino table copied, its two chairs and two more across the other sides
+        var src = tables["domino"];
+        var est = Instantiate(src.gameObject, src.parent).transform;
+        est.name = "Table_estimation";
+        est.position = new Vector3(center.x, src.position.y, center.z); est.rotation = src.rotation; est.localScale = src.localScale;
+        Transform s0 = null, s1 = null;
+        foreach (Transform c in est) { if (c.name == "Seat_domino_0") s0 = c; else if (c.name == "Seat_domino_1") s1 = c; }
+        if (s0 != null && s1 != null)
+        {
+            s0.name = "Seat_estimation_0"; s1.name = "Seat_estimation_2";
+            var s2 = Instantiate(s0.gameObject, est).transform; s2.name = "Seat_estimation_1";
+            s2.position = s0.position; s2.rotation = s0.rotation; s2.RotateAround(est.position, Vector3.up, 90f);
+            var s3 = Instantiate(s1.gameObject, est).transform; s3.name = "Seat_estimation_3";
+            s3.position = s1.position; s3.rotation = s1.rotation; s3.RotateAround(est.position, Vector3.up, 90f);
+        }
+        tables["estimation"] = est;
+        // on its cloth: a trick in the middle and four hands face down, one at each chair
+        var board = new GameObject("Board_estimation").transform;
+        board.SetParent(src.parent, false);
+        board.position = est.position;
+        var felt = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        felt.name = "Felt"; Destroy(felt.GetComponent<Collider>());
+        felt.transform.SetParent(board, false);
+        felt.transform.localRotation = Quaternion.Euler(90, 0, 0);
+        felt.transform.localScale = new Vector3(4.8f, 4.8f, 1);
+        felt.GetComponent<Renderer>().sharedMaterial = Art.Mat(new Color(0.09f, 0.33f, 0.2f), 0.15f);
+        var back = Resources.Load<Texture2D>("UI/Cards/back");
+        var backMat = back != null ? Art.Mat(Color.white, 0.3f, 0, back) : Art.Mat(new Color(0.55f, 0.1f, 0.12f), 0.3f);
+        void Card(Material m, Vector3 at, float turn, int layer)
+        {
+            var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            q.name = "Card"; Destroy(q.GetComponent<Collider>());
+            q.transform.SetParent(board, false);
+            q.transform.localPosition = at + Vector3.up * (0.012f + layer * 0.006f);
+            q.transform.localRotation = Quaternion.Euler(90, turn, 0);
+            q.transform.localScale = new Vector3(0.62f, 0.87f, 1);
+            q.GetComponent<Renderer>().sharedMaterial = m;
+        }
+        int[] trick = { 0, 25, 37, 51 };   // the ace of spades, the king of hearts, the queen of diamonds, the king of clubs
+        for (int i = 0; i < 4; i++)
+        {
+            var dir = Quaternion.Euler(0, 90 * i, 0) * Vector3.forward;
+            var tex = Resources.Load<Texture2D>("UI/Cards/c" + trick[i]);
+            Card(tex != null ? Art.Mat(Color.white, 0.3f, 0, tex) : backMat, dir * 0.55f, 90 * i + (i % 2 == 0 ? 8 : -6), 1);
+            for (int k = 0; k < 3; k++) Card(backMat, dir * 1.75f + Quaternion.Euler(0, 90 * i, 0) * Vector3.right * (k - 1) * 0.28f, 90 * i + (k - 1) * 9, k);
+        }
     }
 
     /// Each table's game (its board, or the domino tiles) sits in the middle of that table's top, resting on it.
@@ -235,7 +303,7 @@ public class Cafe : MonoBehaviour
     /// The camera looks down steeply enough that the two back tables never hide behind the two front ones.
     Vector3 Overview(out Vector3 look)
     {
-        if (cam == null || tables.Count < 4)
+        if (cam == null || tables.Count < 5)
         {
             float aspect = Mathf.Max(0.5f, (float)Screen.width / Mathf.Max(1, Screen.height));
             float far = Mathf.Max(1f, 1.75f / aspect);
@@ -252,11 +320,14 @@ public class Cafe : MonoBehaviour
         var side = Vector3.Cross(Vector3.up, front);
         // each table with its chairs: a box around it, up to the heads of the people sitting there
         var pts = new List<Vector3>();
-        foreach (var t in tables.Values)
+        foreach (var kv in tables)
+        {
+            var t = kv.Value; float hz = kv.Key == "estimation" ? 5f : 4.2f;   // chairs at its front and back too
             foreach (float y in new[] { 0f, 2.6f })
                 foreach (float sx in new[] { -1f, 1f })
                     foreach (float sz in new[] { -1f, 1f })
-                        pts.Add(new Vector3(t.position.x, center.y, t.position.z) + side * 4.2f * sx + front * 4.2f * sz + Vector3.up * y);
+                        pts.Add(new Vector3(t.position.x, center.y, t.position.z) + side * 5f * sx + front * hz * sz + Vector3.up * y);
+        }
         var tr = cam.transform; var p0 = tr.position; var r0 = tr.rotation;
         Vector3 aim = center;
         float d = 40f;

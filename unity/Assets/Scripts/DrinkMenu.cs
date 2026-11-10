@@ -78,9 +78,10 @@ public class DrinkMenu : MonoBehaviour
 
     void Update()
     {
-        // only while you play (not in the waiting room, not watching someone else's game)
+        // only while you play online (not in the waiting room, not watching someone else's game, not in practice
+        // against the computer: there's no café table to bring it to)
         var v = app != null ? app.view : null;
-        bool on = v != null && v.phase != "lobby" && v.you >= 0;
+        bool on = v != null && v.phase != "lobby" && v.you >= 0 && !app.PracticeGame;
         if (button != null && button.activeSelf != on) button.SetActive(on);
         if (!on && panel != null && panel.gameObject.activeSelf) panel.gameObject.SetActive(false);
     }

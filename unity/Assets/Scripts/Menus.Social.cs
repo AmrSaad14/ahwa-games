@@ -144,7 +144,7 @@ public partial class Menus
         // each game: rating and record
         var pg = c0.Obj("perGame");
         var lines = new List<string>();
-        foreach (var g in new[] { "domino", "tawla", "chess", "ludo", "basra", "tarneeb", "konkan" })
+        foreach (var g in new[] { "domino", "tawla", "chess", "ludo", "estimation" })
         {
             var r = pg?.Obj(g); if (r == null) continue;
             int run = (int)r.Num("streak");
@@ -337,13 +337,13 @@ public partial class Menus
         string code = m.Str("code"), mode = m.Str("mode");
         string game = Modes.GameOf(mode);
         Sfx.Chime(); Sfx.Buzz();
-        if (app.view != null && !app.Practicing) { app.Toast(from.Str("name") + " " + Loc.T("بيدعوك تلعب") + " " + Loc.T(App.GameNames[game])); return; }
+        if (app.view != null && !app.Practicing) { app.Toast(from.Str("name") + " " + Loc.T("بيدعوك تلعب") + " " + Loc.T(App.GameName(game))); return; }
         Panel(Loc.T("دعوة للعب"), out var body, new Vector2(460, 250));
         refreshOpen = null;
         var face = Ui.Picture(body, "Face", Face((int)from.Num("ch")));
         face.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(72, 90), new Vector2(0, 0));
         Photo.Into(face, from.Str("photo"));
-        Ui.Label(body, from.Str("name") + " " + Loc.T("بيدعوك تلعب") + " " + Loc.T(App.GameNames[game]), 17, Color.white, TextAnchor.MiddleCenter, Ui.Bold).rectTransform
+        Ui.Label(body, from.Str("name") + " " + Loc.T("بيدعوك تلعب") + " " + Loc.T(App.GameName(game)), 17, Color.white, TextAnchor.MiddleCenter, Ui.Bold).rectTransform
             .Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(420, 28), new Vector2(0, -96));
         if (!string.IsNullOrEmpty(m.Str("group")))
         {

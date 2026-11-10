@@ -181,13 +181,11 @@ public class GameUi : MonoBehaviour
         ["domino"] = new[] { ("ffa2", "فردي"), ("ffa3", "٣ لاعبين"), ("ffa4", "٤ لاعبين"), ("team", "زوجي ٢ ضد ٢") },
         ["tawla"] = new[] { ("tawla", "عادة"), ("mahbousa", "محبوسة"), ("tawla31", "٣١"), ("gulbahar", "جلبهار") },
         ["chess"] = new[] { ("chess1", "دقيقة"), ("chess3", "٣ دقايق"), ("chess", "٥ دقايق"), ("chess10", "١٠ دقايق") },
-        ["basra"] = new[] { ("basra2", "فردي"), ("basra4", "زوجي ٢ ضد ٢") },
-        ["tarneeb"] = new[] { ("tarneeb", "زوجي ٢ ضد ٢") },
-        ["konkan"] = new[] { ("konkan2", "٢ لاعبين"), ("konkan3", "٣ لاعبين"), ("konkan4", "٤ لاعبين"), ("konkanT", "زوجي ٢ ضد ٢") },
+        ["estimation"] = new[] { ("estimation", "٤ لاعبين") },
         ["ludo"] = new[] { ("ludo2", "٢ لاعبين"), ("ludo3", "٣ لاعبين"), ("ludo4", "٤ لاعبين"), ("ludoq2", "سريع ٢"), ("ludoq4", "سريع ٤"), ("ludom2", "ماستر ٢"), ("ludom4", "ماستر ٤") },
     };
     public static int Players(string mode) =>
-        mode == "ffa3" || mode == "ludo3" || mode == "konkan3" ? 3 : mode == "konkan2" ? 2 : mode == "tarneeb" || mode == "konkanT" ? 4 : mode == "ffa4" || mode == "team" || mode.EndsWith("4") ? 4 : 2;
+        mode == "ffa3" || mode == "ludo3" ? 3 : mode == "estimation" || mode == "ffa4" || mode == "team" || mode.EndsWith("4") ? 4 : 2;
 
     void BuildPicker()
     {
@@ -878,6 +876,9 @@ public class GameUi : MonoBehaviour
     public void Render(TableView v, int sel, List<char> choose)
     {
         ShowWatching(v);
+        // voice chat is for people: not in a practice game against the computer
+        bool mic = !app.PracticeGame;
+        if (micButton != null && micButton.gameObject.activeSelf != mic) micButton.gameObject.SetActive(mic);
         lobby.gameObject.SetActive(v.phase == "lobby");
         if (v.phase == "lobby") { RenderLobby(v); turnText.Set(""); rollButton.SetActive(false); undoButton.SetActive(false); }
         if (v.Board) { RenderBoard(v); return; }
@@ -938,8 +939,7 @@ public class GameUi : MonoBehaviour
         ["tawla"] = "طاولة عادة", ["mahbousa"] = "محبوسة", ["tawla31"] = "٣١", ["gulbahar"] = "جلبهار",
         ["chess"] = "شطرنج", ["chess1"] = "شطرنج", ["chess3"] = "شطرنج", ["chess10"] = "شطرنج",
         ["ludo2"] = "لودو", ["ludo3"] = "لودو", ["ludo4"] = "لودو",
-        ["basra2"] = "بصرة", ["basra4"] = "بصرة زوجي", ["tarneeb"] = "طرنيب",
-        ["konkan2"] = "كونكان", ["konkan3"] = "كونكان", ["konkan4"] = "كونكان", ["konkanT"] = "كونكان زوجي",
+        ["estimation"] = "استيميشن",
         ["ludoq2"] = "لودو سريع", ["ludoq4"] = "لودو سريع", ["ludom2"] = "لودو ماستر", ["ludom4"] = "لودو ماستر",
     };
 

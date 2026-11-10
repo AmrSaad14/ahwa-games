@@ -104,7 +104,7 @@ public partial class Menus
         for (int i = 0; i < games.Length; i++)
         {
             string mode = GroupModes[i];
-            var b = Ui.Button(play, App.GameNames[games[i]], Ui.Gold, Ui.Ink, 13, () => { Sfx.Tap(); if (!app.CanPlayOnline(mode)) return; Close(); app.Send(new Dictionary<string, object> { ["t"] = "groupPlay", ["id"] = (double)id, ["mode"] = mode }); });
+            var b = Ui.Button(play, App.GameName(games[i]), Ui.Gold, Ui.Ink, 13, () => { Sfx.Tap(); if (!app.CanPlayOnline(mode)) return; Close(); app.Send(new Dictionary<string, object> { ["t"] = "groupPlay", ["id"] = (double)id, ["mode"] = mode }); });
             At((RectTransform)b.transform, 120 + i * 120, 112, 30);
         }
         // the week's ranking among the group

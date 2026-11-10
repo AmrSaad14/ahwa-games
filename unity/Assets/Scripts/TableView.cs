@@ -19,12 +19,10 @@ public class LastAction
     public int from = -1000, to = -1000, i = -1;
     public List<int> dice = new List<int>();
     public bool capture, check, hit, home, knocked;   // knocked: a ludo pawn sent home
-    // basra: the card played, what it took, the basra points, the deal ended
-    public int card = -1, basra;
-    public List<int> took = new List<int>();
-    public bool deal;
-    // tarneeb: who took the trick (the fourth card), the bid, the trump; konkan: the meld added to
-    public int trick = -1, n = -1, suit = -1, meld = -1;
+    // the card game (estimation): the card played, who took the trick (the fourth card), the deal ended; a call's
+    // or an estimate's number and trump; everyone passed and the cards were dealt again
+    public int card = -1, trick = -1, n = -1, suit = -1;
+    public bool deal, redeal;
 }
 
 public class RoundResult
@@ -61,7 +59,7 @@ public class TableView
     // the board games: who won the game just ended (and how), chess clocks, and the game's own state
     public int endWinner = -1, endPoints; public string endKind;
     public List<double> clocks;
-    public Dictionary<string, object> chess, tawla, ludo, basra, tarneeb, konkan;
+    public Dictionary<string, object> chess, tawla, ludo, estimation;
     public bool Board => game != "domino";
 
     static int I(object o, string k, int def = 0) => (int)o.Num(k, def);
@@ -106,8 +104,8 @@ public class TableView
             v.last = new LastAction { t = last.Str("t"), s = I(last, "s", -1), id = I(last, "id", -1), k = I(last, "k"), e = e.Length > 0 ? e[0] : ' ', auto = last.Bool("auto"), forced = last.Bool("forced"),
                 from = I(last, "from", -1000), to = I(last, "to", -1000), i = I(last, "i", -1), dice = Ints(last.Arr("dice")),
                 capture = last.Bool("capture"), check = last.Bool("check"), hit = last.Bool("hit"), home = last.Bool("home"), knocked = last.Arr("captured") is List<object> kc && kc.Count > 0,
-                card = I(last, "card", -1), took = Ints(last.Arr("took")), basra = I(last, "basra"), deal = last.Bool("deal"),
-                trick = I(last, "trick", -1), n = I(last, "n", -1), suit = I(last, "suit", -1), meld = I(last, "meld", -1) };
+                card = I(last, "card", -1), deal = last.Bool("deal"), redeal = last.Bool("redeal"),
+                trick = I(last, "trick", -1), n = I(last, "n", -1), suit = I(last, "suit", -1) };
         }
         var res = m.Obj("result");
         if (res != null && v.game == "domino")
@@ -117,7 +115,7 @@ public class TableView
         }
         if (res != null && v.game != "domino") { v.endWinner = I(res, "winner", -1); v.endPoints = I(res, "points"); v.endKind = res.Str("kind"); }
         if (m.Arr("clocks") is List<object> cl) { v.clocks = new List<double>(); foreach (var c in cl) v.clocks.Add(c is double cd ? cd : 0); }
-        v.chess = m.Obj("chess"); v.tawla = m.Obj("tawla"); v.ludo = m.Obj("ludo"); v.basra = m.Obj("basra"); v.tarneeb = m.Obj("tarneeb"); v.konkan = m.Obj("konkan");
+        v.chess = m.Obj("chess"); v.tawla = m.Obj("tawla"); v.ludo = m.Obj("ludo"); v.estimation = m.Obj("estimation");
         var match = m.Obj("match");
         if (match != null)
         {
@@ -129,7 +127,7 @@ public class TableView
 
     public bool MyTurn => phase == "play" && you >= 0 && turn == you;
     public SeatView Me => you >= 0 && you < seats.Count ? seats[you] : null;
-    public int TeamOf(int seat) => game == "domino" ? Domino.TeamOf(mode, seat) : mode == "basra4" || mode == "tarneeb" || mode == "konkanT" ? seat % 2 : seat;
-    public int TeamCount => mode == "team" || mode == "basra4" || mode == "tarneeb" || mode == "konkanT" ? 2 : seats.Count;
+    public int TeamOf(int seat) => game == "domino" ? Domino.TeamOf(mode, seat) : seat;
+    public int TeamCount => mode == "team" ? 2 : seats.Count;
     public static List<int> IntList(List<object> a) => Ints(a);
 }

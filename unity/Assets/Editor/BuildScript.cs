@@ -151,6 +151,11 @@ public static class BuildScript
         // R8 on the release build: unused Java code removed, the rest optimised and renamed (Play Console's "DEX code
         // optimization"): a smaller app that starts quicker and uses less memory. Keep rules: Editor/PushGradle.cs.
         // The mapping file goes inside the .aab by itself, so Play's crash reports stay readable.
+        // smoothness: garbage collected a little each frame (no long pauses), the frame pacing library (frames shown
+        // at an even rhythm, no judder), rendering on its own thread
+        PlayerSettings.gcIncremental = true;
+        PlayerSettings.Android.optimizedFramePacing = true;
+        PlayerSettings.SetMobileMTRendering(NamedBuildTarget.Android, true);
         PlayerSettings.Android.minifyRelease = true;
         PlayerSettings.Android.minifyDebug = false;
         bool signed = Sign();
