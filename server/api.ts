@@ -6,7 +6,7 @@
 // Answers are JSON: { ...data } with 200, or { error: "code" } with 4xx. The full list is at /api/docs.
 import { TOURNEY } from './tourney';
 import type http from 'node:http';
-import { Store, REFER_BONUS } from './db';
+import { Store, referBonus } from './db';
 import { Tokens, Limiter, checkPassword, hashPassword } from './auth';
 import type { Hub } from './hub';
 import { GAMES, GameId } from '../shared/engine';
@@ -56,7 +56,7 @@ export function api(ctx: ApiContext) {
     { method: 'GET', path: /^\/api\/v1\/health$/, auth: false, run: () => ({ ok: true, ...hub.stats() }) },
     { method: 'GET', path: /^\/api\/v1\/catalog$/, auth: false, run: () => ({
       skins: SKINS.map(s => ({ ...s, free: isFree(s) })), missions: MISSIONS, weeklyPrizes: WEEKLY_PRIZES,
-      season: { tiers: TIERS, count: SEASON_TIERS, spPerTier: SP_PER_TIER, pass: SEASON_PASS }, economy: ECONOMY, referralBonus: REFER_BONUS,
+      season: { tiers: TIERS, count: SEASON_TIERS, spPerTier: SP_PER_TIER, pass: SEASON_PASS }, economy: ECONOMY, referralBonus: referBonus(),
     }) },
     { method: 'GET', path: /^\/api\/v1\/leaderboard$/, auth: false, run: ({ uid, query }) => {
       const g = query.get('game') || 'domino';
@@ -195,7 +195,7 @@ export function api(ctx: ApiContext) {
     /* ---------- referrals, reports, support ---------- */
     { method: 'POST', path: /^\/api\/v1\/referral$/, auth: true, run: ({ uid, body }) => {
       const e = store.setReferrer(uid!, String(body.code || '')); if (e) fail(409, e);
-      changed(uid!); return { referred: true, bonus: REFER_BONUS, note: 'paid to both of you after your first game' };
+      changed(uid!); return { referred: true, bonus: referBonus(), note: 'paid to both of you after your first game' };
     } },
     { method: 'POST', path: /^\/api\/v1\/report$/, auth: true, run: ({ uid, body }) => {
       const o = other(String(body.pid || ''));

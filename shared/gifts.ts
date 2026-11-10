@@ -34,6 +34,8 @@ export const ECONOMY = {
   comebackDays: 3,        // …of this many days (and one push reminder at that point)
   doubleMax: 100_000,     // "double your winnings": a rewarded ad after a win pays the match's winnings again, up to this
   doubleMinutes: 15,      // …if watched within this long of the win
+  houseFee: 0.1,          // the game keeps this share of what the winners take from the losers
+  referralBonus: 50_000,  // to both, after the invited friend's first game
 };
 
 /** The daily bonus grows for each day in a row you come back: day 1 … day 7 (and every day after). */
@@ -71,10 +73,10 @@ export function weekKey(ms = Date.now()): string {
 }
 
 /** Coins each player puts on the table for one match (online games). */
-export const STAKES = [5_000, 20_000, 50_000, 100_000, 250_000, 500_000, 1_000_000] as const;
-/** The game keeps this share of what the winners take from the losers. */
-export const HOUSE_FEE = 0.1;
-export const isStake = (n: unknown): n is number => STAKES.includes(n as typeof STAKES[number]);
+export const STAKES: number[] = [5_000, 20_000, 50_000, 100_000, 250_000, 500_000, 1_000_000];   // (the dashboard can change them)
+export const isStake = (n: unknown): n is number => typeof n === 'number' && STAKES.includes(n);
+/** How often the full-screen ad shows between games: after 1 game in every `every` (0: never). Sent to the app. */
+export const ADS = { every: 2 };
 
 /**
  * What a winning player gets on top of their own stake back: the losers' stakes shared among the winners,
@@ -82,7 +84,7 @@ export const isStake = (n: unknown): n is number => STAKES.includes(n as typeof 
  */
 export function winnings(stake: number, winners: number, losers: number) {
   const gross = Math.floor(stake * losers / Math.max(1, winners));
-  const fee = Math.floor(gross * HOUSE_FEE);
+  const fee = Math.floor(gross * ECONOMY.houseFee);
   return { gross, fee, net: gross - fee };
 }
 

@@ -413,6 +413,11 @@ export class Store {
   addCoins(id: string, n: number) { if (n) this.db.prepare('UPDATE users SET coins = coins + ? WHERE id = ?').run(n, id); }
 
   /** Writes a line in the player's coin history. */
+  /** The coin prizes paid (weekly 1st, monthly top earners, governorate of the week, tournaments), newest first. */
+  prizeHistory(limit = 60) {
+    return this.db.prepare(`SELECT c.ts, c.kind, c.delta AS coins, c.user_id AS id, u.name FROM coin_log c LEFT JOIN users u ON u.id = c.user_id
+      WHERE c.kind IN ('weekly', 'monthly', 'gov', 'tourney') ORDER BY c.ts DESC LIMIT ?`).all(Math.min(500, limit)) as { ts: number; kind: string; coins: number; id: string; name: string | null }[];
+  }
   logCoins(id: string, kind: string, delta: number, extra: { fee?: number; stake?: number; mode?: string } = {}) {
     this.db.prepare('INSERT INTO coin_log (user_id, ts, kind, delta, fee, stake, mode, balance) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
       .run(id, Date.now(), kind, delta, extra.fee ?? 0, extra.stake ?? 0, extra.mode ?? null, this.coinsOf(id));
@@ -751,6 +756,7 @@ export class Store {
     const r = this.db.prepare('UPDATE users SET ref_paid = 1 WHERE id = ? AND ref_paid = 0').run(uid);
     if (!Number(r.changes)) return null;
     const paidBefore = Number((this.db.prepare('SELECT COUNT(*) AS n FROM users WHERE ref_by = ? AND ref_paid = 1').get(u.ref_by) as { n: number }).n) - 1;
+    const REFER_BONUS = referBonus();
     this.addCoins(uid, REFER_BONUS); this.logCoins(uid, 'referral', REFER_BONUS);
     if (paidBefore < REFER_MAX && this.get(u.ref_by)) { this.addCoins(u.ref_by, REFER_BONUS); this.logCoins(u.ref_by, 'referral', REFER_BONUS); }
     return { referrer: u.ref_by, coins: REFER_BONUS, name: u.name };
@@ -1304,7 +1310,9 @@ export const toPublic = (u: UserRow): PublicUser => ({ id: u.id, name: u.name, c
   phone: u.phone ? maskPhone(u.phone) : null, google: u.google_sub ? (u.google_email || 'Google') : null, apple: u.apple_sub ? (u.apple_email || 'Apple') : null, playGames: !!u.pg_id, code: u.friend_code ?? '', pid: u.pid ?? publicId(u.id) });
 
 /** Referrals: the bonus each side gets, how long a new player has to enter a code, and the most one inviter is paid for. */
-export const REFER_BONUS = 50_000, REFER_DAYS = 7, REFER_MAX = 20;
+export const REFER_DAYS = 7, REFER_MAX = 20;
+/** The coins for an invited friend's first game (to both): the dashboard sets it (ECONOMY.referralBonus). */
+export const referBonus = () => ECONOMY.referralBonus;
 
 export interface PrizeDb { id: number; user_id: string; month: string; game: string; egp: number; status: PrizeRow['status']; phone: string | null; ts: number; claim_ts: number | null; done_ts: number | null; note: string | null }
 const toPrize = (p: PrizeDb): PrizeRow => ({ id: p.id, month: p.month, game: p.game, egp: p.egp, status: p.status, phone: p.phone, ts: p.ts, doneTs: p.done_ts, note: p.note });

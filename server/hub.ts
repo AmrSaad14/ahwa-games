@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { GAMES, GameId, MODES, MODE_PLAYERS, Mode, defaultTarget, gameOf, isTeamMode, targetOptions, teamOf } from '../shared/engine';
 import type { C2S, Emote, FriendRow, IceServer, PlayerCard, S2C } from '../shared/protocol';
 import { GOV_WEEK, isGov } from '../shared/govs';
-import { ECONOMY, STAKES, giftByKind, drinkOnMenu, isStake, winnings, NO_ADS, XP, WEEKLY_PRIZES, MONTHLY_EARNER_PRIZES, weekKey } from '../shared/gifts';
+import { ECONOMY, STAKES, giftByKind, drinkOnMenu, isStake, winnings, NO_ADS, XP, WEEKLY_PRIZES, MONTHLY_EARNER_PRIZES, weekKey, ADS, WHEEL } from '../shared/gifts';
 import { EMOTES } from '../shared/protocol';
 import { Table, publicId, Player, BotMaker } from '../shared/table';
 import { botIdentity } from '../shared/botnames';
@@ -271,6 +271,8 @@ export class Hub {
     const table = this.userTable.get(uid);
     // maintenance (dashboard): no new games start; games already on finish
     if (this.opts.settings?.value.maintenance.on && ['quick', 'create', 'join', 'tourneyJoin', 'rematch'].includes(m.t)) return err('maintenance');
+    // a game switched off in the dashboard: no new tables of it (games already on finish)
+    if (['quick', 'create', 'practice', 'groupPlay', 'invite'].includes(m.t) && typeof (m as { mode?: unknown }).mode === 'string' && this.gameOff((m as { mode: Mode }).mode)) return err('game_off');
     // an app older than the dashboard's minimum: no new games until it's updated
     if (this.outdated(s) && ['quick', 'create', 'join', 'tourneyJoin', 'rematch', 'invite', 'practice', 'groupPlay'].includes(m.t)) return err('update');
     if (['quick', 'create', 'join', 'practice', 'tourneyGo', 'groupPlay'].includes(m.t)) this.unwatch(uid);   // off to play: stop watching
@@ -989,6 +991,7 @@ export class Hub {
     const daily = (s.v ?? 1) < 2 ? this.store.claimDaily(u.id) : { coins: 0, streak: 0 };
     const fresh = this.store.get(u.id) ?? u;
     s.conn.send({ t: 'welcome', user: this.pub(fresh), token: this.tokens.issue(u.id), now: Date.now(), ice: this.iceFor(u.id), guestsOnline: this.opts.guestsOnline !== false,
+      config: this.config(),
       login: { google: !!this.opts.google?.enabled, apple: !!this.opts.apple?.enabled, phone: !!this.opts.phones?.enabled, playGames: this.opts.google?.playGamesEnabled ? this.opts.google.clientId : undefined } });
     this.friendsChanged(u.id);
     this.friendOnlinePush(u);
@@ -1065,6 +1068,30 @@ export class Hub {
   /** A message on every open app (the dashboard's notice). */
   noticeAll(text: string) { for (const ss of this.byUser.values()) ss.conn.send({ t: 'notice', text }); }
   /** Someone's account changed from the dashboard: their app updates (or, banned, they are sent away). */
+  /** What the app takes from the dashboard's settings: how often ads show between games, the games that are off,
+   *  the table stakes and the lucky wheel's prizes. Sent at sign-in and again to everyone when it changes. */
+  config() {
+    const off = this.opts.settings?.value.games?.off ?? [];
+    return { adEvery: ADS.every, gamesOff: off, stakes: [...STAKES], wheel: WHEEL.segments.map(x => x.coins) };
+  }
+  configChanged() { const c = this.config(); for (const ss of this.byUser.values()) ss.conn.send({ t: 'config', ...c }); }
+  private gameOff(mode: Mode) { return MODES.includes(mode) && (this.opts.settings?.value.games?.off ?? []).includes(gameOf(mode)); }
+
+  /** The dashboard's live view: every table now, and who is online. */
+  live() {
+    const tables = [...this.tables.values()].filter(t => !t.closed).map(t => ({
+      id: t.id, mode: t.mode, game: gameOf(t.mode), stake: t.stake ?? 0, phase: t.phase, private: !!t.code, code: t.code,
+      seats: t.seats.map(x => x ? { uid: x.uid, name: x.name, bot: x.bot, online: x.online } : null),
+    }));
+    const online = [...this.byUser.keys()].map(uid => {
+      const u = this.store.get(uid), t = this.userTable.get(uid);
+      return { uid, name: u?.name ?? '?', coins: u?.coins ?? 0, table: t && !t.closed ? t.id : null, mode: t && !t.closed ? t.mode : null };
+    });
+    return { tables, online, queued: [...this.queues.entries()].map(([k, q]) => ({ key: k, players: q.length })).filter(q => q.players > 0) };
+  }
+  /** Closes a player's connection (the app reconnects by itself: a fresh start for a stuck player). */
+  kick(uid: string) { const ss = this.byUser.get(uid); if (!ss) return false; ss.conn.close(4000, 'kicked'); return true; }
+
   adminChanged(uid: string) {
     const u = this.store.get(uid), ss = this.byUser.get(uid);
     if (!u || !ss) return;

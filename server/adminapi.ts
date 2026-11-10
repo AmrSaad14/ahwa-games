@@ -80,7 +80,7 @@ export function adminApi(ctx: AdminCtx) {
       const st = settings.value;
       return { ...store.adminOverview(), live: { ...hub.stats(), online: hub.onlineIds.length }, daily: store.adminDaily(14),
         tourney: { state: hub.tourney.state, startsAt: hub.tourney.startsAt, game: hub.tourney.def.game, registered: store.tourneyRegs(hub.tourney.event).length, enabled: st.tourney.enabled },
-        flags: { season: st.season.enabled, prizes: st.prizes.enabled, maintenance: st.maintenance.on, notice: st.notice.until > Date.now() ? st.notice.text : '', push: ctx.pushOn() } };
+        flags: { season: st.season.enabled, prizes: st.prizes.enabled, maintenance: st.maintenance.on, notice: st.notice.until > Date.now() ? st.notice.text : '', push: ctx.pushOn(), adEvery: st.ads.every, gamesOff: st.games.off, minBuild: st.update.minBuild } };
     }
     if (p === '/catalog') return { skins: SKINS, tiers: TIERS, pass: SEASON_PASS, titles: hub.titles.list, icons: TITLE_ICONS };
 
@@ -111,6 +111,7 @@ export function adminApi(ctx: AdminCtx) {
           if (!store.adminGiveSkin(id, String(b.skin || ''), a === 'skin')) fail(400, 'bad_skin');
           log(req, a, id, { skin: b.skin }); hub.adminChanged(id); return { ok: true };
         }
+        case 'kick': { const ok = hub.kick(id); log(req, 'kick', id, {}); return { ok }; }
         case 'ban': case 'unban': store.adminBan(id, a === 'ban', String(b.reason || '')); log(req, a, id, { reason: b.reason }); hub.adminChanged(id); return { ok: true };
         case 'mute': store.mute(id, Date.now() + Math.max(1, Math.min(24 * 30, Number(b.hours) || 24)) * 3_600_000); log(req, 'mute', id, { hours: b.hours }); hub.adminChanged(id); return { ok: true };
         case 'unmute': store.adminUnmute(id); log(req, 'unmute', id); hub.adminChanged(id); return { ok: true };
@@ -255,6 +256,8 @@ export function adminApi(ctx: AdminCtx) {
     }
 
     // ---- settings
+    if (p === '/live') return hub.live();
+    if (p === '/prizehistory') return { rows: store.prizeHistory(60) };
     if (p === '/settings' && m === 'GET') return settings.value;
     if (p === '/settings' && (m === 'PUT' || m === 'POST')) {
       const b = await readBody(req), before = JSON.stringify(settings.value);

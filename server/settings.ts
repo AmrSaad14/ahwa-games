@@ -1,8 +1,15 @@
-// The game's live settings, changed from the dashboard (/admin) without a restart: the monthly prizes (Vodafone Cash),
-// the weekly tournament, the season pass, the economy (starting coins, daily streak, ads, weekly prizes), how
-// play runs (computer players, turn time), maintenance mode and a notice shown to every player.
+// The game's live settings, changed from the dashboard (/admin) without a restart: the economy (starting coins, daily
+// streak, ads, table stakes and the house fee, the wheel, the missions chest, referrals), the coin prizes (weekly,
+// monthly, governorate), what a game is worth (XP, season and league points), how often ads show between games,
+// which games are on, the weekly tournament, the season pass, how play runs (computer players, turn time),
+// maintenance mode, the forced update and a notice shown to every player (and the old Vodafone Cash prizes, off).
 // They are kept in the database (meta 'settings') and applied to the running game at once.
-import { ECONOMY, STREAK, WEEKLY_PRIZES } from '../shared/gifts';
+import { ECONOMY, STREAK, WEEKLY_PRIZES, MONTHLY_EARNER_PRIZES, STAKES, ADS, WHEEL, XP } from '../shared/gifts';
+import { GOV_WEEK } from '../shared/govs';
+import { CHEST } from '../shared/missions';
+import { LP } from '../shared/leagues';
+import { SP } from '../shared/season';
+import { GAMES, type GameId } from '../shared/engine';
 import { SEASON_PASS, TIERS, SEASON_TIERS, type Reward } from '../shared/season';
 import { skinById } from '../shared/skins';
 import { TOURNEY } from './tourney';
@@ -20,7 +27,24 @@ export interface GameSettings {
   };
   tourney: { enabled: boolean; weekday: number; hour: number; game: TourneyGame; prizes: number[]; played: number };
   season: { enabled: boolean; passCoins: number; passEgp: number; tiers: { free: Reward; prem: Reward }[] };
-  economy: { startCoins: number; adReward: number; adsPerDay: number; skinAdsPerDay: number; streak: number[]; weeklyPrizes: number[]; tutorialCoins: number; comebackCoins: number; comebackDays: number };
+  economy: {
+    startCoins: number; adReward: number; adsPerDay: number; skinAdsPerDay: number; streak: number[]; weeklyPrizes: number[]; tutorialCoins: number; comebackCoins: number; comebackDays: number;
+    /** the coins each player puts on the table (the choices in the game) and the share the game keeps (%) */
+    stakes: number[]; houseFeePct: number;
+    /** the whole game's top earners of the month: 1st, 2nd, 3rd */
+    monthlyPrizes: number[];
+    referralBonus: number; doubleMax: number;
+    /** governorate of the week: the prize for each of its players, how many of them count, and the games needed */
+    govPrize: number; govTop: number; govMinGames: number;
+    /** the weekly missions chest (3 steps) and the lucky wheel's 8 segments */
+    chestCoins: number[]; wheelCoins: number[]; wheelMaxSpins: number;
+  };
+  /** what a game is worth: experience, season points and league points */
+  progress: { xpWin: number; xpLoss: number; spWin: number; spLoss: number; spDaily: number; lpWin: number; lpLoss: number };
+  /** the full-screen ad between games: after 1 game in every `every` (0: never) */
+  ads: { every: number };
+  /** games switched off: hidden from online play and practice (players get a message) */
+  games: { off: GameId[] };
   play: { botFillSeconds: number; turnSeconds: number; dominoTurnSeconds: number };   // turnSeconds: tawla and ludo
   maintenance: { on: boolean; message: string };
   /** The oldest app build that may still play (0: any). Older apps get the update dialog and can't start games. */
@@ -38,7 +62,12 @@ function defaults(): GameSettings {
     prizes: { enabled: false, egp: 500, claimDays: 30, prefixes: ['010'] },   // off for now: switch on in the dashboard
     tourney: { enabled: true, weekday: TOURNEY.weekday, hour: TOURNEY.hour, game: 'rotate', prizes: [...TOURNEY.prizes], played: TOURNEY.played },
     season: { enabled: true, passCoins: SEASON_PASS.coins, passEgp: SEASON_PASS.egp, tiers: TIERS.map(t => ({ free: { ...t.free }, prem: { ...t.prem } })) },
-    economy: { startCoins: ECONOMY.startCoins, adReward: ECONOMY.adReward, adsPerDay: ECONOMY.adsPerDay, skinAdsPerDay: ECONOMY.skinAdsPerDay, tutorialCoins: ECONOMY.tutorialCoins, comebackCoins: ECONOMY.comebackCoins, comebackDays: ECONOMY.comebackDays, streak: [...STREAK], weeklyPrizes: [...WEEKLY_PRIZES] },
+    economy: { startCoins: ECONOMY.startCoins, adReward: ECONOMY.adReward, adsPerDay: ECONOMY.adsPerDay, skinAdsPerDay: ECONOMY.skinAdsPerDay, tutorialCoins: ECONOMY.tutorialCoins, comebackCoins: ECONOMY.comebackCoins, comebackDays: ECONOMY.comebackDays, streak: [...STREAK], weeklyPrizes: [...WEEKLY_PRIZES],
+      stakes: [...STAKES], houseFeePct: Math.round(ECONOMY.houseFee * 100), monthlyPrizes: [...MONTHLY_EARNER_PRIZES], referralBonus: ECONOMY.referralBonus, doubleMax: ECONOMY.doubleMax,
+      govPrize: GOV_WEEK.prize, govTop: GOV_WEEK.top, govMinGames: GOV_WEEK.minGames, chestCoins: [...CHEST.coins], wheelCoins: WHEEL.segments.map(x => x.coins), wheelMaxSpins: WHEEL.maxSpins },
+    progress: { xpWin: XP.win, xpLoss: XP.loss, spWin: SP.win, spLoss: SP.loss, spDaily: SP.daily, lpWin: LP.win, lpLoss: LP.loss },
+    ads: { every: ADS.every },
+    games: { off: [] },
     play: { botFillSeconds: 60, turnSeconds: 10, dominoTurnSeconds: 20 },
     maintenance: { on: false, message: 'السيرفر في صيانة دلوقتي، ارجع كمان شوية · Maintenance, back soon' },
     update: { minBuild: 0 },
@@ -54,6 +83,14 @@ const int = (v: unknown, lo: number, hi: number, d: number) => { const n = Math.
 const ints = (v: unknown, lo: number, hi: number, d: number[], maxLen = 64) => Array.isArray(v) && v.length ? v.slice(0, maxLen).map((x, i) => int(x, lo, hi, d[i] ?? d[d.length - 1] ?? 0)) : d;
 const text = (v: unknown, max: number, d: string) => typeof v === 'string' ? v.trim().slice(0, max) : d;
 const bool = (v: unknown, d: boolean) => typeof v === 'boolean' ? v : d;
+/** A list of exactly as many numbers as `d` (the chest's steps, the wheel's segments). */
+const fixed = (v: unknown, lo: number, hi: number, d: number[]) => Array.isArray(v) && v.length === d.length ? v.map((x, k) => int(x, lo, hi, d[k])) : d;
+/** The table stakes: 1–10 different amounts, smallest first. */
+const stakes = (v: unknown, d: number[]) => {
+  if (!Array.isArray(v)) return d;
+  const out = [...new Set(v.map(x => Math.round(Number(x))).filter(x => Number.isFinite(x) && x >= 100 && x <= 1_000_000_000))].sort((a, b) => a - b).slice(0, 10);
+  return out.length ? out : d;
+};
 function reward(v: unknown, d: Reward): Reward {
   const r = v as { coins?: unknown; skin?: unknown };
   if (r && typeof r.skin === 'string' && skinById(r.skin)) return { skin: r.skin };
@@ -103,7 +140,25 @@ export function sanitize(input: unknown, cur: GameSettings): GameSettings {
       comebackDays: int(e.comebackDays, 0, 60, cur.economy.comebackDays ?? SHIPPED.economy.comebackDays),
       streak: ints(e.streak, 0, 100_000_000, cur.economy.streak, 7),
       weeklyPrizes: ints(e.weeklyPrizes, 0, 100_000_000, cur.economy.weeklyPrizes, 10),
+      stakes: stakes(e.stakes, cur.economy.stakes ?? SHIPPED.economy.stakes),
+      houseFeePct: int(e.houseFeePct, 0, 50, cur.economy.houseFeePct ?? SHIPPED.economy.houseFeePct),
+      monthlyPrizes: ints(e.monthlyPrizes, 0, 1_000_000_000, cur.economy.monthlyPrizes ?? SHIPPED.economy.monthlyPrizes, 10),
+      referralBonus: int(e.referralBonus, 0, 100_000_000, cur.economy.referralBonus ?? SHIPPED.economy.referralBonus),
+      doubleMax: int(e.doubleMax, 0, 100_000_000, cur.economy.doubleMax ?? SHIPPED.economy.doubleMax),
+      govPrize: int(e.govPrize, 0, 100_000_000, cur.economy.govPrize ?? SHIPPED.economy.govPrize),
+      govTop: int(e.govTop, 1, 1000, cur.economy.govTop ?? SHIPPED.economy.govTop),
+      govMinGames: int(e.govMinGames, 0, 1000, cur.economy.govMinGames ?? SHIPPED.economy.govMinGames),
+      chestCoins: fixed(e.chestCoins, 0, 100_000_000, cur.economy.chestCoins ?? SHIPPED.economy.chestCoins),
+      wheelCoins: fixed(e.wheelCoins, 0, 100_000_000, cur.economy.wheelCoins ?? SHIPPED.economy.wheelCoins),
+      wheelMaxSpins: int(e.wheelMaxSpins, 1, 50, cur.economy.wheelMaxSpins ?? SHIPPED.economy.wheelMaxSpins),
     },
+    progress: (() => {
+      const g = (i.progress ?? {}) as Record<string, unknown>, c = cur.progress ?? SHIPPED.progress;
+      return { xpWin: int(g.xpWin, 0, 10_000, c.xpWin), xpLoss: int(g.xpLoss, 0, 10_000, c.xpLoss), spWin: int(g.spWin, 0, 10_000, c.spWin), spLoss: int(g.spLoss, 0, 10_000, c.spLoss),
+        spDaily: int(g.spDaily, 0, 10_000, c.spDaily), lpWin: int(g.lpWin, 0, 1000, c.lpWin), lpLoss: int(g.lpLoss, -1000, 0, c.lpLoss) };
+    })(),
+    ads: { every: int((i.ads ?? {}).every, 0, 20, cur.ads?.every ?? SHIPPED.ads.every) },
+    games: { off: Array.isArray((i.games ?? {}).off) ? [...new Set(((i.games as { off: unknown[] }).off).filter((g): g is GameId => (GAMES as unknown[]).includes(g)))] : (cur.games?.off ?? []) },
     play: { botFillSeconds: int(p.botFillSeconds, 2, 120, cur.play.botFillSeconds), turnSeconds: int(p.turnSeconds, 5, 60, cur.play.turnSeconds), dominoTurnSeconds: int(p.dominoTurnSeconds, 5, 60, cur.play.dominoTurnSeconds ?? SHIPPED.play.dominoTurnSeconds) },
     maintenance: { on: bool(m.on, cur.maintenance.on), message: text(m.message, 300, cur.maintenance.message) },
     update: { minBuild: int((i.update ?? {}).minBuild, 0, 1_000_000, cur.update?.minBuild ?? 0) },
@@ -122,6 +177,18 @@ function apply(s: GameSettings) {
   ECONOMY.tutorialCoins = s.economy.tutorialCoins; ECONOMY.comebackCoins = s.economy.comebackCoins; ECONOMY.comebackDays = s.economy.comebackDays;
   STREAK.splice(0, STREAK.length, ...s.economy.streak);
   WEEKLY_PRIZES.splice(0, WEEKLY_PRIZES.length, ...s.economy.weeklyPrizes);
+  const e = s.economy;
+  STAKES.splice(0, STAKES.length, ...e.stakes);
+  ECONOMY.houseFee = e.houseFeePct / 100; ECONOMY.referralBonus = e.referralBonus; ECONOMY.doubleMax = e.doubleMax;
+  MONTHLY_EARNER_PRIZES.splice(0, MONTHLY_EARNER_PRIZES.length, ...e.monthlyPrizes);
+  Object.assign(GOV_WEEK, { prize: e.govPrize, top: e.govTop, minGames: e.govMinGames });
+  CHEST.coins.splice(0, CHEST.coins.length, ...e.chestCoins);
+  e.wheelCoins.forEach((c, k) => { if (WHEEL.segments[k]) WHEEL.segments[k].coins = c; });
+  WHEEL.maxSpins = e.wheelMaxSpins;
+  Object.assign(XP, { win: s.progress.xpWin, loss: s.progress.xpLoss });
+  Object.assign(SP, { win: s.progress.spWin, loss: s.progress.spLoss, daily: s.progress.spDaily });
+  Object.assign(LP, { win: s.progress.lpWin, loss: s.progress.lpLoss });
+  ADS.every = s.ads.every;
   EVENTS.splice(0, EVENTS.length, ...s.events);
 }
 

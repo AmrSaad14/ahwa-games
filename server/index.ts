@@ -51,6 +51,8 @@ export function createServer(opts = config) {
     hub.setTiming(now.play.botFillSeconds * 1000, now.play.turnSeconds * 1000, now.play.dominoTurnSeconds * 1000);
     const t = now.tourney, b = before.tourney;
     if (t.weekday !== b.weekday || t.hour !== b.hour || t.game !== b.game || t.enabled !== b.enabled) hub.tourney.reschedule();
+    // the app's part of the settings (ads between games, games off, stakes, the wheel): to everyone online at once
+    if (JSON.stringify([now.ads, now.games, now.economy.stakes, now.economy.wheelCoins]) !== JSON.stringify([before.ads, before.games, before.economy.stakes, before.economy.wheelCoins])) hub.configChanged();
   });
   const admin = adminApi({ store, hub, settings, adminKey: opts.adminKey, secret: store.secret(opts.secret), ip: req => clientIp(req), pushOn: () => push.enabled,
     push: (uids, ar, en) => { for (const u of uids) push.toUser(u, ar, en).catch(() => {}); } });

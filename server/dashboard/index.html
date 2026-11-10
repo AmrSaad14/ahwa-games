@@ -15,7 +15,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 nav.side{background:#0d0805;border-right:1px solid var(--line);padding:16px 10px;position:sticky;top:0;height:100vh;overflow:auto}
 .brand{display:block;padding:4px 10px 16px;color:var(--gold);font-weight:800;font-size:16px}
 .brand small{display:block;color:var(--muted);font-weight:500;font-size:11px}
-nav.side a{display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-radius:9px;color:var(--text);text-decoration:none;margin-bottom:2px}
+nav.side a{display:flex;justify-content:space-between;align-items:center;padding:7px 12px;border-radius:9px;color:var(--text);text-decoration:none;margin-bottom:2px}
 nav.side a:hover{background:var(--panel)}
 nav.side a.on{background:var(--gold);color:var(--ink);font-weight:700}
 .pill{background:var(--bad);color:#fff;border-radius:99px;font-size:11px;padding:0 7px;font-weight:700}
@@ -99,9 +99,47 @@ label.f input[type=color]{width:52px}
 input[type=color]{width:52px;height:36px;padding:2px;cursor:pointer}
 .login{max-width:360px;margin:12vh auto;padding:26px}
 .empty{padding:22px;text-align:center;color:var(--muted)}
+.navsec{font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:#7d6b52;padding:12px 12px 3px;font-weight:700}
+.navsec:first-of-type{padding-top:4px}
+.qs{margin:0 4px 6px;display:block}.qs input{width:100%;padding:7px 10px;font-size:13px}
+.lead{color:var(--muted);font-size:13.5px;max-width:860px;margin:2px 0 6px}
+.sec{margin-top:18px}
+.sec>h2{margin:0 0 4px}
+.sec>.help{color:var(--muted);font-size:12.5px;margin:0 0 10px;max-width:820px}
+.fgrid{display:grid;gap:14px 16px;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+.fld{display:grid;gap:4px;align-content:start}
+.fld>span.l{font-size:12.5px;color:var(--text);font-weight:600}
+.fld>span.h{font-size:11.5px;color:var(--muted);line-height:1.35}
+.fld input[type=number],.fld input[type=text],.fld select,.fld textarea{width:100%}
+.fld.changed input,.fld.changed select,.fld.changed textarea,.fld.changed .lst input{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}
+.fld .hint{font-size:11.5px;color:var(--gold2);min-height:15px}
+.lst{display:grid;gap:6px}
+.lst .it{display:grid;grid-template-columns:auto 1fr auto;gap:6px;align-items:center}
+.lst .it b{font-size:11.5px;color:var(--muted);min-width:46px;font-weight:600}
+.lst .it input{width:100%}
+.lst .it .hint{grid-column:2}
+.lst{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.xbtn{background:none;border:1px solid var(--line);border-radius:7px;color:var(--muted);cursor:pointer;width:28px;height:30px}
+.xbtn:hover{color:#fff;border-color:var(--bad)}
+.savebar{position:sticky;bottom:12px;margin-top:22px;display:flex;align-items:center;gap:12px;justify-content:space-between;background:#2a1c10;border:1px solid var(--gold2);border-radius:12px;padding:10px 14px;box-shadow:0 12px 30px rgba(0,0,0,.55);z-index:20}
+.savebar[hidden]{display:none}
+.savebar .msg{font-weight:700}
+.toggles{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+.tog{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#0d0805;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.tog.off{border-color:var(--bad);background:rgba(212,87,74,.08)}
+.tog b{font-size:14px}.tog .sub{font-size:11.5px}
+.adrow{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.adrow span{font-size:12px;padding:4px 9px;border-radius:8px;background:#0d0805;border:1px solid var(--line)}
+.adrow span.ad{background:rgba(243,205,98,.14);border-color:var(--gold2);color:var(--gold);font-weight:700}
+.livegrid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.lt{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.lt .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.lt .seat{display:flex;justify-content:space-between;font-size:13px;padding:2px 0}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:6px}
+.dot.off{background:#6b5a45}
 .tierrow td{padding:5px 8px}
 .tierrow select,.tierrow input{padding:4px 6px}
-@media (max-width:820px){.app{grid-template-columns:1fr}nav.side{position:static;height:auto;display:flex;overflow-x:auto;gap:4px;padding:8px}nav.side .brand{display:none}nav.side a{white-space:nowrap}main{padding:16px}}
+@media (max-width:820px){.app{grid-template-columns:1fr}nav.side{position:static;height:auto;display:flex;overflow-x:auto;gap:4px;padding:8px}nav.side .brand,nav.side .navsec,nav.side .qs{display:none}nav.side a{white-space:nowrap}main{padding:16px}.savebar{bottom:6px}}
 </style>
 </head>
 <body>
@@ -152,21 +190,39 @@ function showLogin() {
 }
 
 /* ---------------- the frame ---------------- */
-const VIEWS = [
-  ['overview', 'Overview'], ['analytics', 'Analytics'], ['prizes', 'Monthly prizes'], ['players', 'Players'], ['rewards', 'Rewards & notices'],
-  ['tourney', 'Tournaments'], ['season', 'Season pass'], ['titles', 'Titles'], ['events', 'Events'], ['settings', 'Game settings'], ['reports', 'Reports & support'],
-  ['purchases', 'Purchases'], ['log', 'Activity log'],
+// the sidebar: [view, label] rows under section headings
+const NAV = [
+  ['Now', [['overview', 'Overview'], ['live', 'Live tables'], ['analytics', 'Analytics']]],
+  ['Players', [['players', 'Players'], ['reports', 'Reports & support'], ['purchases', 'Purchases']]],
+  ['Engage', [['rewards', 'Push, gifts & notices'], ['events', 'Events'], ['tourney', 'Tournaments'], ['season', 'Season pass'], ['titles', 'Titles']]],
+  ['Game rules', [['games', 'Games & ads'], ['economy', 'Economy'], ['coinprizes', 'Prizes'], ['system', 'System']]],
+  ['', [['log', 'Activity log']]],
 ];
+// the old Vodafone Cash money prizes: only listed while they are on or still have claims to settle
+const VIEWS = NAV.flatMap(x => x[1]).concat([['prizes', 'Money prizes (Vodafone Cash)']]);
+const ALIAS = { settings: 'system' };
 function frame() {
   $('#root').innerHTML = '<div class="app"><nav class="side"><div class="brand">♛ Board Battles<small>Control room</small></div>' +
-    VIEWS.map(([k, l]) => '<a href="#' + k + '" data-v="' + k + '">' + l + (k === 'prizes' ? '<span class="pill" id="pendpill" hidden></span>' : '') + '</a>').join('') +
+    '<form class="qs" id="qsf"><input id="qsi" placeholder="Find a player…" autocomplete="off"></form>' +
+    NAV.map(([h, rows]) => (h ? '<div class="navsec">' + h + '</div>' : '<div style="height:10px"></div>') + rows.map(([k, l]) => '<a href="#' + k + '" data-v="' + k + '">' + l + '</a>').join('')).join('') +
+    '<a href="#prizes" data-v="prizes" id="moneynav" hidden>Money prizes<span class="pill" id="pendpill" hidden></span></a>' +
     '<a href="#" id="logout" style="margin-top:14px">Sign out</a></nav><main id="main"></main></div>';
-  $('#logout').onclick = async e => { e.preventDefault(); await api('/logout', { body: {} }).catch(() => {}); showLogin(); };
+  $('#logout').onclick = async e => { e.preventDefault(); if (!leaveOk()) return; await api('/logout', { body: {} }).catch(() => {}); showLogin(); };
+  $('#qsf').onsubmit = e => { e.preventDefault(); state.q = $('#qsi').value.trim(); if (location.hash === '#players') go(); else location.hash = 'players'; };
 }
-function setPending(n) { state.pending = n; const p = $('#pendpill'); if (p) { p.hidden = !n; p.textContent = n; } }
+function setPending(n) { state.pending = n; const p = $('#pendpill'); if (p) { p.hidden = !n; p.textContent = n; } const m = $('#moneynav'); if (m) m.hidden = !(n || state.moneyOn); }
+// unsaved changes on a settings page: asked before leaving it
+let dirtyCheck = null;
+const leaveOk = () => !dirtyCheck || !dirtyCheck() || confirm('You have unsaved changes on this page. Leave without saving?');
+window.addEventListener('beforeunload', e => { if (dirtyCheck && dirtyCheck()) { e.preventDefault(); e.returnValue = ''; } });
+let lastHash = location.hash, liveTimer = null;
 async function go() {
+  if (location.hash !== lastHash && !leaveOk()) { history.replaceState(null, '', lastHash || '#overview'); return; }
+  lastHash = location.hash; dirtyCheck = null;
+  if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
   closeDrawer();
-  const v = (location.hash.slice(1) || 'overview').split('/')[0];
+  let v = (location.hash.slice(1) || 'overview').split('/')[0];
+  v = ALIAS[v] || v;
   state.view = VIEWS.some(x => x[0] === v) ? v : 'overview';
   document.querySelectorAll('nav.side a[data-v]').forEach(a => a.classList.toggle('on', a.dataset.v === state.view));
   const main = $('#main'); main.innerHTML = '<div class="empty">Loading…</div>';
@@ -177,7 +233,8 @@ async function start() {
   try { state.catalog = await api('/catalog'); } catch { return; }
   window.onhashchange = go;
   go();
-  setInterval(async () => { try { const o = await api('/overview'); setPending(o.prizePending); } catch {} }, 60000);
+  const tick = async () => { try { const o = await api('/overview'); state.moneyOn = o.flags.prizes; setPending(o.prizePending); } catch {} };
+  tick(); setInterval(tick, 60000);
 }
 
 /* ---------------- charts (plain SVG) ---------------- */
@@ -205,13 +262,17 @@ RENDER.overview = async main => {
   const f = (on, l, warn) => '<span class="flag ' + (warn && on ? 'warn' : on ? 'on' : 'off') + '">' + l + ': ' + (on ? 'on' : 'off') + '</span>';
   const t = o.tourney;
   main.innerHTML = '<h1>Overview</h1><div class="sub">Cairo time · updated ' + when(Date.now()) + '</div>' +
-    '<div class="flags">' + f(o.flags.prizes, 'Monthly prizes') + f(o.flags.maintenance, 'Maintenance', true) + f(!!o.flags.notice, 'Notice') + f(t.enabled, 'Tournament') + f(o.flags.season, 'Season pass') + f(o.flags.push, 'Push') + '</div>' +
+    '<div class="flags">' + f(o.flags.maintenance, 'Maintenance', true) + f(!!o.flags.notice, 'Notice') + f(t.enabled, 'Tournament') + f(o.flags.season, 'Season pass') + f(o.flags.push, 'Push') +
+      '<a class="flag" href="#games" style="text-decoration:none;color:inherit">Ads between games: ' + (o.flags.adEvery ? (o.flags.adEvery === 1 ? 'every game' : '1 in ' + o.flags.adEvery) : 'off') + '</a>' +
+      (o.flags.gamesOff.length ? '<a class="flag warn" href="#games" style="text-decoration:none">Off: ' + o.flags.gamesOff.map(g => GNAME[g] || g).join(', ') + '</a>' : '') +
+      (o.flags.minBuild ? '<a class="flag" href="#system" style="text-decoration:none;color:inherit">Oldest app allowed: ' + o.flags.minBuild + '</a>' : '') +
+      (o.flags.prizes ? f(true, 'Money prizes') : '') + '</div>' +
     '<div class="grid">' +
-      k(num(o.live.online), 'Online now · ' + num(o.live.tables) + ' tables · ' + num(o.live.queued) + ' waiting') +
+      '<a href="#live" style="text-decoration:none;color:inherit">' + k(num(o.live.online), 'Online now · ' + num(o.live.tables) + ' tables · ' + num(o.live.queued) + ' waiting ›') + '</a>' +
       k(num(o.activeToday), 'Played today · ' + num(o.activeWeek) + ' this week') +
       k(num(o.players), 'Players · ' + num(o.signedIn) + ' signed in · ' + num(o.newToday) + ' new today') +
       k(num(o.gamesToday), 'Games today · fees ' + short(o.houseFeesToday) + ' coins') +
-      k(o.prizePending ? num(o.prizePending) + ' · ' + num(o.prizePendingEgp) + ' EGP' : '0', 'Prizes to pay · ' + num(o.prizeUnclaimed) + ' waiting for a number · ' + num(o.prizePaidEgp) + ' EGP paid in all', o.prizePending > 0) +
+      (o.flags.prizes || o.prizePending ? k(o.prizePending ? num(o.prizePending) + ' · ' + num(o.prizePendingEgp) + ' EGP' : '0', 'Money prizes to pay · ' + num(o.prizeUnclaimed) + ' waiting for a number', o.prizePending > 0) : '') +
       k(num(o.seasonPremium), 'Season pass buyers this month') +
       k(num(o.purchasesToday) + ' / ' + num(o.purchasesWeek), 'Store purchases today / this week') +
       k(short(o.coinsHeld), 'Coins held by players') +
@@ -222,7 +283,7 @@ RENDER.overview = async main => {
       '<div class="card">' + bars(o.daily, 'active', 'Players who played', '#c9a25a') + '</div>' +
       '<div class="card">' + bars(o.daily, 'games', 'Games finished', '#4fae6a') + '</div>' +
       '<div class="card">' + bars(o.daily, 'newPlayers', 'New players', '#6f9fd8') + '</div>' +
-      '<div class="card">' + bars(o.daily, 'prizeEgp', 'Prizes paid (EGP)', '#e0a03a') + '</div>' +
+      (o.flags.prizes ? '<div class="card">' + bars(o.daily, 'prizeEgp', 'Prizes paid (EGP)', '#e0a03a') + '</div>' : '') +
     '</div>' +
     '<h2>Next tournament</h2><div class="card row" style="justify-content:space-between"><div><b>' + esc(GAMES[t.game] || t.game) + '</b> · ' + esc(t.state) + ' · ' + when(t.startsAt) + '<div class="sub">' + num(t.registered) + ' signed up</div></div><a class="btn" href="#tourney">Manage</a></div>' +
     (o.flags.notice ? '<h2>Notice showing</h2><div class="card">' + esc(o.flags.notice) + '</div>' : '');
@@ -398,7 +459,7 @@ RENDER.rewards = async main => {
       '<div class="form"><label class="f" style="grid-column:1/-1">Text<textarea id="nt" rows="2" maxlength="400">' + esc(live ? st.notice.text : '') + '</textarea></label>' +
       '<label class="f">Show for (hours)<input id="nh" type="number" value="24" min="1" max="720"></label></div>' +
       '<div class="row" style="margin-top:12px"><label class="switch"><input type="checkbox" id="np"> Also a push to players of the last 30 days</label><button class="btn gold" id="nb">Show notice</button>' + (live ? '<button class="btn" id="nc">Take it down</button>' : '') + '</div></div>' +
-    '<h2>Daily reward, ads and weekly prizes</h2><div class="card"><div class="sub">Daily streak: ' + st.economy.streak.map(short).join(' · ') + ' · rewarded ad: ' + short(st.economy.adReward) + ' (' + st.economy.adsPerDay + ' a day) · skins by ads: 30–150 ads (' + st.economy.skinAdsPerDay + ' a day) · weekly top ten: ' + st.economy.weeklyPrizes.map(short).join(' · ') + '</div><a class="btn" href="#settings" style="display:inline-block;margin-top:10px">Change them</a></div>';
+    '<h2>Daily reward, ads and prizes</h2><div class="card"><div class="sub">Daily streak: ' + st.economy.streak.map(short).join(' · ') + ' · rewarded ad: ' + short(st.economy.adReward) + ' (' + st.economy.adsPerDay + ' a day) · weekly prize: ' + st.economy.weeklyPrizes.map(short).join(' · ') + ' · monthly top earners: ' + st.economy.monthlyPrizes.map(short).join(' · ') + '</div><a class="btn" href="#economy" style="display:inline-block;margin-top:10px">Change them</a></div>';
   const pushBody = () => ({ titleAr: $('#pta').value, titleEn: $('#pte').value, bodyAr: $('#pba').value, bodyEn: $('#pbe').value });
   $('#pst').onclick = async () => {
     if (!$('#pp').value.trim()) return toast('Enter a friend code or player id to test on', true);
@@ -653,40 +714,222 @@ RENDER.events = async main => {
   main.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { const e = d.events[b.dataset.del]; if (confirm('Delete "' + e.en + '"?')) save(d.events.filter((_, i) => i !== Number(b.dataset.del)).map(({ stats, ...x }) => x)); });
 };
 
-/* ---------------- game settings ---------------- */
-RENDER.settings = async main => {
+/* ---------------- settings pages: one form engine ----------------
+ * A page is a list of sections; each field points at a setting by its path ('economy.startCoins'). Changed fields
+ * light up, a bar at the bottom counts them and saves only what changed; leaving with changes asks first. */
+const getAt = (o, p) => p.split('.').reduce((a, k) => a == null ? a : a[k], o);
+const setAt = (o, p, v) => { const ks = p.split('.'); let a = o; ks.slice(0, -1).forEach(k => { a[k] = a[k] ?? {}; a = a[k]; }); a[ks[ks.length - 1]] = v; };
+const exact = n => { const a = Math.abs(n), t = (x, d) => String(+x.toFixed(d)); return a >= 1e6 ? t(n / 1e6, 3) + 'M' : a >= 1e3 ? t(n / 1e3, 2) + 'K' : String(n); };
+const coinsHint = v => { const n = Number(v); return Number.isFinite(n) && n ? '= ' + exact(n) + ' coins' : ''; };
+function fieldHtml(f, v) {
+  const id = 'f_' + f.path.replace(/\W/g, '_');
+  const head = '<span class="l">' + esc(f.label) + '</span>';
+  const help = f.help ? '<span class="h">' + f.help + '</span>' : '';
+  const numIn = (val, extra) => '<input type="number" data-num value="' + esc(val) + '"' + (f.min !== undefined ? ' min="' + f.min + '"' : '') + (f.max !== undefined ? ' max="' + f.max + '"' : '') + (f.step ? ' step="' + f.step + '"' : '') + (extra || '') + '>';
+  if (f.type === 'bool') return '<div class="fld" data-path="' + f.path + '" data-type="bool">' + head + '<label class="switch"><input type="checkbox"' + (v ? ' checked' : '') + '> ' + esc(f.on || 'On') + '</label>' + help + '</div>';
+  if (f.type === 'text') return '<div class="fld" data-path="' + f.path + '" data-type="text"' + (f.wide ? ' style="grid-column:1/-1"' : '') + '>' + head + '<input type="text" value="' + esc(v) + '" maxlength="' + (f.maxlen || 300) + '"' + (f.rtl ? ' dir="auto"' : '') + '>' + help + '</div>';
+  if (f.type === 'select') return '<div class="fld" data-path="' + f.path + '" data-type="select">' + head + '<select>' + f.options.map(([k, l]) => '<option value="' + esc(k) + '"' + (String(k) === String(v) ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</select>' + help + '</div>';
+  if (f.type === 'list') {
+    const arr = v || [];
+    const item = (x, i) => '<div class="it"><b>' + esc(f.itemLabel ? f.itemLabel(i) : '#' + (i + 1)) + '</b>' + numIn(x) + (f.fixed ? '<span></span>' : '<button type="button" class="xbtn" data-rm title="Remove">✕</button>') + (f.coins ? '<span class="hint"></span>' : '') + '</div>';
+    return '<div class="fld" data-path="' + f.path + '" data-type="list"' + (f.coins ? ' data-coins' : '') + ' style="grid-column:1/-1">' + head + help + '<div class="lst' + (arr.length > 3 ? ' wide' : '') + '">' + arr.map(item).join('') + '</div>' +
+      (f.fixed ? '' : '<div><button type="button" class="btn sm" data-add' + (f.maxItems && arr.length >= f.maxItems ? ' disabled' : '') + '>+ Add</button></div>') + '</div>';
+  }
+  // numbers: coins (with a 1.5M preview), seconds, percent, plain
+  return '<div class="fld" data-path="' + f.path + '" data-type="num"' + (f.type === 'coins' ? ' data-coins' : '') + '>' + head + numIn(v) + (f.type === 'coins' ? '<span class="hint"></span>' : '') + help + '</div>';
+}
+function readField(el) {
+  const t = el.dataset.type;
+  if (t === 'bool') return el.querySelector('input').checked;
+  if (t === 'text') return el.querySelector('input').value;
+  if (t === 'select') { const v = el.querySelector('select').value; return /^-?\d+$/.test(v) ? Number(v) : v; }
+  if (t === 'list') return [...el.querySelectorAll('.lst input')].map(i => Number(i.value));
+  return Number(el.querySelector('input').value);
+}
+/** Draws a settings page into `main` and wires the save bar. `extra(main, values, changed)` adds custom parts. */
+async function settingsPage(main, title, lead, sections, opts = {}) {
   const s = await api('/settings');
-  const n = (id, label, v, extra) => '<label class="f">' + label + '<input id="' + id + '" type="number" value="' + v + '"' + (extra || '') + '></label>';
-  const list = (cls, label, arr) => arr.map((v, i) => '<label class="f">' + label + ' ' + (i + 1) + '<input type="number" class="' + cls + '" value="' + v + '"></label>').join('');
-  main.innerHTML = '<h1>Game settings</h1><div class="sub">Changes reach the game at once, without a restart. Every change is in the activity log.</div>' +
-    '<h2>Maintenance</h2><div class="card"><div class="form"><label class="f">Maintenance mode<span class="switch"><input type="checkbox" id="mo"' + (s.maintenance.on ? ' checked' : '') + '> no new games start</span></label>' +
-      '<label class="f" style="grid-column:span 2">Message players see<input id="mm" value="' + esc(s.maintenance.message) + '"></label></div></div>' +
-    '<h2>Forced update</h2><div class="card"><div class="form">' + n('ub', 'Minimum app version (build number, 0: any)', (s.update && s.update.minBuild) || 0, ' min="0"') + '</div>' +
-      '<div class="sub" style="margin-top:8px">Phones from Google Play are asked to update by themselves as soon as Play has a newer version. Set this only to stop an old version at once: apps with a lower build number get an update screen they can\'t close and can\'t start games. The build number is the AAB\'s version code (board-battles-<b>122</b>.aab). Raise it only once that version is live on Play, or those players can\'t update yet.</div></div>' +
-    '<h2>Monthly prizes: Vodafone Cash</h2><div class="card"><div class="form">' +
-      '<label class="f">Monthly prizes<span class="switch"><input type="checkbox" id="co"' + (s.prizes.enabled ? ' checked' : '') + '> the top player of each game wins money</span></label>' +
-      n('ce', 'EGP for each game\'s winner', s.prizes.egp) + n('cd', 'Days to give a number', s.prizes.claimDays) +
-      n('cg', 'Online games needed in the month', s.titles.minGames) +
-      '<label class="f">Accepted numbers (prefixes)<input id="cp" value="' + esc(s.prizes.prefixes.join(', ')) + '"></label>' +
-    '</div><div class="sub" style="margin-top:8px">Four games, so up to ' + num(4 * s.prizes.egp) + ' EGP a month. The winner must be signed in (Google, Apple or phone). Vodafone Cash works on Vodafone lines (010). Coins can\'t be turned into money.</div></div>' +
-    '<h2>Economy</h2><div class="card"><div class="form">' + n('es', 'Coins for a new player', s.economy.startCoins) + n('ea', 'Coins for a rewarded ad', s.economy.adReward) + n('ed', 'Rewarded ads a day', s.economy.adsPerDay) + n('esa', 'Ads a day towards skins', s.economy.skinAdsPerDay) +
-      n('et', 'Coins for finishing the first-game guide', s.economy.tutorialCoins) + n('eb', 'Gift for coming back', s.economy.comebackCoins) + n('ey', '…after this many days away (0: off)', s.economy.comebackDays) + '</div>' +
-      '<div class="sub" style="margin:12px 0 6px">Daily reward, day by day (day 7 repeats after)</div><div class="form">' + list('ek', 'Day', s.economy.streak) + '</div>' +
-      '<div class="sub" style="margin:12px 0 6px">Weekly leaderboard prizes, places 1–10 (paid every Monday)</div><div class="form">' + list('ew', 'Place', s.economy.weeklyPrizes) + '</div></div>' +
-    '<h2>Play</h2><div class="card"><div class="form">' + n('pb', 'Seconds before computer players fill a table', s.play.botFillSeconds, ' min="2" max="120"') + n('pd', 'Seconds for a move (dominoes)', s.play.dominoTurnSeconds, ' min="5" max="60"') + n('pt', 'Seconds for a move (tawla, ludo)', s.play.turnSeconds, ' min="5" max="60"') + '</div></div>' +
-    '<div class="row" style="margin-top:16px"><button class="btn gold" id="sv">Save all settings</button><button class="btn" id="rs">Back to the defaults</button></div>';
-  $('#sv').onclick = async () => {
-    const vals = cls => [...main.querySelectorAll('.' + cls)].map(i => Number(i.value));
-    await act(() => api('/settings', { method: 'PUT', body: {
-      maintenance: { on: $('#mo').checked, message: $('#mm').value },
-      update: { minBuild: Number($('#ub').value) },
-      prizes: { enabled: $('#co').checked, egp: Number($('#ce').value), claimDays: Number($('#cd').value), prefixes: $('#cp').value.split(/[ ,]+/).filter(Boolean) },
-      titles: { minGames: Number($('#cg').value) },
-      economy: { startCoins: Number($('#es').value), adReward: Number($('#ea').value), adsPerDay: Number($('#ed').value), skinAdsPerDay: Number($('#esa').value), tutorialCoins: Number($('#et').value), comebackCoins: Number($('#eb').value), comebackDays: Number($('#ey').value), streak: vals('ek'), weeklyPrizes: vals('ew') },
-      play: { botFillSeconds: Number($('#pb').value), turnSeconds: Number($('#pt').value), dominoTurnSeconds: Number($('#pd').value) },
-    } }), 'Settings saved'); go();
+  const orig = structuredClone(s);
+  main.innerHTML = '<h1>' + esc(title) + '</h1><div class="lead">' + lead + '</div>' +
+    sections.map(sec => '<div class="sec"><h2>' + esc(sec.title) + '</h2>' + (sec.help ? '<div class="help">' + sec.help + '</div>' : '') +
+      '<div class="card">' + (sec.html ? sec.html(s) : '') + (sec.fields && sec.fields.length ? '<div class="fgrid">' + sec.fields.map(f => fieldHtml(f, getAt(s, f.path))).join('') + '</div>' : '') + (sec.after ? sec.after(s) : '') + '</div></div>').join('') +
+    (opts.footer ? opts.footer(s) : '') +
+    '<div class="savebar" id="sbar" hidden><span><span class="msg" id="smsg"></span> <span class="sub" id="sdet"></span></span><span class="row"><button class="btn" id="sdis">Discard</button><button class="btn gold" id="ssave">Save changes</button></span></div>';
+  const fields = [...main.querySelectorAll('.fld[data-path]')];
+  const custom = opts.collect || (() => ({}));   // pages with their own controls add their values here
+  const current = () => { const v = structuredClone(orig); fields.forEach(el => setAt(v, el.dataset.path, readField(el))); Object.entries(custom()).forEach(([p, x]) => setAt(v, p, x)); return v; };
+  const changedPaths = () => {
+    const v = current(), out = [];
+    fields.forEach(el => { if (JSON.stringify(getAt(v, el.dataset.path)) !== JSON.stringify(getAt(orig, el.dataset.path))) out.push(el.dataset.path); });
+    Object.keys(custom()).forEach(p => { if (JSON.stringify(getAt(v, p)) !== JSON.stringify(getAt(orig, p))) out.push(p); });
+    return out;
   };
-  $('#rs').onclick = async () => { if (confirm('Put every setting back to the defaults?')) { await act(() => api('/settings/reset', { body: {} }), 'Back to the defaults'); go(); } };
+  const labelOf = p => { const el = fields.find(x => x.dataset.path === p); return el ? el.querySelector('.l').textContent : (opts.labels || {})[p] || p; };
+  const refresh = () => {
+    main.querySelectorAll('.fld[data-coins]').forEach(el => {
+      if (el.dataset.type === 'list') el.querySelectorAll('.it').forEach(it => { const h = it.querySelector('.hint'); if (h) h.textContent = coinsHint(it.querySelector('input').value); });
+      else el.querySelector('.hint').textContent = coinsHint(el.querySelector('input').value);
+    });
+    const ch = changedPaths();
+    fields.forEach(el => el.classList.toggle('changed', ch.includes(el.dataset.path)));
+    $('#sbar').hidden = !ch.length;
+    $('#smsg').textContent = ch.length === 1 ? '1 unsaved change' : ch.length + ' unsaved changes';
+    $('#sdet').textContent = ch.slice(0, 4).map(labelOf).join(' · ') + (ch.length > 4 ? ' …' : '');
+    if (opts.onChange) opts.onChange(current());
+  };
+  main.addEventListener('input', refresh); main.addEventListener('change', refresh);
+  main.querySelectorAll('.fld[data-type=list]').forEach(el => {
+    const f = sections.flatMap(x => x.fields || []).find(x => x.path === el.dataset.path);
+    el.addEventListener('click', e => {
+      if (e.target.matches('[data-rm]')) { if (el.querySelectorAll('.it').length > (f.minItems || 1)) e.target.closest('.it').remove(); renumber(); refresh(); }
+      if (e.target.matches('[data-add]')) {
+        const items = el.querySelectorAll('.it'), last = items[items.length - 1];
+        const it = last.cloneNode(true); it.querySelector('input').value = f.addValue ? f.addValue([...items].map(i => Number(i.querySelector('input').value))) : last.querySelector('input').value;
+        el.querySelector('.lst').appendChild(it); renumber(); refresh();
+      }
+    });
+    const renumber = () => { const its = el.querySelectorAll('.it'); its.forEach((it, i) => it.querySelector('b').textContent = f.itemLabel ? f.itemLabel(i) : '#' + (i + 1)); const add = el.querySelector('[data-add]'); if (add) add.disabled = !!(f.maxItems && its.length >= f.maxItems); };
+  });
+  dirtyCheck = () => changedPaths().length > 0;
+  $('#sdis').onclick = () => go.call(null, dirtyCheck = null);
+  $('#ssave').onclick = async () => {
+    const v = current(), ch = changedPaths(), body = {};
+    if (opts.confirm) { const q = opts.confirm(v, orig, ch); if (q && !confirm(q)) return; }
+    ch.forEach(p => setAt(body, p, getAt(v, p)));
+    const saved = await act(() => api('/settings', { method: 'PUT', body }), 'Saved · the game uses it now');
+    dirtyCheck = null;
+    // the server checks every value: show what it kept (a value out of range comes back corrected)
+    const fixed = ch.filter(p => JSON.stringify(getAt(saved, p)) !== JSON.stringify(getAt(v, p)));
+    if (fixed.length) toast('Adjusted to the allowed range: ' + fixed.map(labelOf).join(', '), true);
+    go();
+  };
+  refresh();
+  if (opts.after) opts.after(main, s);
+}
+
+/* ---------------- games & ads ---------------- */
+RENDER.games = async main => {
+  const GKEYS = Object.keys(GNAME);
+  let off = [], origOff = [];
+  await settingsPage(main, 'Games & ads', 'Which games are open, how often the full-screen ad shows between games, the coins for watching ads, and the time limits for a move. Changes reach players who are online at once.', [
+    { title: 'Games', help: 'A game switched off disappears from online play and practice: players who tap it see “This game is closed for a while”. Games already being played finish normally. Use it if a game has a problem.',
+      html: s => { off = [...s.games.off]; origOff = [...s.games.off]; return '<div class="toggles">' + GKEYS.map(g => '<label class="tog' + (off.includes(g) ? ' off' : '') + '" data-g="' + g + '"><span><b>' + GNAME[g] + '</b><div class="sub">' + (off.includes(g) ? 'Off' : 'Open') + '</div></span><span class="switch"><input type="checkbox"' + (off.includes(g) ? '' : ' checked') + '></span></label>').join('') + '</div>'; } },
+    { title: 'Ads between games', help: 'The full-screen ad after a game, finished or left. Players on the ad-free plan never see it.',
+      fields: [{ path: 'ads.every', type: 'select', label: 'Show the ad', options: [[0, 'Never'], [1, 'After every game'], [2, 'After 1 game in 2'], [3, 'After 1 game in 3'], [4, 'After 1 game in 4'], [5, 'After 1 game in 5']] }],
+      after: s => '<div class="sub" style="margin-top:10px">What a player sees, game after game:</div><div class="adrow" id="adrow"></div>' },
+    { title: 'Ads for coins (the player chooses)', fields: [
+      { path: 'economy.adReward', type: 'coins', label: 'Coins for watching an ad', min: 0 },
+      { path: 'economy.adsPerDay', type: 'int', label: 'Ads for coins a day', min: 0, max: 100 },
+      { path: 'economy.skinAdsPerDay', type: 'int', label: 'Ads a day towards a skin', min: 0, max: 500, help: 'Skins unlocked by ads take 30–150 ads.' },
+      { path: 'economy.doubleMax', type: 'coins', label: '“Double your winnings” up to', min: 0, help: 'After a win, an ad pays the winnings again, up to this.' }] },
+    { title: 'Time limits', fields: [
+      { path: 'play.dominoTurnSeconds', type: 'int', label: 'Seconds for a move: dominoes', min: 5, max: 60 },
+      { path: 'play.turnSeconds', type: 'int', label: 'Seconds for a move: tawla, ludo and card games', min: 5, max: 60 },
+      { path: 'play.botFillSeconds', type: 'int', label: 'Seconds before the computer fills empty seats', min: 2, max: 120, help: 'When not enough people join a quick game.' }] },
+  ], {
+    collect: () => { const o = GKEYS.filter(g => off.includes(g)); return { 'games.off': o.length === origOff.length && o.every(g => origOff.includes(g)) ? origOff : o }; },
+    labels: { 'games.off': 'Games on/off' },
+    confirm: (v, o) => { const newly = v.games.off.filter(g => !o.games.off.includes(g)); return newly.length ? 'Switch off ' + newly.map(g => GNAME[g]).join(', ') + '? Players can\'t start new games of it until you switch it back on.' : null; },
+    onChange: v => { const n = v.ads.every; const r = $('#adrow'); if (r) r.innerHTML = Array.from({ length: 8 }, (_, i) => '<span class="' + (n && i % n === 0 ? 'ad' : '') + '">Game ' + (i + 1) + ': ' + (n && i % n === 0 ? 'ad' : 'no ad') + '</span>').join(''); },
+    after: main => main.querySelectorAll('.tog').forEach(t => t.querySelector('input').onchange = e => {
+      const g = t.dataset.g; off = e.target.checked ? off.filter(x => x !== g) : [...off, g];
+      t.classList.toggle('off', !e.target.checked); t.querySelector('.sub').textContent = e.target.checked ? 'Open' : 'Off';
+    }),
+  });
+};
+
+/* ---------------- economy ---------------- */
+RENDER.economy = async main => {
+  await settingsPage(main, 'Economy', 'Every coin that comes into the game and goes out of it. Coins can\'t be bought: players get them from playing, daily rewards, the wheel, missions and ads.', [
+    { title: 'New players and coming back', fields: [
+      { path: 'economy.startCoins', type: 'coins', label: 'Coins for a new player', min: 0 },
+      { path: 'economy.tutorialCoins', type: 'coins', label: 'Coins for finishing the first-game guide', min: 0 },
+      { path: 'economy.comebackCoins', type: 'coins', label: 'Gift for coming back', min: 0 },
+      { path: 'economy.comebackDays', type: 'int', label: '…after this many days away', min: 0, max: 60, help: '0 switches the gift off. Players also get one reminder push then.' },
+      { path: 'economy.referralBonus', type: 'coins', label: 'Inviting a friend', min: 0, help: 'Paid to both after the friend\'s first game (up to 20 friends each).' }] },
+    { title: 'Daily reward', help: 'Grows for each day in a row the player comes back. Day 7 repeats after.', fields: [
+      { path: 'economy.streak', type: 'list', coins: true, fixed: true, label: 'Coins by day', itemLabel: i => 'Day ' + (i + 1) }] },
+    { title: 'Tables: stakes and the house fee', help: 'The stakes are the choices players get before a game (smallest first). The house keeps its fee from what the winners take.', fields: [
+      { path: 'economy.stakes', type: 'list', coins: true, label: 'Stakes', itemLabel: i => 'Stake ' + (i + 1), minItems: 1, maxItems: 10, addValue: a => Math.max(...a) * 2 },
+      { path: 'economy.houseFeePct', type: 'int', label: 'House fee (%)', min: 0, max: 50 }],
+      after: () => '<div class="sub" id="feeex" style="margin-top:10px"></div>' },
+    { title: 'Lucky wheel', help: 'One free spin a day, then spins unlocked by ads. The 8 prizes in the order they sit on the wheel; the big ones come up rarely.', fields: [
+      { path: 'economy.wheelCoins', type: 'list', coins: true, fixed: true, label: 'Prizes', itemLabel: i => 'Slice ' + (i + 1) },
+      { path: 'economy.wheelMaxSpins', type: 'int', label: 'Spins a day (most)', min: 1, max: 50 }] },
+    { title: 'Weekly missions chest', help: 'Opens after 3, 8 and 15 missions done in the week.', fields: [
+      { path: 'economy.chestCoins', type: 'list', coins: true, fixed: true, label: 'Coins', itemLabel: i => ['3 done', '8 done', '15 done'][i] }] },
+    { title: 'What a game is worth', help: 'Experience (levels), season points (the season pass: 100 a tier) and league points (the monthly leagues). Online games; games against the computer count less.', fields: [
+      { path: 'progress.xpWin', type: 'int', label: 'XP for a win', min: 0 }, { path: 'progress.xpLoss', type: 'int', label: 'XP for a loss', min: 0 },
+      { path: 'progress.spWin', type: 'int', label: 'Season points for a win', min: 0 }, { path: 'progress.spLoss', type: 'int', label: 'Season points for a loss', min: 0 },
+      { path: 'progress.spDaily', type: 'int', label: 'Season points for the daily reward', min: 0 },
+      { path: 'progress.lpWin', type: 'int', label: 'League points for a win', min: 0 }, { path: 'progress.lpLoss', type: 'int', label: 'League points for a loss', max: 0, help: 'Negative: taken away.' }] },
+  ], {
+    onChange: v => { const e = $('#feeex'); if (!e) return; const st = v.economy.stakes[1] ?? v.economy.stakes[0], fee = Math.floor(st * v.economy.houseFeePct / 100);
+      e.innerHTML = 'Example: 1 vs 1 at <b>' + short(st) + '</b>: the winner gets their stake back + <b>' + short(st - fee) + '</b>, the game keeps <b>' + short(fee) + '</b>, the loser loses ' + short(st) + '.'; },
+    confirm: (v, o) => v.economy.startCoins > o.economy.startCoins * 5 ? 'New players would start with ' + short(v.economy.startCoins) + ' coins. Sure?' : null,
+  });
+};
+
+/* ---------------- coin prizes ---------------- */
+RENDER.coinprizes = async main => {
+  const h = await api('/prizehistory');
+  const KIND = { weekly: 'Weekly #1', monthly: 'Top earner of the month', gov: 'Governorate of the week', tourney: 'Tournament' };
+  await settingsPage(main, 'Prizes', 'The coin prizes paid by the game itself. Tournament prizes are on the <a href="#tourney">Tournaments</a> page; event titles on <a href="#events">Events</a>.', [
+    { title: 'Weekly leaderboard', help: 'Paid every Monday to the best of the week (3 points a win, 1 a game, online games). Add places to pay 2nd, 3rd…', fields: [
+      { path: 'economy.weeklyPrizes', type: 'list', coins: true, label: 'Prize by place', itemLabel: i => '#' + (i + 1), minItems: 1, maxItems: 10, addValue: a => Math.round(a[a.length - 1] / 2) }] },
+    { title: 'Top earners of the month', help: 'On the 1st of each month: the players who won the most coins in games last month, all games together.', fields: [
+      { path: 'economy.monthlyPrizes', type: 'list', coins: true, label: 'Prize by place', itemLabel: i => '#' + (i + 1), minItems: 1, maxItems: 10, addValue: a => Math.round(a[a.length - 1] / 2) }] },
+    { title: 'Governorate of the week', help: 'The governorate whose players scored most in the week: each of its players who played enough gets the prize.', fields: [
+      { path: 'economy.govPrize', type: 'coins', label: 'Prize for each player', min: 0 },
+      { path: 'economy.govMinGames', type: 'int', label: 'Games needed in the week', min: 0 },
+      { path: 'economy.govTop', type: 'int', label: 'Best players counted per governorate', min: 1, help: 'Only a governorate\'s best this many add to its score.' }] },
+  ], {
+    footer: () => '<div class="sec"><h2>Paid lately</h2>' + (h.rows.length ? '<div class="tablewrap"><table><thead><tr><th>When</th><th>Prize</th><th>Player</th><th class="num">Coins</th></tr></thead><tbody>' +
+      h.rows.map(r => '<tr><td>' + when(r.ts) + '</td><td>' + esc(KIND[r.kind] || r.kind) + '</td><td><a href="#players/' + esc(r.id) + '">' + esc(r.name || r.id) + '</a></td><td class="num">' + num(r.coins) + '</td></tr>').join('') + '</tbody></table></div>' : '<div class="card empty">No prizes paid yet</div>') + '</div>',
+  });
+};
+
+/* ---------------- system ---------------- */
+RENDER.system = async main => {
+  await settingsPage(main, 'System', 'Switches for the whole game. Every change is in the <a href="#log">activity log</a>.', [
+    { title: 'Maintenance', help: 'While on, no new games start (games already on finish) and players see the message when they open the game.', fields: [
+      { path: 'maintenance.on', type: 'bool', label: 'Maintenance mode', on: 'On: no new games' },
+      { path: 'maintenance.message', type: 'text', label: 'Message players see', wide: true, rtl: true, maxlen: 300 }] },
+    { title: 'Forced update', help: 'Phones from Google Play update by themselves as soon as Play has a newer version. Set this only to stop an old version at once: apps with a lower build number get an update screen they can\'t close and can\'t start games. The build number is the AAB\'s version code (board-battles-<b>125</b>.aab). Raise it only once that version is live on Play.', fields: [
+      { path: 'update.minBuild', type: 'int', label: 'Oldest app build allowed (0: any)', min: 0 }] },
+    { title: 'Money prizes (Vodafone Cash)', help: 'The old monthly money prize for each game\'s best player. Off: the game gives coin prizes only.', fields: [
+      { path: 'prizes.enabled', type: 'bool', label: 'Money prizes', on: 'On' },
+      { path: 'prizes.egp', type: 'int', label: 'EGP for each game\'s winner', min: 0 },
+      { path: 'titles.minGames', type: 'int', label: 'Online games needed in the month (also for “player of the month”)', min: 0 }] },
+  ], {
+    confirm: (v, o) => v.maintenance.on && !o.maintenance.on ? 'Switch maintenance on? No new games start until you switch it off.' : v.prizes.enabled && !o.prizes.enabled ? 'Switch money prizes on? Winners will ask you to pay them on Vodafone Cash.' : null,
+    footer: () => '<div class="sec"><h2>Back to the defaults</h2><div class="card row" style="justify-content:space-between"><span class="sub">Every setting on every page back to what the game shipped with (events and titles stay).</span><button class="btn bad" id="rs">Reset all settings</button></div></div>',
+    after: () => { $('#rs').onclick = async () => { if (prompt('Type RESET to put every setting back to the defaults') === 'RESET') { await act(() => api('/settings/reset', { body: {} }), 'Back to the defaults'); dirtyCheck = null; go(); } }; },
+  });
+};
+
+/* ---------------- live tables ---------------- */
+RENDER.live = async main => {
+  const MODE = m => { const g = Object.keys(GNAME).find(k => m.startsWith(k)) || (m.startsWith('ffa') || m === 'team' ? 'domino' : m.startsWith('chess') ? 'chess' : ''); return (GNAME[g] || '') + ' · ' + m; };
+  const draw = async () => {
+    const d = await api('/live');
+    if (state.view !== 'live') return;
+    const people = d.tables.filter(t => t.seats.some(x => x && !x.bot));
+    main.innerHTML = '<h1>Live tables</h1><div class="lead">Refreshes every 5 seconds · ' + num(d.online.length) + ' online · ' + num(d.tables.length) + ' tables (' + num(people.length) + ' with people)' + (d.queued.length ? ' · waiting for a game: ' + d.queued.map(q => esc(q.key) + ' (' + q.players + ')').join(', ') : '') + '</div>' +
+      '<div class="tabs" id="lf"><button data-f="people" class="' + (state.liveAll ? '' : 'on') + '">With people</button><button data-f="all" class="' + (state.liveAll ? 'on' : '') + '">All tables</button></div>' +
+      ((state.liveAll ? d.tables : people).length ? '<div class="livegrid">' + (state.liveAll ? d.tables : people).map(t => '<div class="lt"><div class="top"><b>' + esc(MODE(t.mode)) + '</b><span class="tag ' + (t.phase === 'play' || t.phase === 'rend' ? 'on' : '') + '">' + esc(t.phase) + '</span></div>' +
+        '<div class="sub" style="margin-bottom:6px">' + (t.stake ? 'stake ' + short(t.stake) : t.seats.filter(x => x && !x.bot).length === 1 ? 'practice vs the computer' : 'friendly, no stake') + (t.private && t.seats.filter(x => x && !x.bot).length > 1 ? ' · private room ' + esc(t.code || '') : '') + '</div>' +
+        t.seats.map(x => x ? '<div class="seat"><span><span class="dot' + (x.online || x.bot ? '' : ' off') + '"></span>' + (x.bot ? '<span class="muted">' + esc(x.name) + ' (computer)</span>' : '<a href="#players/' + esc(x.uid) + '" data-p="' + esc(x.uid) + '">' + esc(x.name) + '</a>') + '</span></div>' : '<div class="seat muted">empty seat</div>').join('') + '</div>').join('') + '</div>'
+        : '<div class="card empty">No tables right now</div>') +
+      '<h2>Online now (' + d.online.length + ')</h2>' + (d.online.length ? '<div class="tablewrap"><table><thead><tr><th>Player</th><th class="num">Coins</th><th>Where</th><th></th></tr></thead><tbody>' +
+        d.online.sort((a, b) => (b.table ? 1 : 0) - (a.table ? 1 : 0)).map(u => '<tr><td><a href="#players/' + esc(u.uid) + '" data-p="' + esc(u.uid) + '">' + esc(u.name) + '</a></td><td class="num">' + short(u.coins) + '</td><td>' + (u.mode ? esc(MODE(u.mode)) : '<span class="muted">in the café</span>') + '</td>' +
+        '<td><button class="btn sm" data-kick="' + esc(u.uid) + '" data-n="' + esc(u.name) + '" title="Closes their connection; the app reconnects by itself">Reconnect</button></td></tr>').join('') + '</tbody></table></div>' : '<div class="card empty">Nobody online</div>');
+    main.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { state.liveAll = b.dataset.f === 'all'; draw(); });
+    main.querySelectorAll('[data-p]').forEach(a => a.onclick = e => { e.preventDefault(); openPlayer(a.dataset.p); });
+    main.querySelectorAll('[data-kick]').forEach(b => b.onclick = async () => { if (confirm('Disconnect ' + b.dataset.n + '? Their app reconnects by itself (it helps when a player is stuck).')) { await act(() => api('/players/' + encodeURIComponent(b.dataset.kick), { body: { action: 'kick' } }), 'Disconnected'); draw(); } });
+  };
+  await draw();
+  liveTimer = setInterval(() => { if (!document.querySelector('.drawer')) draw().catch(() => {}); }, 5000);
 };
 
 /* ---------------- reports and support ---------------- */

@@ -282,3 +282,45 @@ test('admin: minimum app version — older apps get the update dialog and no new
   await adm('PUT', '/settings', { update: { minBuild: 0 } });
   for (const c of [old, legacy, fresh, web]) c.ws.close();
 });
+
+test('admin: game rules: stakes, fee, prizes, progress and ads apply at once; a game switched off refuses new games; the app gets its config', async () => {
+  const { WebSocket } = await import('ws');
+  const gifts = await import('../shared/gifts');
+  const { LP } = await import('../shared/leagues');
+  const r = await adm('PUT', '/settings', { economy: { stakes: [50_000, 1_000, 1_000, 'x', 20_000], houseFeePct: 99, monthlyPrizes: [5_000_000], wheelCoins: [1, 2, 3] },
+    progress: { lpLoss: 7 }, ads: { every: 3 }, games: { off: ['konkan', 'nope'] } });
+  assert.deepEqual(r.json.economy.stakes, [1_000, 20_000, 50_000]);          // sorted, no repeats, bad ones dropped
+  assert.equal(r.json.economy.houseFeePct, 50);                                // kept in range
+  assert.equal(r.json.economy.wheelCoins.length, 8);                           // the wheel keeps its 8 slices
+  assert.equal(r.json.progress.lpLoss, 0);
+  assert.deepEqual(r.json.games.off, ['konkan']);
+  assert.deepEqual(gifts.STAKES, [1_000, 20_000, 50_000]);
+  assert.equal(gifts.ECONOMY.houseFee, 0.5);
+  assert.deepEqual(gifts.MONTHLY_EARNER_PRIZES, [5_000_000]);
+  assert.equal(gifts.ADS.every, 3);
+  assert.equal(LP.loss, 0);
+  assert.equal(gifts.winnings(20_000, 1, 1).fee, 10_000);
+
+  const ws = new WebSocket(base.replace('http', 'ws') + '/ws');
+  const msgs: { t: string; code?: string; config?: { adEvery: number; gamesOff: string[]; stakes: number[] }; adEvery?: number; gamesOff?: string[] }[] = [];
+  await new Promise(res => ws.once('open', res));
+  ws.on('message', d => msgs.push(JSON.parse(d.toString())));
+  const until = async (f: () => boolean) => { for (let i = 0; i < 200 && !f(); i++) await new Promise(res => setTimeout(res, 25)); assert.ok(f()); };
+  ws.send(JSON.stringify({ t: 'hello', v: 2, build: 999 }));
+  await until(() => msgs.some(m => m.t === 'welcome'));
+  const cfg = msgs.find(m => m.t === 'welcome')!.config!;
+  assert.equal(cfg.adEvery, 3); assert.deepEqual(cfg.gamesOff, ['konkan']); assert.deepEqual(cfg.stakes, [1_000, 20_000, 50_000]);
+  ws.send(JSON.stringify({ t: 'practice', mode: 'konkan2' }));
+  await until(() => msgs.some(m => m.t === 'err' && m.code === 'game_off'));
+  ws.send(JSON.stringify({ t: 'practice', mode: 'chess' }));
+  await until(() => msgs.some(m => m.t === 'table' || m.t === 'board'));
+  // the live view sees the table; switching the game back on reaches the app at once
+  const live = await adm('GET', '/live');
+  assert.ok(live.json.tables.some((t: { mode: string }) => t.mode === 'chess'));
+  assert.equal(live.json.online.length >= 1, true);
+  await adm('PUT', '/settings', { games: { off: [] }, ads: { every: 2 } });
+  await until(() => msgs.some(m => m.t === 'config' && m.adEvery === 2 && m.gamesOff!.length === 0));
+  ws.close();
+  await adm('POST', '/settings/reset', {});
+  assert.deepEqual(gifts.STAKES, [5_000, 20_000, 50_000, 100_000, 250_000, 500_000, 1_000_000]);
+});
