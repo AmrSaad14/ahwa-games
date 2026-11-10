@@ -70,7 +70,7 @@ const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/;
 /** Everything live on the server: who is connected, the matchmaking queues and every table. */
 /** A real account: signed in with Google, Apple, a phone number, Play Games or an e-mail and password. */
 /** The games' names in notifications. */
-const GAME_NAMES: Record<string, { ar: string; en: string }> = { domino: { ar: 'دومينو', en: 'dominoes' }, tawla: { ar: 'طاولة', en: 'tawla' }, chess: { ar: 'شطرنج', en: 'chess' }, ludo: { ar: 'لودو', en: 'ludo' } };
+const GAME_NAMES: Record<string, { ar: string; en: string }> = { domino: { ar: 'دومينو', en: 'dominoes' }, tawla: { ar: 'طاولة', en: 'tawla' }, chess: { ar: 'شطرنج', en: 'chess' }, ludo: { ar: 'لودو', en: 'ludo' }, estimation: { ar: 'استيميشن', en: 'estimation' } };
 export const isSignedIn = (u: UserRow) => !!(u.google_sub || u.apple_sub || u.phone || u.pg_id || u.email);
 
 export class Hub {
@@ -643,7 +643,13 @@ export class Hub {
           const clean: BoardAction | null =
             a.t === 'move' ? { t: 'move', from: n(a.from), to: n(a.to), promo: (['q', 'r', 'b', 'n'] as const).find(p => p === a.promo) } :
             a.t === 'step' ? { t: 'step', from: n(a.from), to: n(a.to), via: Array.isArray(a.via) ? a.via.slice(0, 4).map(n) : undefined } :
-            a.t === 'pawn' ? { t: 'pawn', i: n(a.i) } : a.t === 'roll' ? { t: 'roll' } : a.t === 'pass' ? { t: 'pass' } : null;
+            a.t === 'pawn' ? { t: 'pawn', i: n(a.i) } : a.t === 'roll' ? { t: 'roll' } : a.t === 'pass' ? { t: 'pass' } :
+            // the card games: play a card, bid, name a trump, call, estimate (konkan's moves too)
+            a.t === 'card' ? { t: 'card', id: n(a.id) } : a.t === 'bid' ? { t: 'bid', n: n(a.n) } : a.t === 'trump' ? { t: 'trump', suit: n(a.suit) } :
+            a.t === 'call' ? { t: 'call', n: n(a.n), suit: a.suit === undefined ? undefined : n(a.suit) } : a.t === 'est' ? { t: 'est', n: n(a.n) } :
+            a.t === 'draw' ? { t: 'draw' } : a.t === 'take' ? { t: 'take' } : a.t === 'back' ? { t: 'back' } : a.t === 'throw' ? { t: 'throw', id: n(a.id) } :
+            a.t === 'add' ? { t: 'add', id: n(a.id), meld: n(a.meld) } :
+            a.t === 'down' && Array.isArray(a.melds) ? { t: 'down', melds: (a.melds as unknown[]).slice(0, 8).map(m => (Array.isArray(m) ? m.slice(0, 14).map(n) : [])) } : null;
           e = clean ? table.act(uid, clean) : 'bad_action';
         }
         if (e) { err(e); this.pushView(table, uid); }

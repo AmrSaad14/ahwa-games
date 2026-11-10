@@ -19,18 +19,17 @@ export type Mode = 'ffa2' | 'ffa3' | 'ffa4' | 'team'
   | 'tawla' | 'mahbousa' | 'tawla31' | 'gulbahar'
   | 'chess1' | 'chess3' | 'chess' | 'chess10'
   | 'ludo2' | 'ludo3' | 'ludo4' | 'ludoq2' | 'ludoq4' | 'ludom2' | 'ludom4'
-  | 'basra2' | 'basra4' | 'tarneeb' | 'konkan2' | 'konkan3' | 'konkan4' | 'konkanT';
-export type GameId = 'domino' | 'tawla' | 'chess' | 'ludo' | 'basra' | 'tarneeb' | 'konkan';
-export const GAMES: GameId[] = ['domino', 'tawla', 'chess', 'ludo', 'basra', 'tarneeb', 'konkan'];
+  | 'basra2' | 'basra4' | 'tarneeb' | 'konkan2' | 'konkan3' | 'konkan4' | 'konkanT' | 'estimation';
+export type GameId = 'domino' | 'tawla' | 'chess' | 'ludo' | 'estimation' | 'basra' | 'tarneeb' | 'konkan';
+/** The games the app offers. Basra, tarneeb and konkan were taken out (their rules stay for old records). */
+export const GAMES: GameId[] = ['domino', 'tawla', 'chess', 'ludo', 'estimation'];
 /** The ways to play that the app offers, per game. */
-export const GAME_MODES: Record<GameId, Mode[]> = {
+export const GAME_MODES: Partial<Record<GameId, Mode[]>> & Record<'domino' | 'tawla' | 'chess' | 'ludo' | 'estimation', Mode[]> = {
   domino: ['ffa2', 'ffa3', 'ffa4', 'team'],
   tawla: ['tawla', 'mahbousa', 'tawla31', 'gulbahar'],
   chess: ['chess1', 'chess3', 'chess', 'chess10'],
   ludo: ['ludo2', 'ludo3', 'ludo4', 'ludoq2', 'ludoq4', 'ludom2', 'ludom4'],
-  basra: ['basra2', 'basra4'],
-  tarneeb: ['tarneeb'],
-  konkan: ['konkan2', 'konkan3', 'konkan4', 'konkanT'],
+  estimation: ['estimation'],
 };
 /** Every mode the rules engines understand (including ones no longer offered). */
 const ALL_MODES: Record<GameId, Mode[]> = {
@@ -41,8 +40,9 @@ const ALL_MODES: Record<GameId, Mode[]> = {
   basra: ['basra2', 'basra4'],
   tarneeb: ['tarneeb'],
   konkan: ['konkan2', 'konkan3', 'konkan4', 'konkanT'],
+  estimation: ['estimation'],
 };
-export const MODES: Mode[] = GAMES.flatMap(g => GAME_MODES[g]);
+export const MODES: Mode[] = GAMES.flatMap(g => GAME_MODES[g] ?? []);
 export const MODE_PLAYERS: Record<Mode, number> = {
   ffa2: 2, ffa3: 3, ffa4: 4, team: 4,
   tawla: 2, mahbousa: 2, tawla31: 2, gulbahar: 2,
@@ -51,8 +51,9 @@ export const MODE_PLAYERS: Record<Mode, number> = {
   basra2: 2, basra4: 4,   // basra4: two teams, partners opposite
   tarneeb: 4,             // two teams, partners opposite
   konkan2: 2, konkan3: 3, konkan4: 4, konkanT: 4,   // konkanT: two teams, partners opposite
+  estimation: 4,          // each for themselves
 };
-export const gameOf = (m: Mode): GameId => (GAMES.find(g => ALL_MODES[g].includes(m)) ?? 'domino');
+export const gameOf = (m: Mode): GameId => ((Object.keys(ALL_MODES) as GameId[]).find(g => ALL_MODES[g].includes(m)) ?? 'domino');
 /** Tawla variants. */
 export type TawlaVariant = 'aada' | 'mahbousa' | 'tawla31' | 'gulbahar';
 export const tawlaVariant = (m: Mode): TawlaVariant => (m === 'tawla' ? 'aada' : (m as TawlaVariant));

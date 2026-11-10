@@ -6,9 +6,10 @@ import * as V from './tables';
 import * as B from './basra';
 import * as TN from './tarneeb';
 import * as K from './konkan';
+import * as E from './estimation';
 import { CHESS_TIME, Mode, gameOf, ludoVariant, tawlaVariant } from '../engine';
 
-export type BoardGameId = 'chess' | 'tawla' | 'ludo' | 'basra' | 'tarneeb' | 'konkan';
+export type BoardGameId = 'chess' | 'tawla' | 'ludo' | 'basra' | 'tarneeb' | 'konkan' | 'estimation';
 
 export type BoardAction =
   | { t: 'move'; from: number; to: number; promo?: C.Promo }   // chess
@@ -20,13 +21,16 @@ export type BoardAction =
   | { t: 'card'; id: number }                                  // basra, tarneeb: play a card
   | { t: 'bid'; n: number }                                    // tarneeb: bid 7…13, or 0 to pass
   | { t: 'trump'; suit: number }                               // tarneeb: name the trump suit
+  | { t: 'call'; n: number; suit?: number }                    // estimation: call n tricks with a trump (4 no trump), or 0 to pass
+  | { t: 'est'; n: number }                                    // estimation: how many tricks you'll take
   | { t: 'draw' } | { t: 'take' } | { t: 'back' }              // konkan: draw from the pack, take the thrown card, put it back
   | { t: 'down'; melds: number[][] }                           // konkan: lay down melds
   | { t: 'add'; id: number; meld: number }                     // konkan: add a card to a meld on the table
   | { t: 'throw'; id: number };                                // konkan: throw a card (ends the turn)
 
 export interface BoardEvent {
-  t: 'start' | 'move' | 'roll' | 'step' | 'pawn' | 'pass' | 'end' | 'undo' | 'card' | 'bid' | 'trump' | 'draw' | 'take' | 'back' | 'down' | 'add' | 'throw';
+  t: 'start' | 'move' | 'roll' | 'step' | 'pawn' | 'pass' | 'end' | 'undo' | 'card' | 'bid' | 'trump' | 'draw' | 'take' | 'back' | 'down' | 'add' | 'throw' | 'call' | 'est';
+  redeal?: boolean;                                                  // estimation: everyone passed, the cards were dealt again
   card?: number; took?: number[]; basra?: number; deal?: boolean;   // basra: the card played, what it took, a basra, the deal ended
   n?: number; suit?: number; trick?: number;                         // tarneeb: the bid, the trump, who took the trick (when it ended)
   melds?: number[][]; meld?: number;                                 // konkan: what was laid down, the meld added to
@@ -392,12 +396,49 @@ export const konkanDef: GameDef<K.KonkanState> = {
 /** Konkan in two teams of two (partners opposite): to 201, the side with fewer points wins. */
 export const konkanTeamDef: GameDef<K.KonkanState> = { ...konkanDef, newGame: (n, first, rnd) => K.newKonkan(n, first, rnd, 201, true) };
 
+/* ---------------- estimation ---------------- */
+export interface EstimationView {
+  hand: number[]; legal: number[]; estOptions: number[]; counts: number[]; phase: E.EstimationPhase; turn: number; you: number; dealer: number;
+  calls: (E.Call | 0 | null)[]; bid: number; suit: number; caller: number; ests: (number | null)[];
+  trick: { seat: number; card: number }[]; lastTrick: { seat: number; card: number }[] | null; lastWinner: number;
+  tricks: number[]; scores: number[]; deal: number; deals: number; lastDeal: E.EstimationState['lastDeal'];
+}
+export const estimationDef: GameDef<E.EstimationState> = {
+  game: 'estimation',
+  newGame: (_n, first, rnd) => E.newEstimation(first, rnd),
+  toMove: s => s.turn,
+  act(s, seat, a, rnd) {
+    if (a.t !== 'call' && a.t !== 'est' && a.t !== 'card') return 'bad_action';
+    const r = E.act(s, seat, a, rnd);
+    if (typeof r === 'string') return r;
+    const e: BoardEvent = a.t === 'call' ? { t: 'call', s: seat, n: Number(a.n), suit: Number(a.n) ? Number(a.suit) : undefined, redeal: r.redeal || undefined }
+      : a.t === 'est' ? { t: 'est', s: seat, n: Number(a.n) }
+      : { t: 'card', s: seat, card: Number(a.id), trick: r.trick?.winner, deal: !!r.dealOver };
+    return { s: r.s, e };
+  },
+  auto: (s, seat, level) => E.botAction(s, seat, level ?? 'normal'),
+  forced: (s, seat) => {
+    // only one card you can play, or one number you can say: it's played for you after a moment
+    if (s.phase === 'play') { const ok = E.legal(s, seat); return ok.length === 1 && s.hands[seat].length === 1 ? { t: 'card', id: ok[0] } : null; }
+    if (s.phase === 'est') { const ok = E.estOptions(s, seat); return ok.length === 1 ? { t: 'est', n: ok[0] } : null; }
+    return null;
+  },
+  over: s => (s.done ? { winner: E.winnerSeat(s), points: 1, kind: 'win' } : null),
+  view: (s, seat): EstimationView => ({
+    hand: seat >= 0 ? s.hands[seat] : [], legal: seat >= 0 ? E.legal(s, seat) : [], estOptions: seat >= 0 ? E.estOptions(s, seat) : [],
+    counts: s.hands.map(h => h.length), phase: s.phase, turn: s.turn, you: seat, dealer: s.dealer,
+    calls: s.calls, bid: s.bid, suit: s.suit, caller: s.caller, ests: s.ests,
+    trick: s.trick, lastTrick: s.lastTrick, lastWinner: s.lastWinner, tricks: s.tricks, scores: s.scores, deal: s.deal, deals: s.deals, lastDeal: s.lastDeal,
+  }),
+};
+
 export function defFor(mode: Mode): GameDef<any> {
   let d = DEFS.get(mode);
   if (!d) {
     const g = gameOf(mode);
     if (g === 'basra') d = basraDef;
     else if (g === 'tarneeb') d = tarneebDef;
+    else if (g === 'estimation') d = estimationDef;
     else if (g === 'konkan') d = mode === 'konkanT' ? konkanTeamDef : konkanDef;
     else if (g === 'chess') d = { ...chessDef, clockMs: (CHESS_TIME[mode]?.min ?? 5) * 60_000 };
     else if (g === 'ludo') d = ludoDef(ludoVariant(mode));

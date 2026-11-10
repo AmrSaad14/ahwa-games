@@ -98,7 +98,7 @@ export function createServer(opts = config) {
     if (url.pathname === '/api/leaderboard') {
       res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'max-age=30' });
       const g = url.searchParams.get('game');
-      return res.end(JSON.stringify(store.leaderboard(null, (['domino', 'tawla', 'chess', 'ludo'] as const).find(x => x === g) ?? 'domino', 50)));
+      return res.end(JSON.stringify(store.leaderboard(null, (['domino', 'tawla', 'chess', 'ludo', 'estimation'] as const).find(x => x === g) ?? 'domino', 50)));
     }
     if (url.pathname === '/api/admin/reports') {
       const key = url.searchParams.get('key') || '';

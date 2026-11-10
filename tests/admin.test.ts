@@ -305,12 +305,12 @@ test('admin: game rules: stakes, fee, prizes, progress and ads apply at once; a 
   const gifts = await import('../shared/gifts');
   const { LP } = await import('../shared/leagues');
   const r = await adm('PUT', '/settings', { economy: { stakes: [50_000, 1_000, 1_000, 'x', 20_000], houseFeePct: 99, monthlyPrizes: [5_000_000], wheelCoins: [1, 2, 3] },
-    progress: { lpLoss: 7 }, ads: { every: 3 }, games: { off: ['konkan', 'nope'] } });
+    progress: { lpLoss: 7 }, ads: { every: 3 }, games: { off: ['estimation', 'nope'] } });
   assert.deepEqual(r.json.economy.stakes, [1_000, 20_000, 50_000]);          // sorted, no repeats, bad ones dropped
   assert.equal(r.json.economy.houseFeePct, 50);                                // kept in range
   assert.equal(r.json.economy.wheelCoins.length, 8);                           // the wheel keeps its 8 slices
   assert.equal(r.json.progress.lpLoss, 0);
-  assert.deepEqual(r.json.games.off, ['konkan']);
+  assert.deepEqual(r.json.games.off, ['estimation']);
   assert.deepEqual(gifts.STAKES, [1_000, 20_000, 50_000]);
   assert.equal(gifts.ECONOMY.houseFee, 0.5);
   assert.deepEqual(gifts.MONTHLY_EARNER_PRIZES, [5_000_000]);
@@ -326,8 +326,8 @@ test('admin: game rules: stakes, fee, prizes, progress and ads apply at once; a 
   ws.send(JSON.stringify({ t: 'hello', v: 2, build: 999 }));
   await until(() => msgs.some(m => m.t === 'welcome'));
   const cfg = msgs.find(m => m.t === 'welcome')!.config!;
-  assert.equal(cfg.adEvery, 3); assert.deepEqual(cfg.gamesOff, ['konkan']); assert.deepEqual(cfg.stakes, [1_000, 20_000, 50_000]);
-  ws.send(JSON.stringify({ t: 'practice', mode: 'konkan2' }));
+  assert.equal(cfg.adEvery, 3); assert.deepEqual(cfg.gamesOff, ['estimation']); assert.deepEqual(cfg.stakes, [1_000, 20_000, 50_000]);
+  ws.send(JSON.stringify({ t: 'practice', mode: 'estimation' }));
   await until(() => msgs.some(m => m.t === 'err' && m.code === 'game_off'));
   ws.send(JSON.stringify({ t: 'practice', mode: 'chess' }));
   await until(() => msgs.some(m => m.t === 'table' || m.t === 'board'));

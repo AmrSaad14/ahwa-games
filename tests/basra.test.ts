@@ -53,37 +53,4 @@ test('basra: playing out of turn or a card you don\'t hold is refused', () => {
   assert.equal(play(s, 0, s.hands[1][0], Math.random), 'not_in_hand');
 });
 
-test('basra on the server: a practice table plays to the end with computer players', async () => {
-  const { createServer } = await import('../server/index');
-  const { config } = await import('../server/config');
-  const WebSocket = (await import('ws')).default;
-  const app = createServer({ ...config, port: 0, host: '127.0.0.1', dbPath: ':memory:', staticDir: '/nonexistent', botFillMs: 300, msgsPer5s: 10000, turnMs: 400, botDelay: [5, 10], nextRoundMs: 50,
-    guestsOnline: true, login: { ...config.login, sms: 'console' } } as typeof config);
-  const port = await app.listen();
-  try {
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
-    const msgs: any[] = [];
-    ws.on('message', d => msgs.push(JSON.parse(d.toString())));
-    await new Promise<void>(r => ws.once('open', () => r()));
-    ws.send(JSON.stringify({ t: 'hello' }));
-    const until = async (fn: () => boolean, ms = 60_000) => { const end = Date.now() + ms; while (!fn()) { if (Date.now() > end) throw new Error('timed out ' + JSON.stringify(msgs.slice(-2)).slice(0, 400)); await new Promise(r => setTimeout(r, 20)); } };
-    await until(() => msgs.some(m => m.t === 'welcome'));
-    ws.send(JSON.stringify({ t: 'practice', mode: 'basra4' }));
-    const last = () => [...msgs].reverse().find(m => m.t === 'table')?.view;
-    await until(() => last()?.phase === 'play');
-    const v = last();
-    assert.ok(v.basra.hand.length >= 3 && v.basra.hand.length <= 4, 'four cards each (one may be played already)');
-    assert.equal(v.basra.counts.length, 4);
-    assert.equal(v.basra.counts[v.you], v.basra.hand.length);
-    assert.deepEqual(v.seats.map((x: any) => x.team), [0, 1, 0, 1], 'partners opposite');
-    // play my cards when it's my turn until the match ends
-    await until(() => {
-      const w = last();
-      if (w?.phase === 'play' && w.basra.turn === w.you && w.basra.hand.length) ws.send(JSON.stringify({ t: 'act', a: { t: 'card', id: w.basra.hand[0] } }));
-      return w?.phase === 'mend';
-    }, 180_000);
-    const end = last();
-    assert.ok(end.match.team === 0 || end.match.team === 1);
-    ws.close();
-  } finally { await app.close(); }
-});
+// basra is no longer offered by the app (its rules stay for old records): no server game to play

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as TN from '../shared/games/tarneeb';
 import * as K from '../shared/games/konkan';
+import * as E from '../shared/games/estimation';
 import { defFor } from '../shared/games/defs';
 
 const c = (rank: number, suit = 0) => suit * 13 + rank - 1;   // ♠ ♥ ♦ ♣ = 0..3
@@ -145,6 +146,100 @@ test('card games run on the generic table defs', () => {
   assert.ok(k.wholeTurn);
 });
 
+/* ---------------- estimation ---------------- */
+
+test('estimation: calls must go higher (more tricks, or a higher trump: ♣ ♦ ♥ ♠ no trump); three passes end it', () => {
+  const s = E.newEstimation(0, seeded(4));
+  assert.equal(s.phase, 'call'); assert.equal(s.turn, 0);
+  assert.equal(E.act(s, 0, { t: 'call', n: 3, suit: 0 }, seeded(1)), 'bad_call');
+  let r = E.act(s, 0, { t: 'call', n: 5, suit: 2 }, seeded(1)); assert.ok(typeof r !== 'string');      // 5 ♦
+  assert.equal(E.act(r.s, 1, { t: 'call', n: 5, suit: 3 }, seeded(1)), 'call_higher');               // 5 ♣ is lower
+  let x = E.act(r.s, 1, { t: 'call', n: 5, suit: 0 }, seeded(1)); assert.ok(typeof x !== 'string');  // 5 ♠ is higher
+  let st = x.s;
+  for (const seat of [2, 3, 0]) { const y = E.act(st, seat, { t: 'call', n: 0 }, seeded(1)); assert.ok(typeof y !== 'string'); st = y.s; }
+  assert.equal(st.phase, 'est'); assert.equal(st.caller, 1); assert.equal(st.bid, 5); assert.equal(st.suit, 0);
+  assert.equal(st.turn, 2); assert.equal(st.ests[1], 5);
+  // nobody says more than the caller; the last can't make it 13
+  assert.equal(E.act(st, 2, { t: 'est', n: 6 }, seeded(1)), 'bad_est');
+  for (const [seat, n] of [[2, 4], [3, 4]] as const) { const y = E.act(st, seat, { t: 'est', n }, seeded(1)); assert.ok(typeof y !== 'string'); st = y.s; }
+  assert.equal(st.turn, 0);
+  assert.ok(!E.estOptions(st, 0).includes(0));   // 5 + 4 + 4 + 0 = 13
+  assert.equal(E.act(st, 0, { t: 'est', n: 0 }, seeded(1)), 'not_13');
+  const z = E.act(st, 0, { t: 'est', n: 1 }, seeded(1)); assert.ok(typeof z !== 'string');
+  assert.equal(z.s.phase, 'play'); assert.equal(z.s.turn, 1);   // the caller leads
+});
+
+test('estimation: four passes deal again; no trump takes with the suit led', () => {
+  let s = E.newEstimation(2, seeded(7));
+  const dealer = s.dealer;
+  for (const seat of [2, 3, 0]) { const y = E.act(s, seat, { t: 'call', n: 0 }, seeded(1)); assert.ok(typeof y !== 'string'); s = y.s; }
+  const y = E.act(s, 1, { t: 'call', n: 0 }, seeded(1)); assert.ok(typeof y !== 'string');
+  assert.ok(y.redeal); assert.equal(y.s.deal, 2); assert.equal(y.s.dealer, (dealer + 1) % 4); assert.equal(y.s.phase, 'call');
+  assert.equal(E.trickWinner([{ seat: 0, card: c(5, 1) }, { seat: 1, card: c(1, 0) }, { seat: 2, card: c(9, 1) }, { seat: 3, card: c(2, 1) }], E.SANS), 2);
+  assert.equal(E.trickWinner([{ seat: 0, card: c(5, 1) }, { seat: 1, card: c(2, 0) }, { seat: 2, card: c(9, 1) }, { seat: 3, card: c(2, 1) }], 0), 1);
+});
+
+test('estimation: scoring (exact: 10 + tricks, the caller 10 more; missed: minus the difference; only winner / only loser)', () => {
+  // caller (0) said 5 and took 5; 1 said 3 took 3; 2 said 2 took 4; 3 said 1 took 1
+  assert.deepEqual(E.dealPoints([5, 3, 2, 1], [5, 3, 4, 1], 0), [25, 13, -2 - 10, 11]);
+  // only player 2 made it: +10 for them; the caller missed by 2
+  assert.deepEqual(E.dealPoints([6, 3, 2, 1], [4, 5, 2, 2], 0), [-12, -2, 22, -1]);
+});
+
+test('estimation: whole games between computer players', () => {
+  for (const seed of [1, 5, 9, 13]) {
+    const rnd = seeded(seed);
+    let s = E.newEstimation(seed % 4, rnd);
+    let guard = 0;
+    while (!s.done && guard++ < 20000) {
+      const a = E.botAction(s, s.turn, seed === 9 ? 'easy' : 'hard', rnd);
+      const r = E.act(s, s.turn, a, rnd);
+      assert.ok(typeof r !== 'string', `bot action failed: ${r} ${JSON.stringify(a)} phase ${s.phase}`);
+      if (r.dealOver) { assert.equal(r.s.lastDeal!.tricks.reduce((a, b) => a + b, 0), 13); assert.notEqual(r.s.lastDeal!.ests.reduce((a, b) => a + b, 0), 13); }
+      s = r.s;
+    }
+    assert.ok(s.done, 'not done'); assert.ok(s.deal >= 5);
+    assert.ok(E.winnerSeat(s) >= 0);
+  }
+});
+
+test('estimation on the server: I call, estimate and play my own cards (no "can\'t do that now")', async () => {
+  const { createServer } = await import('../server/index');
+  const { config } = await import('../server/config');
+  const WebSocket = (await import('ws')).default;
+  const app = createServer({ ...config, port: 0, host: '127.0.0.1', dbPath: ':memory:', staticDir: '/nonexistent', botFillMs: 300, msgsPer5s: 100000, turnMs: 60_000, botDelay: [1, 2], nextRoundMs: 50,
+    guestsOnline: true, login: { ...config.login, sms: 'console' } } as typeof config);
+  const port = await app.listen();
+  try {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    const msgs: any[] = [];
+    ws.on('message', d => msgs.push(JSON.parse(d.toString())));
+    await new Promise<void>(r => ws.once('open', () => r()));
+    ws.send(JSON.stringify({ t: 'hello' }));
+    const until = async (fn: () => boolean, ms = 240_000) => { const end = Date.now() + ms; while (!fn()) { if (Date.now() > end) throw new Error('timed out ' + JSON.stringify(msgs.slice(-1)).slice(0, 600)); await new Promise(r => setTimeout(r, 10)); } };
+    await until(() => msgs.some(m => m.t === 'welcome'));
+    ws.send(JSON.stringify({ t: 'practice', mode: 'estimation', level: 'normal' }));
+    const last = () => [...msgs].reverse().find(m => m.t === 'table')?.view;
+    await until(() => last()?.phase === 'play');
+    let played = 0, acted = 0, lastK = -1;
+    while (last()?.phase === 'play' || last()?.phase === 'rend') {
+      const v = last(), g = v.estimation;
+      if (v.phase === 'play' && g && g.turn === v.you && v.v !== lastK) {
+        lastK = v.v;
+        const a = g.phase === 'call' ? { t: 'call', n: 0 } : g.phase === 'est' ? { t: 'est', n: g.estOptions[0] } : { t: 'card', id: g.legal[0] };
+        ws.send(JSON.stringify({ t: 'act', a }));
+        acted++; if (a.t === 'card') played++;
+      }
+      await new Promise(r => setTimeout(r, 5));
+      if (msgs.some(m => m.t === 'err')) break;
+    }
+    assert.deepEqual(msgs.filter(m => m.t === 'err'), []);
+    assert.ok(played >= 13, 'I played my cards: ' + played + ' of ' + acted);
+    assert.equal(last().phase, 'mend');
+    ws.close();
+  } finally { await app.close(); }
+});
+
 test('tarneeb and konkan on the server: practice tables play to the end (my turns run out of time)', async () => {
   const { createServer } = await import('../server/index');
   const { config } = await import('../server/config');
@@ -153,7 +248,7 @@ test('tarneeb and konkan on the server: practice tables play to the end (my turn
     guestsOnline: true, login: { ...config.login, sms: 'console' } } as typeof config);
   const port = await app.listen();
   try {
-    for (const mode of ['tarneeb', 'konkan4']) {
+    for (const mode of ['estimation']) {
       const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
       const msgs: any[] = [];
       ws.on('message', d => msgs.push(JSON.parse(d.toString())));
@@ -164,7 +259,7 @@ test('tarneeb and konkan on the server: practice tables play to the end (my turn
       ws.send(JSON.stringify({ t: 'practice', mode, level: 'hard' }));
       const last = () => [...msgs].reverse().find(m => m.t === 'table')?.view;
       await until(() => last()?.phase === 'play');
-      const v = last(), g = mode === 'tarneeb' ? v.tarneeb : v.konkan;
+      const v = last(), g = v.estimation;
       assert.ok(g, 'the game view is under its name');
       assert.equal(g.counts.length, 4);
       await until(() => last()?.phase === 'mend');
