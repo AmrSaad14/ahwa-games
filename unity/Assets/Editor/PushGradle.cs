@@ -36,6 +36,14 @@ public class PushGradle : IPostGenerateGradleAndroidProject
             "# Board Battles (Editor/PushGradle.cs): the Java helpers called from C# through JNI, by class and method name\n" +
             "-keep class com.ahwa.** { *; }\n" +
             "-keep class com.unity3d.player.** { *; }\n" +
+            "# voice chat (com.unity.webrtc): its native libraries find these classes by name when they load; without them\n" +
+            "# the app closes at once\n" +
+            "-keep class org.webrtc.** { *; }\n" +
+            "-keep class com.unity.webrtc.** { *; }\n" +
+            "-keep class org.fmod.** { *; }\n" +
+            "# any class with native methods keeps its name (JNI looks them up by name)\n" +
+            "-keepclasseswithmembernames,includedescriptorclasses class * { native <methods>; }\n" +
+            "-dontwarn org.webrtc.**\n" +
             "-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod,SourceFile,LineNumberTable\n" +
             "-dontwarn com.unity3d.**\n" +
             "-dontwarn com.google.android.gms.**\n" +
