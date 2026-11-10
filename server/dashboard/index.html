@@ -493,15 +493,18 @@ RENDER.rewards = async main => {
 RENDER.tourney = async main => {
   const d = await api('/tourney'), v = d.view, t = d.settings;
   const who = e => e ? esc(e.name) + (e.bot ? ' <span class="muted">(cpu)</span>' : '') : '<span class="muted">—</span>';
+  const on = !!t.enabled;
   main.innerHTML = '<h1>Tournaments</h1>' +
-    '<div class="card row" style="justify-content:space-between"><div><b>' + esc(GAMES[v.game] || v.game) + '</b> · <span class="tag ' + (v.state === 'running' ? 'pending' : '') + '">' + v.state + '</span> · starts ' + when(v.startsAt) +
+    '<div class="card row" style="justify-content:space-between;margin-bottom:12px"><div><b>Tournaments in the game</b><div class="sub">' +
+      (on ? 'On: players see the tournament, sign up, and it starts by itself every ' + DAYS[t.weekday] + ' at ' + t.hour + ':00.' : 'Off: hidden in the game and none start. Sign-ups are kept for when you switch it back on.') +
+      '</div></div><label class="switch"><input type="checkbox" id="ton"' + (on ? ' checked' : '') + '><b>' + (on ? 'On' : 'Off') + '</b></label></div>' +
+    '<div class="card row" style="justify-content:space-between' + (on ? '' : ';opacity:.6') + '"><div><b>' + esc(GAMES[v.game] || v.game) + '</b> · <span class="tag ' + (v.state === 'running' ? 'pending' : '') + '">' + (on || v.state !== 'open' ? v.state : 'off') + '</span> · starts ' + when(v.startsAt) +
       '<div class="sub">' + num(v.count) + (v.state === 'open' ? ' signed up' : ' places in the bracket') + ' · prizes ' + v.prizes.map(short).join(' · ') + '</div></div>' +
-      '<div class="row">' + (v.state === 'open' ? '<button class="btn gold" id="ts">Start now</button>' : '') + (v.state !== 'done' ? '<button class="btn bad" id="tc">' + (v.state === 'running' ? 'Stop' : 'Skip this one') + '</button>' : '') + '</div></div>' +
+      '<div class="row">' + (v.state === 'open' && on ? '<button class="btn gold" id="ts">Start now</button>' : '') + (v.state !== 'done' ? '<button class="btn bad" id="tc">' + (v.state === 'running' ? 'Stop' : 'Skip this one') + '</button>' : '') + '</div></div>' +
     (v.rounds.length ? '<h2>Bracket</h2><div class="bracket">' + v.rounds.map((r, i) => '<div class="round"><div class="sub">' + (i === v.rounds.length - 1 ? 'Final' : i === v.rounds.length - 2 ? 'Semi-finals' : 'Round ' + (i + 1)) + '</div>' +
       r.map(m => '<div class="match"><div class="' + (m.winner === 0 ? 'w' : '') + '">' + who(m.a) + '</div><div class="' + (m.winner === 1 ? 'w' : '') + '">' + who(m.b) + '</div>' + (m.live ? '<div class="sub">playing…</div>' : '') + '</div>').join('') + '</div>').join('') + '</div>' : '') +
     (v.results.length ? '<h2>Results</h2><table><tbody>' + v.results.map(x => '<tr><td>#' + x.place + '</td><td>' + esc(x.name) + '</td><td class="num">' + num(x.coins) + '</td></tr>').join('') + '</tbody></table>' : '') +
     '<h2>Settings</h2><div class="card"><div class="form">' +
-      '<label class="f">Tournaments in the game<span class="switch"><input type="checkbox" id="te"' + (t.enabled ? ' checked' : '') + '> on (off: hidden in the game, none start)</span></label>' +
       '<label class="f">Day (Cairo)<select id="tw">' + DAYS.map((x, i) => '<option value="' + i + '"' + (i === t.weekday ? ' selected' : '') + '>' + x + '</option>').join('') + '</select></label>' +
       '<label class="f">Hour (0–23, Cairo)<input id="th" type="number" min="0" max="23" value="' + t.hour + '"></label>' +
       '<label class="f">Game<select id="tg">' + Object.entries(GAMES).map(([k, l]) => '<option value="' + k + '"' + (k === t.game ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label>' +
@@ -516,12 +519,18 @@ RENDER.tourney = async main => {
     if (!confirm('Start the tournament now with ' + v.count + ' player' + (v.count === 1 ? '' : 's') + '? Empty places get computer players.')) return;
     try { await act(() => api('/tourney', { body: { action: 'start' } }), 'Tournament started'); } finally { go(); }
   };
+  $('#ton').onchange = async e => {
+    const want = e.target.checked;
+    if (!want && !confirm('Switch tournaments off? They disappear from the game and none start until you switch them back on.' + (v.state === 'running' ? ' The one running now still plays to the end.' : ''))) { e.target.checked = true; return; }
+    try { await act(() => api('/settings', { method: 'PUT', body: { tourney: { enabled: want } } }), want ? 'Tournaments are on' : 'Tournaments are off'); } catch { e.target.checked = !want; return; }
+    go();
+  };
   if ($('#tc')) $('#tc').onclick = async () => {
     if (!confirm(v.state === 'running' ? 'Stop the running tournament? Nobody is paid, and the next one opens.' : 'Skip this tournament? Its sign-ups are dropped and the next week’s opens.')) return;
     try { await act(() => api('/tourney', { body: { action: 'cancel' } }), v.state === 'running' ? 'Tournament stopped' : 'Skipped: the next tournament is open'); } finally { go(); }
   };
   $('#tsv').onclick = async () => {
-    await act(() => api('/settings', { method: 'PUT', body: { tourney: { enabled: $('#te').checked, weekday: Number($('#tw').value), hour: Number($('#th').value), game: $('#tg').value,
+    await act(() => api('/settings', { method: 'PUT', body: { tourney: { weekday: Number($('#tw').value), hour: Number($('#th').value), game: $('#tg').value,
       prizes: [...main.querySelectorAll('.tp')].map(i => Number(i.value)), played: Number($('#tpl').value) } } }), 'Tournament settings saved'); go();
   };
 };
