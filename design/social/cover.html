@@ -1,0 +1,80 @@
+<!doctype html><html lang="ar"><head><meta charset="utf-8">
+<style>
+@font-face { font-family: Kufi; src: url(ReemKufi.ttf); font-weight: 400 800; }
+@font-face { font-family: Plex; src: url(PlexArabicBold.ttf); }
+html,body{margin:0;background:#1c0609}
+.c{width:1640px;height:624px;position:relative;overflow:hidden;
+  background:radial-gradient(ellipse 60% 95% at 31% 48%,#9a1f33 0,#5e0e1d 42%,#2b060d 78%,#16040a 100%)}
+.rays{position:absolute;left:510px;top:300px;width:3000px;height:3000px;margin:-1500px 0 0 -1500px;
+  background:repeating-conic-gradient(from 3deg at 50% 50%,rgba(243,205,98,.085) 0 5deg,transparent 5deg 20deg);
+  -webkit-mask:radial-gradient(circle at 50% 50%,#000 0,#000 18%,transparent 48%);mask:radial-gradient(circle at 50% 50%,#000 0,#000 18%,transparent 48%)}
+.lattice{position:absolute;inset:0;opacity:.05;
+  background:conic-gradient(from 45deg,#f3cd62 25%,transparent 0 50%,#f3cd62 0 75%,transparent 0) 0 0/56px 56px}
+.vig{position:absolute;inset:0;background:radial-gradient(ellipse 75% 120% at 50% 50%,transparent 55%,rgba(8,1,3,.75) 100%)}
+.rule{position:absolute;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,#c88f2a 15%,#ffe9b0 50%,#c88f2a 85%,transparent)}
+.rule.t{top:18px;opacity:.55}.rule.b{bottom:18px;opacity:.55}
+.logo{position:absolute;left:300px;top:44px;height:540px;filter:drop-shadow(0 18px 30px rgba(0,0,0,.55))}
+.txt{position:absolute;right:285px;top:104px;width:640px;direction:rtl;text-align:right}
+.kick{font:700 22px Plex;color:#f3cd62;letter-spacing:.5px;opacity:.9;display:flex;gap:12px;align-items:center}
+.kick i{display:inline-block;width:46px;height:2px;background:linear-gradient(90deg,transparent,#f3cd62)}
+h1{margin:6px 0 0;font:700 84px/1.12 Kufi;
+  background:linear-gradient(180deg,#fff3c4 8%,#f3cd62 48%,#c88f2a 100%);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 4px 0 #5a0d1b) drop-shadow(0 10px 18px rgba(0,0,0,.55))}
+.sub{margin:10px 0 0;font:700 29px Plex;color:#fff7e3}
+.chips{margin-top:26px;display:flex;gap:8px;width:640px;justify-content:flex-start}
+.chips span{font:700 19px Plex;color:#ffe9b0;padding:5px 13px 7px;border-radius:30px;
+  background:linear-gradient(180deg,rgba(0,0,0,.25),rgba(0,0,0,.45));border:2px solid rgba(243,205,98,.55);box-shadow:inset 0 1px 0 rgba(255,233,176,.15)}
+.cta{margin-top:30px;display:inline-flex;align-items:center;gap:14px;padding:12px 26px 14px 30px;border-radius:40px;
+  background:linear-gradient(180deg,#ffe9a6,#f3cd62 45%,#c88f2a);color:#3a0711;font:700 26px Plex;
+  box-shadow:0 6px 0 #7a4a10,0 14px 26px rgba(0,0,0,.45)}
+.cta b{font:800 24px Plex;direction:ltr;letter-spacing:.3px}
+.cta svg{width:26px;height:26px}
+.card{position:absolute;width:190px;border-radius:12px;box-shadow:0 14px 26px rgba(0,0,0,.55)}
+.deco{position:absolute}
+</style></head><body><div class="c">
+<div class="lattice"></div><div class="rays"></div><div class="vig"></div>
+<div class="rule t"></div><div class="rule b"></div>
+
+<!-- right edge: a fan of cards -->
+<img class="card" src="card-qs.png" style="left:1392px;top:268px;transform:rotate(-22deg)">
+<img class="card" src="card-ad.png" style="left:1440px;top:222px;transform:rotate(-6deg)">
+<img class="card" src="card-kh.png" style="left:1490px;top:182px;transform:rotate(10deg)">
+<img class="card" src="card-as.png" style="left:1534px;top:150px;transform:rotate(24deg)">
+
+<!-- left edge: tawla checkers and a die -->
+<svg class="deco" style="left:22px;top:60px" width="260" height="520" viewBox="0 0 260 520">
+  <defs>
+    <radialGradient id="ck1" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#fffdf5"/><stop offset=".7" stop-color="#ead9b3"/><stop offset="1" stop-color="#b89a62"/></radialGradient>
+    <radialGradient id="ck2" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#d23a52"/><stop offset=".7" stop-color="#8a1426"/><stop offset="1" stop-color="#4a0912"/></radialGradient>
+    <linearGradient id="dv" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fffdf5"/><stop offset=".6" stop-color="#f1e8d2"/><stop offset="1" stop-color="#cdbb92"/></linearGradient>
+    <filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="10" stdDeviation="9" flood-color="#000" flood-opacity=".55"/></filter>
+  </defs>
+  <g filter="url(#sh)">
+    <g transform="translate(70 120)">
+      <ellipse cx="0" cy="34" rx="62" ry="22" fill="#3a0711"/><ellipse cx="0" cy="22" rx="62" ry="22" fill="url(#ck2)" stroke="#f3cd62" stroke-width="2"/>
+      <ellipse cx="0" cy="12" rx="62" ry="22" fill="#3a0711"/><ellipse cx="0" cy="0" rx="62" ry="22" fill="url(#ck2)" stroke="#f3cd62" stroke-width="2"/>
+      <ellipse cx="0" cy="0" rx="36" ry="12" fill="none" stroke="rgba(243,205,98,.55)" stroke-width="2"/>
+    </g>
+    <g transform="translate(150 210)">
+      <ellipse cx="0" cy="34" rx="62" ry="22" fill="#9c8452"/><ellipse cx="0" cy="22" rx="62" ry="22" fill="url(#ck1)" stroke="#c88f2a" stroke-width="2"/>
+      <ellipse cx="0" cy="12" rx="62" ry="22" fill="#9c8452"/><ellipse cx="0" cy="0" rx="62" ry="22" fill="url(#ck1)" stroke="#c88f2a" stroke-width="2"/>
+      <ellipse cx="0" cy="0" rx="36" ry="12" fill="none" stroke="rgba(160,106,24,.55)" stroke-width="2"/>
+    </g>
+    <g transform="translate(88 330) rotate(-14)">
+      <rect x="-48" y="-48" width="96" height="96" rx="18" fill="url(#dv)" stroke="#c9b17a" stroke-width="2"/>
+      <circle cx="-22" cy="-22" r="10" fill="#8a1426"/><circle cx="22" cy="-22" r="10" fill="#8a1426"/>
+      <circle cx="-22" cy="22" r="10" fill="#8a1426"/><circle cx="22" cy="22" r="10" fill="#8a1426"/><circle cx="0" cy="0" r="10" fill="#8a1426"/>
+    </g>
+  </g>
+</svg>
+
+<img class="logo" src="logo-crop.png">
+
+<div class="txt">
+  <div class="kick">بورد باتلز · BOARD BATTLES<i></i></div>
+  <h1>القهوة كلها<br>في موبايلك</h1>
+  <div class="sub">العب أونلاين مع صحابك وناس من كل مصر</div>
+  <div class="chips"><span>دومينو</span><span>طاولة</span><span>شطرنج</span><span>لودو</span><span>بصرة</span><span>طرنيب</span><span>كونكان</span></div>
+  <div class="cta"><svg viewBox="0 0 24 24"><path d="M6 3.5v17l14-8.5z" fill="#3a0711"/></svg>حمّلها مجانًا من <b>Google Play</b></div>
+</div>
+</div></body></html>
