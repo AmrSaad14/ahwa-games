@@ -214,7 +214,12 @@ export function adminApi(ctx: AdminCtx) {
     }
     if (p === '/tourney' && m === 'POST') {
       const b = await readBody(req);
-      if (b.action === 'start') { hub.tourney.startNow(); log(req, 'tourney_start', hub.tourney.event); return { ok: true, state: hub.tourney.state }; }
+      if (b.action === 'start') {
+        const r = hub.tourney.startNow();
+        if (r === 'nobody') fail(409, 'nobody_signed_up');
+        if (r === 'not_open') fail(409, 'tourney_not_open');
+        log(req, 'tourney_start', hub.tourney.event); return { ok: true, state: hub.tourney.state };
+      }
       if (b.action === 'cancel') { const ev = hub.tourney.event; hub.tourney.cancel(); log(req, 'tourney_cancel', ev); return { ok: true }; }
       fail(400, 'bad_action');
     }

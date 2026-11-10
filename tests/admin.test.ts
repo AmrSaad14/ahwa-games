@@ -89,6 +89,23 @@ test('admin: settings apply to the running game and are checked', async () => {
   assert.notEqual(ECONOMY.startCoins, 77_000);
 });
 
+test('admin: tournament "Start now" with nobody signed up, and "Skip this one"', async () => {
+  const before = (await adm('GET', '/tourney')).json.view;
+  assert.equal(before.state, 'open');
+  const st = await adm('POST', '/tourney', { action: 'start' });
+  assert.equal(st.status, 409);
+  assert.equal(st.json.error, 'nobody_signed_up');
+  assert.equal((await adm('GET', '/tourney')).json.view.state, 'open');
+  const sk = await adm('POST', '/tourney', { action: 'cancel' });
+  assert.equal(sk.status, 200);
+  const after = (await adm('GET', '/tourney')).json.view;
+  assert.equal(after.state, 'open');
+  assert.notEqual(after.event, before.event);            // the next week's, not the same one again
+  assert.ok(after.startsAt > before.startsAt);
+  await adm('POST', '/tourney', { action: 'cancel' });
+  assert.ok((await adm('GET', '/tourney')).json.view.startsAt > after.startsAt);
+});
+
 test('admin: maintenance blocks new games', async () => {
   await adm('PUT', '/settings', { maintenance: { on: true } });
   assert.equal((await adm('GET', '/overview')).json.flags.maintenance, true);

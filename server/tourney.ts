@@ -89,19 +89,35 @@ export class Tourney {
     this.event = eventOf(this.startsAt); this.def = gameFor(this.startsAt);
   }
 
-  /** Starts the tournament now (for testing: /admin/tourney?start=1). */
-  startNow(now = Date.now()) { if (this.state === 'open') { this.startsAt = now; this.reminded = true; this.tick(now); } }
+  /** Starts the tournament now (dashboard "Start now"), even while tournaments are switched off. Returns why it
+   *  couldn't: 'not_open' (one is running or just ended) or 'nobody' (no one signed up: it stays open). */
+  startNow(now = Date.now()): 'ok' | 'not_open' | 'nobody' {
+    if (this.state !== 'open') return 'not_open';
+    if (!this.host.regs(this.event).some(u => this.host.entrant(u))) return 'nobody';
+    this.startsAt = now; this.reminded = true; this.start(now);
+    return this.state === 'running' ? 'ok' : 'nobody';
+  }
+
+  /** The next start after `from` whose tournament hasn't been held, skipped or missed already. */
+  private nextFree(from: number) {
+    let at = nextTourneyAt(from);
+    for (let i = 0; i < 8 && this.host.metaGet('tourney_done_' + eventOf(at)); i++) at = nextTourneyAt(at + 1);
+    return at;
+  }
 
   /** The day, hour or game changed (dashboard): a tournament not started yet moves to the new time. */
   reschedule(now = Date.now()) {
     if (this.state !== 'open') return;
-    this.startsAt = nextTourneyAt(now + 1);
+    this.startsAt = this.nextFree(now + 1);
     this.event = eventOf(this.startsAt); this.def = gameFor(this.startsAt); this.reminded = false;
   }
-  /** Stops a running tournament (dashboard): no more rounds, nobody is paid; the next one opens. */
+  /** Skips the coming tournament or stops a running one (dashboard): no more rounds, nobody is paid; the one
+   *  after opens. Whoever had signed up hears about it. */
   cancel(now = Date.now()) {
-    if (this.state === 'running') this.host.metaSet('tourney_done_' + this.event, 'cancelled');
+    const was = this.state, regs = this.host.regs(this.event);
+    this.host.metaSet('tourney_done_' + this.event, was === 'running' ? 'cancelled' : was === 'open' ? 'skipped' : 'done');
     this.state = 'done'; this.doneAt = 0; this.reset(now);
+    for (const uid of regs) if (this.host.online(uid)) this.host.send(uid, { t: 'tourney', view: this.view(uid) });
   }
 
   tick(now = Date.now()) {
@@ -124,7 +140,7 @@ export class Tourney {
   }
 
   private reset(now: number) {
-    this.startsAt = nextTourneyAt(now + 1);
+    this.startsAt = this.nextFree(now + 1);
     this.event = eventOf(this.startsAt); this.def = gameFor(this.startsAt);
     this.state = 'open'; this.rounds = []; this.results = []; this.reminded = false; this.played.clear(); this.nextRoundAt = 0;
   }

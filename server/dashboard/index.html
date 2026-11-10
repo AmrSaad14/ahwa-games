@@ -157,11 +157,15 @@ const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 
 const GAMES = { rotate: 'Each week in turn', domino: 'Dominoes', tawla: 'Backgammon (tawla)', chess: 'Chess', ludo: 'Ludo' };
 let state = { view: 'overview', catalog: null, pending: 0 };
 
+const ERRS = {
+  nobody_signed_up: 'Nobody has signed up for this tournament yet, so it can’t start. Use “Skip this one” to move to the next week.',
+  tourney_not_open: 'This tournament has already started or ended. The page is now up to date.',
+};
 async function api(path, opts = {}) {
   const r = await fetch('/api/admin' + path, { method: opts.method || (opts.body ? 'POST' : 'GET'), headers: { 'Content-Type': 'application/json' }, body: opts.body ? JSON.stringify(opts.body) : undefined, credentials: 'same-origin' });
   const j = await r.json().catch(() => ({}));
   if (r.status === 401) { showLogin(); throw new Error('Signed out'); }
-  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  if (!r.ok) throw new Error(ERRS[j.error] || j.error || ('HTTP ' + r.status));
   return j;
 }
 function toast(msg, err) { const t = document.createElement('div'); t.className = 'toast' + (err ? ' err' : ''); t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), err ? 4500 : 2400); }
@@ -507,8 +511,15 @@ RENDER.tourney = async main => {
     '<h2>Signed up (' + d.registered.length + ')</h2>' + (d.registered.length ? '<div class="card">' + d.registered.map(r => '<a href="#players/' + esc(r.id) + '" class="tag" style="margin:2px;text-decoration:none">' + esc(r.name) + (r.online ? ' ●' : '') + '</a>').join('') + '</div>' : '<div class="card empty">Nobody yet</div>') +
     '<h2>Past tournaments</h2>' + (d.history.length ? '<table><thead><tr><th>Date</th><th>Game</th><th class="num">People</th><th>Winner</th><th>2nd</th></tr></thead><tbody>' +
       d.history.map(h => '<tr><td>' + esc(h.event) + '</td><td>' + esc(GAMES[h.game] || h.game) + '</td><td class="num">' + num(h.people) + '</td><td>' + esc(h.results?.[0]?.name || '—') + '</td><td>' + esc(h.results?.[1]?.name || '—') + '</td></tr>').join('') + '</tbody></table>' : '<div class="card empty">None yet</div>');
-  if ($('#ts')) $('#ts').onclick = async () => { if (confirm('Start the tournament now with ' + v.count + ' players?')) { await act(() => api('/tourney', { body: { action: 'start' } }), 'Started'); go(); } };
-  if ($('#tc')) $('#tc').onclick = async () => { if (confirm(v.state === 'running' ? 'Stop the running tournament? Nobody is paid.' : 'Skip this tournament and open the next one?')) { await act(() => api('/tourney', { body: { action: 'cancel' } }), 'Done'); go(); } };
+  if ($('#ts')) $('#ts').onclick = async () => {
+    if (!v.count) return toast(ERRS.nobody_signed_up, true);
+    if (!confirm('Start the tournament now with ' + v.count + ' player' + (v.count === 1 ? '' : 's') + '? Empty places get computer players.')) return;
+    try { await act(() => api('/tourney', { body: { action: 'start' } }), 'Tournament started'); } finally { go(); }
+  };
+  if ($('#tc')) $('#tc').onclick = async () => {
+    if (!confirm(v.state === 'running' ? 'Stop the running tournament? Nobody is paid, and the next one opens.' : 'Skip this tournament? Its sign-ups are dropped and the next week’s opens.')) return;
+    try { await act(() => api('/tourney', { body: { action: 'cancel' } }), v.state === 'running' ? 'Tournament stopped' : 'Skipped: the next tournament is open'); } finally { go(); }
+  };
   $('#tsv').onclick = async () => {
     await act(() => api('/settings', { method: 'PUT', body: { tourney: { enabled: $('#te').checked, weekday: Number($('#tw').value), hour: Number($('#th').value), game: $('#tg').value,
       prizes: [...main.querySelectorAll('.tp')].map(i => Number(i.value)), played: Number($('#tpl').value) } } }), 'Tournament settings saved'); go();
