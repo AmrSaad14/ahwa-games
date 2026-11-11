@@ -38,12 +38,12 @@ public class EstimationTable : MonoBehaviour
         canvas = Ui.MakeCanvas("Estimation", 15);
         root = Ui.Rect("Estimation", canvas.transform).Safe();
         CardArt.Cloth(root);
-        trickArea = Ui.Rect("Trick", root).Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(240, 180), new Vector2(0, 26));
+        trickArea = Ui.Rect("Trick", root).Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(240, 170), new Vector2(0, 4));   // low enough that the top player's card clears his cards
         handArea = Ui.Rect("Hand", root).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(520, 96), new Vector2(0, 4));
         for (int i = 1; i < 4; i++) backs[i] = Ui.Rect("Backs" + i, root);
-        backs[1].Place(new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(60, 150), new Vector2(-112, 24));
+        backs[1].Place(new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(60, 150), new Vector2(-140, 24));
         backs[2].Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(240, 54), new Vector2(0, -56));
-        backs[3].Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(60, 150), new Vector2(122, 24));
+        backs[3].Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(60, 150), new Vector2(150, 24));   // clear of the turn line under the clock
         for (int i = 0; i < 4; i++)
         {
             var b = Ui.Box(root, "Said" + i, new Color(0.98f, 0.93f, 0.8f, 0.95f));
@@ -121,7 +121,7 @@ public class EstimationTable : MonoBehaviour
         var half = root.rect.size / 2;
         switch (rel) { case 0: return new Vector2(0, -half.y + 60); case 1: return new Vector2(half.x - 110, 24); case 2: return new Vector2(0, half.y - 80); default: return new Vector2(-half.x + 110, 24); }
     }
-    static Vector2 TrickSpot(int rel) => rel == 0 ? new Vector2(0, -44) : rel == 1 ? new Vector2(64, 0) : rel == 2 ? new Vector2(0, 44) : new Vector2(-64, 0);
+    static Vector2 TrickSpot(int rel) => rel == 0 ? new Vector2(0, -40) : rel == 1 ? new Vector2(64, 0) : rel == 2 ? new Vector2(0, 40) : new Vector2(-64, 0);
     Vector2 TrickCenter => trickArea.anchoredPosition;
     static int? Said(object o) => o is double d ? (int)d : (int?)null;
     string Name(TableView v, int s)
@@ -237,7 +237,7 @@ public class EstimationTable : MonoBehaviour
             bg.color = mine ? Ui.Gold : new Color(0.98f, 0.93f, 0.8f, 0.95f);
             var p = SeatPoint(rel);
             var brt = bg.rectTransform;
-            brt.anchoredPosition = rel == 0 ? new Vector2(0, -root.rect.height / 2 + 116) : rel == 2 ? new Vector2(190, root.rect.height / 2 - 98) : new Vector2(p.x, -62);
+            brt.anchoredPosition = rel == 0 ? new Vector2(0, -root.rect.height / 2 + 110) : rel == 2 ? new Vector2(190, root.rect.height / 2 - 98) : new Vector2(p.x, -62);
             brt.sizeDelta = new Vector2(phase == "play" ? 118 : 84, 24);
         }
 

@@ -899,7 +899,7 @@ public class GameUi : MonoBehaviour
         string msg = "";
         if (v.phase == "play")
         {
-            if (v.MyTurn) msg = choose != null && choose.Count > 1 ? Loc.T("دوس على المكان اللي بينوّر أو اسحب الحجر له") : v.open >= 0 && v.line.Empty ? Loc.T("افتح بالـ ") + Domino.Tiles[v.open][0] + "|" + Domino.Tiles[v.open][1] : Loc.T("دورك");
+            if (v.MyTurn) msg = choose != null && choose.Count > 1 ? Loc.T("اختار الطرف") : v.open >= 0 && v.line.Empty ? Loc.T("افتح بالـ ") + Domino.Tiles[v.open][0] + "|" + Domino.Tiles[v.open][1] : Loc.T("دورك");
             else if (v.turn >= 0) msg = Say(v, v.turn, "turn");
             if (v.last != null && v.last.t == "pass" && v.last.s != v.you && v.last.s >= 0) msg = Say(v, v.last.s, "pass");
         }
@@ -1077,8 +1077,9 @@ public class GameUi : MonoBehaviour
             // on screen, and clear of the top bar
             float halfH = root.rect.height / 2, halfW = root.rect.width / 2;
             local.y = Mathf.Min(local.y, halfH - 66); local.x = Mathf.Clamp(local.x, -halfW + 104, halfW - 150);   // clear of the screen edge and the mic / chat / sound buttons on the right
-            // a board (ludo, chess, tawla) fills the middle: the names go to the sides instead of over it
-            if (v.Board && !App.CardGame(v.game))
+            // a board (ludo, chess, tawla) or the domino table fills the middle: the names go to the screen's sides
+            // instead of over it, where they would hide tiles and catch the taps meant for the glowing spots
+            if (!App.CardGame(v.game))
             {
                 if (pos == 2) local = new Vector2(-halfW + 110, halfH - 66);
                 else if (pos == 1) local = new Vector2(halfW - 150, -halfH * 0.25f);

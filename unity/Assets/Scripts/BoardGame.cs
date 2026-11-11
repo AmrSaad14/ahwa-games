@@ -340,10 +340,7 @@ public class BoardGame : MonoBehaviour
     public string TurnHint()
     {
         if (view == null || !view.MyTurn) return null;
-        if (NeedsRoll()) return Loc.T("دورك: ارمي الزهر");
-        if (view.game == "chess") return view.chess != null && view.chess.Num("check", -1) >= 0 ? Loc.T("كش! احمي الملك") : sel != -1000 ? Loc.T("اختار هتحطها فين") : Loc.T("دورك: حرّك قطعة");
-        if (view.game == "tawla") return sel != -1000 ? Loc.T("اختار هتحطها فين") : Loc.T("حرّك قشاطاتك");
-        if (view.game == "ludo") return Loc.T("اختار العسكري اللي هيتحرك");
+        if (view.game == "chess" && view.chess != null && view.chess.Num("check", -1) >= 0) return Loc.T("كش!");   // no tips: just whose turn it is
         return Loc.T("دورك");
     }
 }

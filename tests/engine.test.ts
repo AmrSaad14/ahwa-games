@@ -296,3 +296,20 @@ test('قافلة: when no tile left can ever fit, the round ends at once and nob
     assert.equal(t.result?.points, 10);
   } finally { t.close(); }
 });
+
+test('a dealt hand never comes with tiles of the same number side by side when they can be kept apart', async () => {
+  const { spreadHand, sameNeighbours, insertSpread, TILES: T, shuffled: sh } = await import('../shared/engine');
+  for (let k = 0; k < 300; k++) {
+    const hand = sh(T.map((_, i) => i)).slice(0, 7);
+    const out = spreadHand(hand);
+    assert.deepEqual(out.slice().sort((a, b) => a - b), hand.slice().sort((a, b) => a - b));   // same tiles
+    assert.ok(sameNeighbours(out) <= sameNeighbours(hand));
+  }
+  // 0|1 0|2 3|4 3|5: the two 0s and the two 3s can always be kept apart
+  const id = (x: number, y: number) => T.findIndex(t => t[0] === x && t[1] === y);
+  for (let k = 0; k < 50; k++) assert.equal(sameNeighbours(spreadHand([id(0, 1), id(0, 2), id(3, 4), id(3, 5)])), 0);
+  const h = [id(0, 1), id(2, 3)];
+  insertSpread(h, id(1, 2));   // touches both: it goes to an end, never between them
+  assert.equal(h.length, 3);
+  assert.equal(sameNeighbours(h), 1);
+});

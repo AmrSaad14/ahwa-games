@@ -1,6 +1,6 @@
 import { chooseMove } from './bot';
 import {
-  End, HAND_SIZE, Line, crowdedHand, MODE_PLAYERS, Mode, TILES, canPlay, endsFor, isDouble, newLine, pipSum, place,
+  End, HAND_SIZE, Line, crowdedHand, insertSpread, spreadHand, MODE_PLAYERS, Mode, TILES, canPlay, endsFor, isDouble, newLine, pipSum, place,
   shuffled, teamCount, teamOf,
   defaultTarget, targetOptions,
 } from './engine';
@@ -272,6 +272,7 @@ export class Table {
       this.hands = this.seats.map(() => deck.splice(0, size));
       if (!this.hands.some(crowdedHand) || tries > 200) break;
     }
+    this.hands = this.hands.map(h => spreadHand(h));   // tiles with the same number are not handed out side by side
     this.yard = deck;
     this.line = newLine();
     this.passes = 0;
@@ -334,7 +335,7 @@ export class Table {
       if (this.block) return 'no_draw';
       if (canPlay(this.line, hand)) return 'can_play';
       if (!this.yard.length) return 'yard_empty';
-      hand.push(this.yard.pop()!);   // a drawn tile goes at the end of the hand
+      insertSpread(hand, this.yard.pop()!);   // a drawn tile goes where it doesn't sit beside a tile of the same number
       this.last = { t: 'draw', s: seat, k: ++this.v };
       // drawing gives a little time back so the player can look at the new tile
       if (this.turnEndsAt) this.turnEndsAt = Math.max(this.turnEndsAt, Date.now() + Math.min(5000, this.opts.turnMs));

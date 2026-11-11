@@ -374,7 +374,7 @@ public class App : MonoBehaviour
                 // a tile going down clacks; your turn chimes (and buzzes the phone)
                 int tilesNow = v.line.Empty ? 0 : 1 + v.line.L.Count + v.line.R.Count;
                 if (view != null && tilesNow > tilesOnTable) Sfx.Slap();
-                if (v.MyTurn && v.phase == "play" && (view == null || !view.MyTurn)) { Sfx.Chime(); Sfx.Buzz(); if (guided && guideHints < 3) { guideHints++; Toast(Loc.T(v.game == "domino" ? "دورك! دوس على حجر بينوّر عشان تلعبه" : "دورك! دوس على اللوح"), 4f); } else GameGuide(v); }
+                if (v.MyTurn && v.phase == "play" && (view == null || !view.MyTurn)) { Sfx.Chime(); Sfx.Buzz(); }   // no tips during a game
                 tilesOnTable = tilesNow;
                 cafe.SetGameKind(v.game);   // each board framed its own way
                 view = v;

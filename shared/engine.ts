@@ -86,6 +86,43 @@ export function crowdedHand(hand: number[]): boolean {
   return false;
 }
 
+const shares = (a: number, b: number) => {
+  const [x, y] = TILES[a], [u, v] = TILES[b];
+  return x === u || x === v || y === u || y === v;
+};
+/** How many neighbours in the hand share a number (two 2s side by side, …). */
+export function sameNeighbours(hand: number[]): number {
+  let n = 0;
+  for (let i = 1; i < hand.length; i++) if (shares(hand[i - 1], hand[i])) n++;
+  return n;
+}
+/** The hand in a mixed order: tiles that share a number are kept apart as far as the tiles allow,
+ * so a player's 2s (or 5s…) are never handed to them grouped together. */
+export function spreadHand(hand: number[], rnd: () => number = Math.random): number[] {
+  let best = hand.slice(), bestN = sameNeighbours(best);
+  for (let t = 0; t < 40 && bestN > 0; t++) {
+    const pool = shuffled(hand, rnd), out: number[] = [];
+    while (pool.length) {
+      const prev = out[out.length - 1];
+      let k = prev === undefined ? 0 : pool.findIndex(x => !shares(prev, x));
+      if (k < 0) k = 0;
+      out.push(pool.splice(k, 1)[0]);
+    }
+    const n = sameNeighbours(out);
+    if (n < bestN) { best = out; bestN = n; }
+  }
+  return best;
+}
+/** Where a drawn tile goes: a gap whose neighbours share no number with it (the end when none is free). */
+export function insertSpread(hand: number[], id: number, rnd: () => number = Math.random): void {
+  const ok: number[] = [];
+  for (let i = 0; i <= hand.length; i++) {
+    if ((i === 0 || !shares(hand[i - 1], id)) && (i === hand.length || !shares(hand[i], id))) ok.push(i);
+  }
+  const at = ok.length ? ok[Math.floor(rnd() * ok.length)] : hand.length;
+  hand.splice(at, 0, id);
+}
+
 export type End = 'L' | 'R' | 'C';
 /** One tile on an arm of the line: [tileId, inner value (touching), outer value (open)]. */
 export type ArmTile = [number, number, number];

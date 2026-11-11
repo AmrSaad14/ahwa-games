@@ -37,6 +37,46 @@ public class OfflineDomino : OfflineGame
         return false;
     }
 
+    static bool Shares(int a, int b)
+    {
+        var x = Domino.Tiles[a]; var y = Domino.Tiles[b];
+        return x[0] == y[0] || x[0] == y[1] || x[1] == y[0] || x[1] == y[1];
+    }
+    static int SameNeighbours(List<int> h)
+    {
+        int c = 0;
+        for (int i = 1; i < h.Count; i++) if (Shares(h[i - 1], h[i])) c++;
+        return c;
+    }
+    /// The hand in a mixed order: tiles that share a number are kept apart as far as the tiles allow (shared/engine.ts spreadHand).
+    List<int> Spread(List<int> hand)
+    {
+        var best = new List<int>(hand); int bestN = SameNeighbours(best);
+        for (int t = 0; t < 40 && bestN > 0; t++)
+        {
+            var pool = new List<int>(hand);
+            for (int i = pool.Count - 1; i > 0; i--) { int j = rng.Next(i + 1); (pool[i], pool[j]) = (pool[j], pool[i]); }
+            var outp = new List<int>();
+            while (pool.Count > 0)
+            {
+                int k = outp.Count == 0 ? 0 : pool.FindIndex(x => !Shares(outp[outp.Count - 1], x));
+                if (k < 0) k = 0;
+                outp.Add(pool[k]); pool.RemoveAt(k);
+            }
+            int c = SameNeighbours(outp);
+            if (c < bestN) { best = outp; bestN = c; }
+        }
+        return best;
+    }
+    /// A drawn tile goes into a gap whose neighbours share no number with it (the end when none is free).
+    void InsertSpread(List<int> hand, int id)
+    {
+        var ok = new List<int>();
+        for (int i = 0; i <= hand.Count; i++)
+            if ((i == 0 || !Shares(hand[i - 1], id)) && (i == hand.Count || !Shares(hand[i], id))) ok.Add(i);
+        hand.Insert(ok.Count > 0 ? ok[rng.Next(ok.Count)] : hand.Count, id);
+    }
+
     void StartRound()
     {
         round++;
@@ -52,6 +92,7 @@ public class OfflineDomino : OfflineGame
             for (int s = 0; s < n; s++) { hands[s] = deck.GetRange(0, size); deck.RemoveRange(0, size); }   // left in the shuffled order (not sorted)
             if (!hands.Any(Crowded) || tries > 200) break;
         }
+        for (int s = 0; s < n; s++) hands[s] = Spread(hands[s]);   // tiles with the same number are not handed out side by side
         yard = deck;
         line = new Domino.Line();
         passes = 0; result = null;
@@ -128,7 +169,7 @@ public class OfflineDomino : OfflineGame
         {
             if (Domino.CanPlay(line, hand)) return "can_play";
             if (yard.Count == 0) return "yard_empty";
-            hand.Add(yard[yard.Count - 1]); yard.RemoveAt(yard.Count - 1);
+            InsertSpread(hand, yard[yard.Count - 1]); yard.RemoveAt(yard.Count - 1);
             last = new Dictionary<string, object> { ["t"] = "draw", ["s"] = seat, ["k"] = ++v };
             if (turnEndsAt > 0) turnEndsAt = Math.Max(turnEndsAt, Now + Math.Min(5000, DominoTurnMs));
             return null;

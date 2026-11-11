@@ -131,7 +131,7 @@ public static class Loc
         ["استنى شوية وجرّب تاني"] = "Wait a bit and try again",
         ["أهلاً بيك في القهوة!"] = "Welcome to the café!", ["أول مرة هنا؟ العب دور دومينو سهل ضد الكمبيوتر وإحنا هنقولك تعمل إيه خطوة بخطوة"] = "New here? Play an easy game of dominoes against the computer and we'll guide you step by step",
         ["وفي الآخر خد"] = "and get", ["كوين هدية"] = "coins as a gift", ["يلا نلعب"] = "Let's play", ["بعدين"] = "Later",
-        ["دورك! دوس على حجر بينوّر عشان تلعبه"] = "Your turn! Tap a glowing tile to play it", ["دورك! دوس على اللوح"] = "Your turn! Tap the board",
+        ["دورك! دوس على حجر بينوّر عشان تلعبه"] = "Your turn! Tap a glowing tile to play it", ["دورك! دوس على اللوح"] = "Your turn! Tap the board", ["اختار الطرف"] = "Pick an end", ["كش!"] = "Check!",
         ["أحسنت!"] = "Well done!", ["خلصت أول دور. هدية"] = "You finished your first game. Gift", ["جرّب تلعب أونلاين ضد ناس حقيقية"] = "Now try playing online against real people",
         ["احتفال"] = "Celebration", ["عرض رمضان"] = "Ramadan offer", ["عرض العيد"] = "Eid offer", ["احتفالك بيظهر لكل اللي على الترابيزة لما تكسب"] = "Your celebration shows to everyone at the table when you win",
         ["مطر كوينز"] = "Coin rain", ["ورق ملوّن"] = "Confetti", ["نجوم دهب"] = "Gold stars", ["صواريخ"] = "Fireworks", ["فوانيس"] = "Lanterns", ["بلالين"] = "Balloons",
