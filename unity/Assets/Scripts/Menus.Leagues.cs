@@ -92,6 +92,14 @@ public partial class Menus
         var left = Ui.Rect("Govs", area); left.anchorMin = new Vector2(Loc.En ? 0 : 0.5f, 0); left.anchorMax = new Vector2(Loc.En ? 0.5f : 1, 1); left.offsetMin = new Vector2(2, 0); left.offsetMax = new Vector2(-2, -36);
         var right = Ui.Rect("Players", area); right.anchorMin = new Vector2(Loc.En ? 0.5f : 0, 0); right.anchorMax = new Vector2(Loc.En ? 1 : 0.5f, 1); right.offsetMin = new Vector2(2, 0); right.offsetMax = new Vector2(-2, -36);
         var govs = govData.Arr("govs") ?? new List<object>();
+        if (govs.Count == 0 && (govData.Arr("players") ?? new List<object>()).Count == 0)
+        {
+            // nobody has played for a governorate yet this week: one message, not two empty columns
+            var none = Ui.Label(area, Loc.T("لسه محدش لعب لمحافظته الأسبوع ده. العب أونلاين وكسّب نقط لمحافظتك"), 15, Ui.GoldLight, TextAnchor.MiddleCenter);
+            none.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(480, 60), new Vector2(0, -18));
+            Destroy(left.gameObject); Destroy(right.gameObject);
+            return;
+        }
         if (govs.Count == 0) Ui.Label(left, Loc.T("مفيش نتايج لسه"), 14, Ui.GoldLight).rectTransform.Fill();
         else
         {

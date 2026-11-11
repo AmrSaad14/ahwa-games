@@ -46,13 +46,13 @@ const st = (bg1: string, bg2: string, fg: string, border: string, icon: string, 
 export const DEFAULT_TITLES: TitleDef[] = [
   // the monthly ones: the best of each game
   { id: 'potm_domino', ar: 'لاعب الدومينو للشهر', en: 'Domino Player of the Month', monthly: 'domino', style: st('#11804f', '#063b25', '#ffd76a', '#ffd76a', 'domino', 'shine') },
-  { id: 'potm_tawla', ar: 'لاعب الطاولة للشهر', en: 'Tawla Player of the Month', monthly: 'tawla', style: st('#9c2430', '#4a0d14', '#ffd76a', '#ffd76a', 'dice', 'shine') },
+  { id: 'potm_tawla', ar: 'لاعب الطاولة للشهر', en: 'Backgammon Player of the Month', monthly: 'tawla', style: st('#9c2430', '#4a0d14', '#ffd76a', '#ffd76a', 'dice', 'shine') },
   { id: 'potm_chess', ar: 'لاعب الشطرنج للشهر', en: 'Chess Player of the Month', monthly: 'chess', style: st('#2c4bb0', '#0e1a4a', '#ffd76a', '#ffd76a', 'knight', 'shine') },
   { id: 'potm_ludo', ar: 'لاعب اللودو للشهر', en: 'Ludo Player of the Month', monthly: 'ludo', style: st('#7b3fc4', '#3a1666', '#ffd76a', '#ffd76a', 'star', 'shine') },
   // given by the team
   { id: 'legend', ar: 'أسطورة القهوة', en: 'Café Legend', style: st('#ffe08a', '#b8862b', '#2a1a05', '#fff6d6', 'crown', 'shine') },
   { id: 'domino_king', ar: 'ملك الدومينو', en: 'Domino King', style: st('#2b2b2b', '#0d0d0d', '#f3cd62', '#f3cd62', 'domino', 'glow') },
-  { id: 'tawla_sultan', ar: 'سلطان الطاولة', en: 'Tawla Sultan', style: st('#8a2626', '#3d0d0d', '#ffd9a0', '#e0a03a', 'dice', 'glow') },
+  { id: 'tawla_sultan', ar: 'سلطان الطاولة', en: 'Backgammon Sultan', style: st('#8a2626', '#3d0d0d', '#ffd9a0', '#e0a03a', 'dice', 'glow') },
   { id: 'chess_vizier', ar: 'وزير الشطرنج', en: 'Chess Vizier', style: st('#26397f', '#0f1838', '#e6ecff', '#9fb4ff', 'knight', 'glow') },
   { id: 'ludo_boss', ar: 'معلّم اللودو', en: 'Ludo Boss', style: st('#2f9e57', '#1d6a8a', '#ffffff', '#ffd84d', 'star', 'none') },
   { id: 'champion', ar: 'بطل البطولة', en: 'Tournament Champion', style: st('#6a32a0', '#2a1140', '#ffe08a', '#ffe08a', 'trophy', 'glow') },

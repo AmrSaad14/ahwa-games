@@ -1227,7 +1227,7 @@ public partial class Menus : MonoBehaviour
             {
                 // the whole game: who won the most coins, all the games together — all time, or this month
                 var info = Ui.Label(area, Loc.T("آخر كل شهر: الأول") + " " + Loc.Short(MonthlyEarnerPrizes[0]) + "  ·  " + Loc.T("التاني") + " " + Loc.Short(MonthlyEarnerPrizes[1]) + "  ·  " + Loc.T("التالت") + " " + Loc.Short(MonthlyEarnerPrizes[2]) + " " + Loc.T("كوين"), 12, Ui.Gold, StartAlign, Ui.Bold);
-                At(info.rectTransform, 10, 330, 24); info.rectTransform.anchoredPosition = new Vector2(info.rectTransform.anchoredPosition.x, -12);
+                info.rectTransform.Place(new Vector2(Loc.En ? 0 : 1, 1), new Vector2(Loc.En ? 0 : 1, 1), new Vector2(350, 24), new Vector2(Loc.En ? 10 : -10, 0));   // at the top, beside the period buttons
                 for (int k = 0; k < 2; k++)
                 {
                     string per = k == 0 ? "all" : "month";
@@ -1269,7 +1269,7 @@ public partial class Menus : MonoBehaviour
             }
             // the column heads
             var head = Ui.Rect("Head", area).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(560, 22), new Vector2(0, -top));
-            LbCells(head, Loc.T("الترتيب"), "", Loc.T(coins ? "الكوينز" : week ? "نقط" : "التقييم"), Loc.T(week ? "الجايزة" : "مكسب"), new Color(1, 1, 1, 0.5f), 12);
+            LbCells(head, Loc.T("الترتيب"), "", Loc.T(coins ? "كوينز" : week ? "نقط" : "التقييم"), Loc.T(week ? "الجايزة" : "مكسب"), new Color(1, 1, 1, 0.5f), 12);
             var listArea = Ui.Rect("List", area); listArea.anchorMin = Vector2.zero; listArea.anchorMax = Vector2.one; listArea.offsetMin = new Vector2(0, lbMe != null ? 40 : 0); listArea.offsetMax = new Vector2(0, -24 - top);
             if (lbRows == null || lbRows.Count == 0)
             {

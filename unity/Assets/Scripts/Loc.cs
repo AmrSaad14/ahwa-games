@@ -303,7 +303,7 @@ public static class Loc
         ["اقعد هنا"] = "Sit here",
         ["صاحبك اللي تدعيه بيقعد قصادك ويبقى شريكك"] = "A friend you invite sits across from you as your partner",
         ["بستوني"] = "Spades",
-        ["الأكثر كسبًا"] = "Top earners",
+        ["الأكثر كسبًا"] = "Top earners", ["كوينز"] = "Coins", ["لسه محدش لعب لمحافظته الأسبوع ده. العب أونلاين وكسّب نقط لمحافظتك"] = "Nobody has played for their governorate yet this week. Play online to score points for yours",
         ["أكتر لاعيبة كسبوا كوينز في كل الألعاب"] = "Most coins won, all games together",
         ["كل الوقت"] = "All time",
         ["الشهر ده"] = "This month",

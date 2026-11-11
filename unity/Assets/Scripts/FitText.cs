@@ -1,5 +1,6 @@
 // Keeps a label's text inside its box, on every screen size and in both languages:
-//  - too long for one line: it goes onto more lines when the box is tall enough for them;
+//  - too long for one line: a little smaller first, then more lines when the box is tall enough for them
+//    (never cutting a word in two);
 //  - still too big: the letters get smaller, down to 60% of their size;
 //  - Arabic is broken into lines here, word by word from its first word, since Unity's own wrapping would
 //    start the top line with the sentence's end (the text is stored right to left for its drawing).
@@ -60,6 +61,11 @@ public class FitText : MonoBehaviour
         if (!wrap)
         {
             if (Width(src) <= size.x + 0.5f) return src;
+            // a little smaller first: a short label (a tab, a button) stays on one line
+            int soft = Mathf.Max(min, Mathf.RoundToInt(baseSize * 0.85f));
+            for (int fs = baseSize; fs > soft && Width(src) > size.x + 0.5f; ) t.fontSize = --fs;
+            if (Width(src) <= size.x + 0.5f) return src;
+            t.fontSize = baseSize;
             // room for two lines (and no lines of its own): let it wrap
             if (size.y >= baseSize * 2.3f && src.IndexOf('\n') < 0) wrap = true;
             else
@@ -78,9 +84,17 @@ public class FitText : MonoBehaviour
         {
             t.fontSize = fs;
             text = arabic ? WrapRtl(src, size.x) : src;
-            if (fs <= min || Height(text, size.x) <= size.y + 0.5f) break;
+            // a word is never cut in two ("Backgamm / on"): smaller letters until the longest word fits a line
+            if (fs <= min || (Height(text, size.x) <= size.y + 0.5f && LongestWord(src) <= size.x + 0.5f)) break;
         }
         return text;
+    }
+
+    float LongestWord(string s)
+    {
+        float m = 0;
+        foreach (var w in s.Split(' ', '\n')) if (w.Length > 0) m = Mathf.Max(m, Width(w));
+        return m;
     }
 
     float Width(string s) => t.cachedTextGeneratorForLayout.GetPreferredWidth(s, t.GetGenerationSettings(Vector2.zero)) / t.pixelsPerUnit;

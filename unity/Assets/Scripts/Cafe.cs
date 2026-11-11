@@ -374,6 +374,7 @@ public class Cafe : MonoBehaviour
         bool first = lastW == 0;
         lastW = Screen.width; lastH = Screen.height;
         if (first || inGame) return;
+        ResetLobbyZoom();
         camPosTo = focus == null ? Overview(out camLookTo) : TableShot(focus, out camLookTo);
     }
 
@@ -422,7 +423,7 @@ public class Cafe : MonoBehaviour
         inGame = on;
         if (lobby != null) lobby.gameObject.SetActive(!on);
         Crowd();
-        GameLight(on); ResetZoom();
+        GameLight(on); ResetZoom(); ResetLobbyZoom();
         if (on) camPosTo = GameShot(out camLookTo); else Focus(focus);
         if (probe != null && probe.enabled) probe.RenderProbe();   // the room changed (the big table in, or out)
     }
@@ -543,9 +544,61 @@ public class Cafe : MonoBehaviour
 
     void ResetZoom() { zoom = 1f; pan = Vector3.zero; pinching = false; }
 
+    // the café floor (the lobby): two fingers (or the wheel) bring the camera nearer or farther and move it
+    const float LobbyMin = 0.35f, LobbyMax = 1.15f;
+    float lobbyZoom = 1f; Vector3 lobbyPan, lobbyBase, lobbyLook; bool lobbyHasBase;
+    void ResetLobbyZoom() { lobbyZoom = 1f; lobbyPan = Vector3.zero; lobbyHasBase = false; }
+
+    void LobbyZoomInput()
+    {
+        bool moved = false;
+        if (Input.touchCount >= 2)
+        {
+            Touch a = Input.GetTouch(0), b = Input.GetTouch(1);
+            float dist = Mathf.Max(1f, (a.position - b.position).magnitude);
+            Vector2 mid = (a.position + b.position) * 0.5f;
+            if (!pinching)
+            {
+                // a pinch that starts on a menu or button belongs to it
+                var es = UnityEngine.EventSystems.EventSystem.current;
+                if (es != null && (es.IsPointerOverGameObject(a.fingerId) || es.IsPointerOverGameObject(b.fingerId))) return;
+                pinching = true; pinchFrom = dist; pinchMid = mid;
+            }
+            else
+            {
+                lobbyZoom = Mathf.Clamp(lobbyZoom * pinchFrom / dist, LobbyMin, LobbyMax);
+                float far = Vector3.Distance(camPosTo, camLookTo);
+                float perPixel = 2f * far * Mathf.Tan(cam.fieldOfView * Mathf.Deg2Rad / 2) / Mathf.Max(1, Screen.height);
+                Vector2 dm = mid - pinchMid;
+                var right = Vector3.Cross(front, Vector3.up);
+                lobbyPan -= right * dm.x * perPixel;
+                lobbyPan += front * dm.y * perPixel;
+                pinchFrom = dist; pinchMid = mid; moved = true;
+            }
+        }
+        else pinching = false;
+        // the mouse wheel, unless the pointer is on a menu (its lists scroll with the wheel)
+        float wheel = Input.mouseScrollDelta.y;
+        if (Mathf.Abs(wheel) > 0.01f)
+        {
+            var es = UnityEngine.EventSystems.EventSystem.current;
+            if (es == null || !es.IsPointerOverGameObject()) { lobbyZoom = Mathf.Clamp(lobbyZoom * Mathf.Pow(0.9f, wheel), LobbyMin, LobbyMax); moved = true; }
+        }
+        if (!moved) return;
+        if (!lobbyHasBase) { lobbyBase = focus == null ? Overview(out lobbyLook) : TableShot(focus, out lobbyLook); lobbyHasBase = true; }
+        // close up, the view can move over the café; at the full view it stays put
+        float reach = 14f * Mathf.Max(0f, 1f - lobbyZoom);
+        lobbyPan.y = 0;
+        if (lobbyPan.magnitude > reach) lobbyPan = lobbyPan.normalized * reach;
+        camLookTo = lobbyLook + lobbyPan;
+        camPosTo = camLookTo + (lobbyBase - lobbyLook) * lobbyZoom;
+        camPos = camPosTo; camLook = camLookTo;   // follows the fingers at once
+    }
+
     void ZoomInput()
     {
-        if (!inGame || cam == null) return;
+        if (cam == null) return;
+        if (!inGame) { LobbyZoomInput(); return; }
         bool moved = false;
         if (Input.touchCount >= 2)
         {
@@ -585,6 +638,7 @@ public class Cafe : MonoBehaviour
 
     public void Focus(string g)
     {
+        ResetLobbyZoom();
         focus = g != null && tables.ContainsKey(g) ? g : null;
         camPosTo = focus == null ? Overview(out camLookTo) : TableShot(focus, out camLookTo);
     }
