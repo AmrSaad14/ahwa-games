@@ -222,7 +222,12 @@ jobs:
           set +e
           if [ -f logs/editor.log ]; then tail -c 4000000 logs/editor.log > logs/editor-tail.log; fi
           # the logs are public: blank out the Unity account's email wherever a tool printed it
-          for f in logs/*.txt logs/*.log; do [ -f "$f" ] && sudo sed -i "s/${UNITY_EMAIL//\//\\/}/***/g; s/[A-Za-z0-9._%+-]*@[A-Za-z0-9.-]*\.[A-Za-z]\{2,\}/***@***/g" "$f"; done
+          # (an empty pattern would make sed fail and skip the whole file, so the account's email only when it's set)
+          blank="s/[A-Za-z0-9._%+-]*@[A-Za-z0-9.-]*\.[A-Za-z]\{2,\}/***@***/g"
+          if [ -n "$UNITY_EMAIL" ]; then blank="s/${UNITY_EMAIL//\//\\/}/***/g; $blank"; fi
+          for f in logs/*.txt logs/*.log; do [ -f "$f" ] && sudo sed -i "$blank" "$f"; done
+          # GitHub refuses empty files as release assets (and the whole upload with them)
+          find logs shots -maxdepth 1 -type f -empty -delete 2>/dev/null
           files=$(ls logs/*.txt logs/activate.log logs/return.log logs/editor-tail.log logs/player.log logs/film-*.log logs/salon-*.log logs/server.log shots/*.png shots/*.mp4 2>/dev/null)
           echo "publishing: $files"
           gh release delete unity-logs --yes --cleanup-tag
