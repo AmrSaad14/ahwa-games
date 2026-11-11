@@ -3,6 +3,7 @@
 // every month gets "<game> player of the month" by itself. The catalog below is what the game ships with; the
 // dashboard can change it (kept in the database).
 import type { GameId } from './engine';
+import { GOVS } from './govs';
 
 /** The icons a title can carry (white shapes, tinted with the title's text colour). 24×24 SVG paths. */
 export const TITLE_ICONS: Record<string, string> = {
@@ -48,7 +49,8 @@ export const DEFAULT_TITLES: TitleDef[] = [
   // the monthly ones: the top of last month's ranking, for 30 days
   { id: 'potm_all', ar: 'لاعب الشهر', en: 'Player of the Month', monthly: 'all', style: st('#ffe08a', '#c2861e', '#2a1a05', '#fff6d6', 'crown', 'shine') },
   { id: 'champ_country', ar: 'بطل البلد', en: 'National Champion', monthly: 'country', style: st('#1f7a4a', '#0b3a22', '#ffe08a', '#ffe08a', 'trophy', 'glow') },
-  { id: 'champ_gov', ar: 'بطل المحافظة', en: 'Governorate Champion', monthly: 'gov', style: st('#2c4bb0', '#0e1a4a', '#ffe08a', '#9fb4ff', 'shield', 'glow') },
+  // each governorate's player of the month: this one is the pattern, {gov} becomes the governorate's name
+  { id: 'champ_gov', ar: 'لاعب الشهر في {gov}', en: '{gov} Player of the Month', monthly: 'gov', style: st('#2c4bb0', '#0e1a4a', '#ffe08a', '#9fb4ff', 'shield', 'glow') },
   // the best of each game (given until the ranking became one for the whole game; holders keep them till they end)
   { id: 'potm_domino', ar: 'لاعب الدومينو للشهر', en: 'Domino Player of the Month', monthly: 'domino', style: st('#11804f', '#063b25', '#ffd76a', '#ffd76a', 'domino', 'shine') },
   { id: 'potm_tawla', ar: 'لاعب الطاولة للشهر', en: 'Backgammon Player of the Month', monthly: 'tawla', style: st('#9c2430', '#4a0d14', '#ffd76a', '#ffd76a', 'dice', 'shine') },
@@ -100,3 +102,17 @@ export function cleanTitle(v: unknown, d?: TitleDef): TitleDef | null {
 
 /** The month a moment falls in, in Cairo: "2026-10". */
 export { seasonOf as monthOf } from './season';
+
+/** A governorate's player-of-the-month title ("Cairo Player of the Month"): made from the champ_gov pattern. */
+export const govTitleId = (gov: string) => 'potm_gov_' + gov;
+export const isGovTitle = (id: string | null | undefined) => !!id && id.startsWith('potm_gov_');
+/** The titles of every governorate, from the pattern (its design and its words, {gov} filled in). */
+export function govTitles(pattern: TitleDef): TitleDef[] {
+  return GOVS.map(g => ({
+    id: govTitleId(g.id),
+    ar: pattern.ar.includes('{gov}') ? pattern.ar.replace('{gov}', g.ar) : `${pattern.ar} - ${g.ar}`,
+    en: pattern.en.includes('{gov}') ? pattern.en.replace('{gov}', g.en) : `${pattern.en} - ${g.en}`,
+    style: structuredClone(pattern.style),
+    monthly: 'gov' as const,
+  }));
+}

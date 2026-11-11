@@ -13,6 +13,8 @@ public partial class Menus
     Dictionary<string, object> titleData;
     bool placing, askedPlace;   // looking for the phone's location now
     string placeNote;   // why there's no governorate (no permission, location off, outside Egypt)
+    bool placeAsked;   // the player asked from the settings: say how it went
+    Text govLabel;   // the governorate line in the settings, while they're open
 
     static readonly string[,] Countries =
     {
@@ -243,7 +245,7 @@ public partial class Menus
             while (Application.isFocused && !LocAllowed() && Time.realtimeSinceStartup - t0 < 2) yield return null;
             while (!Application.isFocused && Time.realtimeSinceStartup - t0 < 120) yield return null;
             yield return new WaitForSeconds(0.3f);
-            if (!LocAllowed()) { placing = false; placeNote = "اسمح بالموقع عشان نعرف محافظتك"; RefreshGov(); yield break; }
+            if (!LocAllowed()) { placing = false; placeNote = "اسمح بالموقع عشان نعرف محافظتك"; PlaceFailed(); yield break; }
         }
         int state = 0; double lat = 0, lon = 0;
         try { using (var c = new AndroidJavaClass("com.ahwa.location.BBLocation")) c.CallStatic("start"); }
@@ -263,7 +265,7 @@ public partial class Menus
             catch { state = -1; }
         }
         placing = false;
-        if (state != 1) { placeNote = "شغّل الموقع في الموبايل عشان نعرف محافظتك"; RefreshGov(); yield break; }
+        if (state != 1) { placeNote = "شغّل الموقع في الموبايل عشان نعرف محافظتك"; PlaceFailed(); yield break; }
         Debug.Log("[place] location found");
         app.Send(new Dictionary<string, object> { ["t"] = "location", ["lat"] = System.Math.Round(lat, 2), ["lon"] = System.Math.Round(lon, 2) });
 #else
@@ -274,10 +276,47 @@ public partial class Menus
     void OnPlaced(string result)
     {
         placeNote = result == "outside" ? "ترتيب المحافظات لمصر بس" : null;
+        if (placeAsked)
+        {
+            placeAsked = false;
+            if (result == "outside") app.Toast(Loc.T("ترتيب المحافظات لمصر بس"));
+            else if (result == "same") app.Toast(Loc.T("محافظتك زي ما هي"));
+            else if (result == "locked") app.Toast(Loc.T("محافظتك متتغيرش غير كل ٦٠ يوم"));
+        }
         StartCoroutine(RefreshGovSoon());
     }
-    System.Collections.IEnumerator RefreshGovSoon() { yield return new WaitForSeconds(0.4f); if (lbGame == "gov") { lbRows = null; AskRank(); } RefreshGov(); }
-    void RefreshGov() { if (open != null && lbGame == "gov") refreshOpen?.Invoke(); }
+    System.Collections.IEnumerator RefreshGovSoon()
+    {
+        yield return new WaitForSeconds(0.4f);
+        if (lbGame == "gov") { lbRows = null; AskRank(); }
+        RefreshGov();
+    }
+    void RefreshGov()
+    {
+        if (govLabel != null) { govLabel.Set(placing ? Loc.T("بندوّر على محافظتك…") : GovLine()); FitText.OneLine(govLabel); }
+        if (open != null && lbGame == "gov") refreshOpen?.Invoke();
+    }
+    void PlaceFailed()
+    {
+        if (placeAsked) { placeAsked = false; app.Toast(Loc.T(placeNote)); }
+        RefreshGov();
+    }
+
+    /// Settings: change the governorate from where you are now, once its 60 days are over.
+    void GovFromSettings()
+    {
+        Sfx.Tap();
+        if (!CanLocate()) { app.Toast(Loc.T("محافظتك بتتحدد من موقعك على الموبايل")); return; }
+        if (placing) return;
+        if (!PlaceDue())
+        {
+            int days = Mathf.CeilToInt((float)((user.Num("govNext") - App.LocalMs()) / 86_400_000));
+            app.Toast(Loc.En ? "You can change your governorate in " + days + " days" : "تقدر تغيّر محافظتك بعد " + days + " يوم");
+            return;
+        }
+        placeAsked = true;
+        StartCoroutine(Locate(true));
+    }
 
     /// Your governorate in one line, and when it can change.
     string GovLine()
@@ -338,7 +377,8 @@ public partial class Menus
         float x = 8;
         var b = Titles.Badge(row, title, 9);
         if (b != null) { At(b, x, b.sizeDelta.x, b.sizeDelta.y); x += b.sizeDelta.x + 6; }
-        string place = string.IsNullOrEmpty(where) ? null : (title == "champ_country" ? CountryName(where) : GovName(where));
+        // (a governorate's title already says which: "Cairo Player of the Month")
+        string place = string.IsNullOrEmpty(where) || title != "champ_country" ? null : CountryName(where);
         if (place != null) { Line(row, place, 12, Ui.Gold, x, 96, 30); x += 100; }
         return x;
     }

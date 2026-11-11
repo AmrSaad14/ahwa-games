@@ -518,8 +518,12 @@ public partial class Menus : MonoBehaviour
             var gr = Row(list, 44, Card);
             At(Ui.Label(gr, "محافظتك", 16, Color.white, StartAlign, Ui.Bold).rectTransform, 14, 160, 40);
             var gv = Ui.Label(gr, "", 14, Ui.GoldLight, Loc.En ? TextAnchor.MiddleRight : TextAnchor.MiddleLeft, Ui.Bold);
-            gv.Set(GovLine()); FitText.OneLine(gv);
-            gv.rectTransform.Place(new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(330, 40), new Vector2(Loc.En ? -14 : 14, 0));
+            gv.Set(placing ? Loc.T("بندوّر على محافظتك…") : GovLine()); FitText.OneLine(gv); govLabel = gv;
+            gv.rectTransform.Place(new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(220, 40), new Vector2(Loc.En ? -128 : 128, 0));
+            // change it from where you are now (the same 60 days as always)
+            var gb = Ui.Button(gr, "من موقعي", Ui.Gold, Ui.Ink, 13, GovFromSettings);
+            FitText.OneLine(gb.GetComponentInChildren<Text>());
+            ((RectTransform)gb.transform).Place(new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(104, 32), new Vector2(Loc.En ? -14 : 14, 0));
             // your colour in ludo (kept on the server for online games, and on the phone for practice)
             var lc = Row(list, 44, Card);
             At(Ui.Label(lc, "لونك في اللودو", 16, Color.white, StartAlign, Ui.Bold).rectTransform, 14, 160, 40);

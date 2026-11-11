@@ -296,7 +296,7 @@ test('leaderboard and health endpoints answer', async () => {
   c.send({ t: 'titleBoard' });
   await c.until(() => !!c.last('titleBoard'));
   assert.equal(c.last('titleBoard').days, 30);
-  assert.deepEqual(c.last('titleBoard').race.map((r: { title: string }) => r.title), ['potm_all', 'champ_country', 'champ_gov']);
+  assert.deepEqual(c.last('titleBoard').race.map((r: { title: string }) => r.title), ['potm_all', 'champ_country', 'potm_gov_alex']);
   const res = await fetch(`http://127.0.0.1:${port}/healthz`);
   assert.equal(res.status, 200);
   assert.equal((await res.json()).ok, true);

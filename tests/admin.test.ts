@@ -142,8 +142,11 @@ test('titles: the designs, giving one, wearing it, and player of the month', asy
   await adm('PUT', '/settings', { prizes: { enabled: true } });   // prizes are off until switched on
   const t0 = Date.now();
   const won = app.hub.monthlyTitles().filter(w => w.uid === a.user.id || w.uid === b.user.id);
-  assert.deepEqual(won.map(w => [w.uid, w.title, w.where ?? '']), [[a.user.id, 'champ_gov', 'alex'], [a.user.id, 'champ_country', 'EG'], [a.user.id, 'potm_all', '']]);
+  assert.deepEqual(won.map(w => [w.uid, w.title, w.where ?? '']), [[a.user.id, 'potm_gov_alex', 'alex'], [a.user.id, 'champ_country', 'EG'], [a.user.id, 'potm_all', '']]);
   assert.equal(app.store.wornTitle(a.user.id), 'potm_all', 'the biggest title is the one worn');
+  // each governorate's title carries its name, made from the champ_gov pattern
+  const alex = app.hub.titles.get('potm_gov_alex')!;
+  assert.deepEqual([alex.ar, alex.en], ['لاعب الشهر في الإسكندرية', 'Alexandria Player of the Month']);
   const held = app.store.titlesOf(a.user.id).find(t => t.id === 'potm_all')!;
   assert.ok(Math.abs(held.until - (t0 + 30 * 86_400_000)) < 60_000, 'for 30 days');
   assert.deepEqual(app.hub.monthlyTitles(), [], 'once a month');

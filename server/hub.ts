@@ -2,8 +2,9 @@ import { PlayBilling } from './billing';
 import crypto from 'node:crypto';
 import { GAMES, GameId, MODES, MODE_PLAYERS, Mode, defaultTarget, gameOf, isTeamMode, targetOptions, teamOf } from '../shared/engine';
 import type { C2S, Emote, FriendRow, IceServer, PlayerCard, S2C } from '../shared/protocol';
-import { GOV_WEEK, isGov } from '../shared/govs';
+import { GOV_WEEK, GOVS, isGov } from '../shared/govs';
 import { RANK_TITLES, RANK_TITLE_DAYS, isCountry, type RankScope } from '../shared/ranks';
+import { govTitleId } from '../shared/titles';
 import { ECONOMY, STAKES, giftByKind, drinkOnMenu, isStake, winnings, NO_ADS, XP, WEEKLY_PRIZES, MONTHLY_EARNER_PRIZES, weekKey, ADS, WHEEL } from '../shared/gifts';
 import { EMOTES } from '../shared/protocol';
 import { Table, publicId, Player, BotMaker } from '../shared/table';
@@ -193,7 +194,7 @@ export class Hub {
     const rows = this.store.monthRanking(prev, cfg.minGames);
     const won: { uid: string; game: string; title: string; month: string; prize: number | null; where?: string }[] = [];
     const give = (scope: RankScope, r: typeof rows[number], where: string) => {
-      const t = this.titles.get(RANK_TITLES[scope]); if (!t) return;
+      const t = this.titles.get(scope === 'gov' ? govTitleId(where) : RANK_TITLES[scope]); if (!t) return;
       this.store.grantTitle(r.id, t.id, until, prev + (where ? '|' + where : ''));
       won.push({ uid: r.id, game: 'all', title: t.id, month: prev, prize: null, where: where || undefined });
       console.log(`[titles] ${prev} ${t.id}${where ? ' ' + where : ''}: ${r.name}`);
@@ -215,11 +216,12 @@ export class Hub {
     const me = this.store.get(uid);
     const cfg = this.opts.settings?.value.titles ?? { monthly: true, minGames: 10 };
     const holders: { title: string; where: string | null; pid: string; name: string; ch: number; photo: string | null; until: number; me: boolean }[] = [];
-    for (const scope of ['all', 'country', 'gov'] as RankScope[]) {
-      for (const h of this.store.titleHolders(RANK_TITLES[scope], 100, now)) {
+    const ids = [RANK_TITLES.all, RANK_TITLES.country, ...GOVS.map(g => govTitleId(g.id))];
+    for (const id of ids) {
+      for (const h of this.store.titleHolders(id, 100, now)) {
         const u = this.store.get(h.id); if (!u) continue;
         const where = (h.note ?? '').split('|')[1] || null;
-        holders.push({ title: RANK_TITLES[scope], where, pid: u.pid ?? '', name: u.name, ch: u.ch, photo: u.photo ?? null, until: h.until, me: h.id === uid });
+        holders.push({ title: id, where, pid: u.pid ?? '', name: u.name, ch: u.ch, photo: u.photo ?? null, until: h.until, me: h.id === uid });
       }
     }
     // this month: who leads (with enough games) for each of the player's titles
@@ -228,7 +230,7 @@ export class Hub {
     const race = [
       { title: RANK_TITLES.all, where: null as string | null, leader: lead(() => true) },
       ...(me?.country ? [{ title: RANK_TITLES.country, where: me.country, leader: lead(r => r.country === me.country) }] : []),
-      ...(me?.gov ? [{ title: RANK_TITLES.gov, where: me.gov, leader: lead(r => r.gov === me.gov) }] : []),
+      ...(me?.gov ? [{ title: govTitleId(me.gov), where: me.gov, leader: lead(r => r.gov === me.gov) }] : []),
     ];
     return { holders, race, on: cfg.monthly, minGames: cfg.minGames, days: RANK_TITLE_DAYS, next: seasonEndsAt(now) };
   }
