@@ -697,11 +697,7 @@ export class Hub {
         return s.conn.send({ t: 'rank', period, scope, where: where || null, rows: lb.rows, me: lb.me, prizes: [...MONTHLY_EARNER_PRIZES] });
       }
       case 'titleBoard': return s.conn.send({ t: 'titleBoard', ...this.titleBoard(uid) });
-      case 'setCountry': {
-        if (!isCountry(m.country)) return err('bad_country');
-        this.store.setCountry(uid, m.country);
-        return this.sendUser(uid);
-      }
+      case 'setCountry': return err('country_auto');   // from the phone's settings and location
       case 'lb': {
         if (m.game === 'coins') {
           // the whole game: the most coins won in games, every game together (all time, or this month)
@@ -851,9 +847,13 @@ export class Hub {
         this.store.setLudoColor(uid, c);
         return this.sendUser(uid);
       }
-      case 'setGov': {
-        if (!isGov(m.gov)) return err('bad_gov');
-        this.store.setGov(uid, m.gov);
+      case 'setGov': return err('gov_auto');   // the governorate comes from the player's location now
+      case 'location': {
+        // the phone's rough location, turned into a governorate here (the place itself is not kept)
+        const lat = Number(m.lat), lon = Number(m.lon);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return err('bad_location');
+        const r = this.store.placeFrom(uid, lat, lon);
+        s.conn.send({ t: 'placed', result: r });
         return this.sendUser(uid);
       }
       case 'govBoard': {

@@ -217,7 +217,9 @@ public partial class Menus : MonoBehaviour
                 if (pendingAd != null) app.Send(new Dictionary<string, object> { ["t"] = "adWatched", ["ticket"] = pendingAd });
                 if (pendingTicket != null) { var tk = pendingTicket; pendingTicket = null; app.Send(new Dictionary<string, object> { ["t"] = "ticket", ["ticket"] = tk }); }
                 if (pendingJoin != null) { var j = pendingJoin; pendingJoin = null; StartCoroutine(JoinSoon(j)); }
+                StartCoroutine(PlaceSoon());   // the governorate from the phone's location, when it's due (allowed before)
                 break;
+            case "placed": OnPlaced(m.Str("result")); break;
             case "signedIn":
                 app.Toast(Loc.T(m.Str("via") == "apple" ? "أهلاً! اتسجلت بحساب أبل" : "أهلاً! اتسجلت بحساب جوجل"));
                 if (open != null) Close();
@@ -507,16 +509,17 @@ public partial class Menus : MonoBehaviour
                 At((RectTransform)qb.transform, 140 + qi * 92, 86, 32);
                 qBtns.Add(qb.GetComponent<Image>());
             }
-            // the country you play for (the country ranking)
+            // the country and governorate you play for: from the phone (its settings and rough location), not picked
             var cr = Row(list, 44, Card);
             At(Ui.Label(cr, "بلدك", 16, Color.white, StartAlign, Ui.Bold).rectTransform, 14, 160, 40);
-            var cb = Ui.Button(cr, CountryName(user?.Str("country")) ?? Loc.T("اختار"), Ui.Panel, Ui.GoldLight, 14, () => { Sfx.Tap(); pickerBack = null; OpenCountryPicker(); });
-            ((RectTransform)cb.transform).Place(new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(170, 34), new Vector2(Loc.En ? -100 : 100, 0));
-            // the governorate you play for (the governorate ranking)
+            var cv = Ui.Label(cr, "", 14, Ui.GoldLight, Loc.En ? TextAnchor.MiddleRight : TextAnchor.MiddleLeft, Ui.Bold);
+            cv.Set(CountryName(user?.Str("country")) ?? Loc.T("مش معروف لسه")); FitText.OneLine(cv);
+            cv.rectTransform.Place(new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(240, 40), new Vector2(Loc.En ? -14 : 14, 0));
             var gr = Row(list, 44, Card);
             At(Ui.Label(gr, "محافظتك", 16, Color.white, StartAlign, Ui.Bold).rectTransform, 14, 160, 40);
-            var gb = Ui.Button(gr, GovName(user?.Str("gov")) ?? Loc.T("اختار"), Ui.Panel, Ui.GoldLight, 14, () => { Sfx.Tap(); pickerBack = null; OpenGovPicker(); });
-            ((RectTransform)gb.transform).Place(new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(170, 34), new Vector2(Loc.En ? -100 : 100, 0));
+            var gv = Ui.Label(gr, "", 14, Ui.GoldLight, Loc.En ? TextAnchor.MiddleRight : TextAnchor.MiddleLeft, Ui.Bold);
+            gv.Set(GovLine()); FitText.OneLine(gv);
+            gv.rectTransform.Place(new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(Loc.En ? 1 : 0, 0.5f), new Vector2(330, 40), new Vector2(Loc.En ? -14 : 14, 0));
             // your colour in ludo (kept on the server for online games, and on the phone for practice)
             var lc = Row(list, 44, Card);
             At(Ui.Label(lc, "لونك في اللودو", 16, Color.white, StartAlign, Ui.Bold).rectTransform, 14, 160, 40);

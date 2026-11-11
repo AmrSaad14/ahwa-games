@@ -284,10 +284,15 @@ test('leaderboard and health endpoints answer', async () => {
   c.send({ t: 'rank', scope: 'gov' });
   await c.until(() => c.last('rank')?.scope === 'gov');
   assert.equal(c.last('rank').rows.length, 0, 'no governorate picked: nothing to show');
-  c.send({ t: 'setCountry', country: 'SA' });
-  await c.until(() => c.last('user')?.user.country === 'SA');
+  // the governorate comes from the phone's location (not picked), and stays 60 days
   c.send({ t: 'setGov', gov: 'cairo' });
-  await c.until(() => c.last('user')?.user.gov === 'cairo' && c.last('user')?.user.country === 'EG');
+  await c.until(() => c.last('err')?.code === 'gov_auto');
+  c.send({ t: 'location', lat: 31.2001, lon: 29.9187 });   // Alexandria
+  await c.until(() => c.last('user')?.user.gov === 'alex' && c.last('user')?.user.country === 'EG');
+  assert.ok(c.last('user').user.govNext > Date.now() + 59 * 86_400_000);
+  c.send({ t: 'location', lat: 30.0444, lon: 31.2357 });   // Cairo, a week later: still Alexandria
+  await c.until(() => c.last('placed')?.result === 'locked');
+  assert.equal(c.last('user').user.gov, 'alex');
   c.send({ t: 'titleBoard' });
   await c.until(() => !!c.last('titleBoard'));
   assert.equal(c.last('titleBoard').days, 30);

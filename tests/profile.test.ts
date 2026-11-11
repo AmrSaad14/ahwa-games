@@ -92,6 +92,19 @@ test('ranking: every game together, all time or one month, over everyone, a coun
   // a country outside Egypt has no governorate
   s.setCountry(b.id, 'KW');
   assert.equal(s.get(b.id)!.gov, '');
+  // the governorate from the player's location: kept 60 days, then the next place can change it
+  const d = s.createGuest('D', 3), t0 = Date.parse('2026-11-01T10:00:00Z');
+  assert.equal(s.placeFrom(d.id, 30.0444, 31.2357, t0), 'set');
+  assert.deepEqual([s.get(d.id)!.gov, s.get(d.id)!.country], ['cairo', 'EG']);
+  assert.equal(s.placeFrom(d.id, 31.2001, 29.9187, t0 + 59 * 86_400_000), 'locked');
+  assert.equal(s.get(d.id)!.gov, 'cairo');
+  assert.equal(s.placeFrom(d.id, 31.2001, 29.9187, t0 + 61 * 86_400_000), 'set');
+  assert.equal(s.get(d.id)!.gov, 'alex');
+  const { govAt } = require('../shared/govs');
+  assert.equal(govAt(30.0131, 31.2089), 'giza');
+  assert.equal(govAt(27.9158, 34.33), 'southsinai');
+  assert.equal(govAt(31.5, 34.45), null, 'Gaza is not Egypt');
+  assert.equal(govAt(24.71, 46.67), null, 'Riyadh');
   const { countryOfPhone } = require('../shared/ranks');
   assert.equal(countryOfPhone('+201012345678'), 'EG');
   assert.equal(countryOfPhone('+966501234567'), 'SA');

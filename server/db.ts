@@ -7,7 +7,7 @@ import type { PrizeRow, CoinRow, LeaderRow, PublicUser } from '../shared/protoco
 import type { GameId } from '../shared/engine';
 import { achievementsOf } from '../shared/achievements';
 import { LEAGUES, LP, leagueOf, leagueView } from '../shared/leagues';
-import { GOV_WEEK } from '../shared/govs';
+import { GOV_WEEK, GOV_LOCK_DAYS, govAt } from '../shared/govs';
 import { countryOfPhone, type RankPeriod, type RankScope } from '../shared/ranks';
 import { ECONOMY, WEEKLY_PRIZES, WHEEL, wheelCost, cairoDay, levelOf, nextCairoDay, streakBonus, weekKey } from '../shared/gifts';
 import { Equipped, adsForSkin, isFree, skinById } from '../shared/skins';
@@ -26,7 +26,7 @@ export interface UserRow {
   phone: string | null; google_sub: string | null; google_email: string | null; apple_sub?: string | null; apple_email?: string | null;
   pg_id: string | null; friend_code: string | null; streak?: number; xp?: number;
   ref_by?: string | null; ref_paid?: number; muted_until?: number; pid?: string | null; banned?: number; ban_reason?: string | null; title?: string | null;
-  tutorial?: number; nudged?: number; prayer_push?: number; gov?: string; ludo_color?: number; country?: string; wheel_day?: string; wheel_spins?: number; wheel_ads?: number;
+  tutorial?: number; nudged?: number; prayer_push?: number; gov?: string; ludo_color?: number; country?: string; gov_at?: number; wheel_day?: string; wheel_spins?: number; wheel_ads?: number;
 }
 
 export class Store {
@@ -112,6 +112,8 @@ export class Store {
         const c = countryOfPhone(r.phone); if (c) this.db.prepare('UPDATE users SET country = ? WHERE id = ?').run(c, r.id);
       }
     }
+    // when the governorate was last set from the player's location (it stays 60 days)
+    if (!cols.has('gov_at')) this.db.exec('ALTER TABLE users ADD COLUMN gov_at INTEGER NOT NULL DEFAULT 0');
     if (!cols.has('ludo_color')) this.db.exec('ALTER TABLE users ADD COLUMN ludo_color INTEGER NOT NULL DEFAULT -1');
     this.db.exec('CREATE TABLE IF NOT EXISTS gov_paid (week TEXT NOT NULL, user_id TEXT NOT NULL, PRIMARY KEY (week, user_id))');
     // leagues: points per player, game and season (a month), the highest reached, and whether its reward was paid
@@ -519,6 +521,16 @@ export class Store {
   setLudoColor(id: string, c: number) { this.db.prepare('UPDATE users SET ludo_color = ? WHERE id = ?').run(c, id); }
   /** A governorate is in Egypt: picking one makes the player's country Egypt. */
   setGov(id: string, gov: string) { this.db.prepare("UPDATE users SET gov = ?, country = 'EG' WHERE id = ?").run(gov, id); }
+  /** The governorate from where the player is (the place itself is not kept). It stays GOV_LOCK_DAYS days; after
+   *  that the next place can change it. Outside Egypt: no governorate (once the 60 days are over). */
+  placeFrom(id: string, lat: number, lon: number, now = Date.now()): 'set' | 'same' | 'locked' | 'outside' | null {
+    const u = this.get(id); if (!u) return null;
+    const gov = govAt(lat, lon);
+    if (u.gov && now - (u.gov_at ?? 0) < GOV_LOCK_DAYS * 86_400_000) return gov === u.gov ? 'same' : 'locked';
+    if (!gov) { if (u.gov) this.db.prepare("UPDATE users SET gov = '', gov_at = ? WHERE id = ?").run(now, id); return 'outside'; }
+    this.db.prepare("UPDATE users SET gov = ?, country = 'EG', gov_at = ? WHERE id = ?").run(gov, now, id);
+    return gov === u.gov ? 'same' : 'set';
+  }
   /** The player's country; outside Egypt there is no governorate. */
   setCountry(id: string, c: string) { this.db.prepare("UPDATE users SET country = ?, gov = CASE WHEN ? = 'EG' THEN gov ELSE '' END WHERE id = ?").run(c, c, id); }
 
@@ -663,7 +675,7 @@ export class Store {
     const now = Date.now(), season = this.seasonState(u.id);
     // no full-screen ads: with the season pass, until the season ends
     const adFreeUntil = u.ad_free_until ?? 0;   // only the no-ads plan (199 EGP a month) removes ads; the season pass doesn't
-    return { ...toPublic(u), adFreeUntil, titles: this.titlesOf(u.id, now), title: this.wornTitle(u.id, now), chest: this.chestState(u.id, now), tutorial: !!u.tutorial, prayerPush: u.prayer_push !== 0, gov: u.gov || null, country: u.country || null, ludoColor: u.ludo_color ?? -1, leagues: this.leaguesOf(u.id, now), wheel: this.wheelState(u, now), xp: u.xp ?? 0, level: levelOf(u.xp ?? 0), streak: u.streak ?? 0, daily: this.dailyState(u), code: this.friendCode(u.id), ratings: this.ratingsOf(u.id),
+    return { ...toPublic(u), adFreeUntil, titles: this.titlesOf(u.id, now), title: this.wornTitle(u.id, now), chest: this.chestState(u.id, now), tutorial: !!u.tutorial, prayerPush: u.prayer_push !== 0, gov: u.gov || null, govNext: u.gov ? (u.gov_at ?? 0) + GOV_LOCK_DAYS * 86_400_000 : 0, country: u.country || null, ludoColor: u.ludo_color ?? -1, leagues: this.leaguesOf(u.id, now), wheel: this.wheelState(u, now), xp: u.xp ?? 0, level: levelOf(u.xp ?? 0), streak: u.streak ?? 0, daily: this.dailyState(u), code: this.friendCode(u.id), ratings: this.ratingsOf(u.id),
       adsLeft: Math.max(0, ECONOMY.adsPerDay - this.adsToday(u.id)), skins: this.skinsOf(u.id),
       skinAds: this.skinAdsOf(u.id), skinAdsLeft: Math.max(0, ECONOMY.skinAdsPerDay - this.skinAdsToday(u.id)),
       missions: this.missions(u.id), missionsAt: nextCairoDay(now), season,

@@ -11,7 +11,8 @@ public partial class Menus
     static readonly long[] MonthlyEarnerPrizes = { 3_000_000, 2_000_000, 1_000_000 };   // the month's top three
     string lbPeriod = "all", lbWhere;
     Dictionary<string, object> titleData;
-    System.Action pickerBack;   // where the country and governorate pickers go back to
+    bool placing, askedPlace;   // looking for the phone's location now
+    string placeNote;   // why there's no governorate (no permission, location off, outside Egypt)
 
     static readonly string[,] Countries =
     {
@@ -133,21 +134,21 @@ public partial class Menus
                 : Loc.T("كل الألعاب أونلاين: المكسب ٣ نقط واللعب نقطة");
             Line(bar, info, 12, Ui.Gold, 4, 340);
         }
-        else
-        {
-            // where: your country or governorate, and a button to change it
-            string where = scope == "country" ? CountryName(lbWhere ?? mineCountry) : GovName(lbWhere ?? mineGov);
-            var change = Ui.Button(bar, "غيّر", new Color(1, 1, 1, 0.1f), Ui.GoldLight, 12, () => { Sfx.Tap(); OpenPlace(scope); });
-            FitText.OneLine(change.GetComponentInChildren<Text>());
-            At((RectTransform)change.transform, 4, 64, 24);
-            Line(bar, where ?? Loc.T(scope == "country" ? "اختار بلدك" : "اختار محافظتك"), 14, Ui.Gold, 76, 260);
-        }
-        // nothing to show yet: no country or governorate picked (governorates are in Egypt only)
-        if (scope == "country" && string.IsNullOrEmpty(mineCountry)) { EmptyPick(area, "اختار بلدك عشان تشوف ترتيب بلدك", "اختار بلدك", scope); return; }
+        else if (scope == "country") Line(bar, CountryName(lbWhere ?? mineCountry) ?? Loc.T("مش معروف لسه"), 14, Ui.Gold, 4, 340);
+        else Line(bar, GovLine(), 13, Ui.Gold, 4, 340);
+        // nothing to show yet: the country isn't known, or no governorate yet (it comes from the phone's location)
+        if (scope == "country" && string.IsNullOrEmpty(mineCountry)) { Empty(area, "مش عارفين بلدك لسه. بلدك بيتحدد من إعدادات موبايلك"); return; }
         if (scope == "gov" && string.IsNullOrEmpty(mineGov))
         {
             if (!string.IsNullOrEmpty(mineCountry) && mineCountry != "EG") { Empty(area, "ترتيب المحافظات لمصر بس"); return; }
-            EmptyPick(area, "اختار محافظتك عشان تشوف ترتيبها", "اختار محافظتك", scope); return;
+            if (!CanLocate()) { Empty(area, "محافظتك بتتحدد من موقعك على الموبايل"); return; }
+            if (placing) { Empty(area, "بندوّر على محافظتك…"); return; }
+            if (placeNote == null && !askedPlace) { askedPlace = true; StartCoroutine(Locate(true)); Empty(area, "بندوّر على محافظتك…"); return; }
+            Empty(area, placeNote ?? "محافظتك بتتحدد من موقعك على الموبايل");
+            var b = Ui.Button(area, "حدد محافظتي من موقعي", Ui.Gold, Ui.Ink, 14, () => { Sfx.Tap(); StartCoroutine(Locate(true)); });
+            FitText.OneLine(b.GetComponentInChildren<Text>());
+            ((RectTransform)b.transform).Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(220, 36), new Vector2(0, -50));
+            return;
         }
         // the column heads, the rows, and your own place at the bottom
         var head = Ui.Rect("Head", area).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(560, 22), new Vector2(0, -30));
@@ -197,52 +198,94 @@ public partial class Menus
         var t = Ui.Label(area, "", 15, Ui.GoldLight, TextAnchor.MiddleCenter); t.Set(Loc.T(text)); FitText.OneLine(t);
         t.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(540, 30), new Vector2(0, -10));
     }
-    void EmptyPick(RectTransform area, string text, string button, string scope)
+    /* ---------- the governorate: from the phone's rough location, kept 60 days ---------- */
+
+    const string LocPerm = "android.permission.ACCESS_COARSE_LOCATION";
+    static bool CanLocate()
     {
-        Empty(area, text);
-        var b = Ui.Button(area, button, Ui.Gold, Ui.Ink, 14, () => { Sfx.Tap(); OpenPlace(scope); });
-        FitText.OneLine(b.GetComponentInChildren<Text>());
-        ((RectTransform)b.transform).Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(180, 36), new Vector2(0, -50));
+#if UNITY_ANDROID && !UNITY_EDITOR
+        return true;
+#else
+        return false;
+#endif
+    }
+    static bool LocAllowed()
+    {
+#if UNITY_ANDROID && !UNITY_EDITOR
+        return UnityEngine.Android.Permission.HasUserAuthorizedPermission(LocPerm);
+#else
+        return false;
+#endif
+    }
+    /// Due: no governorate yet, or its 60 days are over.
+    bool PlaceDue() => user != null && (string.IsNullOrEmpty(user.Str("gov")) || user.Num("govNext") <= App.LocalMs());
+
+    /// After signing in: when it's due and the phone already allows it, quietly (no question asked here).
+    System.Collections.IEnumerator PlaceSoon()
+    {
+        yield return new WaitForSeconds(3f);
+        if (CanLocate() && LocAllowed() && PlaceDue() && !placing) StartCoroutine(Locate(false));
     }
 
-    /// The country or governorate picker, coming back here after.
-    void OpenPlace(string scope)
+    /// Finds the phone's rough location and sends it; the server answers with the governorate. `ask`: may ask for
+    /// the permission (only from the governorate ranking, where the player sees why).
+    System.Collections.IEnumerator Locate(bool ask)
     {
-        int tab = lbTab;
-        pickerBack = () => OpenLeaders(tab);
-        Close();
-        if (scope == "country") OpenCountryPicker(); else OpenGovPicker();
-    }
-
-    /// Settings (or the leaderboard): which country you play for.
-    void OpenCountryPicker()
-    {
-        Panel(Loc.T("بلدك"), out var body, new Vector2(600, 340));
-        var list = Scroll(body, 4);
-        RectTransform line = null;
-        for (int i = 0; i < Countries.GetLength(0); i++)
+        if (!CanLocate()) yield break;
+        placing = true; placeNote = null; RefreshGov();
+#if UNITY_ANDROID && !UNITY_EDITOR
+        if (!LocAllowed())
         {
-            if (i % 3 == 0) line = Row(list, 38);
-            string id = Countries[i, 0];
-            int k = Loc.En ? i % 3 : 2 - i % 3;
-            bool on = user?.Str("country") == id;
-            var b = Ui.Button(line, Loc.En ? Countries[i, 2] : Countries[i, 1], on ? Ui.Gold : Card, on ? Ui.Ink : Color.white, 14, () =>
-            {
-                Sfx.Tap();
-                app.Send(new Dictionary<string, object> { ["t"] = "setCountry", ["country"] = id });
-                if (user != null) { user["country"] = id; if (id != "EG") user["gov"] = ""; }
-                Close(); PickerDone();
-            });
-            FitText.OneLine(b.GetComponentInChildren<Text>());
-            var rt = (RectTransform)b.transform;
-            rt.anchorMin = new Vector2(k / 3f, 0); rt.anchorMax = new Vector2((k + 1) / 3f, 1); rt.offsetMin = new Vector2(3, 2); rt.offsetMax = new Vector2(-3, -2);
+            if (!ask) { placing = false; yield break; }
+            UnityEngine.Android.Permission.RequestUserPermission(LocPerm);
+            // the question takes the screen (the game loses focus) until it's answered
+            float t0 = Time.realtimeSinceStartup;
+            while (Application.isFocused && !LocAllowed() && Time.realtimeSinceStartup - t0 < 2) yield return null;
+            while (!Application.isFocused && Time.realtimeSinceStartup - t0 < 120) yield return null;
+            yield return new WaitForSeconds(0.3f);
+            if (!LocAllowed()) { placing = false; placeNote = "اسمح بالموقع عشان نعرف محافظتك"; RefreshGov(); yield break; }
         }
+        int state = 0; double lat = 0, lon = 0;
+        try { using (var c = new AndroidJavaClass("com.ahwa.location.BBLocation")) c.CallStatic("start"); }
+        catch (System.Exception e) { Debug.Log("[place] " + e.Message); state = -1; }
+        float start = Time.realtimeSinceStartup;
+        while (state == 0 && Time.realtimeSinceStartup - start < 25)
+        {
+            yield return new WaitForSeconds(0.5f);
+            try
+            {
+                using (var c = new AndroidJavaClass("com.ahwa.location.BBLocation"))
+                {
+                    state = c.CallStatic<int>("state");
+                    if (state == 1) { lat = c.CallStatic<double>("lat"); lon = c.CallStatic<double>("lon"); }
+                }
+            }
+            catch { state = -1; }
+        }
+        placing = false;
+        if (state != 1) { placeNote = "شغّل الموقع في الموبايل عشان نعرف محافظتك"; RefreshGov(); yield break; }
+        Debug.Log("[place] location found");
+        app.Send(new Dictionary<string, object> { ["t"] = "location", ["lat"] = System.Math.Round(lat, 2), ["lon"] = System.Math.Round(lon, 2) });
+#else
+        yield break;
+#endif
     }
-    /// After picking: back to where the picker was opened from (the leaderboard), or Settings.
-    void PickerDone()
+
+    void OnPlaced(string result)
     {
-        var back = pickerBack; pickerBack = null;
-        if (back != null) back(); else OpenSettings();
+        placeNote = result == "outside" ? "ترتيب المحافظات لمصر بس" : null;
+        StartCoroutine(RefreshGovSoon());
+    }
+    System.Collections.IEnumerator RefreshGovSoon() { yield return new WaitForSeconds(0.4f); if (lbGame == "gov") { lbRows = null; AskRank(); } RefreshGov(); }
+    void RefreshGov() { if (open != null && lbGame == "gov") refreshOpen?.Invoke(); }
+
+    /// Your governorate in one line, and when it can change.
+    string GovLine()
+    {
+        string g = GovName(user?.Str("gov"));
+        if (g == null) return Loc.T("من موقعك");
+        int days = Mathf.CeilToInt((float)((user.Num("govNext") - App.LocalMs()) / 86_400_000));
+        return g + "  ·  " + (days > 0 ? (Loc.En ? "can change in " + days + " days" : "تتغير بعد " + days + " يوم") : Loc.T("من موقعك"));
     }
 
     /// The titles tab: who wears the monthly titles now, and who leads this month's race for yours.
