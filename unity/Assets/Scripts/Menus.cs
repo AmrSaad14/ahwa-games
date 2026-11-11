@@ -291,7 +291,7 @@ public partial class Menus : MonoBehaviour
                     var tt = Titles.List.Find(x => x.monthly == m.Str("game"));
                     string head = Loc.T("كسبت") + " " + (int)m.Num("egp") + " " + Loc.T("جنيه") + "!";
                     if (app.view == null) ShowCard(head, (tt != null ? tt.Name + ". " : "") + Loc.T("دوس على «جايزتك» واكتب رقم فودافون كاش"), tt?.id, true, head + " " + (tt != null ? tt.Name : ""));
-                    else app.Toast(head + " 🏆", 6f);
+                    else app.Toast(head + " ★", 6f);
                     Sfx.Coins();
                 }
                 break;
@@ -996,7 +996,9 @@ public partial class Menus : MonoBehaviour
                 c.sizeDelta = new Vector2(340, c.sizeDelta.y);
                 var vi = Ui.Picture(c, "Icon", Icon("t_crown")); vi.color = Ui.Gold; vi.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(44, 44), new Vector2(0, -10));
                 Ui.Label(c, "بدون إعلانات", 20, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(320, 28), new Vector2(0, -58));
-                Ui.Label(c, "مفيش إعلانات بين الأدوار لمدة شهر، وبيتجدد كل شهر. تقدر تلغيه في أي وقت من جوجل بلاي", 12, Color.white, TextAnchor.MiddleCenter).rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(330, 36), new Vector2(0, -88));
+                var nd = Ui.Label(c, "مفيش إعلانات بين الأدوار لمدة شهر، وبيتجدد كل شهر. تقدر تلغيه في أي وقت من جوجل بلاي", 12, Color.white, TextAnchor.MiddleCenter);
+                nd.horizontalOverflow = HorizontalWrapMode.Wrap;
+                nd.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(310, 40), new Vector2(0, -88));
                 double until = user != null ? user.Num("adFreeUntil") : 0;
                 if (until > App.LocalMs())
                 {

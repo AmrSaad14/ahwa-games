@@ -59,12 +59,21 @@ public static class Arabic
     static bool IsMark(char c) => (c >= 'ً' && c <= 'ٟ') || c == 'ٰ';
     static bool IsLetter(char c) => Forms.ContainsKey(c) || c == 'ـ';
     static bool JoinsNext(char c) => c == 'ـ' || (Forms.TryGetValue(c, out var f) && f[2] != 0);
+    /// Arabic already put in display order (its letters in their joined shapes)?
+    public static bool IsVisual(string s) { foreach (var c in s) if ((c >= '\uFE70' && c <= '\uFEFF') || (c >= '؀' && c <= 'ۿ')) return true; return false; }
     public static bool HasArabic(string s) { foreach (var c in s) if (c >= '؀' && c <= 'ۿ') return true; return false; }
 
     /// Text ready for Unity's left-to-right drawing.
     public static string Fix(string s)
     {
         if (string.IsNullOrEmpty(s) || !HasArabic(s)) return s;
+        // each line on its own, so the lines stay in their order (top to bottom)
+        if (s.IndexOf('\n') >= 0)
+        {
+            var parts = s.Split('\n');
+            for (int i = 0; i < parts.Length; i++) parts[i] = HasArabic(parts[i]) ? Visual(Shape(parts[i])) : parts[i];
+            return string.Join("\n", parts);
+        }
         return Visual(Shape(s));
     }
 

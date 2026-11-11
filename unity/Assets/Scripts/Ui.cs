@@ -113,6 +113,7 @@ public static class Ui
         t.raycastTarget = false;
         t.text = Arabic.Fix(Loc.T(text));
         Loc.Track(t, text);   // changes language with the rest
+        r.gameObject.AddComponent<FitText>();   // stays inside its box: wraps, then shrinks
         return t;
     }
 

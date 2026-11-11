@@ -62,7 +62,7 @@ public class EstimationTable : MonoBehaviour
 
         // the call: how many tricks (4 … 13), with which trump, or pass
         var cp = Ui.Box(root, "Call", new Color(0.1f, 0.06f, 0.04f, 0.94f));
-        callPanel = cp.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(476, 176), new Vector2(0, 34));
+        callPanel = cp.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(476, 172), new Vector2(0, 2));
         cp.gameObject.AddComponent<Outline>().effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.5f);
         callTitle = Ui.Label(callPanel, "هتطلب كام لمّة، وإيه الطرنيب؟", 15, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold);
         callTitle.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(450, 26), new Vector2(0, -4));
@@ -78,8 +78,9 @@ public class EstimationTable : MonoBehaviour
             int k = s;
             // low to high, left to right: ♣ ♦ ♥ ♠ صن
             int col = TrumpRank(s);
-            var b = Ui.Button(callPanel, TrumpSym[s], new Color(0.98f, 0.95f, 0.88f), SymColor(s), s == SANS ? 17 : 26, () => { selSuit = k; Sfx.Tap(); key = ""; Render(app.view); });
-            ((RectTransform)b.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(58, 44), new Vector2((col - 2) * 66, -78));
+            // four suits 60 wide, then "no trump" wider for its words
+            var b = Ui.Button(callPanel, TrumpSym[s], new Color(0.98f, 0.95f, 0.88f), SymColor(s), s == SANS ? 15 : 26, () => { selSuit = k; Sfx.Tap(); key = ""; Render(app.view); });
+            ((RectTransform)b.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(s == SANS ? 104 : 60, 44), new Vector2(s == SANS ? 140 : -160 + col * 68, -78));
             suitButtons[s] = b;
         }
         var pass = Ui.Button(callPanel, "باص", Ui.Panel, Ui.GoldLight, 17, () => Act(new Dictionary<string, object> { ["t"] = "call", ["n"] = 0 }));
@@ -94,19 +95,19 @@ public class EstimationTable : MonoBehaviour
 
         // the estimate: 0 … the caller's number
         var ep = Ui.Box(root, "Estimate", new Color(0.1f, 0.06f, 0.04f, 0.94f));
-        estPanel = ep.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(560, 116), new Vector2(0, 34));
+        estPanel = ep.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(520, 116), new Vector2(0, 30));
         ep.gameObject.AddComponent<Outline>().effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.5f);
         estTitle = Ui.Label(estPanel, "هتاخد كام لمّة؟", 15, Ui.Gold, TextAnchor.MiddleCenter, Ui.Bold);
-        estTitle.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(540, 26), new Vector2(0, -4));
+        estTitle.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(500, 26), new Vector2(0, -4));
         for (int n = 0; n <= 13; n++)
         {
             int k = n;
             var b = Ui.Button(estPanel, n.ToString(), Ui.Gold, Ui.Ink, 16, () => Act(new Dictionary<string, object> { ["t"] = "est", ["n"] = k }));
-            ((RectTransform)b.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(34, 36), new Vector2((n - 6.5f) * 38, -34));
+            ((RectTransform)b.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(32, 36), new Vector2((n - 6.5f) * 35, -34));
             estButtons[n] = b;
         }
         estNote = Ui.Label(estPanel, "", 12, Ui.GoldLight, TextAnchor.MiddleCenter);
-        estNote.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(540, 24), new Vector2(0, 8));
+        estNote.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(500, 24), new Vector2(0, 8));
         estPanel.gameObject.SetActive(false);
         canvas.gameObject.SetActive(false);
     }
@@ -126,8 +127,9 @@ public class EstimationTable : MonoBehaviour
     string Name(TableView v, int s)
     {
         if (s == v.you) return Loc.T("إنت");
-        var n = s >= 0 && s < v.seats.Count ? v.seats[s].name ?? "" : "";
-        return n.Length > 9 ? n.Substring(0, 9) : n;
+        var n = GameUi.NameOf(v, s);
+        int sp = n.IndexOf(' '); if (sp > 0 && sp < n.Length - 1) n = n.Substring(sp + 1);   // "Hajj Mahmoud" → "Mahmoud"
+        return n.Length > 10 ? n.Substring(0, 10) : n;
     }
 
     public void Render(TableView v)
@@ -203,7 +205,7 @@ public class EstimationTable : MonoBehaviour
                 kv.Value.gameObject.SetActive(shown);
                 kv.Value.interactable = ok;
                 kv.Value.GetComponent<Image>().color = ok ? Ui.Gold : Dim;
-                ((RectTransform)kv.Value.transform).anchoredPosition = new Vector2((kv.Key - bid / 2f) * 38, -34);
+                ((RectTransform)kv.Value.transform).anchoredPosition = new Vector2((kv.Key - bid / 2f) * 35, -34);
             }
             estTitle.Set(Loc.T("هتاخد كام لمّة؟") + "  (" + Loc.T("الطلب") + " " + bid + " " + Sym(suit) + ")");
             estNote.Set(Loc.T("مجموع اللي اتقال") + ": " + said + (left == 1 ? "  ·  " + Loc.T("إنت الأخير: المجموع ماينفعش يبقى ١٣") : ""));
@@ -235,7 +237,7 @@ public class EstimationTable : MonoBehaviour
             bg.color = mine ? Ui.Gold : new Color(0.98f, 0.93f, 0.8f, 0.95f);
             var p = SeatPoint(rel);
             var brt = bg.rectTransform;
-            brt.anchoredPosition = rel == 0 ? new Vector2(0, -root.rect.height / 2 + 118) : p + (rel == 2 ? new Vector2(170, 0) : new Vector2(0, 98));
+            brt.anchoredPosition = rel == 0 ? new Vector2(0, -root.rect.height / 2 + 116) : rel == 2 ? new Vector2(190, root.rect.height / 2 - 98) : new Vector2(p.x, -62);
             brt.sizeDelta = new Vector2(phase == "play" ? 118 : 84, 24);
         }
 

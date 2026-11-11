@@ -173,21 +173,21 @@ public partial class Menus
 
     public void ShowNoAdsPromo()
     {
-        Panel(Loc.T("العب من غير إعلانات"), out var body, new Vector2(560, 320));
+        Panel(Loc.T("العب من غير إعلانات"), out var body, new Vector2(560, 340));
         var glow = Ui.Picture(body, "Glow", Ui.Glow(256)); glow.color = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.3f);
         glow.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), new Vector2(420, 200), new Vector2(0, -60));
         var ic = Ui.Picture(body, "Crown", Icon("t_crown")); ic.color = Ui.Gold;
-        ic.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(70, 70), new Vector2(0, -4));
+        ic.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(54, 54), new Vector2(0, -2));
         var big = Ui.Label(body, "", 26, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
         big.Set(Loc.T("ولا إعلان بين الأدوار"));
-        big.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(520, 40), new Vector2(0, -82));
+        big.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(500, 36), new Vector2(0, -60));
         var l = Ui.Label(body, "", 14, Ui.GoldLight, TextAnchor.MiddleCenter);
         l.Set(Loc.T("شهر كامل من غير إعلانات بـ ١٩٩ جنيه بس. بيتجدد كل شهر وتقدر تلغيه في أي وقت من جوجل بلاي"));
         l.horizontalOverflow = HorizontalWrapMode.Wrap;
-        l.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(480, 48), new Vector2(0, -124));
+        l.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(470, 46), new Vector2(0, -100));
         var buy = Ui.Button(body, Loc.T("اشترك بـ ١٩٩ ج.م / شهر"), Ui.Gold, Ui.Ink, 16, () => { Sfx.Tap(); Close(); Billing.Buy(Billing.NoAds); });
-        ((RectTransform)buy.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(280, 52), new Vector2(0, 44));
+        ((RectTransform)buy.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(300, 48), new Vector2(0, 42));
         var later = Ui.Button(body, Loc.T("بعدين"), new Color(1, 1, 1, 0.08f), Ui.GoldLight, 13, () => { Sfx.Tap(); Close(); });
-        ((RectTransform)later.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(140, 34), new Vector2(0, 2));
+        ((RectTransform)later.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(140, 32), new Vector2(0, 4));
     }
 }

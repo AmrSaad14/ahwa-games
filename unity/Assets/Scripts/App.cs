@@ -523,6 +523,7 @@ public class App : MonoBehaviour
         dominoTable.Show(false);
         boardGame.Show(false);
         estimationTable.Hide();
+        toastUntil = 0;   // a game's hint doesn't stay up over the café
         voice.Leave(); voice.Sync(null);
         cafe.SetGame(false);
         Music.Home(true);
@@ -885,8 +886,8 @@ public class App : MonoBehaviour
         statusText = Ui.Label(root, "جاري الاتصال…", 12, Ui.GoldLight, TextAnchor.MiddleRight);
         statusText.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(200, 20), new Vector2(-86, -54));
 
-        // the four games, down the right side
-        var list = Ui.Rect("Games", root).Place(new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(170, 306), new Vector2(-14, -18));
+        // the five games, down the right side (under your level, connection and title badge)
+        var list = Ui.Rect("Games", root).Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(170, 230), new Vector2(-14, -104));
         var title = Ui.Label(list, "اختار لعبتك", 15, Ui.GoldLight, TextAnchor.MiddleRight, Ui.Bold);
         title.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(170, 24), new Vector2(0, 0));
         for (int i = 0; i < HomeGames.Length; i++)
