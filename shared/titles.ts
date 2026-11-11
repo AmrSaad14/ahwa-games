@@ -37,14 +37,19 @@ export interface TitleDef {
   ar: string;
   en: string;
   style: TitleStyle;
-  /** Given by the game itself: the best player of `game` every month. */
-  monthly?: GameId;
+  /** Given by the game itself every month: the best of a game (the old titles), or the top of a ranking
+   *  (all: the whole game, country: each country, gov: each governorate). */
+  monthly?: GameId | 'all' | 'country' | 'gov';
 }
 
 const st = (bg1: string, bg2: string, fg: string, border: string, icon: string, effect: TitleEffect): TitleStyle => ({ bg: [bg1, bg2], fg, border, icon, effect });
 
 export const DEFAULT_TITLES: TitleDef[] = [
-  // the monthly ones: the best of each game
+  // the monthly ones: the top of last month's ranking, for 30 days
+  { id: 'potm_all', ar: 'لاعب الشهر', en: 'Player of the Month', monthly: 'all', style: st('#ffe08a', '#c2861e', '#2a1a05', '#fff6d6', 'crown', 'shine') },
+  { id: 'champ_country', ar: 'بطل البلد', en: 'National Champion', monthly: 'country', style: st('#1f7a4a', '#0b3a22', '#ffe08a', '#ffe08a', 'trophy', 'glow') },
+  { id: 'champ_gov', ar: 'بطل المحافظة', en: 'Governorate Champion', monthly: 'gov', style: st('#2c4bb0', '#0e1a4a', '#ffe08a', '#9fb4ff', 'shield', 'glow') },
+  // the best of each game (given until the ranking became one for the whole game; holders keep them till they end)
   { id: 'potm_domino', ar: 'لاعب الدومينو للشهر', en: 'Domino Player of the Month', monthly: 'domino', style: st('#11804f', '#063b25', '#ffd76a', '#ffd76a', 'domino', 'shine') },
   { id: 'potm_tawla', ar: 'لاعب الطاولة للشهر', en: 'Backgammon Player of the Month', monthly: 'tawla', style: st('#9c2430', '#4a0d14', '#ffd76a', '#ffd76a', 'dice', 'shine') },
   { id: 'potm_chess', ar: 'لاعب الشطرنج للشهر', en: 'Chess Player of the Month', monthly: 'chess', style: st('#2c4bb0', '#0e1a4a', '#ffd76a', '#ffd76a', 'knight', 'shine') },
@@ -68,7 +73,7 @@ export const DEFAULT_TITLES: TitleDef[] = [
 
 const HEX = /^#[0-9a-f]{6}$/i;
 const hex = (v: unknown, d: string) => typeof v === 'string' && HEX.test(v) ? v.toLowerCase() : d;
-const GAMES: GameId[] = ['domino', 'tawla', 'chess', 'ludo'];
+const GAMES: string[] = ['domino', 'tawla', 'chess', 'ludo', 'all', 'country', 'gov'];
 
 /** Checks a title from the dashboard (anything wrong keeps `d`'s value). */
 export function cleanTitle(v: unknown, d?: TitleDef): TitleDef | null {
@@ -80,7 +85,7 @@ export function cleanTitle(v: unknown, d?: TitleDef): TitleDef | null {
   if (!ar || !en) return null;
   const s = x.style ?? {}, ds = d?.style ?? DEFAULT_TITLES[4].style;
   const bg = Array.isArray(s.bg) ? s.bg : ds.bg;
-  const monthly = x.monthly === undefined ? d?.monthly : GAMES.includes(x.monthly as GameId) ? x.monthly : undefined;
+  const monthly = x.monthly === undefined ? d?.monthly : GAMES.includes(x.monthly as string) ? x.monthly : undefined;
   return {
     id, ar, en,
     style: {

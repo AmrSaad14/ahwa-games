@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { GAMES, GameId, MODES, MODE_PLAYERS, Mode, defaultTarget, gameOf, isTeamMode, targetOptions, teamOf } from '../shared/engine';
 import type { C2S, Emote, FriendRow, IceServer, PlayerCard, S2C } from '../shared/protocol';
 import { GOV_WEEK, isGov } from '../shared/govs';
+import { RANK_TITLES, RANK_TITLE_DAYS, isCountry, type RankScope } from '../shared/ranks';
 import { ECONOMY, STAKES, giftByKind, drinkOnMenu, isStake, winnings, NO_ADS, XP, WEEKLY_PRIZES, MONTHLY_EARNER_PRIZES, weekKey, ADS, WHEEL } from '../shared/gifts';
 import { EMOTES } from '../shared/protocol';
 import { Table, publicId, Player, BotMaker } from '../shared/table';
@@ -32,7 +33,7 @@ export interface Conn {
   ip: string;
 }
 
-interface Session { conn: Conn; uid: string | null; msgs: Limiter; v?: number; build?: number }
+interface Session { conn: Conn; uid: string | null; msgs: Limiter; v?: number; build?: number; country?: string }
 interface QEntry { uid: string; since: number; rating: number; coins: number }
 /** Coins on a table for the match being played: who paid in, from which seat, and who has walked away. */
 interface Escrow { stake: number; mode: Mode; paid: Map<string, { seat: number; left: boolean }> }
@@ -149,23 +150,25 @@ export class Hub {
     const pd = new Date(prevStart), month = `${pd.getUTCFullYear()}-${String(pd.getUTCMonth() + 1).padStart(2, '0')}`;
     if (this.store.metaGet('earners_paid_' + month)) return [];
     this.store.metaSet('earners_paid_' + month, String(now));
-    const top = this.store.coinsBoard(null, prevStart, MONTHLY_EARNER_PRIZES.length, thisStart).rows;
+    void thisStart; void prevStart;
+    const top = this.store.monthRanking(month).slice(0, MONTHLY_EARNER_PRIZES.length);
     const out: { uid: string; rank: number; coins: number; month: string }[] = [];
     top.forEach((r, i) => {
-      const uid = this.store.byPid(r.pid!)?.id; if (!uid) return;
+      const uid = r.id;
       const coins = MONTHLY_EARNER_PRIZES[i];
       this.store.addCoins(uid, coins); this.store.logCoins(uid, 'monthly', coins);
       out.push({ uid, rank: i + 1, coins, month });
       console.log(`[earners] ${month}: #${i + 1} ${r.name} +${coins}`);
       this.byUser.get(uid)?.conn.send({ t: 'monthlyPrize', rank: i + 1, coins, month });
       this.sendUser(uid);
-      this.opts.push?.([uid], ['مبروك! 🏆', `جيت المركز ${i + 1} في الأكثر كسبًا الشهر اللي فات وكسبت ${coins.toLocaleString('en')} كوين`], ['Congratulations! 🏆', `You were #${i + 1} top earner last month and won ${coins.toLocaleString('en')} coins`]);
+      this.opts.push?.([uid], ['مبروك! 🏆', `جيت المركز ${i + 1} في الترتيب الشهر اللي فات وكسبت ${coins.toLocaleString('en')} كوين`], ['Congratulations! 🏆', `You finished #${i + 1} in last month's ranking and won ${coins.toLocaleString('en')} coins`]);
     });
     return out;
   }
 
   /** After a week ends, its first gets the prize (once). */
   weeklyPrizes(): { uid: string; rank: number; coins: number }[] {
+    if (!WEEKLY_ON) return [];
     const last = weekKey(Date.now() - 7 * 86_400_000);
     const paid = this.store.payWeekly(last);
     for (const p of paid) {
@@ -177,32 +180,57 @@ export class Hub {
     return paid;
   }
 
-  /** When a month ends, the best player of each game (with enough games) is "<game> player of the month" for
-   *  the whole next month, and wins the month's prize on Vodafone Cash (once per month). */
-  monthlyTitles(now = Date.now()): { uid: string; game: string; title: string; month: string; prize: number | null }[] {
+  /** On the first day of a month, the top of last month's ranking (with enough games) gets a title for 30 days:
+   *  the player of the month, the champion of each country and of each governorate (once per month). */
+  monthlyTitles(now = Date.now()): { uid: string; game: string; title: string; month: string; prize: number | null; where?: string }[] {
     const cfg = this.opts.settings?.value.titles ?? { monthly: true, minGames: 10 };
     const [y, mo] = seasonOf(now).split('-').map(Number);
     const prev = mo === 1 ? `${y - 1}-12` : `${y}-${String(mo - 1).padStart(2, '0')}`;
     if (this.store.metaGet('potm_' + prev)) return [];
     this.store.metaSet('potm_' + prev, String(now));
     if (!cfg.monthly) return [];
-    const until = seasonEndsAt(now), won: { uid: string; game: string; title: string; month: string; prize: number | null }[] = [];
-    const pz = this.prizeCfg;
-    for (const game of GAMES) {
-      const t = this.titles.monthlyFor(game); if (!t) continue;
-      const top = this.store.monthlyBoard(game, prev, 1, cfg.minGames)[0]; if (!top) continue;
-      if (cfg.monthly) this.store.grantTitle(top.id, t.id, until, prev);
-      const prize: number | null = null;   // no money prizes any more: the title only (prizes won before can still be claimed)
-      won.push({ uid: top.id, game, title: t.id, month: prev, prize });
-      console.log(`[titles] ${prev} ${game}: ${top.name}${prize ? ` (prize #${prize}, ${pz.egp} EGP)` : ''}`);
-      if (cfg.monthly) this.byUser.get(top.id)?.conn.send({ t: 'titleWon', id: t.id, month: prev });
-      if (prize) this.byUser.get(top.id)?.conn.send({ t: 'prizeWon', id: prize, game, month: prev, egp: pz.egp });
-      this.titleToTable(top.id); this.sendUser(top.id);
-      if (prize) this.opts.push?.([top.id], ['كسبت ' + pz.egp + ' جنيه! 🏆', `انت ${t.ar}. افتح اللعبة واكتب رقم فودافون كاش عشان نحولك الجايزة`], ['You won ' + pz.egp + ' EGP! 🏆', `You are ${t.en}. Open the game and enter your Vodafone Cash number to get the prize`]);
-      else this.opts.push?.([top.id], ['مبروك! 🏅', `انت ${t.ar} — اللقب بتاعك الشهر ده كله`], ['Congratulations! 🏅', `You are ${t.en}: the title is yours all month`]);
-    }
+    const until = now + RANK_TITLE_DAYS * 86_400_000;
+    const rows = this.store.monthRanking(prev, cfg.minGames);
+    const won: { uid: string; game: string; title: string; month: string; prize: number | null; where?: string }[] = [];
+    const give = (scope: RankScope, r: typeof rows[number], where: string) => {
+      const t = this.titles.get(RANK_TITLES[scope]); if (!t) return;
+      this.store.grantTitle(r.id, t.id, until, prev + (where ? '|' + where : ''));
+      won.push({ uid: r.id, game: 'all', title: t.id, month: prev, prize: null, where: where || undefined });
+      console.log(`[titles] ${prev} ${t.id}${where ? ' ' + where : ''}: ${r.name}`);
+      this.byUser.get(r.id)?.conn.send({ t: 'titleWon', id: t.id, month: prev });
+      this.opts.push?.([r.id], ['مبروك! 🏅', `انت ${t.ar} — اللقب بتاعك ${RANK_TITLE_DAYS} يوم`], ['Congratulations! 🏅', `You are ${t.en}: the title is yours for ${RANK_TITLE_DAYS} days`]);
+    };
+    // the governorates first, then the countries, then the whole game: the biggest title is the one worn
+    const seenGov = new Set<string>(), seenCountry = new Set<string>();
+    for (const r of rows) if (r.gov && !seenGov.has(r.gov)) { seenGov.add(r.gov); give('gov', r, r.gov); }
+    for (const r of rows) if (r.country && !seenCountry.has(r.country)) { seenCountry.add(r.country); give('country', r, r.country); }
+    if (rows[0]) give('all', rows[0], '');
+    for (const uid of new Set(won.map(w => w.uid))) { this.titleToTable(uid); this.sendUser(uid); }
     this.store.metaSet('potm_winners_' + prev, JSON.stringify(won.map(w => ({ ...w, name: this.store.get(w.uid)?.name ?? '' }))));
     return won;
+  }
+
+  /** The monthly titles: who wears them now (and where), and who leads this month's race for the player's own. */
+  private titleBoard(uid: string, now = Date.now()) {
+    const me = this.store.get(uid);
+    const cfg = this.opts.settings?.value.titles ?? { monthly: true, minGames: 10 };
+    const holders: { title: string; where: string | null; pid: string; name: string; ch: number; photo: string | null; until: number; me: boolean }[] = [];
+    for (const scope of ['all', 'country', 'gov'] as RankScope[]) {
+      for (const h of this.store.titleHolders(RANK_TITLES[scope], 100, now)) {
+        const u = this.store.get(h.id); if (!u) continue;
+        const where = (h.note ?? '').split('|')[1] || null;
+        holders.push({ title: RANK_TITLES[scope], where, pid: u.pid ?? '', name: u.name, ch: u.ch, photo: u.photo ?? null, until: h.until, me: h.id === uid });
+      }
+    }
+    // this month: who leads (with enough games) for each of the player's titles
+    const month = seasonOf(now), rows = this.store.monthRanking(month, cfg.minGames);
+    const lead = (f: (r: typeof rows[number]) => boolean) => { const r = rows.find(f); return r ? { name: r.name, points: Number(r.points), me: r.id === uid } : null; };
+    const race = [
+      { title: RANK_TITLES.all, where: null as string | null, leader: lead(() => true) },
+      ...(me?.country ? [{ title: RANK_TITLES.country, where: me.country, leader: lead(r => r.country === me.country) }] : []),
+      ...(me?.gov ? [{ title: RANK_TITLES.gov, where: me.gov, leader: lead(r => r.gov === me.gov) }] : []),
+    ];
+    return { holders, race, on: cfg.monthly, minGames: cfg.minGames, days: RANK_TITLE_DAYS, next: seasonEndsAt(now) };
   }
 
   /** The event on now, as a player sees it (or null). */
@@ -258,7 +286,7 @@ export class Hub {
     try { m = JSON.parse(raw); } catch { return; }
     if (!m || typeof m !== 'object' || typeof (m as { t?: unknown }).t !== 'string') return;
     if (m.t === 'ping') return s.conn.send({ t: 'pong', c: Number(m.c) || 0, now: Date.now() });
-    if (m.t === 'hello') { s.v = typeof m.v === 'number' ? m.v : 1; s.build = typeof m.build === 'number' ? m.build : 0; return this.hello(s, m.token); }
+    if (m.t === 'hello') { s.v = typeof m.v === 'number' ? m.v : 1; s.build = typeof m.build === 'number' ? m.build : 0; s.country = isCountry((m as { country?: unknown }).country) ? (m as { country: string }).country : undefined; return this.hello(s, m.token); }
     if (!s.uid) return s.conn.send({ t: 'err', code: 'not_ready' });
     const uid = s.uid;
     const err = (code: string) => s.conn.send({ t: 'err', code });
@@ -660,6 +688,20 @@ export class Hub {
         if (this.store.mutedUntil(uid) > Date.now()) return err('chat_muted');
         table.emote(uid, m.k); return;
       }
+      case 'rank': {
+        const period = m.period === 'month' ? 'month' : 'all';
+        const scope: RankScope = m.scope === 'country' || m.scope === 'gov' ? m.scope : 'all';
+        const me = this.store.get(uid);
+        const where = scope === 'country' ? me?.country ?? '' : scope === 'gov' ? me?.gov ?? '' : '';
+        const lb = this.store.rankBoard(uid, period, scope, where, seasonOf(Date.now()));
+        return s.conn.send({ t: 'rank', period, scope, where: where || null, rows: lb.rows, me: lb.me, prizes: [...MONTHLY_EARNER_PRIZES] });
+      }
+      case 'titleBoard': return s.conn.send({ t: 'titleBoard', ...this.titleBoard(uid) });
+      case 'setCountry': {
+        if (!isCountry(m.country)) return err('bad_country');
+        this.store.setCountry(uid, m.country);
+        return this.sendUser(uid);
+      }
       case 'lb': {
         if (m.game === 'coins') {
           // the whole game: the most coins won in games, every game together (all time, or this month)
@@ -991,7 +1033,9 @@ export class Hub {
     // a season ended since last time: the league rewards
     const leagueRewards = this.store.leagueRewards(u.id);
     // last week's governorate of the week was yours, and you played for it
-    const govPrize = this.store.govPrize(u.id);
+    const govPrize = WEEKLY_ON ? this.store.govPrize(u.id) : null;
+    // the country, from the phone's settings, the first time (the player can change it in Settings)
+    if (!u.country && s.country) this.store.setCountry(u.id, s.country);
     this.store.touch(u.id);
     // the daily reward: newer phones show the track and the player collects it; older ones get it at once
     const daily = (s.v ?? 1) < 2 ? this.store.claimDaily(u.id) : { coins: 0, streak: 0 };
@@ -1568,6 +1612,9 @@ export class Hub {
     });
   }
 }
+
+/** No weekly rankings any more (the leaderboard is all time or monthly): no weekly prizes either. */
+const WEEKLY_ON = false;
 
 /** The monthly prizes when the dashboard hasn't changed anything (see server/settings.ts). */
 export const PRIZES: GameSettings['prizes'] = { enabled: false, egp: 500, claimDays: 30, prefixes: ['010'] };

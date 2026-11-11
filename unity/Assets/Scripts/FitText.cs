@@ -12,6 +12,17 @@ using UnityEngine.UI;
 [DisallowMultipleComponent]
 public class FitText : MonoBehaviour
 {
+    /// Never more than one line: too long, it only gets smaller.
+    public bool oneLine;
+    /// Marks a label as one line only (the leaderboard, the tabs).
+    public static Text OneLine(Text t)
+    {
+        if (t == null) return t;
+        var f = t.GetComponent<FitText>() ?? t.gameObject.AddComponent<FitText>();
+        f.oneLine = true; f.enabled = true;
+        t.resizeTextForBestFit = false; t.horizontalOverflow = HorizontalWrapMode.Overflow;
+        return t;
+    }
     Text t;
     RectTransform rt;
     string src, shown;
@@ -56,8 +67,8 @@ public class FitText : MonoBehaviour
 
     string Fit(Vector2 size)
     {
-        int min = Mathf.Max(8, Mathf.RoundToInt(baseSize * 0.6f));
-        bool wrap = mode == HorizontalWrapMode.Wrap;
+        int min = Mathf.Max(8, Mathf.RoundToInt(baseSize * (oneLine ? 0.5f : 0.6f)));
+        bool wrap = mode == HorizontalWrapMode.Wrap && !oneLine;
         if (!wrap)
         {
             if (Width(src) <= size.x + 0.5f) return src;
@@ -67,7 +78,7 @@ public class FitText : MonoBehaviour
             if (Width(src) <= size.x + 0.5f) return src;
             t.fontSize = baseSize;
             // room for two lines (and no lines of its own): let it wrap
-            if (size.y >= baseSize * 2.3f && src.IndexOf('\n') < 0) wrap = true;
+            if (!oneLine && size.y >= baseSize * 2.3f && src.IndexOf('\n') < 0) wrap = true;
             else
             {
                 for (int fs = baseSize; fs > min && Width(src) > size.x + 0.5f; ) t.fontSize = --fs;

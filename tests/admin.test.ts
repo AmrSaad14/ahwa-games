@@ -130,18 +130,22 @@ test('titles: the designs, giving one, wearing it, and player of the month', asy
   assert.equal((await adm('DELETE', '/titles/potm_domino')).status, 400);
   assert.equal((await adm('DELETE', '/titles/night_owl')).status, 200);
   assert.equal(app.store.wornTitle(g.user.id), null);
-  // last month's best domino player (enough games) gets the title for this month
+  // last month's top of the ranking (enough games, every game together) gets the titles for 30 days
   const { seasonOf } = await import('../shared/season');
   const [y, mo] = seasonOf(Date.now()).split('-').map(Number);
   const prev = mo === 1 ? `${y - 1}-12` : `${y}-${String(mo - 1).padStart(2, '0')}`;
   app.store.metaSet('potm_' + prev, '');   // not given yet
   const a = await guest('Domino Ace'), b = await guest('Few Games');
-  for (let i = 0; i < 12; i++) app.store.addMonthly(a.user.id, 'domino', i % 2 === 0, prev);
+  for (let i = 0; i < 12; i++) app.store.addMonthly(a.user.id, i % 2 ? 'domino' : 'tawla', i % 2 === 0, prev);
   for (let i = 0; i < 5; i++) app.store.addMonthly(b.user.id, 'domino', true, prev);   // more points a game, but too few games
+  app.store.setGov(a.user.id, 'alex');
   await adm('PUT', '/settings', { prizes: { enabled: true } });   // prizes are off until switched on
-  const won = app.hub.monthlyTitles();
-  assert.deepEqual(won.map(w => [w.uid, w.title]), [[a.user.id, 'potm_domino']]);
-  assert.equal(app.store.wornTitle(a.user.id), 'potm_domino');
+  const t0 = Date.now();
+  const won = app.hub.monthlyTitles().filter(w => w.uid === a.user.id || w.uid === b.user.id);
+  assert.deepEqual(won.map(w => [w.uid, w.title, w.where ?? '']), [[a.user.id, 'champ_gov', 'alex'], [a.user.id, 'champ_country', 'EG'], [a.user.id, 'potm_all', '']]);
+  assert.equal(app.store.wornTitle(a.user.id), 'potm_all', 'the biggest title is the one worn');
+  const held = app.store.titlesOf(a.user.id).find(t => t.id === 'potm_all')!;
+  assert.ok(Math.abs(held.until - (t0 + 30 * 86_400_000)) < 60_000, 'for 30 days');
   assert.deepEqual(app.hub.monthlyTitles(), [], 'once a month');
   // no money prizes any more: the title only, even with prizes switched on in the dashboard
   assert.equal(app.store.prizesOf(a.user.id).length, 0);
@@ -164,8 +168,9 @@ test('titles: the designs, giving one, wearing it, and player of the month', asy
   const { MONTHLY_EARNER_PRIZES } = await import('../shared/gifts');
   const d = new Date(), lastMonth = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 10);
   const e1 = { user: app.store.createGuest('Earner One', 1) }, e2 = { user: app.store.createGuest('Earner Two', 2) };
-  app.store.db.prepare("INSERT INTO coin_log (user_id, ts, kind, delta, balance) VALUES (?, ?, 'win', ?, 0)").run(e1.user.id, lastMonth, 9_000_000);
-  app.store.db.prepare("INSERT INTO coin_log (user_id, ts, kind, delta, balance) VALUES (?, ?, 'win', ?, 0)").run(e2.user.id, lastMonth, 8_000_000);
+  const lm = new Date(lastMonth), lmKey = `${lm.getUTCFullYear()}-${String(lm.getUTCMonth() + 1).padStart(2, '0')}`;
+  for (let i = 0; i < 40; i++) app.store.addMonthly(e1.user.id, 'chess', true, lmKey);
+  for (let i = 0; i < 35; i++) app.store.addMonthly(e2.user.id, 'ludo', true, lmKey);
   const before = app.store.coinsOf(e1.user.id);
   const paid = app.hub.monthlyEarners();
   assert.deepEqual(paid.slice(0, 2).map(p => [p.uid, p.rank, p.coins]), [[e1.user.id, 1, MONTHLY_EARNER_PRIZES[0]], [e2.user.id, 2, MONTHLY_EARNER_PRIZES[1]]]);

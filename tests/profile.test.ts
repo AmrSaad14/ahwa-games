@@ -69,3 +69,30 @@ test('the whole game leaderboard: most coins won in games, all games together', 
   assert.equal(lb.me!.rank, 2); assert.equal(lb.me!.rating, 1200);
   assert.equal(st.coinsBoard(c.id).me, null);
 });
+
+test('ranking: every game together, all time or one month, over everyone, a country or a governorate', () => {
+  const s = new Store(':memory:');
+  const a = s.createGuest('A', 0), b = s.createGuest('B', 1), c = s.createGuest('C', 2);
+  s.setGov(a.id, 'alex'); s.setGov(b.id, 'cairo'); s.setCountry(c.id, 'SA');
+  // a: 2 wins in domino and 1 in chess last month; b: 3 wins this month; c: 1 win this month
+  for (let i = 0; i < 2; i++) s.addMonthly(a.id, 'domino', true, '2026-10');
+  s.addMonthly(a.id, 'chess', true, '2026-10');
+  for (let i = 0; i < 3; i++) s.addMonthly(b.id, 'ludo', true, '2026-11');
+  s.addMonthly(c.id, 'tawla', true, '2026-11');
+  s.addMonthly(a.id, 'tawla', false, '2026-11');
+  const all = s.rankBoard(a.id, 'all', 'all', '', '2026-11');
+  assert.deepEqual(all.rows.map(r => [r.name, r.rating]), [['A', 10], ['B', 9], ['C', 3]], 'all time: every game and month together');
+  const month = s.rankBoard(a.id, 'month', 'all', '', '2026-11');
+  assert.deepEqual(month.rows.map(r => r.name), ['B', 'C', 'A']);
+  assert.deepEqual([month.me?.rank, month.me?.rating], [3, 1]);
+  assert.deepEqual(s.rankBoard(a.id, 'all', 'country', 'EG', '2026-11').rows.map(r => r.name), ['A', 'B'], 'Egypt: the governorate made them Egyptian');
+  assert.deepEqual(s.rankBoard(c.id, 'all', 'country', 'SA', '2026-11').rows.map(r => r.name), ['C']);
+  assert.deepEqual(s.rankBoard(b.id, 'all', 'gov', 'cairo', '2026-11').rows.map(r => r.name), ['B']);
+  assert.equal(s.rankBoard(c.id, 'all', 'gov', '', '2026-11').rows.length, 0, 'no governorate: nothing');
+  // a country outside Egypt has no governorate
+  s.setCountry(b.id, 'KW');
+  assert.equal(s.get(b.id)!.gov, '');
+  const { countryOfPhone } = require('../shared/ranks');
+  assert.equal(countryOfPhone('+201012345678'), 'EG');
+  assert.equal(countryOfPhone('+966501234567'), 'SA');
+});

@@ -143,6 +143,7 @@ public class Net
                 if (s == "\u0001open")
                 {
                     var hello = new Dictionary<string, object> { ["t"] = "hello", ["v"] = 2, ["build"] = Updater.Build };
+                    var country = Menus.DeviceCountry(); if (country != null) hello["country"] = country;   // for the country ranking
                     if (!string.IsNullOrEmpty(Token)) hello["token"] = Token;
                     Send(hello);
                     Debug.Log("[net] connected to " + url);

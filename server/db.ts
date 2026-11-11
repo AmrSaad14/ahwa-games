@@ -8,6 +8,7 @@ import type { GameId } from '../shared/engine';
 import { achievementsOf } from '../shared/achievements';
 import { LEAGUES, LP, leagueOf, leagueView } from '../shared/leagues';
 import { GOV_WEEK } from '../shared/govs';
+import { countryOfPhone, type RankPeriod, type RankScope } from '../shared/ranks';
 import { ECONOMY, WEEKLY_PRIZES, WHEEL, wheelCost, cairoDay, levelOf, nextCairoDay, streakBonus, weekKey } from '../shared/gifts';
 import { Equipped, adsForSkin, isFree, skinById } from '../shared/skins';
 import { activeEvent } from '../shared/events';
@@ -25,7 +26,7 @@ export interface UserRow {
   phone: string | null; google_sub: string | null; google_email: string | null; apple_sub?: string | null; apple_email?: string | null;
   pg_id: string | null; friend_code: string | null; streak?: number; xp?: number;
   ref_by?: string | null; ref_paid?: number; muted_until?: number; pid?: string | null; banned?: number; ban_reason?: string | null; title?: string | null;
-  tutorial?: number; nudged?: number; prayer_push?: number; gov?: string; ludo_color?: number; wheel_day?: string; wheel_spins?: number; wheel_ads?: number;
+  tutorial?: number; nudged?: number; prayer_push?: number; gov?: string; ludo_color?: number; country?: string; wheel_day?: string; wheel_spins?: number; wheel_ads?: number;
 }
 
 export class Store {
@@ -103,6 +104,14 @@ export class Store {
     // the governorate a player plays for, and the weekly prize for the governorate of the week (paid once)
     if (!cols.has('gov')) this.db.exec("ALTER TABLE users ADD COLUMN gov TEXT NOT NULL DEFAULT ''");
     // the ludo colour a player likes to play (-1: any)
+    // the country a player plays for (ISO code: from the phone, the phone number, or picked in Settings)
+    if (!cols.has('country')) {
+      this.db.exec("ALTER TABLE users ADD COLUMN country TEXT NOT NULL DEFAULT ''");
+      this.db.exec("UPDATE users SET country = 'EG' WHERE gov != ''");
+      for (const r of this.db.prepare("SELECT id, phone FROM users WHERE country = '' AND phone IS NOT NULL").all() as { id: string; phone: string }[]) {
+        const c = countryOfPhone(r.phone); if (c) this.db.prepare('UPDATE users SET country = ? WHERE id = ?').run(c, r.id);
+      }
+    }
     if (!cols.has('ludo_color')) this.db.exec('ALTER TABLE users ADD COLUMN ludo_color INTEGER NOT NULL DEFAULT -1');
     this.db.exec('CREATE TABLE IF NOT EXISTS gov_paid (week TEXT NOT NULL, user_id TEXT NOT NULL, PRIMARY KEY (week, user_id))');
     // leagues: points per player, game and season (a month), the highest reached, and whether its reward was paid
@@ -508,7 +517,51 @@ export class Store {
   }
 
   setLudoColor(id: string, c: number) { this.db.prepare('UPDATE users SET ludo_color = ? WHERE id = ?').run(c, id); }
-  setGov(id: string, gov: string) { this.db.prepare('UPDATE users SET gov = ? WHERE id = ?').run(gov, id); }
+  /** A governorate is in Egypt: picking one makes the player's country Egypt. */
+  setGov(id: string, gov: string) { this.db.prepare("UPDATE users SET gov = ?, country = 'EG' WHERE id = ?").run(gov, id); }
+  /** The player's country; outside Egypt there is no governorate. */
+  setCountry(id: string, c: string) { this.db.prepare("UPDATE users SET country = ?, gov = CASE WHEN ? = 'EG' THEN gov ELSE '' END WHERE id = ?").run(c, c, id); }
+
+  /** The ranking: points from online games (every game together), all time or one month, over everyone, one
+   *  country or one governorate. `rating` carries the points. The top is worked out at most once a minute. */
+  rankBoard(meId: string | null, period: RankPeriod, scope: RankScope, where: string, month: string, limit = 50): { rows: LeaderRow[]; me: LeaderRow | null } {
+    if (scope !== 'all' && !where) return { rows: [], me: null };
+    const conds = ['u.banned = 0'], args: (string | number)[] = [];
+    if (period === 'month') { conds.push('m.month = ?'); args.push(month); }
+    if (scope === 'country') { conds.push('u.country = ?'); args.push(where); }
+    if (scope === 'gov') { conds.push('u.gov = ?'); args.push(where); }
+    const sql = `SELECT m.user_id AS id, SUM(m.points) AS points, SUM(m.games) AS games, SUM(m.wins) AS wins FROM monthly m JOIN users u ON u.id = m.user_id
+      WHERE ${conds.join(' AND ')} GROUP BY m.user_id`;
+    const key = [period, scope, where, month, limit].join('|');
+    let c = this.rankCache.get(key);
+    if (!c || Date.now() - c.at > 60_000) {
+      c = { at: Date.now(), top: this.db.prepare(sql + ' ORDER BY points DESC, wins DESC, games ASC LIMIT ?').all(...args, limit) as { id: string; points: number; games: number; wins: number }[] };
+      this.rankCache.set(key, c);
+      if (this.rankCache.size > 500) this.rankCache.clear();
+    }
+    const rows: LeaderRow[] = [];
+    c.top.forEach((r, i) => {
+      const u = this.get(r.id); if (!u) return;
+      rows.push({ rank: i + 1, name: u.name, ch: u.ch, photo: u.photo ?? null, rating: Number(r.points), games: Number(r.games), wins: Number(r.wins), me: r.id === meId, level: levelOf(u.xp ?? 0), pid: u.pid, title: this.wornTitle(r.id) });
+    });
+    let me: LeaderRow | null = null;
+    const u = meId ? this.get(meId) : undefined;
+    if (u) {
+      const mine = this.db.prepare(`SELECT * FROM (${sql}) WHERE id = ?`).get(...args, u.id) as { points: number; games: number; wins: number } | undefined;
+      if (mine) {
+        const above = this.db.prepare(`SELECT COUNT(*) AS c FROM (${sql}) WHERE points > ?`).get(...args, mine.points) as { c: number };
+        me = { rank: Number(above.c) + 1, name: u.name, ch: u.ch, photo: u.photo ?? null, rating: Number(mine.points), games: Number(mine.games), wins: Number(mine.wins), me: true, level: levelOf(u.xp ?? 0), pid: u.pid };
+      }
+    }
+    return { rows, me };
+  }
+  private rankCache = new Map<string, { at: number; top: { id: string; points: number; games: number; wins: number }[] }>();
+  /** A month's whole ranking with each player's country and governorate (for that month's titles and prizes). */
+  monthRanking(month: string, minGames = 0) {
+    return this.db.prepare(`SELECT m.user_id AS id, u.name, u.country, u.gov, SUM(m.points) AS points, SUM(m.games) AS games, SUM(m.wins) AS wins
+      FROM monthly m JOIN users u ON u.id = m.user_id WHERE m.month = ? AND u.banned = 0 GROUP BY m.user_id HAVING SUM(m.games) >= ?
+      ORDER BY points DESC, wins DESC, games ASC`).all(month, minGames) as { id: string; name: string; country: string; gov: string; points: number; games: number; wins: number }[];
+  }
   /** The governorates this week: each one's score (its best players' points), players, and its best players. */
   govBoard(week = weekKey()): { gov: string; points: number; players: number }[] {
     const rows = this.db.prepare(`SELECT u.gov AS gov, w.points AS points FROM weekly w JOIN users u ON u.id = w.user_id
@@ -610,7 +663,7 @@ export class Store {
     const now = Date.now(), season = this.seasonState(u.id);
     // no full-screen ads: with the season pass, until the season ends
     const adFreeUntil = u.ad_free_until ?? 0;   // only the no-ads plan (199 EGP a month) removes ads; the season pass doesn't
-    return { ...toPublic(u), adFreeUntil, titles: this.titlesOf(u.id, now), title: this.wornTitle(u.id, now), chest: this.chestState(u.id, now), tutorial: !!u.tutorial, prayerPush: u.prayer_push !== 0, gov: u.gov || null, ludoColor: u.ludo_color ?? -1, leagues: this.leaguesOf(u.id, now), wheel: this.wheelState(u, now), xp: u.xp ?? 0, level: levelOf(u.xp ?? 0), streak: u.streak ?? 0, daily: this.dailyState(u), code: this.friendCode(u.id), ratings: this.ratingsOf(u.id),
+    return { ...toPublic(u), adFreeUntil, titles: this.titlesOf(u.id, now), title: this.wornTitle(u.id, now), chest: this.chestState(u.id, now), tutorial: !!u.tutorial, prayerPush: u.prayer_push !== 0, gov: u.gov || null, country: u.country || null, ludoColor: u.ludo_color ?? -1, leagues: this.leaguesOf(u.id, now), wheel: this.wheelState(u, now), xp: u.xp ?? 0, level: levelOf(u.xp ?? 0), streak: u.streak ?? 0, daily: this.dailyState(u), code: this.friendCode(u.id), ratings: this.ratingsOf(u.id),
       adsLeft: Math.max(0, ECONOMY.adsPerDay - this.adsToday(u.id)), skins: this.skinsOf(u.id),
       skinAds: this.skinAdsOf(u.id), skinAdsLeft: Math.max(0, ECONOMY.skinAdsPerDay - this.skinAdsToday(u.id)),
       missions: this.missions(u.id), missionsAt: nextCairoDay(now), season,

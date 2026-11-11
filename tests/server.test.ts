@@ -278,6 +278,20 @@ test('leaderboard and health endpoints answer', async () => {
   const c = await new Client().open();
   c.send({ t: 'lb' });
   await c.until(() => !!c.last('lb'));
+  // the ranking: every game together, all time or this month, everyone / your country / your governorate
+  c.send({ t: 'rank', period: 'month', scope: 'all' });
+  await c.until(() => c.last('rank')?.period === 'month');
+  c.send({ t: 'rank', scope: 'gov' });
+  await c.until(() => c.last('rank')?.scope === 'gov');
+  assert.equal(c.last('rank').rows.length, 0, 'no governorate picked: nothing to show');
+  c.send({ t: 'setCountry', country: 'SA' });
+  await c.until(() => c.last('user')?.user.country === 'SA');
+  c.send({ t: 'setGov', gov: 'cairo' });
+  await c.until(() => c.last('user')?.user.gov === 'cairo' && c.last('user')?.user.country === 'EG');
+  c.send({ t: 'titleBoard' });
+  await c.until(() => !!c.last('titleBoard'));
+  assert.equal(c.last('titleBoard').days, 30);
+  assert.deepEqual(c.last('titleBoard').race.map((r: { title: string }) => r.title), ['potm_all', 'champ_country', 'champ_gov']);
   const res = await fetch(`http://127.0.0.1:${port}/healthz`);
   assert.equal(res.status, 200);
   assert.equal((await res.json()).ok, true);

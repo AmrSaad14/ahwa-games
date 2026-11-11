@@ -283,6 +283,9 @@ export type C2S =
   | { t: 'wheelSpin' }
   | { t: 'setLudoColor'; color: number }   // the ludo colour you like (0 red, 1 green, 2 yellow, 3 blue; -1 any)
   | { t: 'setGov'; gov: string }   // the governorate you play for (shared/govs.ts)
+  | { t: 'setCountry'; country: string }   // the country you play for (two letters, shared/ranks.ts)
+  | { t: 'rank'; period?: 'all' | 'month'; scope?: 'all' | 'country' | 'gov' }   // the ranking (every game together)
+  | { t: 'titleBoard' }   // who wears the monthly titles, and who leads this month
   | { t: 'govBoard'; gov?: string }   // the governorates this week, and one governorate's best players   // spin the lucky wheel (free once a day, then unlocked by ads: adStart with wheel)
   | { t: 'crashReport'; kind: string; msg: string; where?: string; model?: string; gpu?: string; api?: string; os?: string; mem?: number; gmem?: number; ver?: string }   // the app closed by itself last time, or a script error
   | { t: 'track'; name: string }
