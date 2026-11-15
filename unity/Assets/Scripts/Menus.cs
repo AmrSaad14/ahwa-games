@@ -154,7 +154,7 @@ public partial class Menus : MonoBehaviour
     public void OnUser(Dictionary<string, object> u)
     {
         user = u;
-        bool signed = !string.IsNullOrEmpty(u.Str("google")) || !string.IsNullOrEmpty(u.Str("apple")) || !string.IsNullOrEmpty(u.Str("phone")) || !string.IsNullOrEmpty(u.Str("email"));
+        bool signed = !string.IsNullOrEmpty(u.Str("google")) || !string.IsNullOrEmpty(u.Str("apple")) || !string.IsNullOrEmpty(u.Str("phone")) || !string.IsNullOrEmpty(u.Str("email")) || u.Bool("playGames");
         signChip.SetActive(!signed);
         ApplyFeatures(u.Obj("features"));
         LayoutTop();
@@ -213,6 +213,7 @@ public partial class Menus : MonoBehaviour
             case "welcome":
                 var login = m.Obj("login");
                 if (login != null) { googleOn = login.Bool("google"); appleOn = login.Bool("apple"); }
+                OnLoginPlayGames(login);   // a guest signed in to Play Games on this phone: their account at once
                 // the connection dropped while the video played: tell the new one (the old message was lost)
                 if (pendingAd != null) app.Send(new Dictionary<string, object> { ["t"] = "adWatched", ["ticket"] = pendingAd });
                 if (pendingTicket != null) { var tk = pendingTicket; pendingTicket = null; app.Send(new Dictionary<string, object> { ["t"] = "ticket", ["ticket"] = tk }); }
@@ -221,7 +222,7 @@ public partial class Menus : MonoBehaviour
                 break;
             case "placed": OnPlaced(m.Str("result")); break;
             case "signedIn":
-                app.Toast(Loc.T(m.Str("via") == "apple" ? "أهلاً! اتسجلت بحساب أبل" : "أهلاً! اتسجلت بحساب جوجل"));
+                app.Toast(Loc.T(m.Str("via") == "apple" ? "أهلاً! اتسجلت بحساب أبل" : m.Str("via") == "playgames" ? "أهلاً! اتسجلت بـ Play Games" : "أهلاً! اتسجلت بحساب جوجل"));
                 if (open != null) Close();
                 Sfx.Coins();
                 break;
@@ -558,14 +559,14 @@ public partial class Menus : MonoBehaviour
             var t = Ui.Label(acc, "الحساب", 16, Color.white, StartAlign, Ui.Bold);
             t.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(480, 26), new Vector2(0, -8));
             string g = user?.Str("google"), ap = user?.Str("apple"), ph = user?.Str("phone"), em = user?.Str("email");
-            string who = !string.IsNullOrEmpty(g) ? g : !string.IsNullOrEmpty(ap) ? ap : !string.IsNullOrEmpty(em) ? em : ph;
+            string who = !string.IsNullOrEmpty(g) ? g : !string.IsNullOrEmpty(ap) ? ap : !string.IsNullOrEmpty(em) ? em : !string.IsNullOrEmpty(ph) ? ph : user != null && user.Bool("playGames") ? "Play Games" : null;
             var note = Ui.Label(acc, "", 13, Ui.GoldLight, StartAlign);
             note.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(480, 22), new Vector2(0, -34));
             if (string.IsNullOrEmpty(who))
             {
                 note.Set(Loc.T("بتلعب كضيف. سجّل عشان فلوسك وتقدمك يتحفظوا."));
                 // Google, and Apple when the server has it
-                var b = Ui.Button(acc, "الدخول بجوجل", Color.white, Ui.Ink, 14, () => SignInWith("google"));
+                var b = Ui.Button(acc, "الدخول بجوجل", Color.white, Ui.Ink, 14, () => { if (PlayGamesOn) SignIn(); else SignInWith("google"); });
                 var br = ((RectTransform)b.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(200, 32), new Vector2(appleOn ? (Loc.En ? -106 : 106) : 0, 6));
                 var gi = Ui.Picture(br, "G", Icon("google")); gi.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(20, 20), new Vector2(8, 0));
                 if (appleOn)
@@ -1443,17 +1444,33 @@ public partial class Menus : MonoBehaviour
     void SignIn()
     {
         Sfx.Tap();
-        if (!appleOn) { SignInWith("google"); return; }
-        Panel(Loc.T("سجّل دخولك"), out var body, new Vector2(420, 250));
+        bool pg = PlayGamesOn;
+        if (!appleOn && !pg) { SignInWith("google"); return; }
+        int n = 1 + (appleOn ? 1 : 0) + (pg ? 1 : 0);
+        Panel(Loc.T("سجّل دخولك"), out var body, new Vector2(420, 134 + 58 * n));
         refreshOpen = null;
         Ui.Label(body, "عشان كوينزك وتقدمك يتحفظوا وتلعب من أي موبايل", 13, Ui.GoldLight).rectTransform
             .Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(390, 22), new Vector2(0, -2));
+        float y = -40;
+        if (pg)
+        {
+            // Google Play Games: the phone's own Play Games profile, no browser
+            var p = Ui.Button(body, "كمّل بـ Play Games", new Color(0.004f, 0.53f, 0.37f), Color.white, 16, SignInPlayGames);
+            var pr = ((RectTransform)p.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 46), new Vector2(0, y));
+            var pi = Ui.Picture(pr, "PG", Icon("t_dice")); pi.color = Color.white;
+            pi.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(22, 22), new Vector2(12, 0));
+            y -= 58;
+        }
         var g = Ui.Button(body, "كمّل بجوجل", Color.white, Ui.Ink, 16, () => SignInWith("google"));
-        var gr = ((RectTransform)g.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 46), new Vector2(0, -40));
+        var gr = ((RectTransform)g.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 46), new Vector2(0, y));
         var gi = Ui.Picture(gr, "G", Icon("google")); gi.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(24, 24), new Vector2(12, 0));
-        var a = Ui.Button(body, "كمّل بأبل", Color.black, Color.white, 16, () => SignInWith("apple"));
-        ((RectTransform)a.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 46), new Vector2(0, -98));
-        a.gameObject.AddComponent<Outline>().effectColor = new Color(1, 1, 1, 0.35f);
+        y -= 58;
+        if (appleOn)
+        {
+            var a = Ui.Button(body, "كمّل بأبل", Color.black, Color.white, 16, () => SignInWith("apple"));
+            ((RectTransform)a.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 46), new Vector2(0, y));
+            a.gameObject.AddComponent<Outline>().effectColor = new Color(1, 1, 1, 0.35f);
+        }
     }
 
     /// The provider's page opens in the browser; the server sends the player back with a one-time ticket

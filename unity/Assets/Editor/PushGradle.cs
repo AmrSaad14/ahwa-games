@@ -29,6 +29,14 @@ public class PushGradle : IPostGenerateGradleAndroidProject
             File.AppendAllText(gradle, "\n// Google Play purchases: coin packs, the season pass, the ad-free month (Plugins/Android/BBBilling.java)\ndependencies {\n    implementation 'com.android.billingclient:billing:8.3.0'\n}\n");
         if (!g.Contains("app-update"))
             File.AppendAllText(gradle, "\n// the forced update: Play's in-app update (Plugins/Android/BBUpdate.java)\ndependencies {\n    implementation 'com.google.android.play:app-update:2.1.0'\n}\n");
+        // Google Play Games Services v2 (Plugins/Android/BBGames.java)
+        if (!g.Contains("play-services-games-v2"))
+            File.AppendAllText(gradle, "\n// Google Play Games: signing in with the phone's Play Games profile (Plugins/Android/BBGames.java)\ndependencies {\n    implementation 'com.google.android.gms:play-services-games-v2:21.0.0'\n}\n");
+        // Play's SDK index flags fragment 1.1.0 as outdated: the Google Play libraries still ask for it, so a newer one
+        // is named here and Gradle takes the newest
+        if (!g.Contains("androidx.fragment:fragment"))
+            File.AppendAllText(gradle, "\n// a current androidx.fragment (Play Console: fragment 1.1.0 is outdated)\ndependencies {\n    implementation 'androidx.fragment:fragment:1.8.5'\n}\n");
+        PlayGamesId(path);
         // R8 (code shrinking and optimising, BuildScript: minifyRelease): the classes C# calls by name stay whole (a library's
         // "consumer" rules file: only keep/dontwarn/keepattributes, no global options such as -ignorewarnings).
         // The libraries (Firebase, Play, billing, Unity Ads) bring their own rules; Unity keeps its player classes.
@@ -91,6 +99,30 @@ public class PushGradle : IPostGenerateGradleAndroidProject
             Debug.Log("[push] Firebase project " + projectId + " set up for push reminders");
         }
         catch (System.Exception e) { Debug.LogWarning("[push] couldn't read google-services.json: " + e.Message); }
+    }
+
+    /// The game's Play Games project id (Play Console › Play Games Services › Configuration), from
+    /// unity/play-games-id.txt (the build workflow writes it from the PLAY_GAMES_APP_ID variable). With it the
+    /// manifest gets the entry Play Games starts from; without it Play Games stays off and the build is as before.
+    static void PlayGamesId(string path)
+    {
+        var file = Path.Combine(Directory.GetCurrentDirectory(), "play-games-id.txt");
+        var id = File.Exists(file) ? File.ReadAllText(file).Trim() : "";
+        if (!System.Text.RegularExpressions.Regex.IsMatch(id, "^[0-9]{6,20}$")) { Debug.Log("[games] no Play Games project id: Play Games is off in this build"); return; }
+        var values = Path.Combine(path, "src", "main", "res", "values");
+        Directory.CreateDirectory(values);
+        File.WriteAllText(Path.Combine(values, "games_ids.xml"),
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources>\n  <string name=\"game_services_project_id\" translatable=\"false\">" + id + "</string>\n</resources>\n");
+        var manifest = Path.Combine(path, "src", "main", "AndroidManifest.xml");
+        var m = File.ReadAllText(manifest);
+        if (!m.Contains("com.google.android.gms.games.APP_ID"))
+        {
+            int at = m.LastIndexOf("</application>", System.StringComparison.Ordinal);
+            if (at < 0) { Debug.LogWarning("[games] the manifest has no <application>"); return; }
+            m = m.Insert(at, "    <meta-data android:name=\"com.google.android.gms.games.APP_ID\" android:value=\"@string/game_services_project_id\" />\n  ");
+            File.WriteAllText(manifest, m);
+        }
+        Debug.Log("[games] Play Games is on (project " + id + ")");
     }
 
     static void Copy(string from, string to)

@@ -465,6 +465,8 @@ public class App : MonoBehaviour
         switch (code)
         {
             case "maintenance": return Loc.T("السيرفر في صيانة دلوقتي، ارجع كمان شوية");
+            case "play_games_failed": return Loc.T("ماقدرناش ندخلك بـ Play Games، جرّب تاني");
+            case "play_games_off": return Loc.T("الدخول بـ Play Games مش متاح دلوقتي");
             case "game_off": return Loc.T("اللعبة دي مقفولة شوية، جرّب لعبة تانية");
             case "update": Updater.Need(); return Loc.T("لازم تحدّث عشان تكمل لعب");
             case "not_enough_coins": return Loc.T("رصيدك مش كفاية للرهان ده");

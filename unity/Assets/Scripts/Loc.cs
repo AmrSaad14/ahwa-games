@@ -309,6 +309,8 @@ public static class Loc
         ["كل شهر، الأول في الترتيب الشهري بيكسب"] = "Every month, the #1 of the monthly ranking wins", ["العام"] = "Overall", ["الدولة"] = "Country", ["المحافظة"] = "Governorate", ["الألقاب"] = "Titles", ["بلدك"] = "Your country",
         ["آخر الشهر"] = "End of month", ["كل الألعاب أونلاين: المكسب ٣ نقط واللعب نقطة"] = "All games online: 3 points a win, 1 for playing",
         ["ترتيب المحافظات لمصر بس"] = "Governorate rankings are for Egypt only",
+        ["كمّل بـ Play Games"] = "Continue with Play Games", ["أهلاً! اتسجلت بـ Play Games"] = "Welcome! Signed in with Play Games",
+        ["ماقدرناش ندخلك بـ Play Games، جرّب تاني"] = "Couldn't sign you in with Play Games, please try again", ["الدخول بـ Play Games مش متاح دلوقتي"] = "Play Games sign-in isn't available right now",
         ["اسمح بالموقع عشان نعرف محافظتك"] = "Allow location so we can find your governorate", ["بندوّر على محافظتك…"] = "Finding your governorate…",
         ["حدد محافظتي من موقعي"] = "Find my governorate from my location", ["شغّل الموقع في الموبايل عشان نعرف محافظتك"] = "Turn on location so we can find your governorate",
         ["محافظتك بتتحدد من موقعك على الموبايل"] = "Your governorate comes from your phone's location", ["محافظتك زي ما هي"] = "Your governorate is the same",

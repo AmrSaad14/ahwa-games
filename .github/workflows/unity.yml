@@ -51,6 +51,12 @@ jobs:
         run: |
           if [ -n "$GOOGLE_SERVICES_JSON" ]; then printf '%s' "$GOOGLE_SERVICES_JSON" > unity/google-services.json; echo "push: on"; else echo "push: off (no GOOGLE_SERVICES_JSON secret)"; fi
 
+      - name: Google Play Games (the PLAY_GAMES_APP_ID variable; without it Play Games is off)
+        env:
+          PLAY_GAMES_APP_ID: ${{ vars.PLAY_GAMES_APP_ID }}   # Play Console → Play Games Services → Configuration (the numeric project id)
+        run: |
+          if [ -n "$PLAY_GAMES_APP_ID" ]; then printf '%s' "$PLAY_GAMES_APP_ID" > unity/play-games-id.txt; echo "play games: on"; else echo "play games: off (no PLAY_GAMES_APP_ID variable)"; fi
+
       - uses: actions/cache@v4
         with:
           path: unity/Library
