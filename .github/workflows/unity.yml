@@ -53,7 +53,7 @@ jobs:
 
       - name: Google Play Games (the PLAY_GAMES_APP_ID variable; without it Play Games is off)
         env:
-          PLAY_GAMES_APP_ID: ${{ vars.PLAY_GAMES_APP_ID }}   # Play Console → Play Games Services → Configuration (the numeric project id)
+          PLAY_GAMES_APP_ID: ${{ vars.PLAY_GAMES_APP_ID || '214034500520' }}   # Play Console → Play Games Services → Configuration (the project id; public)
         run: |
           if [ -n "$PLAY_GAMES_APP_ID" ]; then printf '%s' "$PLAY_GAMES_APP_ID" > unity/play-games-id.txt; echo "play games: on"; else echo "play games: off (no PLAY_GAMES_APP_ID variable)"; fi
 
