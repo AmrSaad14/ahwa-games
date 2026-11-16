@@ -98,8 +98,15 @@ public class Updater : MonoBehaviour
         Sfx.Chime();
     }
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+    [System.Runtime.InteropServices.DllImport("__Internal")] static extern void BBWeb_Reload();
+#endif
     void Go()
     {
+        // the web version: a newer one is already on the server, so loading the page again is the update
+#if UNITY_WEBGL && !UNITY_EDITOR
+        BBWeb_Reload(); return;
+#endif
         if (Application.platform != RuntimePlatform.Android) { Application.OpenURL("https://play.google.com/store/apps/details?id=" + Application.identifier); return; }
         flowOpen = true;
         Call("start");

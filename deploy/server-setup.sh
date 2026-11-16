@@ -9,6 +9,7 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 BASE=/opt/board-battles
 cd "$BASE"
+mkdir -p "$BASE/web"   # the game in the browser (unity-web.yml puts it here)
 
 # ---- the first time: Docker, sqlite3 for backups, a firewall, a little swap for building on a small server ----
 if ! command -v docker >/dev/null 2>&1; then
@@ -49,7 +50,7 @@ chmod 600 app/.env env.github 2>/dev/null || true
 cd app
 # a Caddyfile that doesn't load would take the site down: check it first (the running Caddy keeps its old one)
 echo "== checking the Caddyfile"
-docker run --rm -e "DOMAIN=$DOMAIN" -e "SERVER_IP=$(grep -m1 '^SERVER_IP=' .env | cut -d= -f2)" -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine \
+docker run --rm -v /opt/board-battles/web:/srv/web:ro -e "DOMAIN=$DOMAIN" -e "SERVER_IP=$(grep -m1 '^SERVER_IP=' .env | cut -d= -f2)" -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine \
   caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile 2>&1 | tail -3
 [ "${PIPESTATUS[0]}" = 0 ] || { echo "!! the Caddyfile doesn't load: nothing restarted"; exit 1; }
 echo "== building and starting the game"

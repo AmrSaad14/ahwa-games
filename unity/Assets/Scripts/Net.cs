@@ -9,7 +9,12 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
+#if UNITY_WEBGL && !UNITY_EDITOR
+using System.Runtime.InteropServices;
+#endif
 
+// In the web version (WebGL) the browser's own WebSocket carries the connection (Plugins/WebGL/BBSocket.jslib):
+// browsers have no threads or .NET sockets, so it is polled from Pump() instead of read on a task.
 public class Net
 {
     public const string ServerUrl = "wss://qimma-labs.com/boardbattles/ws";
@@ -19,16 +24,38 @@ public class Net
     readonly ConcurrentQueue<string> inbox = new ConcurrentQueue<string>();
     readonly SemaphoreSlim sendLock = new SemaphoreSlim(1, 1);
     readonly CancellationTokenSource stop = new CancellationTokenSource();
+#if UNITY_WEBGL && !UNITY_EDITOR
+    [DllImport("__Internal")] static extern void BBSock_Open(string url);
+    [DllImport("__Internal")] static extern int BBSock_State();
+    [DllImport("__Internal")] static extern void BBSock_Send(string text);
+    [DllImport("__Internal")] static extern void BBSock_Close();
+    [DllImport("__Internal")] static extern string BBSock_Next();
+    [DllImport("__Internal")] static extern string BBWeb_Base();
+    bool webStarted, webStopped, webWaitingResume;
+    float webRetryAt = -1; int webBackoff = 1000;
+    public bool Open => BBSock_State() == 1;
+#else
     ClientWebSocket ws;
+    /// The socket is open right now (Online can lag a moment behind a dropped connection).
+    public bool Open { get { var w = ws; return w != null && w.State == WebSocketState.Open; } }
+#endif
     float lastPing;
 
     public bool Online { get; private set; }
-    /// The socket is open right now (Online can lag a moment behind a dropped connection).
-    public bool Open { get { var w = ws; return w != null && w.State == WebSocketState.Open; } }
     public event Action<Dictionary<string, object>> OnMessage;
     public event Action<bool> OnOnline;
 
-    public Net(string url = null) { this.url = url ?? Arg("-server") ?? ServerUrl; }
+    public Net(string url = null) { this.url = url ?? Arg("-server") ?? PageServer() ?? ServerUrl; }
+
+    /// The web version talks to the server it was loaded from (https://host/boardbattles/ → wss://host/boardbattles/ws).
+    static string PageServer()
+    {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        try { var b = BBWeb_Base(); if (!string.IsNullOrEmpty(b)) return (b.StartsWith("https://") ? "wss://" + b.Substring(8) : "ws://" + b.Substring(7)) + "/ws"; }
+        catch { }
+#endif
+        return null;
+    }
 
     /// The same server over https (sign-in pages): wss://host/ws → https://host
     public string HttpBase
@@ -54,6 +81,39 @@ public class Net
         set { PlayerPrefs.SetString(TokenKey, value ?? ""); PlayerPrefs.Save(); }
     }
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+    public void Start() { webStarted = true; webRetryAt = 0; }
+    public void Stop() { webStopped = true; try { BBSock_Close(); } catch { } }
+    public void Resume() { webWaitingResume = false; if (BBSock_State() != 1) webRetryAt = 0; }
+    public event Action OnReplaced;
+    public void Send(Dictionary<string, object> m) { if (BBSock_State() == 1) BBSock_Send(Json.Write(m)); }
+
+    /// The browser's socket: hand on what arrived, and reconnect with backoff when it closes.
+    void WebTick()
+    {
+        if (!webStarted || webStopped) return;
+        string s;
+        while ((s = BBSock_Next()) != null && s.Length > 0)
+        {
+            if (s == "\u0001open") { webBackoff = 1000; inbox.Enqueue(s); continue; }
+            if (s.StartsWith("\u0001closed"))
+            {
+                inbox.Enqueue("\u0001closed");
+                // the same account opened elsewhere: wait for the player to come back to this tab
+                if (s == "\u0001closed:4001") { webWaitingResume = true; inbox.Enqueue("\u0001replaced"); }
+                else { webRetryAt = Time.unscaledTime + webBackoff / 1000f; webBackoff = Math.Min(webBackoff * 2, 15000); }
+                continue;
+            }
+            inbox.Enqueue(s);
+        }
+        if (!webWaitingResume && webRetryAt >= 0 && Time.unscaledTime >= webRetryAt && BBSock_State() != 1 && BBSock_State() != 0)
+        {
+            webRetryAt = -1;
+            BBSock_Open(url);
+        }
+        else if (webRetryAt == 0 && BBSock_State() == 3) { webRetryAt = -1; BBSock_Open(url); }
+    }
+#else
     public void Start() { _ = Run(); }
     public void Stop() { stop.Cancel(); try { ws?.Abort(); } catch { } }
 
@@ -132,10 +192,14 @@ public class Net
         catch (Exception e) { Debug.LogWarning("[net] send failed: " + e.Message); }
         finally { sendLock.Release(); }
     }
+#endif
 
     /// Main thread: hand over what arrived.
     public void Pump()
     {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        WebTick();
+#endif
         while (inbox.TryDequeue(out var s))
         {
             if (s.Length > 0 && s[0] == '\u0001')

@@ -119,6 +119,25 @@ public static class BuildScript
 
     public static void BuildLinux() { if (!Linux()) EditorApplication.Exit(1); }
     public static void BuildAndroid() { if (!Android()) EditorApplication.Exit(1); }
+    public static void BuildWeb() { if (!Web()) EditorApplication.Exit(1); }
+
+    /// The web version (WebGL): the same game in the browser, served at https://qimma-labs.com/boardbattles/
+    /// (unity-web.yml puts it on the server). No voice chat, purchases, ads or push there: those are Android only.
+    static bool Web()
+    {
+        Common();
+        int n = int.TryParse(System.Environment.GetEnvironmentVariable("BUILD_NUMBER"), out var bn) && bn > 0 ? bn : 1;
+        PlayerSettings.bundleVersion = "1.0." + n;          // the same version as the app from the same build
+        PlayerSettings.WebGL.template = "PROJECT:BoardBattles";
+        PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Brotli;   // Caddy sends the .br files as they are
+        PlayerSettings.WebGL.decompressionFallback = false;
+        PlayerSettings.WebGL.nameFilesAsHashes = true;      // a new build never mixes with files a browser kept
+        PlayerSettings.WebGL.dataCaching = true;
+        PlayerSettings.WebGL.exceptionSupport = WebGLExceptionSupport.ExplicitlyThrownExceptionsOnly;
+        PlayerSettings.WebGL.powerPreference = WebGLPowerPreference.HighPerformance;
+        PlayerSettings.SetManagedStrippingLevel(NamedBuildTarget.WebGL, ManagedStrippingLevel.Low);
+        return Build(BuildTarget.WebGL, BuildTargetGroup.WebGL, "../build/web");
+    }
 
     static bool Linux()
     {

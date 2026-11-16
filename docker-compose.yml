@@ -68,6 +68,7 @@ services:
       SERVER_IP: ${SERVER_IP:-127.0.0.1}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /opt/board-battles/web:/srv/web:ro   # the game in the browser (unity-web.yml)
       - caddy-data:/data
       - caddy-config:/config
 

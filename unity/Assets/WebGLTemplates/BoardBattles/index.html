@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ar">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#2a0710">
+  <meta name="description" content="Board Battles: domino, tawla, chess, ludo and estimation in an Egyptian café, online with friends.">
+  <title>Board Battles</title>
+  <link rel="icon" href="icon.png">
+  <style>
+    html, body { margin: 0; height: 100%; background: #1c0609; overflow: hidden; touch-action: none; }
+    #unity-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; background: #1c0609; outline: none; }
+    #load { position: fixed; inset: 0; display: grid; place-items: center; align-content: center; gap: 22px;
+      background: radial-gradient(120% 90% at 50% 42%, #7a1424 0%, #4a0b16 45%, #1c0609 100%);
+      color: #f3cd62; font: 600 15px system-ui, -apple-system, "Segoe UI", sans-serif; transition: opacity .5s; }
+    #load.out { opacity: 0; pointer-events: none; }
+    #load img { width: min(42vmin, 220px); height: auto; filter: drop-shadow(0 8px 24px rgba(0,0,0,.45)); }
+    #load .t { font-size: clamp(26px, 6vmin, 44px); letter-spacing: .18em; }
+    #bar { width: min(60vw, 320px); height: 6px; border-radius: 3px; background: rgba(255,255,255,.12); overflow: hidden; }
+    #bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #c99a3a, #f3cd62); transition: width .2s; }
+    #msg { opacity: .8; font-weight: 500; text-align: center; padding: 0 20px; }
+    #rotate { display: none; position: fixed; inset: 0; z-index: 5; place-items: center; text-align: center; padding: 24px;
+      background: #1c0609; color: #f3cd62; font: 600 18px system-ui, sans-serif; }
+    @media (orientation: portrait) and (max-width: 820px) { #rotate.on { display: grid; } }
+  </style>
+</head>
+<body>
+  <canvas id="unity-canvas" tabindex="-1"></canvas>
+  <div id="load">
+    <img src="icon.png" alt="">
+    <div class="t">BOARD BATTLES</div>
+    <div id="bar"><i></i></div>
+    <div id="msg">جاري التحميل… Loading…</div>
+  </div>
+  <div id="rotate">لف الموبايل بالعرض عشان تلعب<br>Turn your phone sideways to play</div>
+  <script>
+    // an old offline cache from the earlier web version would keep showing it: take it away
+    if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(function (rs) { rs.forEach(function (r) { r.unregister(); }); }).catch(function () {});
+    if (window.caches) caches.keys().then(function (k) { k.forEach(function (n) { caches.delete(n); }); }).catch(function () {});
+
+    var canvas = document.getElementById('unity-canvas');
+    var config = {
+      dataUrl: "Build/{{{ DATA_FILENAME }}}",
+      frameworkUrl: "Build/{{{ FRAMEWORK_FILENAME }}}",
+      codeUrl: "Build/{{{ CODE_FILENAME }}}",
+      streamingAssetsUrl: "StreamingAssets",
+      companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
+      productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
+      productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},
+      matchWebGLToCanvasSize: true,
+      devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+      showBanner: function (msg, type) { if (type === 'error') document.getElementById('msg').textContent = msg; console.log('[unity] ' + msg); }
+    };
+    var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile) document.getElementById('rotate').classList.add('on');
+    var s = document.createElement('script');
+    s.src = "Build/{{{ LOADER_FILENAME }}}";
+    s.onload = function () {
+      createUnityInstance(canvas, config, function (p) {
+        document.querySelector('#bar i').style.width = Math.round(p * 100) + '%';
+      }).then(function (inst) {
+        window.unityInstance = inst;
+        document.getElementById('load').classList.add('out');
+        canvas.focus();
+      }).catch(function (e) {
+        document.getElementById('msg').textContent = 'ماقدرناش نشغّل اللعبة على المتصفح ده. Couldn\'t start the game in this browser: ' + e;
+      });
+    };
+    document.body.appendChild(s);
+  </script>
+</body>
+</html>

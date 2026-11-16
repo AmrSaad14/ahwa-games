@@ -1481,8 +1481,18 @@ public partial class Menus : MonoBehaviour
         if (provider == "google" && !googleOn) { app.Toast(Loc.T("تسجيل الدخول بجوجل مش متاح على السيرفر ده")); return; }
         if (provider == "apple" && !appleOn) { app.Toast(Loc.T("تسجيل الدخول بأبل مش متاح على السيرفر ده")); return; }
         if (app.net == null) return;
+#if UNITY_WEBGL && !UNITY_EDITOR
+        // the web version: the sign-in page opens in this tab and comes back to the game with ?ticket=…
+        WebGo(app.net.HttpBase + "/auth/" + provider + "/start?to=web");
+#else
         Application.OpenURL(app.net.HttpBase + "/auth/" + provider + "/start?to=app");
+#endif
     }
+#if UNITY_WEBGL && !UNITY_EDITOR
+    [System.Runtime.InteropServices.DllImport("__Internal")] static extern void BBWeb_Go(string url);
+    [System.Runtime.InteropServices.DllImport("__Internal")] static extern void BBWeb_CleanUrl();
+    static void WebGo(string url) { BBWeb_Go(url); }
+#endif
 
     IEnumerator SendTicketSoon()
     {
@@ -1510,7 +1520,12 @@ public partial class Menus : MonoBehaviour
             if (app.net != null && app.net.Online && user != null) app.JoinRoom(code); else pendingJoin = code;
             return;
         }
-        if (!url.StartsWith("ahwagames://auth")) return;
+        // the web version: back from signing in, the page's own address carries ?ticket=…
+        bool web = url.StartsWith("http") && (url.Contains("?ticket=") || url.Contains("&ticket="));
+#if UNITY_WEBGL && !UNITY_EDITOR
+        if (web) { try { BBWeb_CleanUrl(); } catch { } }
+#endif
+        if (!web && !url.StartsWith("ahwagames://auth")) return;
         int q = url.IndexOf("ticket=", StringComparison.Ordinal);
         if (q < 0) return;
         var ticket = Uri.UnescapeDataString(url.Substring(q + 7).Split('&')[0]);

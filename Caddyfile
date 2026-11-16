@@ -3,7 +3,41 @@
 {$DOMAIN} {
 	encode zstd gzip
 	handle_path /boardbattles/* {
-		reverse_proxy domino:8080
+		# the game in the browser (the Unity web build, put in /opt/board-battles/web by unity-web.yml): its page
+		# and files; everything else (the API, sign-in, the live connection, the legal pages) is the game server
+		root * /srv/web
+		@page {
+			path /
+			file {
+				root /srv/web
+				try_files /index.html
+			}
+		}
+		@files {
+			path /Build/* /StreamingAssets/* /icon.png /sw.js
+			file {
+				root /srv/web
+			}
+		}
+		@br path *.br
+		header @br Content-Encoding br
+		@wasm path *.wasm.br
+		header @wasm Content-Type application/wasm
+		@js path *.js.br
+		header @js Content-Type application/javascript
+		@data path *.data.br *.symbols.json.br
+		header @data Content-Type application/octet-stream
+		header @page Cache-Control "no-cache"
+		header /sw.js Cache-Control "no-cache"
+		handle @page {
+			file_server
+		}
+		handle @files {
+			file_server
+		}
+		handle {
+			reverse_proxy domino:8080
+		}
 	}
 	handle /boardbattles {
 		redir * /boardbattles/ 308

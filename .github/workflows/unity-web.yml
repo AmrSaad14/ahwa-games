@@ -1,0 +1,101 @@
+# The game in the browser: the same Unity game as the app, built for WebGL after every Unity build (and by hand),
+# and put on the game server, where Caddy serves it at https://qimma-labs.com/boardbattles/ (Caddyfile).
+# The build is also kept in the "unity-web" release (board-battles-web.zip).
+# Needs the same secrets as the Unity build (UNITY_EMAIL, UNITY_PASSWORD) and the deploy key (DEPLOY_SSH_KEY).
+name: Unity web
+on:
+  workflow_run:
+    workflows: ['Unity build']
+    types: [completed]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: unity-build        # one Unity licence at a time: a new Unity build waits for (or cancels) this one
+  cancel-in-progress: false
+jobs:
+  web:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      IMAGE: unityci/editor:ubuntu-6000.0.84f1-webgl-3.2.2
+      HOST: ${{ vars.DEPLOY_HOST || '46.225.157.22' }}
+      HAS_KEY: ${{ secrets.DEPLOY_SSH_KEY != '' }}
+      # the same version number as the app from the same Unity build
+      BUILD_NUMBER: ${{ github.event.workflow_run.run_number || github.run_number }}
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - name: Free disk space (the Unity image is large)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /usr/local/share/boost /usr/local/share/powershell /usr/share/swift /opt/az /opt/microsoft /opt/google /usr/lib/jvm /opt/hostedtoolcache/CodeQL /opt/hostedtoolcache/go /opt/hostedtoolcache/PyPy || true
+          docker system prune -af > /dev/null || true
+          df -h /
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SHA }}
+
+      - name: The café regulars (realistic humans made by the Characters workflow)
+        run: |
+          mkdir -p unity/Assets/Resources/People
+          gh release download chars-glb -p "*.glb" -D unity/Assets/Resources/People --clobber || echo "no characters yet: the generated ones will be used"
+
+      - uses: actions/cache@v4
+        with:
+          path: unity/Library
+          key: unity-web-library-${{ hashFiles('unity/Assets/**', 'unity/Packages/manifest.json') }}
+          restore-keys: unity-web-library-
+
+      - name: Build (WebGL)
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          set +e
+          mkdir -p build logs
+          docker pull -q $IMAGE > logs/web-step.txt 2>&1
+          docker run --rm -e UNITY_EMAIL -e UNITY_PASSWORD -e BUILD_NUMBER -v "$PWD":/w -w /w $IMAGE bash -c '
+            LC=/opt/unity/Editor/Data/Resources/Licensing/Client/Unity.Licensing.Client
+            for i in 1 2 3; do
+              "$LC" --activate-all --include-personal --username "$UNITY_EMAIL" --password "$UNITY_PASSWORD" > /w/logs/web-activate.log 2>&1 && break
+              sleep 20
+            done
+            unity-editor -batchmode -nographics -quit -projectPath /w/unity -executeMethod BuildScript.BuildWeb -logFile /w/logs/web-editor.log
+            echo "build exit $?" > /w/logs/web-exit.txt
+            unity-editor -batchmode -nographics -quit -returnlicense -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD" -logFile /w/logs/web-return.log
+            chmod -R a+rwX /w/build /w/logs /w/unity/Library 2>/dev/null
+            true' >> logs/web-step.txt 2>&1
+          cat logs/web-step.txt logs/web-exit.txt
+          grep -E "^\[build|error CS|Error building|Scripts have compiler errors|\[build error\]" logs/web-editor.log | head -80
+          ls -la build/web build/web/Build 2>/dev/null
+          test -f build/web/index.html
+
+      - name: Publish the web build and its log
+        if: always()
+        run: |
+          set +e
+          blank="s/[A-Za-z0-9._%+-]*@[A-Za-z0-9.-]*\.[A-Za-z]\{2,\}/***@***/g"
+          for f in logs/*.txt logs/*.log; do [ -f "$f" ] && sudo sed -i "$blank" "$f"; done
+          [ -f logs/web-editor.log ] && tail -c 4000000 logs/web-editor.log > logs/web-editor-tail.log
+          files=$(ls logs/web-step.txt logs/web-exit.txt logs/web-editor-tail.log 2>/dev/null)
+          if [ -f build/web/index.html ]; then (cd build/web && zip -qr ../../board-battles-web.zip .); files="$files board-battles-web.zip"; fi
+          gh release delete unity-web --yes --cleanup-tag || true
+          gh release create unity-web $files --title "Unity web build" --target "$SHA" --prerelease --notes "The game in the browser, build $BUILD_NUMBER (${SHA::7})"
+
+      - name: Put it on the server
+        if: env.HAS_KEY == 'true' && hashFiles('build/web/index.html') != ''
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -T 15 "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          # the new files go in next to the old ones, then the two swap in one step (players never get half a build)
+          ssh root@"$HOST" 'rm -rf /opt/board-battles/web.new && mkdir -p /opt/board-battles/web.new /opt/board-battles/web'
+          tar -C build/web -cf - . | ssh root@"$HOST" 'tar -x -C /opt/board-battles/web.new && chmod -R a+rX /opt/board-battles/web.new'
+          # the folder Caddy reads is mounted by path, so its contents are replaced, not the folder itself
+          ssh root@"$HOST" 'cd /opt/board-battles && rm -rf web.old && mkdir web.old && { cp -a web/. web.old/ 2>/dev/null || true; } && find web -mindepth 1 -delete && cp -a web.new/. web/ && rm -rf web.new && ls web web/Build'
+          curl -s -o /dev/null -w "the page: %{http_code}\n" https://qimma-labs.com/boardbattles/
