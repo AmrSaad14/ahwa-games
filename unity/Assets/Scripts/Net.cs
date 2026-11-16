@@ -12,7 +12,7 @@ using UnityEngine;
 
 public class Net
 {
-    public const string ServerUrl = "wss://qimma-labs.com/ws";
+    public const string ServerUrl = "wss://qimma-labs.com/boardbattles/ws";
     const string TokenKey = "ahwa.token";
 
     readonly string url;

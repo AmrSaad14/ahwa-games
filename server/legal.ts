@@ -13,7 +13,7 @@ button{font:inherit;font-weight:700;padding:12px;border:0;border-radius:10px;bac
 function page(title: string, body: string): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${title} · Board Battles</title><style>${STYLE}</style></head><body><main>
-<nav><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/delete-account">Delete account</a></nav>${body}</main></body></html>`;
+<nav><a href="privacy">Privacy</a><a href="terms">Terms</a><a href="delete-account">Delete account</a></nav>${body}</main></body></html>`;
 }
 
 const UPDATED = '7 November 2026';
@@ -37,7 +37,7 @@ ${c?.enabled ? '<li><b>Monthly prizes:</b> if you win one, the Vodafone Cash num
 <h2>Services we use</h2><ul>
 <li><b>Google Play</b> (purchases, the install referrer for invite codes), <b>Unity Ads</b> (ads; Unity may use your device's advertising id, approximate location from your IP address and device information to show and measure ads, see <a href="https://unity.com/legal/game-player-and-app-user-privacy-policy">Unity's privacy policy</a>; you can reset or delete your advertising id in your phone's settings), <b>Firebase Cloud Messaging</b> (reminders).</li>
 <li><b>Google</b> and <b>Apple</b> sign-in, and an SMS provider for mobile-number codes, only when you choose them.</li></ul>
-<h2>How long</h2><p>As long as your account exists. Delete it any time: in the app, Settings → Delete my account, or on the <a href="/delete-account">delete-account page</a>. Everything above is removed; purchase records the law requires us to keep are kept for that time only.</p>
+<h2>How long</h2><p>As long as your account exists. Delete it any time: in the app, Settings → Delete my account, or on the <a href="delete-account">delete-account page</a>. Everything above is removed; purchase records the law requires us to keep are kept for that time only.</p>
 <h2>Children</h2><p>The game is for players 13 and over${c?.enabled ? '; the monthly cash prizes are for adults (18+) living in Egypt' : ''}. Coins can't be cashed out.</p>
 <h2>Contact</h2><p>In the app: Settings → Contact support.</p>
 <div class="ar"><h1>سياسة الخصوصية</h1>
@@ -47,7 +47,7 @@ ${c?.enabled ? '<li><b>Monthly prizes:</b> if you win one, the Vodafone Cash num
 <li>رسايل الدعم والبلاغات، وتوكن الإشعارات لو سمحت بيها.</li>${c?.enabled ? '<li>لو كسبت جايزة الشهر: رقم فودافون كاش اللي بتكتبه، عشان نحولك ونحتفظ بسجل.</li>' : ''}</ul>
 <h2>مش بنحتفظ بـ</h2><ul><li>الكلام الصوتي مش بيتسجل. شات الترابيزة مش بيتخزن. مش بنبيع بياناتك.</li></ul>
 <h2>خدمات بنستخدمها</h2><ul><li>Google Play، Unity Ads للإعلانات، Firebase للإشعارات، وتسجيل الدخول بجوجل أو أبل أو الموبايل لو اخترته.</li></ul>
-<h2>امسح حسابك</h2><p>من اللعبة: الإعدادات ← امسح حسابي، أو من <a href="/delete-account">صفحة مسح الحساب</a>.</p></div>`);
+<h2>امسح حسابك</h2><p>من اللعبة: الإعدادات ← امسح حسابي، أو من <a href="delete-account">صفحة مسح الحساب</a>.</p></div>`);
 }
 
 export function termsPage(c?: PrizeTerms): string {
@@ -84,6 +84,6 @@ your profile, coins, games, skins, friends and messages. Records of Google Play 
 <p>من غير اللعبة: اكتب كود الصحاب بتاعك وإزاي كنت بتسجل دخول، وهنمسح الحساب خلال ٧ أيام.</p></div>
 <script>document.getElementById('f').onsubmit=async function(e){e.preventDefault();var d=new FormData(this),m=document.getElementById('m');
 var text='Account deletion request. Friend code: '+d.get('code')+'. '+(d.get('note')||'');
-try{var r=await fetch('/api/support',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text,contact:d.get('contact'),app:'delete-account page'})});
+try{var r=await fetch('api/support',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text,contact:d.get('contact'),app:'delete-account page'})});
 m.className=r.ok?'ok':'';m.textContent=r.ok?'Received. Your account will be deleted within 7 days. · وصلنا طلبك.':'Something went wrong, try again.';if(r.ok)this.reset();}catch(_){m.textContent='Something went wrong, try again.'}};</script>`);
 }

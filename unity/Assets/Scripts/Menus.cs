@@ -598,7 +598,7 @@ public partial class Menus : MonoBehaviour
             var sb = Ui.Button(sup, "كلّمنا", Ui.Gold, Ui.Ink, 14, OpenSupport);
             At((RectTransform)sb.transform, 384, 100, 32);
             // the privacy policy and the terms (pages on the server), and deleting your account
-            string web = app.net != null ? app.net.HttpBase : "https://qimma-labs.com";
+            string web = app.net != null ? app.net.HttpBase : "https://qimma-labs.com/boardbattles";
             var lg = Row(list, 44, Card);
             At(Ui.Label(lg, "الخصوصية والشروط", 16, Color.white, StartAlign, Ui.Bold).rectTransform, 14, 200, 40);
             var pv = Ui.Button(lg, "الخصوصية", new Color(1, 1, 1, 0.08f), Ui.GoldLight, 14, () => { Sfx.Tap(); Application.OpenURL(web + "/privacy"); });

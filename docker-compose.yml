@@ -19,7 +19,7 @@ services:
       TURN_SECRET: ${TURN_SECRET:?Set TURN_SECRET in .env}
       ADMIN_KEY: ${ADMIN_KEY:-}
       # sign-in with Google and a mobile number (README → Sign-in)
-      PUBLIC_URL: https://${DOMAIN}
+      PUBLIC_URL: https://${DOMAIN}/boardbattles   # the game is under /boardbattles on the domain (Caddyfile)
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       SMS_PROVIDER: ${SMS_PROVIDER:-}

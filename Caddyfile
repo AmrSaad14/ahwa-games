@@ -1,5 +1,25 @@
-# the domain, and the server's old address (apps from before the domain still connect there)
-{$DOMAIN}, {$OLD_DOMAIN:static.22.157.225.46.clients.your-server.de} {
+# The game lives under https://DOMAIN/boardbattles (the app, the sign-in pages, the API, the WebSocket at
+# /boardbattles/ws); the prefix is taken off before the game server sees the request.
+{$DOMAIN} {
+	encode zstd gzip
+	handle_path /boardbattles/* {
+		reverse_proxy domino:8080
+	}
+	handle /boardbattles {
+		redir * /boardbattles/ 308
+	}
+	# the web version's live connection (it connects to /ws on the page's own host)
+	handle /ws {
+		reverse_proxy domino:8080
+	}
+	# anything else on the domain (a page's own links such as /privacy, /admin) is the game's too
+	handle {
+		redir * /boardbattles{uri} 308
+	}
+}
+
+# the server's old address: everything at the root, as before (apps from before the domain connect here)
+{$OLD_DOMAIN:static.22.157.225.46.clients.your-server.de} {
 	encode zstd gzip
 	reverse_proxy domino:8080
 }
