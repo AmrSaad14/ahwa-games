@@ -147,7 +147,7 @@ jobs:
             cp shots/*.png "$GITHUB_WORKSPACE/shots/" 2>/dev/null
             # the recorded frames → a short video of the run
             if ls shots/frames/*.png > /dev/null 2>&1; then
-              ffmpeg -loglevel error -y -framerate 12 -i shots/frames/f%04d.png -vf scale=960:-2 -c:v libx264 -pix_fmt yuv420p -crf 24 -movflags +faststart "$GITHUB_WORKSPACE/shots/unity-run.mp4" >> "$GITHUB_WORKSPACE/logs/shots-step.txt" 2>&1
+              ffmpeg -loglevel error -y -framerate 12 -i shots/frames/f%04d.png -vf "scale=960:540:force_original_aspect_ratio=decrease,pad=960:540:(ow-iw)/2:(oh-ih)/2,setsar=1" -c:v libx264 -pix_fmt yuv420p -crf 24 -movflags +faststart "$GITHUB_WORKSPACE/shots/unity-run.mp4" >> "$GITHUB_WORKSPACE/logs/shots-step.txt" 2>&1
               echo "frames: $(ls shots/frames | wc -l)" >> "$GITHUB_WORKSPACE/logs/shots-step.txt"
             fi
             cd "$GITHUB_WORKSPACE"

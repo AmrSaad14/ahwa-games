@@ -167,6 +167,7 @@ public class GameUi : MonoBehaviour
     {
         app = a;
         canvas = Ui.MakeCanvas("Game", 20);
+        canvas.gameObject.AddComponent<TallCanvas>();   // ludo is played upright
         root = Ui.Rect("Root", canvas.transform).Safe();
         stakeIndex = Mathf.Clamp(PlayerPrefs.GetInt("ahwa.stake", 0), 0, Stakes.Length - 1);
         BuildPicker(); BuildQueue(); BuildHud(); BuildLobby();
@@ -653,8 +654,47 @@ public class GameUi : MonoBehaviour
         matchPanel.gameObject.SetActive(false);
     }
 
+    /* ---------- ludo is played upright: the same buttons, laid out for a tall screen ---------- */
+
+    bool upright;
+    readonly List<(RectTransform r, Vector2 min, Vector2 max, Vector2 pivot, Vector2 size, Vector2 pos)> wide = new List<(RectTransform, Vector2, Vector2, Vector2, Vector2, Vector2)>();
+
+    /// The screen turned (or the game made it turn): lay the game's buttons out for it.
+    void Orient()
+    {
+        bool tall = TallCanvas.Upright;
+        if (tall == upright || hud == null) return;
+        upright = tall;
+        // the sideways layout, as built, to go back to
+        if (wide.Count == 0) foreach (RectTransform r in hud) wide.Add((r, r.anchorMin, r.anchorMax, r.pivot, r.sizeDelta, r.anchoredPosition));
+        foreach (var w in wide) { w.r.anchorMin = w.min; w.r.anchorMax = w.max; w.r.pivot = w.pivot; w.r.sizeDelta = w.size; w.r.anchoredPosition = w.pos; }
+        roundText.alignment = TextAnchor.MiddleRight;
+        if (!tall) return;
+        foreach (var w in wide)
+        {
+            if (w.min != Vector2.one || w.max != Vector2.one) continue;
+            // the round buttons down the right side (mic, chat, sound, drinks, stickers) go in a row along the top
+            if (w.size == new Vector2(46, 46) && Mathf.Abs(w.pos.x + 12) < 0.5f)
+            {
+                int i = Mathf.RoundToInt((-w.pos.y - 44) / 52f);
+                w.r.anchoredPosition = new Vector2(-12 - 50 * i, -10);
+            }
+            // and their panels open under that row
+            else if (Mathf.Abs(w.pos.x + 64) < 0.5f) w.r.anchoredPosition = new Vector2(-12, -62);
+        }
+        // the scores: their own row under the buttons, the width of the screen; the game's name under them
+        ((RectTransform)scoreText.transform.parent).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(406, 34), new Vector2(0, -62));
+        roundText.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(406, 20), new Vector2(0, -100));
+        roundText.alignment = TextAnchor.MiddleCenter;
+        // whose turn: bottom left; the dice: bottom, right of the middle
+        turnChip.Place(new Vector2(0, 0), new Vector2(0, 0), new Vector2(64, 64), new Vector2(14, 64));
+        ((RectTransform)rollButton.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(170, 56), new Vector2(40, 26));
+        ((RectTransform)undoButton.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(120, 46), new Vector2(40, 26));
+    }
+
     public void ShowHud(bool on)
     {
+        Orient();
         hud.gameObject.SetActive(on);
         if (!on) { HideDouble(); matchPanel.gameObject.SetActive(false); resultPanel.gameObject.SetActive(false); lobby.gameObject.SetActive(false); handKey = ""; lobbyKey = ""; }
         else ShowMic();
@@ -1035,6 +1075,7 @@ public class GameUi : MonoBehaviour
 
     void Update()
     {
+        Orient();
         if (queuePanel.gameObject.activeSelf)
         {
             float left = botsAtLocal - Time.time;
@@ -1079,7 +1120,14 @@ public class GameUi : MonoBehaviour
             local.y = Mathf.Min(local.y, halfH - 66); local.x = Mathf.Clamp(local.x, -halfW + 104, halfW - 150);   // clear of the screen edge and the mic / chat / sound buttons on the right
             // a board (ludo, chess, tawla) or the domino table fills the middle: the names go to the screen's sides
             // instead of over it, where they would hide tiles and catch the taps meant for the glowing spots
-            if (!App.CardGame(v.game))
+            if (!App.CardGame(v.game) && upright)
+            {
+                // held upright (ludo): two across the top under the scores, one at the bottom right (you are bottom left)
+                if (pos == 3) local = new Vector2(-halfW + 96, halfH - 150);
+                else if (pos == 2) local = new Vector2(v.seats.Count == 2 ? 0 : halfW - 96, halfH - 150);
+                else if (pos == 1) local = new Vector2(halfW - 96, -halfH + 150);
+            }
+            else if (!App.CardGame(v.game))
             {
                 if (pos == 2) local = new Vector2(-halfW + 110, halfH - 66);
                 else if (pos == 1) local = new Vector2(halfW - 150, -halfH * 0.25f);

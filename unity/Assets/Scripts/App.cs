@@ -377,6 +377,7 @@ public class App : MonoBehaviour
                 if (v.MyTurn && v.phase == "play" && (view == null || !view.MyTurn)) { Sfx.Chime(); Sfx.Buzz(); }   // no tips during a game
                 tilesOnTable = tilesNow;
                 cafe.SetGameKind(v.game);   // each board framed its own way
+                Upright(v.game == "ludo");  // ludo is played with the phone upright
                 view = v;
                 Redraw();
                 break;
@@ -507,6 +508,29 @@ public class App : MonoBehaviour
         game.ShowHud(true);
     }
 
+    /// Ludo is played with the phone upright; everything else (and the café) sideways, either way round.
+    /// (The test build on a computer turns its window instead, to take the screenshots.)
+    static int upright = -1;
+    public static void Upright(bool on)
+    {
+        if (upright == (on ? 1 : 0)) return;
+        upright = on ? 1 : 0;
+#if (UNITY_ANDROID || UNITY_IOS) && !UNITY_EDITOR
+        if (on) Screen.orientation = ScreenOrientation.Portrait;
+        else if (I != null) I.StartCoroutine(I.Sideways());
+#elif !UNITY_WEBGL
+        if (Recording) Screen.SetResolution(on ? 406 : 1280, 720, false);
+#endif
+    }
+
+    /// Back to sideways: first one way round, then free to turn with the phone again.
+    IEnumerator Sideways()
+    {
+        Screen.orientation = ScreenOrientation.LandscapeLeft;
+        yield return null; yield return null;
+        if (upright != 1) Screen.orientation = ScreenOrientation.AutoRotation;
+    }
+
     /// Your move in a practice board game, made by the computer (filming the advert's game footage).
     public void AutoMove()
     {
@@ -528,6 +552,7 @@ public class App : MonoBehaviour
         toastUntil = 0;   // a game's hint doesn't stay up over the café
         voice.Leave(); voice.Sync(null);
         cafe.SetGame(false);
+        Upright(false);
         Music.Home(true);
         homeGroup.alpha = 1; homeGroup.blocksRaycasts = true;
     }
@@ -923,6 +948,7 @@ public class App : MonoBehaviour
 
         // toasts, over everything
         toastCanvas = Ui.MakeCanvas("Toast", 50);
+        toastCanvas.gameObject.AddComponent<TallCanvas>();
         var toast = Ui.Box(toastCanvas.transform, "Toast", new Color(0.1f, 0.06f, 0.04f, 0.92f));
         toast.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(380, 40), new Vector2(0, 60));
         toastGroup = toast.gameObject.AddComponent<CanvasGroup>(); toastGroup.alpha = 0; toastGroup.blocksRaycasts = false;

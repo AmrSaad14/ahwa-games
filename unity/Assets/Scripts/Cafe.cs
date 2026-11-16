@@ -373,7 +373,8 @@ public class Cafe : MonoBehaviour
         if (Screen.width == lastW && Screen.height == lastH) return;
         bool first = lastW == 0;
         lastW = Screen.width; lastH = Screen.height;
-        if (first || inGame) return;
+        if (first) return;
+        if (inGame) { camPosTo = GameShot(out camLookTo); return; }   // (ludo turns the phone upright)
         ResetLobbyZoom();
         camPosTo = focus == null ? Overview(out camLookTo) : TableShot(focus, out camLookTo);
     }
@@ -491,6 +492,8 @@ public class Cafe : MonoBehaviour
             case "ludo": hx = 5.45f; hz = 5.45f; tall = 0.7f; el = 58f; bottom = 0.03f; break;
             default: hx = 5.5f; hz = 5.35f; tall = 0.8f; el = 58f; bottom = 0.21f; break;   // dominoes: your hand at the bottom
         }
+        // held upright (ludo): the buttons and the names take rows above and below the board instead of its sides
+        if (TallCanvas.Upright) { top = 0.2f; bottom = 0.19f; side = 0.03f; }
         float e = el * Mathf.Deg2Rad;
         var dir = front * Mathf.Cos(e) + Vector3.up * Mathf.Sin(e);
         // as close as the whole board still fits the free part of the screen, its middle in the middle of it:
