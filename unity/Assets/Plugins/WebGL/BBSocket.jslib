@@ -45,6 +45,9 @@ mergeInto(LibraryManager.library, {
   },
   // open a page in this tab (signing in comes back to the game with ?ticket=…)
   BBWeb_Go: function (p) { location.href = UTF8ToString(p); },
+  // the game's own loading, shown on the page's loading screen (Scripts/Splash.cs)
+  BBWeb_Progress: function (p) { if (window.bbLoad) window.bbLoad.progress(p); },
+  BBWeb_Ready: function () { if (window.bbLoad) window.bbLoad.ready(); },
   // load the page again (the update for the web version)
   BBWeb_Reload: function () { location.reload(); },
   // take ?ticket=… off the address once it is used

@@ -219,6 +219,7 @@
     canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 
     // ---- start the game ----
+    var shown = 0;
     var fill = document.getElementById('fill'), pct = document.getElementById('pct'), what = document.getElementById('what');
     function fail(msg) {
       clearInterval(tipTimer);
@@ -246,13 +247,23 @@
     s.onerror = function () { fail('loader'); };
     s.onload = function () {
       createUnityInstance(canvas, config, function (p) {
-        var v = Math.max(3, Math.round(p * 100));
-        fill.style.width = v + '%'; pct.textContent = v + '%';
-        if (p >= 0.9) what.textContent = t('starting');
+        // downloading the game is the first 80%; building the café the rest
+        var v = Math.max(3, Math.round(p * 80));
+        if (v > shown) { shown = v; fill.style.width = v + '%'; pct.textContent = v + '%'; }
       }).then(function (inst) {
         window.unityInstance = inst;
-        fill.style.width = '100%'; pct.textContent = '100%';
-        setTimeout(function () { document.getElementById('load').classList.add('out'); clearInterval(tipTimer); canvas.focus(); }, 250);
+        // the files are in; the game now builds the café and says how far it is (Splash.cs), then that it's ready
+        what.textContent = t('starting');
+        var giveUp = setTimeout(done, 60000);
+        function done() {
+          clearTimeout(giveUp); window.bbLoad = null;
+          fill.style.width = '100%'; pct.textContent = '100%';
+          setTimeout(function () { document.getElementById('load').classList.add('out'); clearInterval(tipTimer); canvas.focus(); }, 250);
+        }
+        window.bbLoad = {
+          progress: function (p) { var v = Math.round(80 + 20 * Math.max(0, Math.min(1, p))); if (v > shown) { shown = v; fill.style.width = v + '%'; pct.textContent = v + '%'; } },
+          ready: done
+        };
       }).catch(function (e) { fail(String(e)); });
     };
     document.body.appendChild(s);

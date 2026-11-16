@@ -17,6 +17,10 @@ public static class Ui
     public static Font Body => body ??= Load("Fonts/PlexArabic");
     public static Font Bold => bold ??= Load("Fonts/PlexArabicBold");
     public static Font Display => display ??= Load("Fonts/ReemKufi");
+    static Font latin, latinBold;
+    /// Poppins, the web page's font (English text only: it has no Arabic letters).
+    public static Font Latin => latin ??= Load("Fonts/PoppinsMedium");
+    public static Font LatinBold => latinBold ??= Load("Fonts/PoppinsBold");
     static Font Load(string path)
     {
         var f = Resources.Load<Font>(path);
@@ -88,6 +92,30 @@ public static class Ui
             t.SetPixels32(px); t.Apply();
             rounded = Sprite.Create(t, new Rect(0, 0, S, S), new Vector2(0.5f, 0.5f), 100, 0, SpriteMeshType.FullRect, new Vector4(R, R, R, R));
             return rounded;
+        }
+    }
+
+    static Sprite ring;
+    /// The outline of a rounded rectangle (a thin line), sliced so it stretches to any size.
+    public static Sprite RoundedRing
+    {
+        get
+        {
+            if (ring != null) return ring;
+            const int S = 64, R = 24; const float W = 2.2f;
+            var t = new Texture2D(S, S, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+            var px = new Color32[S * S];
+            for (int y = 0; y < S; y++)
+                for (int x = 0; x < S; x++)
+                {
+                    float dx = Mathf.Max(0, Mathf.Max(R - x - 0.5f, x + 0.5f - (S - R))), dy = Mathf.Max(0, Mathf.Max(R - y - 0.5f, y + 0.5f - (S - R)));
+                    float d = R - Mathf.Sqrt(dx * dx + dy * dy);          // how far inside the edge
+                    float a = Mathf.Clamp01(d + 0.5f) * Mathf.Clamp01(W - d + 0.5f);
+                    px[y * S + x] = new Color32(255, 255, 255, (byte)(a * 255));
+                }
+            t.SetPixels32(px); t.Apply();
+            ring = Sprite.Create(t, new Rect(0, 0, S, S), new Vector2(0.5f, 0.5f), 100, 0, SpriteMeshType.FullRect, new Vector4(R, R, R, R));
+            return ring;
         }
     }
 

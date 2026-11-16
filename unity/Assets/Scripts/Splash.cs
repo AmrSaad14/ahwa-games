@@ -1,25 +1,45 @@
-// The opening splash for Board Battles: the gold-rimmed crest appears in a glow, a domino tile and a die fly in
-// from the sides and clash with a spark, the crown drops onto the crest, the BOARD BATTLES ribbon unfurls under
-// it, a loading bar fills, then it opens onto the café. The pictures are layers of the logo
-// (design/logo, all drawn in the same 600 × 700 frame so they stack exactly).
+// The opening splash for Board Battles, the same as the web page's loading screen
+// (WebGLTemplates/BoardBattles/index.html): the crest floating in a glow over turning rays, "The Egyptian café,
+// at your table", the five games, a gold bar with the percentage, and a tip. It opens onto the café when it's ready.
+// In the web version the page's own loading screen stays up instead (one intro, not two): the game sends it its
+// progress and tells it when the café is ready (Plugins/WebGL/BBSocket.jslib).
 using UnityEngine;
 using UnityEngine.UI;
+#if UNITY_WEBGL && !UNITY_EDITOR
+using System.Runtime.InteropServices;
+#endif
 
 public class Splash : MonoBehaviour
 {
-    const float MinTime = 2.9f;
-    static readonly Vector2 Frame = new Vector2(240, 280);   // the logo's frame on screen
+    const float MinTime = 1.6f;
+    static readonly Vector2 LogoSize = new Vector2(133, 155);   // the crest (Resources/UI/Logo, 600 × 700)
+    static readonly Color Cream = new Color32(0xf6, 0xea, 0xd0, 0xff);
+
+    static readonly string[] Games = { "دومينو", "طاولة", "شطرنج", "لودو", "استيميشن" };
+    static readonly string[] Tips =
+    {
+        "«العب دلوقتي» بيلاقيلك ترابيزة في ثواني.",
+        "خش بجوجل عشان كوينزك ومستواك يفضلوا معاك على أي جهاز.",
+        "العب مع صحابك: افتح أوضة وابعتلهم الكود.",
+        "المهام اليومية بتديك كوينز زيادة كل يوم.",
+        "اطلع في الترتيب واكسب لقب لاعب الشهر في محافظتك.",
+        "لفّ العجلة واكسب جايزة مجانية.",
+    };
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+    [DllImport("__Internal")] static extern void BBWeb_Progress(float p);
+    [DllImport("__Internal")] static extern void BBWeb_Ready();
+#endif
 
     Canvas canvas;
     Camera splashCam;
-    CanvasGroup group;
-    RectTransform stage, rays, glow, barFill;
-    RawImage raysImg, glowImg, shield, domino, die, spark, crown, ribbon;
-    Text sub;
-    CanvasGroup barGroup;
-    float t0, readyAt = -1, openAt = -1;
-    bool shots;
-    int shot;
+    CanvasGroup group, columnGroup;
+    RectTransform rays, glow, logo, barFill;
+    RawImage raysImg, glowImg;
+    Text pct, what, tip;
+    float t0, readyAt = -1, openAt = -1, shown;
+    bool shots, web, setting;
+    int shot, tipAt;
 
     public bool Opened => openAt >= 0;
     public void Ready() { if (readyAt < 0) readyAt = Time.time; }
@@ -30,6 +50,11 @@ public class Splash : MonoBehaviour
     public void Show()
     {
         shots = App.Recording;
+#if UNITY_WEBGL && !UNITY_EDITOR
+        web = true;
+        t0 = Time.time;
+        return;   // the page's loading screen is the splash
+#endif
         // its own camera: until the café's camera exists nothing else draws, and some phones show black
         var cg = new GameObject("SplashCam", typeof(Camera));
         cg.transform.SetParent(transform, false);
@@ -42,122 +67,120 @@ public class Splash : MonoBehaviour
         Ui.Picture(root, "Background", Ui.Radial(new Color32(0x7a, 0x14, 0x24, 0xff), new Color32(0x4a, 0x0b, 0x16, 0xff), new Color32(0x1c, 0x06, 0x09, 0xff))).rectTransform.Fill();
 
         raysImg = Ui.Picture(root, "Rays", Ui.Rays());
-        rays = raysImg.rectTransform.Place(new Vector2(0.5f, 0.56f), new Vector2(0.5f, 0.5f), new Vector2(1400, 1400), Vector2.zero);
+        rays = raysImg.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(1400, 1400), new Vector2(0, 60));
         glowImg = Ui.Picture(root, "Glow", Ui.Glow());
         glowImg.color = new Color(1f, 0.81f, 0.43f, 0f);
-        glow = glowImg.rectTransform.Place(new Vector2(0.5f, 0.56f), new Vector2(0.5f, 0.5f), new Vector2(420, 420), Vector2.zero);
+        glow = glowImg.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(300, 300), new Vector2(0, 60));
 
-        stage = Ui.Rect("Stage", root).Place(new Vector2(0.5f, 0.54f), new Vector2(0.5f, 0.5f), Frame, Vector2.zero);
-        shield = Layer("Shield", new Vector2(0.5f, 0.5f));
-        domino = Layer("DominoLayer", new Vector2(0.4f, 0.46f));
-        die = Layer("DieLayer", new Vector2(0.62f, 0.42f));
-        spark = Layer("Spark2", new Vector2(0.5f, 1 - 380f / 700));
-        crown = Layer("Crown", new Vector2(0.5f, 1 - 100f / 700));
-        ribbon = Layer("Ribbon", new Vector2(0.5f, 1 - 590f / 700));
+        // the column, centred: crest, line, games, bar, tip (sizes as on the web page held sideways on a phone)
+        var col = Ui.Rect("Column", root).Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(560, 280), Vector2.zero);
+        columnGroup = col.gameObject.AddComponent<CanvasGroup>(); columnGroup.alpha = 0;
+        bool en = Loc.En;
+        Font font = en ? Ui.Latin : Ui.Body, bold = en ? Ui.LatinBold : Ui.Bold;
 
-        sub = Ui.Label(root, "Dominoes  ·  Backgammon  ·  Chess  ·  Ludo", 16, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Body);
-        sub.rectTransform.Place(new Vector2(0.5f, 0.54f), new Vector2(0.5f, 1), new Vector2(520, 30), new Vector2(0, -Frame.y / 2 - 4));
-        sub.color = new Color(1, 0.91f, 0.69f, 0);
+        var logoImg = Ui.Picture(col, "Logo", Resources.Load<Texture2D>("UI/Logo"));
+        logo = logoImg.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), LogoSize, new Vector2(0, 62));
 
-        var bar = Ui.Box(root, "Bar", new Color(1, 0.91f, 0.66f, 0.14f));
-        bar.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(240, 4), new Vector2(0, 22));
-        barGroup = bar.gameObject.AddComponent<CanvasGroup>(); barGroup.alpha = 0;
+        var tag = Ui.Label(col, "القهوة المصرية على ترابيزتك", 14, Cream, TextAnchor.MiddleCenter, bold);
+        tag.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(520, 20), new Vector2(0, -36));
+
+        // the five games, as outlined pills in one row
+        var row = Ui.Rect("Games", col).Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(540, 22), new Vector2(0, -64));
+        var h = row.gameObject.AddComponent<HorizontalLayoutGroup>();
+        h.spacing = 7; h.childAlignment = TextAnchor.MiddleCenter; h.childControlWidth = h.childControlHeight = true; h.childForceExpandWidth = h.childForceExpandHeight = false;
+        foreach (var g in Games)
+        {
+            var pill = Ui.Rect(g, row);
+            var ring = pill.gameObject.AddComponent<Image>();
+            ring.sprite = Ui.RoundedRing; ring.type = Image.Type.Sliced; ring.pixelsPerUnitMultiplier = 2.6f;
+            ring.color = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.55f); ring.raycastTarget = false;
+            var label = Ui.Label(pill, g, 10, Ui.Gold, TextAnchor.MiddleCenter, bold);
+            Object.Destroy(label.GetComponent<FitText>());
+            label.rectTransform.Fill();
+            var le = pill.gameObject.AddComponent<LayoutElement>();
+            le.preferredWidth = label.preferredWidth + 22; le.preferredHeight = 22;
+        }
+
+        // the bar, with what's happening and the percentage under it
+        var bar = Ui.Box(col, "Bar", new Color(1, 1, 1, 0.12f));
+        bar.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(260, 6), new Vector2(0, -90));
         var fill = Ui.Box(bar.transform, "Fill", Ui.Gold);
         barFill = fill.rectTransform;
-        barFill.anchorMin = Vector2.zero; barFill.anchorMax = new Vector2(0, 1); barFill.offsetMin = barFill.offsetMax = Vector2.zero;
+        barFill.anchorMin = Vector2.zero; barFill.anchorMax = new Vector2(0.03f, 1); barFill.offsetMin = barFill.offsetMax = Vector2.zero;
+        what = Ui.Label(col, "بنجهّز القهوة…", 10, new Color(Cream.r, Cream.g, Cream.b, 0.75f), en ? TextAnchor.MiddleLeft : TextAnchor.MiddleRight, font);
+        what.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(200, 14), new Vector2(en ? -30 : 30, -103));
+        pct = Ui.Label(col, "0%", 10, new Color(Cream.r, Cream.g, Cream.b, 0.75f), en ? TextAnchor.MiddleRight : TextAnchor.MiddleLeft, font);
+        pct.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(60, 14), new Vector2(en ? 100 : -100, -103));
+
+        tip = Ui.Label(col, Tips[Random.Range(0, Tips.Length)], 11, new Color(Cream.r, Cream.g, Cream.b, 0.85f), TextAnchor.MiddleCenter, bold);
+        tip.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(400, 30), new Vector2(0, -126));
+        tipAt = 0;
 
         t0 = Time.time;
         Update();
     }
 
-    /// One layer of the logo, filling the frame, turning and scaling about `pivot` (a point in the frame, 0..1).
-    RawImage Layer(string name, Vector2 pivot)
-    {
-        var img = Ui.Picture(stage, name, Resources.Load<Texture2D>("UI/" + name));
-        var r = img.rectTransform;
-        r.anchorMin = r.anchorMax = new Vector2(0.5f, 0.5f);
-        r.sizeDelta = Frame;
-        r.pivot = pivot;
-        r.anchoredPosition = Home(pivot);
-        img.color = new Color(1, 1, 1, 0);
-        return img;
-    }
-    static Vector2 Home(Vector2 pivot) => new Vector2((pivot.x - 0.5f) * Frame.x, (pivot.y - 0.5f) * Frame.y);
-
     static float Seg(float t, float a, float b) => Mathf.Clamp01((t - a) / (b - a));
 
     void Update()
     {
+        float t = Time.time - t0;
+        if (web) { WebUpdate(t); return; }
         if (canvas == null) return;
-        float t = (Time.time - t0) * 2.2f;   // the logo builds up quickly; the bar then runs until the café is ready
 
-        // rays turn slowly; the glow swells behind the crest
-        raysImg.color = new Color(1, 1, 1, Ui.Ease(Seg(t, 0.2f, 1.4f)));
-        rays.localRotation = Quaternion.Euler(0, 0, -t * 9f);
-        float g = Seg(t, 0.3f, 2.9f);
-        float ga = g < 0.25f ? g / 0.25f : Mathf.Lerp(1f, 0.7f, (g - 0.25f) / 0.75f);
-        glowImg.color = new Color(1f, 0.81f, 0.43f, ga * 0.5f);
-        glow.localScale = Vector3.one * (g < 0.25f ? Mathf.Lerp(0.4f, 1.15f, g / 0.25f) : Mathf.Lerp(1.15f, 1f, (g - 0.25f) / 0.75f));
+        // rays turn slowly; the glow breathes behind the crest; the crest floats (as on the web page)
+        raysImg.color = new Color(1, 1, 1, Ui.Ease(Seg(t, 0f, 0.8f)) * 0.9f);
+        rays.localRotation = Quaternion.Euler(0, 0, -t * 4f);
+        glowImg.color = new Color(1f, 0.81f, 0.43f, 0.32f + 0.08f * Mathf.Sin(t * 1.6f));
+        float a = Ui.Ease(Seg(t, 0.05f, 0.45f));
+        columnGroup.alpha = a;
+        logo.localScale = Vector3.one * Mathf.LerpUnclamped(0.85f, 1f, Ui.Back(Seg(t, 0.05f, 0.5f)));
+        float f = Mathf.Sin(t * Mathf.PI * 2 / 3.2f);
+        logo.anchoredPosition = new Vector2(0, 62 + 4f * Mathf.Max(0, f));
+        logo.localRotation = Quaternion.Euler(0, 0, -0.6f * Mathf.Max(0, f));
 
-        // the crest
-        float c = Seg(t, 0.05f, 0.55f);
-        shield.color = new Color(1, 1, 1, Mathf.Clamp01(c * 2));
-        shield.rectTransform.localScale = Vector3.one * Mathf.LerpUnclamped(0.6f, 1f, Ui.Back(c));
-
-        // the domino from the left, the die from the right: they meet in the middle
-        float s = Seg(t, 0.35f, 0.85f), sb = Ui.Back(s);
-        Fly(domino, -1, sb, Mathf.Clamp01(s * 2.5f), 55f);
-        Fly(die, 1, sb, Mathf.Clamp01(s * 2.5f), -65f);
-
-        // the spark where they meet, and a little shake
-        float k = Seg(t, 0.78f, 1.3f);
-        float ka = k <= 0 || k >= 1 ? 0 : k < 0.3f ? k / 0.3f : 1 - (k - 0.3f) / 0.7f;
-        spark.color = new Color(1, 1, 1, ka);
-        spark.rectTransform.localScale = Vector3.one * (k < 0.3f ? Mathf.Lerp(0.2f, 1.2f, k / 0.3f) : Mathf.Lerp(1.2f, 1.5f, (k - 0.3f) / 0.7f));
-        spark.rectTransform.localRotation = Quaternion.Euler(0, 0, -40f * k);
-        float sh = Seg(t, 0.8f, 1.1f);
-        stage.anchoredPosition = sh > 0 && sh < 1 ? new Vector2(Mathf.Sin(sh * 40f) * 5f * (1 - sh), Mathf.Cos(sh * 33f) * 3f * (1 - sh)) : Vector2.zero;
-
-        // the crown drops onto the crest
-        float cr = Seg(t, 1.0f, 1.55f), cb = Ui.Back(cr);
-        crown.color = new Color(1, 1, 1, Mathf.Clamp01(cr * 3));
-        crown.rectTransform.anchoredPosition = Home(crown.rectTransform.pivot) + new Vector2(0, 70f * (1 - cb));
-
-        // the ribbon with the name unfurls from the middle
-        float rb = Seg(t, 1.4f, 1.95f);
-        ribbon.color = new Color(1, 1, 1, Mathf.Clamp01(rb * 3));
-        ribbon.rectTransform.localScale = new Vector3(Mathf.LerpUnclamped(0.05f, 1f, Ui.Back(rb)), Mathf.Lerp(0.6f, 1f, Ui.Ease(rb)), 1);
-
-        float ar = Ui.Ease(Seg(t, 1.9f, 2.4f));
-        sub.color = new Color(1, 0.91f, 0.69f, ar * 0.9f);
-
-        // loading bar: creeps to 90% while the café loads, fills when it's ready
-        barGroup.alpha = Seg(t, 0.2f, 0.6f);
-        float creep = 0.9f * (1 - Mathf.Exp(-t * 0.6f));
-        float p = readyAt < 0 ? Mathf.Lerp(barFill.anchorMax.x, Mathf.Max(creep * 0.5f, progress), 0.15f) : Mathf.Lerp(barFill.anchorMax.x, 1f, 0.2f);
+        // the bar: follows the loading, creeping along meanwhile; full when the café is ready
+        float creep = 0.9f * (1 - Mathf.Exp(-t * 0.5f));
+        float target = readyAt < 0 ? Mathf.Max(creep * 0.5f, progress) : 1f;
+        float p = Mathf.Max(0.03f, Mathf.Lerp(barFill.anchorMax.x, target, readyAt < 0 ? 0.12f : 0.25f));
         barFill.anchorMax = new Vector2(p, 1);
+        int shownPct = Mathf.RoundToInt(p * 100);
+        if (shownPct != (int)shown) { shown = shownPct; pct.Set(shownPct + "%"); }
+        if (!setting && p >= 0.9f) { setting = true; what.Set(Loc.T("بنرصّ الترابيزات…")); }
 
-        if (shots && shot == 0 && t > 0.84f) { shot++; App.Still("1-splash-clash.png"); }
-        if (shots && shot == 1 && t > 2.5f) { shot++; App.Still("2-splash.png"); }
+        // a new tip every few seconds
+        int ti = (int)(t / 4.2f);
+        if (ti != tipAt) { tipAt = ti; if (ti > 0) tip.Set(Loc.T(Tips[(Random.Range(0, Tips.Length))])); }
+
+        if (shots && shot == 0 && t > 0.6f) { shot++; App.Still("1-splash-clash.png"); }
+        if (shots && shot == 1 && t > 1.4f) { shot++; App.Still("2-splash.png"); }
 
         // open onto the café
-        if (openAt < 0 && readyAt >= 0 && t >= MinTime && (!shots || shot >= 2)) openAt = Time.time + 0.25f;
+        if (openAt < 0 && readyAt >= 0 && t >= MinTime && (!shots || shot >= 2)) openAt = Time.time + 0.3f;
         if (openAt >= 0 && Time.time > openAt)
         {
-            float o = Mathf.Clamp01((Time.time - openAt) / 0.65f);
+            float o = Mathf.Clamp01((Time.time - openAt) / 0.6f);
             group.alpha = 1 - Ui.Ease(o);
-            group.transform.localScale = Vector3.one * Mathf.Lerp(1f, 1.18f, Ui.Ease(o));
+            group.transform.localScale = Vector3.one * Mathf.Lerp(1f, 1.08f, Ui.Ease(o));
             group.blocksRaycasts = false;
             if (o >= 1) { Destroy(canvas.gameObject); canvas = null; if (splashCam != null) Destroy(splashCam.gameObject); }
         }
         if (t > 90f && openAt < 0) openAt = Time.time;   // never stuck on the splash
     }
 
-    static void Fly(RawImage img, int dir, float p, float a, float spin)
+    /// The web version: the page shows the loading; the game only says how far it is and when it's ready.
+    void WebUpdate(float t)
     {
-        img.color = new Color(1, 1, 1, a);
-        var r = img.rectTransform;
-        r.anchoredPosition = Home(r.pivot) + new Vector2(dir * 0.75f * Frame.x * (1 - p), -0.1f * Frame.y * (1 - p));
-        r.localRotation = Quaternion.Euler(0, 0, spin * (1 - p));
+        if (openAt >= 0) return;
+#if UNITY_WEBGL && !UNITY_EDITOR
+        try { BBWeb_Progress(readyAt >= 0 ? 1f : Mathf.Max(0, progress)); } catch { }
+#endif
+        if ((readyAt >= 0 && t >= 0.2f) || t > 90f)
+        {
+            openAt = Time.time;
+#if UNITY_WEBGL && !UNITY_EDITOR
+            try { BBWeb_Ready(); } catch { }
+#endif
+        }
     }
 }

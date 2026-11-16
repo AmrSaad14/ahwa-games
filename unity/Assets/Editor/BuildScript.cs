@@ -129,6 +129,7 @@ public static class BuildScript
         int n = int.TryParse(System.Environment.GetEnvironmentVariable("BUILD_NUMBER"), out var bn) && bn > 0 ? bn : 1;
         PlayerSettings.bundleVersion = "1.0." + n;          // the same version as the app from the same build
         PlayerSettings.WebGL.template = "PROJECT:BoardBattles";
+        PlayerSettings.SplashScreen.show = false;           // the page's loading screen is the only intro
         PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Brotli;   // Caddy sends the .br files as they are
         PlayerSettings.WebGL.decompressionFallback = false;
         PlayerSettings.WebGL.nameFilesAsHashes = true;      // a new build never mixes with files a browser kept

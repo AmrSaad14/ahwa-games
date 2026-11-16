@@ -115,7 +115,15 @@ public static class Loc
         ["حد من اللاعبين رصيده مش كفاية"] = "A player doesn't have enough coins", ["ارمي الزهر الأول"] = "Roll the dice first",
         // voice chat
         ["الصوت شغال"] = "Voice on", ["الميك مقفول"] = "Mic muted", ["اسمح بالميكروفون عشان تتكلم"] = "Allow the microphone to talk",
-        ["دردشة صوتية"] = "Voice chat", ["الشراء من التطبيق: نزّله وادخل بنفس الحساب"] = "Purchases are in the app: get it and sign in with the same account",
+        ["دردشة صوتية"] = "Voice chat",
+        // the splash (as on the web page)
+        ["القهوة المصرية على ترابيزتك"] = "The Egyptian café, at your table", ["بنجهّز القهوة…"] = "Loading the café…", ["بنرصّ الترابيزات…"] = "Setting the tables…",
+        ["«العب دلوقتي» بيلاقيلك ترابيزة في ثواني."] = "“Play now” finds you a table in seconds.",
+        ["خش بجوجل عشان كوينزك ومستواك يفضلوا معاك على أي جهاز."] = "Sign in with Google to keep your coins and level on any device.",
+        ["العب مع صحابك: افتح أوضة وابعتلهم الكود."] = "Play with friends: open a room and send them the code.",
+        ["المهام اليومية بتديك كوينز زيادة كل يوم."] = "Daily missions give you extra coins every day.",
+        ["اطلع في الترتيب واكسب لقب لاعب الشهر في محافظتك."] = "Climb the rankings to become your governorate’s Player of the Month.",
+        ["لفّ العجلة واكسب جايزة مجانية."] = "Spin the wheel for a free prize.", ["الشراء من التطبيق: نزّله وادخل بنفس الحساب"] = "Purchases are in the app: get it and sign in with the same account",
         // cash out
         ["اسحب فلوسك"] = "Cash out", ["اسحب على فودافون كاش"] = "Cash out to Vodafone Cash", ["كل"] = "Every", ["كوين"] = "coins", ["جنيه"] = "EGP",
         ["رصيدك"] = "Your coins", ["فاضلك"] = "You need", ["كوين وتقدر تسحب"] = "more coins to cash out",
