@@ -36,7 +36,7 @@ jobs:
 
       - name: Build the game client
         env:
-          SERVER_URL: ${{ vars.SERVER_URL || 'https://static.22.157.225.46.clients.your-server.de' }}   # the game server
+          SERVER_URL: ${{ vars.SERVER_URL || 'https://qimma-labs.com' }}   # the game server
           # AdMob ad units (empty: Google's test ads)
           ADMOB_ANDROID_REWARDED: ${{ vars.ADMOB_ANDROID_REWARDED }}
           ADMOB_ANDROID_INTERSTITIAL: ${{ vars.ADMOB_ANDROID_INTERSTITIAL }}

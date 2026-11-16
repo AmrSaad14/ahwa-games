@@ -1,4 +1,5 @@
-{$DOMAIN} {
+# the domain, and the server's old address (apps from before the domain still connect there)
+{$DOMAIN}, {$OLD_DOMAIN:static.22.157.225.46.clients.your-server.de} {
 	encode zstd gzip
 	reverse_proxy domino:8080
 }

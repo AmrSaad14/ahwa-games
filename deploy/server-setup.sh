@@ -40,7 +40,8 @@ keep ADMIN_KEY
   echo "DOMAIN=${DOMAIN}"
   echo "SERVER_IP=$(curl -4 -s -m 5 https://api.ipify.org || hostname -I | awk '{print $1}')"
   cat env.secrets
-  [ -f env.github ] && cat env.github   # what is set in GitHub wins over the generated ones
+  [ -f env.github ] && grep -v '^DOMAIN=' env.github   # what is set in GitHub wins over the generated ones
+  echo "DOMAIN=${DOMAIN}"   # the address from the workflow, always (PUBLIC_URL and the voice relay come from it)
 } > app/.env
 chmod 600 app/.env env.github 2>/dev/null || true
 

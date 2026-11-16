@@ -7,7 +7,7 @@ on:
     inputs:
       url:
         description: The server's address
-        default: https://static.22.157.225.46.clients.your-server.de
+        default: https://qimma-labs.com
   push:
     branches: [main]
     paths: ['scripts/check-server.mjs', '.github/workflows/server-check.yml']
@@ -29,7 +29,7 @@ jobs:
           mkdir -p /tmp/check && cp scripts/check-server.mjs /tmp/check/ && cd /tmp/check
           npm init -y > /dev/null && npm install --no-audit --no-fund ws@8.18.0 > /dev/null 2>&1
           set +e
-          node check-server.mjs "${{ github.event.inputs.url || 'https://static.22.157.225.46.clients.your-server.de' }}" 2>&1 | tee "$GITHUB_WORKSPACE/server-check.txt"
+          node check-server.mjs "${{ github.event.inputs.url || 'https://qimma-labs.com' }}" 2>&1 | tee "$GITHUB_WORKSPACE/server-check.txt"
           echo "exit ${PIPESTATUS[0]}" >> "$GITHUB_WORKSPACE/server-check.txt"
           # the voice relay itself: ask it for a relayed address with the credentials the game gave out
           if [ -f /tmp/turn.json ]; then

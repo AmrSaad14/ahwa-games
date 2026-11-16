@@ -26,7 +26,7 @@ jobs:
     timeout-minutes: 25
     env:
       HOST: ${{ vars.DEPLOY_HOST || '46.225.157.22' }}
-      DOMAIN: ${{ vars.DEPLOY_DOMAIN || 'static.22.157.225.46.clients.your-server.de' }}
+      DOMAIN: qimma-labs.com   # the game's address; the server's old address keeps working too (Caddyfile)
       HAS_KEY: ${{ secrets.DEPLOY_SSH_KEY != '' }}
     steps:
       - name: Waiting for the key

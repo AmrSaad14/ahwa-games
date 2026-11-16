@@ -64,6 +64,7 @@ services:
       - "443:443/udp"
     environment:
       DOMAIN: ${DOMAIN:?Set DOMAIN in .env}
+      OLD_DOMAIN: ${OLD_DOMAIN:-static.22.157.225.46.clients.your-server.de}
       SERVER_IP: ${SERVER_IP:-127.0.0.1}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
