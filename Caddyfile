@@ -16,7 +16,7 @@
 			}
 		}
 		@files {
-			path /Build/* /StreamingAssets/* /icon.png /sw.js
+			path /Build/* /StreamingAssets/* /icon.png /icon-192.png /logo.png /share.jpg /manifest.webmanifest /sw.js
 			file {
 				root /srv/web
 			}

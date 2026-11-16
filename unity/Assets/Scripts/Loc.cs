@@ -115,7 +115,7 @@ public static class Loc
         ["حد من اللاعبين رصيده مش كفاية"] = "A player doesn't have enough coins", ["ارمي الزهر الأول"] = "Roll the dice first",
         // voice chat
         ["الصوت شغال"] = "Voice on", ["الميك مقفول"] = "Mic muted", ["اسمح بالميكروفون عشان تتكلم"] = "Allow the microphone to talk",
-        ["دردشة صوتية"] = "Voice chat",
+        ["دردشة صوتية"] = "Voice chat", ["الشراء من التطبيق: نزّله وادخل بنفس الحساب"] = "Purchases are in the app: get it and sign in with the same account",
         // cash out
         ["اسحب فلوسك"] = "Cash out", ["اسحب على فودافون كاش"] = "Cash out to Vodafone Cash", ["كل"] = "Every", ["كوين"] = "coins", ["جنيه"] = "EGP",
         ["رصيدك"] = "Your coins", ["فاضلك"] = "You need", ["كوين وتقدر تسحب"] = "more coins to cash out",

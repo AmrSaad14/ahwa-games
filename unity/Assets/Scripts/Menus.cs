@@ -72,6 +72,9 @@ public partial class Menus : MonoBehaviour
 
         // along the top, left of your name and coins: watch an ad, sign in, language
         var ad = Chip(home, "video", "+2K", new Vector2(-252, -10), 98, new Color32(0x2f, 0x6b, 0x3a, 0xf0), Color.white, WatchAd);
+#if UNITY_WEBGL && !UNITY_EDITOR
+        ad.gameObject.SetActive(false);   // no video ads in the browser (they are in the app)
+#endif
         adText = ad.GetComponentInChildren<Text>(); adRect = (RectTransform)ad.transform; prizeRect = (RectTransform)prize.transform; homeRect = home;
         // (the language is changed in Settings only)
         var sign = Chip(home, "google", "دخول", new Vector2(-388, -10), 92, new Color(1, 1, 1, 0.94f), Ui.Ink, SignIn);

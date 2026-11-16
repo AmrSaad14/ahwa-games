@@ -1,44 +1,253 @@
 <!doctype html>
-<html lang="ar">
+<html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
   <meta name="theme-color" content="#2a0710">
-  <meta name="description" content="Board Battles: domino, tawla, chess, ludo and estimation in an Egyptian café, online with friends.">
-  <title>Board Battles</title>
-  <link rel="icon" href="icon.png">
+  <title>Board Battles · بورد باتلز</title>
+  <meta name="description" content="Domino, tawla, chess, ludo and estimation in an Egyptian café. Play online with friends, free, right in your browser.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Board Battles · بورد باتلز">
+  <meta property="og:description" content="Domino, tawla, chess, ludo and estimation in an Egyptian café. Play online with friends, free.">
+  <meta property="og:image" content="https://qimma-labs.com/boardbattles/share.jpg">
+  <meta property="og:url" content="https://qimma-labs.com/boardbattles/">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Reem+Kufi:wght@500;700&display=swap">
   <style>
-    html, body { margin: 0; height: 100%; background: #1c0609; overflow: hidden; touch-action: none; }
-    #unity-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; background: #1c0609; outline: none; }
-    #load { position: fixed; inset: 0; display: grid; place-items: center; align-content: center; gap: 22px;
-      background: radial-gradient(120% 90% at 50% 42%, #7a1424 0%, #4a0b16 45%, #1c0609 100%);
-      color: #f3cd62; font: 600 15px system-ui, -apple-system, "Segoe UI", sans-serif; transition: opacity .5s; }
-    #load.out { opacity: 0; pointer-events: none; }
-    #load img { width: min(42vmin, 220px); height: auto; filter: drop-shadow(0 8px 24px rgba(0,0,0,.45)); }
-    #load .t { font-size: clamp(26px, 6vmin, 44px); letter-spacing: .18em; }
-    #bar { width: min(60vw, 320px); height: 6px; border-radius: 3px; background: rgba(255,255,255,.12); overflow: hidden; }
-    #bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #c99a3a, #f3cd62); transition: width .2s; }
-    #msg { opacity: .8; font-weight: 500; text-align: center; padding: 0 20px; }
-    #rotate { display: none; position: fixed; inset: 0; z-index: 5; place-items: center; text-align: center; padding: 24px;
-      background: #1c0609; color: #f3cd62; font: 600 18px system-ui, sans-serif; }
-    @media (orientation: portrait) and (max-width: 820px) { #rotate.on { display: grid; } }
+    :root {
+      --wine: #2a0710; --wine2: #4a0b16; --deep: #160407; --gold: #f3cd62; --gold2: #c99a3a; --cream: #f6ead0;
+      --bar: 56px; --font: "Poppins", "Reem Kufi", system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: var(--deep); color: var(--cream); font-family: var(--font);
+      overscroll-behavior: none; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
+    html[lang="ar"] body { font-family: "Reem Kufi", "Poppins", system-ui, sans-serif; }
+    a { color: inherit; }
+
+    /* the café backdrop around the game */
+    #bg { position: fixed; inset: 0; z-index: 0;
+      background:
+        radial-gradient(80% 70% at 50% 45%, rgba(122,20,36,.55), transparent 70%),
+        repeating-conic-gradient(from 0deg at 50% 46%, rgba(255,210,122,.045) 0 7deg, transparent 7deg 22.5deg),
+        radial-gradient(130% 100% at 50% 40%, #5a0e1b 0%, #2a0710 55%, #120305 100%); }
+    #bg::after { content: ""; position: absolute; inset: 0; opacity: .06;
+      background-image: radial-gradient(circle at 25% 25%, #f3cd62 1px, transparent 1.6px), radial-gradient(circle at 75% 75%, #f3cd62 1px, transparent 1.6px);
+      background-size: 28px 28px; }
+
+    /* the top bar (computers): the name, links, Google Play, full screen */
+    #bar { position: fixed; top: 0; left: 0; right: 0; height: var(--bar); z-index: 3; display: flex; align-items: center; gap: 14px;
+      padding: 0 18px; direction: ltr; background: linear-gradient(180deg, rgba(10,2,4,.65), rgba(10,2,4,.15)); }
+    #bar .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    #bar .brand img { height: 40px; width: auto; filter: drop-shadow(0 2px 6px rgba(0,0,0,.5)); }
+    #bar .brand b { font: 700 18px var(--font); letter-spacing: .12em; color: var(--gold); }
+    #bar .brand span { font: 500 15px "Reem Kufi", var(--font); color: rgba(246,234,208,.7); }
+    #bar .sp { flex: 1; }
+    #bar nav { display: flex; gap: 16px; font-size: 13px; }
+    #bar nav a { text-decoration: none; opacity: .72; transition: opacity .2s; }
+    #bar nav a:hover { opacity: 1; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px; border-radius: 19px; border: 1px solid rgba(243,205,98,.45);
+      background: rgba(243,205,98,.08); color: var(--gold); font: 600 13px var(--font); cursor: pointer; text-decoration: none; transition: background .2s, transform .1s; }
+    .btn:hover { background: rgba(243,205,98,.18); }
+    .btn:active { transform: scale(.97); }
+    .btn.solid { background: linear-gradient(180deg, #f6d878, #d9a945); color: #2a1206; border-color: transparent; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+    .btn.solid:hover { filter: brightness(1.06); }
+    .btn svg { width: 18px; height: 18px; flex: none; }
+    .icon-btn { width: 38px; padding: 0; justify-content: center; }
+
+    /* the game */
+    #stage { position: fixed; z-index: 1; border-radius: 14px; overflow: hidden; background: #0b0f17;
+      box-shadow: 0 0 0 1px rgba(243,205,98,.35), 0 20px 60px rgba(0,0,0,.6); transition: border-radius .2s; }
+    #stage.full { border-radius: 0; box-shadow: none; }
+    #unity-canvas { display: block; width: 100%; height: 100%; outline: none; touch-action: none; }
+
+    /* loading */
+    #load { position: fixed; inset: 0; z-index: 6; display: grid; place-items: center; align-content: center; gap: 18px; padding: 24px; text-align: center;
+      background: radial-gradient(120% 90% at 50% 42%, #7a1424 0%, #4a0b16 45%, #1c0609 100%); transition: opacity .6s ease, visibility .6s; }
+    #load.out { opacity: 0; visibility: hidden; }
+    #load .logo { width: min(34vmin, 210px); height: auto; filter: drop-shadow(0 12px 30px rgba(0,0,0,.5)); animation: float 3.2s ease-in-out infinite; }
+    @keyframes float { 50% { transform: translateY(-8px) rotate(-1deg); } }
+    #load .tag { font-size: clamp(14px, 2.4vmin, 18px); color: rgba(246,234,208,.85); }
+    .games { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 520px; }
+    .games span { padding: 5px 13px; border-radius: 14px; border: 1px solid rgba(243,205,98,.4); color: var(--gold); font-size: 12.5px; }
+    .meter { width: min(70vw, 340px); display: grid; gap: 8px; }
+    .meter .track { height: 8px; border-radius: 4px; background: rgba(255,255,255,.1); overflow: hidden; }
+    .meter .fill { height: 100%; width: 3%; border-radius: 4px; background: linear-gradient(90deg, #c99a3a, #f3cd62, #fff1bf); background-size: 200% 100%;
+      animation: shine 1.6s linear infinite; transition: width .25s ease; }
+    @keyframes shine { to { background-position: -200% 0; } }
+    .meter .row { display: flex; justify-content: space-between; font-size: 12.5px; color: rgba(246,234,208,.7); direction: ltr; }
+    #tip { min-height: 2.6em; max-width: 420px; font-size: 13.5px; color: rgba(246,234,208,.8); transition: opacity .4s; }
+
+    /* phones held upright, the first tap, and problems */
+    .cover { position: fixed; inset: 0; z-index: 7; display: none; place-items: center; align-content: center; gap: 18px; padding: 28px; text-align: center;
+      background: radial-gradient(120% 90% at 50% 40%, #6a1220 0%, #2a0710 60%, #120305 100%); }
+    .cover.on { display: grid; }
+    .cover h2 { margin: 0; font-size: 22px; color: var(--gold); }
+    .cover p { margin: 0; max-width: 340px; line-height: 1.6; color: rgba(246,234,208,.85); }
+    .phone { width: 64px; height: 108px; border: 4px solid var(--gold); border-radius: 14px; position: relative; animation: turn 2.4s ease-in-out infinite; }
+    .phone::after { content: ""; position: absolute; left: 50%; bottom: 6px; width: 14px; height: 4px; margin-left: -7px; border-radius: 2px; background: var(--gold); }
+    @keyframes turn { 0%, 25% { transform: rotate(0); } 55%, 85% { transform: rotate(-90deg); } 100% { transform: rotate(0); } }
+
+    #toast { position: fixed; left: 50%; top: 14px; z-index: 8; transform: translate(-50%, -80px); padding: 10px 18px; border-radius: 20px;
+      background: rgba(20,4,8,.92); border: 1px solid rgba(243,205,98,.4); color: var(--cream); font-size: 13.5px; transition: transform .35s ease; pointer-events: none; }
+    #toast.on { transform: translate(-50%, 0); }
+
+    body.touch #bar { display: none; }
+    body.touch #stage { border-radius: 0; box-shadow: none; }
+    body.full #bar { display: none; }
+    @media (max-width: 760px) { #bar nav, #bar .brand span { display: none; } }
   </style>
 </head>
 <body>
-  <canvas id="unity-canvas" tabindex="-1"></canvas>
+  <div id="bg"></div>
+
+  <header id="bar">
+    <a class="brand" href="./" aria-label="Board Battles"><img src="logo.png" alt=""><b>BOARD BATTLES</b><span>بورد باتلز</span></a>
+    <div class="sp"></div>
+    <nav><a href="privacy" target="_blank" rel="noopener" data-t="privacy">Privacy</a><a href="terms" target="_blank" rel="noopener" data-t="terms">Terms</a><a href="delete-account" target="_blank" rel="noopener" data-t="del">Delete account</a></nav>
+    <a class="btn solid" id="play-store" href="https://play.google.com/store/apps/details?id=com.ahwa.boardbattles" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4.2 2.6c-.3.3-.4.7-.4 1.2v16.4c0 .5.1.9.4 1.2l9.2-9.4-9.2-9.4zm10.4 10.6 2.6 2.7-11.4 6.5c-.4.2-.8.3-1.1.2l9.9-9.4zm0-2.4L4.7 1.4c.3-.1.7 0 1.1.2l11.4 6.5-2.6 2.7zm3.8-1.9 2.9 1.7c.9.5.9 1.3 0 1.8l-2.9 1.7-2.8-2.6 2.8-2.6z"/></svg>
+      <span data-t="getApp">Get the app</span></a>
+    <button class="btn icon-btn" id="fs" title="Full screen" aria-label="Full screen">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+  </header>
+
+  <div id="stage"><canvas id="unity-canvas" tabindex="-1"></canvas></div>
+
   <div id="load">
-    <img src="icon.png" alt="">
-    <div class="t">BOARD BATTLES</div>
-    <div id="bar"><i></i></div>
-    <div id="msg">جاري التحميل… Loading…</div>
+    <img class="logo" src="logo.png" alt="Board Battles">
+    <div class="tag" data-t="tag">The Egyptian café, at your table</div>
+    <div class="games"><span data-t="g1">Dominoes</span><span data-t="g2">Backgammon</span><span data-t="g3">Chess</span><span data-t="g4">Ludo</span><span data-t="g5">Estimation</span></div>
+    <div class="meter"><div class="track"><div class="fill" id="fill"></div></div><div class="row"><span id="what" data-t="loading">Loading the café…</span><span id="pct">0%</span></div></div>
+    <div id="tip"></div>
   </div>
-  <div id="rotate">لف الموبايل بالعرض عشان تلعب<br>Turn your phone sideways to play</div>
+
+  <div class="cover" id="rotate">
+    <div class="phone"></div>
+    <h2 data-t="rotH">Turn your phone sideways</h2>
+    <p data-t="rotP">Board Battles is played in landscape, like at the café table.</p>
+    <button class="btn solid" id="go-full" data-t="tapPlay">Tap to play full screen</button>
+  </div>
+
+  <div class="cover" id="fail">
+    <img src="logo.png" alt="" style="width:120px">
+    <h2 data-t="failH">This browser can't run the game</h2>
+    <p id="fail-p" data-t="failP">Try the latest Chrome, Edge or Safari, or get the app from Google Play.</p>
+    <a class="btn solid" href="https://play.google.com/store/apps/details?id=com.ahwa.boardbattles" target="_blank" rel="noopener" data-t="getApp">Get the app</a>
+  </div>
+
+  <div id="toast"></div>
+
   <script>
+  (function () {
+    // ---- words, in the visitor's language ----
+    var AR = (navigator.language || '').toLowerCase().indexOf('ar') === 0;
+    var T = {
+      privacy: ['الخصوصية', 'Privacy'], terms: ['الشروط', 'Terms'], del: ['امسح حسابك', 'Delete account'],
+      getApp: ['نزّل التطبيق', 'Get the app'], tag: ['القهوة المصرية على ترابيزتك', 'The Egyptian café, at your table'],
+      g1: ['دومينو', 'Dominoes'], g2: ['طاولة', 'Backgammon'], g3: ['شطرنج', 'Chess'], g4: ['لودو', 'Ludo'], g5: ['استيميشن', 'Estimation'],
+      loading: ['بنجهّز القهوة…', 'Loading the café…'], starting: ['بنرصّ الترابيزات…', 'Setting the tables…'],
+      rotH: ['لف الموبايل بالعرض', 'Turn your phone sideways'], rotP: ['بورد باتلز بتتلعب بالعرض، زي ما بتقعد على ترابيزة القهوة.', 'Board Battles is played in landscape, like at the café table.'],
+      tapPlay: ['العب بملء الشاشة', 'Tap to play full screen'],
+      failH: ['المتصفح ده مش بيشغّل اللعبة', "This browser can't run the game"], failP: ['جرّب آخر نسخة من كروم أو إيدج أو سفاري، أو نزّل التطبيق من جوجل بلاي.', 'Try the latest Chrome, Edge or Safari, or get the app from Google Play.'],
+      fsOn: ['اضغط Esc عشان تخرج من ملء الشاشة', 'Press Esc to leave full screen']
+    };
+    var tips = AR ? [
+      '«العب دلوقتي» بيلاقيلك ترابيزة في ثواني.',
+      'خش بجوجل عشان كوينزك ومستواك يفضلوا معاك على أي جهاز.',
+      'العب مع صحابك: افتح أوضة وابعتلهم الكود.',
+      'المهام اليومية بتديك كوينز زيادة كل يوم.',
+      'اطلع في الترتيب واكسب لقب لاعب الشهر في محافظتك.',
+      'لفّ العجلة واكسب جايزة مجانية.'
+    ] : [
+      '“Play now” finds you a table in seconds.',
+      'Sign in with Google to keep your coins and level on any device.',
+      'Play with friends: open a room and send them the code.',
+      'Daily missions give you extra coins every day.',
+      'Climb the rankings to become your governorate’s Player of the Month.',
+      'Spin the wheel for a free prize.'
+    ];
+    var L = AR ? 0 : 1;
+    document.documentElement.lang = AR ? 'ar' : 'en';
+    document.documentElement.dir = AR ? 'rtl' : 'ltr';
+    document.querySelectorAll('[data-t]').forEach(function (e) { var w = T[e.getAttribute('data-t')]; if (w) e.textContent = w[L]; });
+    function t(k) { return T[k][L]; }
+
+    var tipEl = document.getElementById('tip'), ti = Math.floor(Math.random() * tips.length);
+    function nextTip() { tipEl.style.opacity = 0; setTimeout(function () { tipEl.textContent = '💡 ' + tips[ti++ % tips.length]; tipEl.style.opacity = 1; }, 350); }
+    nextTip(); var tipTimer = setInterval(nextTip, 4200);
+
+    var toastEl = document.getElementById('toast'), toastT;
+    function toast(s) { toastEl.textContent = s; toastEl.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(function () { toastEl.classList.remove('on'); }, 2600); }
+
     // an old offline cache from the earlier web version would keep showing it: take it away
     if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(function (rs) { rs.forEach(function (r) { r.unregister(); }); }).catch(function () {});
-    if (window.caches) caches.keys().then(function (k) { k.forEach(function (n) { caches.delete(n); }); }).catch(function () {});
 
-    var canvas = document.getElementById('unity-canvas');
+    // ---- the game's frame: always a landscape shape that the game's layout is made for ----
+    var touch = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 900;
+    if (touch) document.body.classList.add('touch');
+    var stage = document.getElementById('stage'), canvas = document.getElementById('unity-canvas');
+    function isFull() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+    function layout() {
+      var W = window.innerWidth, H = window.innerHeight, full = isFull() || touch;
+      document.body.classList.toggle('full', isFull());
+      stage.classList.toggle('full', full);
+      var top = full ? 0 : parseInt(getComputedStyle(document.documentElement).getPropertyValue('--bar')) || 56;
+      var pad = full ? 0 : 14;
+      var aw = W - pad * 2, ah = H - top - pad * (full ? 0 : 1);
+      var minR = full ? 1.33 : 1.6, maxR = full ? 2.4 : 2.1;
+      var w = aw, h = ah, r = aw / ah;
+      if (r > maxR) w = Math.round(ah * maxR); else if (r < minR) h = Math.round(aw / minR);
+      stage.style.width = w + 'px'; stage.style.height = h + 'px';
+      stage.style.left = Math.round((W - w) / 2) + 'px';
+      stage.style.top = Math.round(top + (ah - h) / 2) + 'px';
+      // phones held upright: the game is played sideways
+      document.getElementById('rotate').classList.toggle('on', touch && H > W);
+    }
+    window.addEventListener('resize', layout);
+    window.addEventListener('orientationchange', function () { setTimeout(layout, 250); });
+    document.addEventListener('fullscreenchange', layout);
+    document.addEventListener('webkitfullscreenchange', layout);
+    layout();
+
+    // ---- full screen (and sideways, where the phone allows it) ----
+    function goFull() {
+      var el = document.documentElement, p;
+      try { p = (el.requestFullscreen || el.webkitRequestFullscreen).call(el, { navigationUI: 'hide' }); } catch (e) {}
+      Promise.resolve(p).then(function () {
+        if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function () {});
+      }).catch(function () {});
+    }
+    function toggleFull() {
+      if (isFull()) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); }
+      else { goFull(); toast(t('fsOn')); }
+    }
+    document.getElementById('fs').addEventListener('click', toggleFull);
+    document.getElementById('go-full').addEventListener('click', goFull);
+    // phones: the first tap on the game also takes it full screen (the address bar takes room from the table)
+    if (touch && (document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen)) {
+      canvas.addEventListener('pointerup', function once() { if (!isFull()) goFull(); canvas.removeEventListener('pointerup', once); });
+    }
+    canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+    // ---- start the game ----
+    var fill = document.getElementById('fill'), pct = document.getElementById('pct'), what = document.getElementById('what');
+    function fail(msg) {
+      clearInterval(tipTimer);
+      document.getElementById('load').classList.add('out');
+      if (msg) document.getElementById('fail-p').textContent = t('failP') + ' (' + msg + ')';
+      document.getElementById('fail').classList.add('on');
+    }
+    var gl = document.createElement('canvas').getContext('webgl2');
+    if (!gl) { fail(); return; }
+
     var config = {
       dataUrl: "Build/{{{ DATA_FILENAME }}}",
       frameworkUrl: "Build/{{{ FRAMEWORK_FILENAME }}}",
@@ -48,25 +257,25 @@
       productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
       productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},
       matchWebGLToCanvasSize: true,
-      devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2),
-      showBanner: function (msg, type) { if (type === 'error') document.getElementById('msg').textContent = msg; console.log('[unity] ' + msg); }
+      devicePixelRatio: Math.min(window.devicePixelRatio || 1, touch ? 2 : 1.75),
+      showBanner: function (msg, type) { console.log('[unity] ' + msg); if (type === 'error') toast(msg); }
     };
-    var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (isMobile) document.getElementById('rotate').classList.add('on');
     var s = document.createElement('script');
     s.src = "Build/{{{ LOADER_FILENAME }}}";
+    s.onerror = function () { fail('loader'); };
     s.onload = function () {
       createUnityInstance(canvas, config, function (p) {
-        document.querySelector('#bar i').style.width = Math.round(p * 100) + '%';
+        var v = Math.max(3, Math.round(p * 100));
+        fill.style.width = v + '%'; pct.textContent = v + '%';
+        if (p >= 0.9) what.textContent = t('starting');
       }).then(function (inst) {
         window.unityInstance = inst;
-        document.getElementById('load').classList.add('out');
-        canvas.focus();
-      }).catch(function (e) {
-        document.getElementById('msg').textContent = 'ماقدرناش نشغّل اللعبة على المتصفح ده. Couldn\'t start the game in this browser: ' + e;
-      });
+        fill.style.width = '100%'; pct.textContent = '100%';
+        setTimeout(function () { document.getElementById('load').classList.add('out'); clearInterval(tipTimer); canvas.focus(); }, 250);
+      }).catch(function (e) { fail(String(e)); });
     };
     document.body.appendChild(s);
+  })();
   </script>
 </body>
 </html>

@@ -55,6 +55,12 @@ docker run --rm -v /opt/board-battles/web:/srv/web:ro -e "DOMAIN=$DOMAIN" -e "SE
 [ "${PIPESTATUS[0]}" = 0 ] || { echo "!! the Caddyfile doesn't load: nothing restarted"; exit 1; }
 echo "== building and starting the game"
 docker compose -p board-battles up -d --build --remove-orphans
+# Caddy reads its Caddyfile once, from the copy it started with: start it again when the file changed
+sum=$(sha256sum Caddyfile | cut -d' ' -f1)
+if [ "$(cat "$BASE/caddyfile.sha" 2>/dev/null)" != "$sum" ]; then
+  echo "== the Caddyfile changed: starting Caddy again"
+  docker compose -p board-battles up -d --force-recreate --no-deps caddy && echo "$sum" > "$BASE/caddyfile.sha"
+fi
 docker image prune -f >/dev/null
 
 # ---- the nightly database copy ----

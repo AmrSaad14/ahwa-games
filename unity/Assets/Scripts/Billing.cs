@@ -38,6 +38,10 @@ public static class Billing
 #if UNITY_ANDROID && !UNITY_EDITOR
         try { using (var c = new AndroidJavaClass("com.ahwa.extras.BBBilling")) c.CallStatic("buy", Activity(), product, product == NoAds, Tag()); }
         catch (System.Exception e) { Debug.Log("[billing] " + e.Message); app?.Toast(Loc.T("الشراء مش متاح دلوقتي")); }
+#elif UNITY_WEBGL && !UNITY_EDITOR
+        // the browser: purchases are made in the app, on the same account
+        app?.Toast(Loc.T("الشراء من التطبيق: نزّله وادخل بنفس الحساب"), 4f);
+        Application.OpenURL("https://play.google.com/store/apps/details?id=com.ahwa.boardbattles");
 #else
         app?.Toast(Loc.T("الشراء من Google Play على الموبايل بس"));
 #endif
