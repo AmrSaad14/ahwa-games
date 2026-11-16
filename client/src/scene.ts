@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { End, GAMES, GameId, TILES } from '../../shared/engine';
+import { End, GameId, TILES } from '../../shared/engine';
 import { layoutLine, previewPlacement } from '../../shared/layout';
 import type { AnyView, TableView } from '../../shared/protocol';
 import type { BoardGameId } from '../../shared/games/defs';
@@ -28,7 +28,9 @@ const X_MAX = (T - 1.9) / TS;
 const SEAT_R = T + 1.5;
 
 /** The café floor (home screen): one table for each game. */
-const LOBBY: Record<GameId, [number, number]> = { domino: [-8, -5], tawla: [8, -5], chess: [-8, 6.5], ludo: [8, 6.5] };
+const LOBBY: Partial<Record<GameId, [number, number]>> = { domino: [-8, -5], tawla: [8, -5], chess: [-8, 6.5], ludo: [8, 6.5] };
+/** The café tables: the games the web version plays (the card games are in the app only). */
+const GAMES = Object.keys(LOBBY) as GameId[];
 const LOBBY_T = 3.2;
 /** The intro: you come in from the street door and walk between the tables. */
 const INTRO_PATH: [number, number][] = [[16.5, -17.5], [16, -12], [13, -1.5], [6, 0.8], [0, 1]];

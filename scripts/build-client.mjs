@@ -46,7 +46,7 @@ const options = {
     setup(b) {
       b.onEnd(result => {
         if (result.errors.length || !result.metafile) return;
-        const files = Object.keys(result.metafile.outputs).map(f => '/' + path.relative(out, path.resolve(root, f)).split(path.sep).join('/'));
+        const files = Object.keys(result.metafile.outputs).map(f => path.relative(out, path.resolve(root, f)).split(path.sep).join('/'));   // relative: the game can live under a path
         const js = files.find(f => f.endsWith('.js')), css = files.find(f => f.endsWith('.css'));
         // copy static files
         fs.cpSync(path.join(src, 'public'), out, { recursive: true });
@@ -56,12 +56,12 @@ const options = {
         fs.writeFileSync(path.join(out, 'index.html'), html);
         // offline cache for the web version (practice mode works without a connection)
         const version = crypto.createHash('sha1').update(files.join()).digest('hex').slice(0, 10);
-        const precache = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg', '/icon-192.png', ...files];
+        const precache = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', ...files];
         fs.writeFileSync(path.join(out, 'sw.js'), `const V='domino-${version}',P=${JSON.stringify(precache)};
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(P)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==V).map(x=>caches.delete(x)))).then(()=>self.clients.claim()))});
-self.addEventListener('fetch',e=>{const u=new URL(e.request.url);if(e.request.method!=='GET'||u.origin!==location.origin||u.pathname.startsWith('/api')||u.pathname==='/ws')return;
-e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).catch(()=>caches.match('/index.html'))))});
+self.addEventListener('fetch',e=>{const u=new URL(e.request.url);const b=new URL('./',location).pathname;if(e.request.method!=='GET'||u.origin!==location.origin||!u.pathname.startsWith(b)||u.pathname.startsWith(b+'api')||u.pathname.startsWith(b+'auth')||u.pathname===b+'ws')return;
+e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).catch(()=>caches.match('index.html'))))});
 `);
         // remove stale bundles from earlier builds
         const keep = new Set(files.map(f => path.basename(f)));

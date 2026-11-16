@@ -4,7 +4,9 @@ declare const __SERVER_URL__: string;
 
 /** The game server's https address: the build-time SERVER_URL for store apps, otherwise the page's own host. */
 export function httpBase(): string {
-  return (typeof __SERVER_URL__ === 'string' && __SERVER_URL__ ? __SERVER_URL__ : location.origin).replace(/\/$/, '');
+  // the page's own folder: the game can live under a path (https://qimma-labs.com/boardbattles/)
+  const page = location.origin + location.pathname.replace(/\/[^/]*$/, '');
+  return (typeof __SERVER_URL__ === 'string' && __SERVER_URL__ ? __SERVER_URL__ : page).replace(/\/$/, '');
 }
 /** WebSocket URL of the game server. */
 export function socketUrl(): string { return httpBase().replace(/^http/, 'ws') + '/ws'; }

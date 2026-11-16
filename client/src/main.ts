@@ -5,7 +5,7 @@ import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 import { CHESS_TIME, End, GAMES as ALL_GAMES, GAME_MODES, GameId, MODES, MODE_PLAYERS, Mode, TILES, canPlay, defaultTarget, endsFor, gameOf, targetOptions, teamOf } from '../../shared/engine';
 // the website plays the first four games (basra is in the app only)
-const GAMES = ALL_GAMES.filter(g => g !== 'basra' && g !== 'tarneeb' && g !== 'konkan');   // the card games are in the app only
+const GAMES = ALL_GAMES.filter(g => g === 'domino' || g === 'tawla' || g === 'chess' || g === 'ludo');   // the card games (estimation…) are in the app only
 import type { Action, AnyView, BoardAction, BoardView, CoinRow, Emote, FriendRow, LeaderRow, PublicUser, S2C, TableView } from '../../shared/protocol';
 import { playGamesCode, playGamesPossible } from './playgames';
 import { ludoColor } from './boards';
@@ -48,7 +48,7 @@ const S = {
   skinBuy: null as string | null,    // the skin waiting for 'buy?' confirmation
   online: false,
   user: null as PublicUser | null,
-  mode: (MODES.includes(store.get('mode') as Mode) ? store.get('mode') : 'ffa2') as Mode,
+  mode: (MODES.includes(store.get('mode') as Mode) && GAMES.includes(gameOf(store.get('mode') as Mode)) ? store.get('mode') : 'ffa2') as Mode,
   target: 101,
   queue: null as null | { mode: Mode; count: number; need: number; botsAt: number; stake?: number },
   view: null as AnyView | null,
@@ -496,7 +496,7 @@ window.addEventListener('pointercancel', dropTile);
 
 async function shareRoom(code: string) {
   const text = t('shareText', { code: code.toUpperCase(), game: t(('game_' + gameOf(S.view?.mode ?? S.mode)) as Key) });
-  const url = Capacitor.isNativePlatform() ? undefined : `${location.origin}/#${code}`;
+  const url = Capacitor.isNativePlatform() ? undefined : `${httpBase()}/#${code}`;
   try { await Share.share({ title: t('brand'), text, url }); }
   catch { copyText(code.toUpperCase()); }
 }
@@ -1706,7 +1706,7 @@ CapApp.addListener('backButton', () => {
 
 const hashCode = location.hash.replace('#', '');
 if (/^[a-z0-9]{5}$/i.test(hashCode)) { S.joinCode = hashCode.toUpperCase(); S.screen = 'friends'; }
-if ('serviceWorker' in navigator && location.protocol === 'https:' && !Capacitor.isNativePlatform()) navigator.serviceWorker.register('/sw.js').catch(() => {});
+if ('serviceWorker' in navigator && location.protocol === 'https:' && !Capacitor.isNativePlatform()) navigator.serviceWorker.register('sw.js').catch(() => {});
 
 // how-to-play recorder: with ?rec in the address a script can read the view and find board spots on screen
 // recording hooks: ?rec for the how-to GIFs, ?promo for the promo video (the computer plays your seat)
