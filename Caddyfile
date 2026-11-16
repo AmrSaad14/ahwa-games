@@ -1,7 +1,9 @@
 # The game lives under https://DOMAIN/boardbattles (the app, the sign-in pages, the API, the WebSocket at
 # /boardbattles/ws); the prefix is taken off before the game server sees the request.
 {$DOMAIN} {
-	encode zstd gzip
+	# the web build's files are already Brotli: sent as they are, with their size (the loading bar needs it)
+	@compressible not path /boardbattles/Build/*
+	encode @compressible zstd gzip
 	handle_path /boardbattles/* {
 		# the game in the browser (the Unity web build, put in /opt/board-battles/web by unity-web.yml): its page
 		# and files; everything else (the API, sign-in, the live connection, the legal pages) is the game server
