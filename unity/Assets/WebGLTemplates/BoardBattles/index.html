@@ -1,13 +1,13 @@
 <!doctype html>
-<html lang="ar" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
   <meta name="theme-color" content="#2a0710">
-  <title>Board Battles · بورد باتلز</title>
+  <title>Board Battles · Play online with friends</title>
   <meta name="description" content="Domino, tawla, chess, ludo and estimation in an Egyptian café. Play online with friends, free, right in your browser.">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Board Battles · بورد باتلز">
+  <meta property="og:title" content="Board Battles">
   <meta property="og:description" content="Domino, tawla, chess, ludo and estimation in an Egyptian café. Play online with friends, free.">
   <meta property="og:image" content="https://qimma-labs.com/boardbattles/share.jpg">
   <meta property="og:url" content="https://qimma-labs.com/boardbattles/">
@@ -20,16 +20,15 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Reem+Kufi:wght@500;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap">
   <style>
     :root {
       --wine: #2a0710; --wine2: #4a0b16; --deep: #160407; --gold: #f3cd62; --gold2: #c99a3a; --cream: #f6ead0;
-      --bar: 56px; --font: "Poppins", "Reem Kufi", system-ui, -apple-system, "Segoe UI", sans-serif;
+      --bar: 56px; --font: "Poppins", system-ui, -apple-system, "Segoe UI", sans-serif;
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; height: 100%; overflow: hidden; background: var(--deep); color: var(--cream); font-family: var(--font);
       overscroll-behavior: none; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
-    html[lang="ar"] body { font-family: "Reem Kufi", "Poppins", system-ui, sans-serif; }
     a { color: inherit; }
 
     /* the café backdrop around the game */
@@ -48,7 +47,6 @@
     #bar .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
     #bar .brand img { height: 40px; width: auto; filter: drop-shadow(0 2px 6px rgba(0,0,0,.5)); }
     #bar .brand b { font: 700 18px var(--font); letter-spacing: .12em; color: var(--gold); }
-    #bar .brand span { font: 500 15px "Reem Kufi", var(--font); color: rgba(246,234,208,.7); }
     #bar .sp { flex: 1; }
     #bar nav { display: flex; gap: 16px; font-size: 13px; }
     #bar nav a { text-decoration: none; opacity: .72; transition: opacity .2s; }
@@ -102,14 +100,14 @@
     body.touch #bar { display: none; }
     body.touch #stage { border-radius: 0; box-shadow: none; }
     body.full #bar { display: none; }
-    @media (max-width: 760px) { #bar nav, #bar .brand span { display: none; } }
+    @media (max-width: 760px) { #bar nav { display: none; } }
   </style>
 </head>
 <body>
   <div id="bg"></div>
 
   <header id="bar">
-    <a class="brand" href="./" aria-label="Board Battles"><img src="logo.png" alt=""><b>BOARD BATTLES</b><span>بورد باتلز</span></a>
+    <a class="brand" href="./" aria-label="Board Battles"><img src="logo.png" alt=""><b>BOARD BATTLES</b></a>
     <div class="sp"></div>
     <nav><a href="privacy" target="_blank" rel="noopener" data-t="privacy">Privacy</a><a href="terms" target="_blank" rel="noopener" data-t="terms">Terms</a><a href="delete-account" target="_blank" rel="noopener" data-t="del">Delete account</a></nav>
     <a class="btn solid" id="play-store" href="https://play.google.com/store/apps/details?id=com.ahwa.boardbattles" target="_blank" rel="noopener">
@@ -147,26 +145,13 @@
 
   <script>
   (function () {
-    // ---- words, in the visitor's language ----
-    var AR = (navigator.language || '').toLowerCase().indexOf('ar') === 0;
+    // ---- words (English) ----
     var T = {
-      privacy: ['الخصوصية', 'Privacy'], terms: ['الشروط', 'Terms'], del: ['امسح حسابك', 'Delete account'],
-      getApp: ['نزّل التطبيق', 'Get the app'], tag: ['القهوة المصرية على ترابيزتك', 'The Egyptian café, at your table'],
-      g1: ['دومينو', 'Dominoes'], g2: ['طاولة', 'Backgammon'], g3: ['شطرنج', 'Chess'], g4: ['لودو', 'Ludo'], g5: ['استيميشن', 'Estimation'],
-      loading: ['بنجهّز القهوة…', 'Loading the café…'], starting: ['بنرصّ الترابيزات…', 'Setting the tables…'],
-      rotH: ['لف الموبايل بالعرض', 'Turn your phone sideways'], rotP: ['بورد باتلز بتتلعب بالعرض، زي ما بتقعد على ترابيزة القهوة.', 'Board Battles is played in landscape, like at the café table.'],
-      tapPlay: ['العب بملء الشاشة', 'Tap to play full screen'],
-      failH: ['المتصفح ده مش بيشغّل اللعبة', "This browser can't run the game"], failP: ['جرّب آخر نسخة من كروم أو إيدج أو سفاري، أو نزّل التطبيق من جوجل بلاي.', 'Try the latest Chrome, Edge or Safari, or get the app from Google Play.'],
-      fsOn: ['اضغط Esc عشان تخرج من ملء الشاشة', 'Press Esc to leave full screen']
+      tag: 'The Egyptian café, at your table', loading: 'Loading the café…', starting: 'Setting the tables…',
+      failP: 'Try the latest Chrome, Edge or Safari, or get the app from Google Play.',
+      fsOn: 'Press Esc to leave full screen'
     };
-    var tips = AR ? [
-      '«العب دلوقتي» بيلاقيلك ترابيزة في ثواني.',
-      'خش بجوجل عشان كوينزك ومستواك يفضلوا معاك على أي جهاز.',
-      'العب مع صحابك: افتح أوضة وابعتلهم الكود.',
-      'المهام اليومية بتديك كوينز زيادة كل يوم.',
-      'اطلع في الترتيب واكسب لقب لاعب الشهر في محافظتك.',
-      'لفّ العجلة واكسب جايزة مجانية.'
-    ] : [
+    var tips = [
       '“Play now” finds you a table in seconds.',
       'Sign in with Google to keep your coins and level on any device.',
       'Play with friends: open a room and send them the code.',
@@ -174,11 +159,7 @@
       'Climb the rankings to become your governorate’s Player of the Month.',
       'Spin the wheel for a free prize.'
     ];
-    var L = AR ? 0 : 1;
-    document.documentElement.lang = AR ? 'ar' : 'en';
-    document.documentElement.dir = AR ? 'rtl' : 'ltr';
-    document.querySelectorAll('[data-t]').forEach(function (e) { var w = T[e.getAttribute('data-t')]; if (w) e.textContent = w[L]; });
-    function t(k) { return T[k][L]; }
+    function t(k) { return T[k]; }
 
     var tipEl = document.getElementById('tip'), ti = Math.floor(Math.random() * tips.length);
     function nextTip() { tipEl.style.opacity = 0; setTimeout(function () { tipEl.textContent = '💡 ' + tips[ti++ % tips.length]; tipEl.style.opacity = 1; }, 350); }
