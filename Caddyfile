@@ -22,7 +22,8 @@
 			}
 		}
 		@br path *.br
-		header @br Content-Encoding br
+		# added once the file server has set the size (the loading bar needs it)
+		header @br >Content-Encoding br
 		@wasm path *.wasm.br
 		header @wasm Content-Type application/wasm
 		@js path *.js.br
