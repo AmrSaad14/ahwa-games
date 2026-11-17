@@ -55,7 +55,7 @@ export function createServer(opts = config) {
     if (JSON.stringify([now.ads, now.games, now.economy.stakes, now.economy.wheelCoins]) !== JSON.stringify([before.ads, before.games, before.economy.stakes, before.economy.wheelCoins])) hub.configChanged();
   });
   const admin = adminApi({ store, hub, settings, adminKey: opts.adminKey, secret: store.secret(opts.secret), ip: req => clientIp(req), pushOn: () => push.enabled,
-    push: (uids, ar, en) => { for (const u of uids) push.toUser(u, ar, en).catch(() => {}); } });
+    push: (uids, ar, en) => { for (const u of uids) push.toUser(u, ar, en).catch(() => {}); }, pushNow: (uids, ar, en) => push.deliver(uids, ar, en) });
   const pushTimer = setInterval(() => { push.tick().catch(e => console.error('[push]', (e as Error).message)); }, 60_000);
   const staticRoot = path.resolve(opts.staticDir);
   const perIp = new Map<string, number>();

@@ -8,6 +8,7 @@
 <style>
 :root{--bg:#120c08;--panel:#1c130d;--panel2:#241810;--line:#3a2a1e;--gold:#f3cd62;--gold2:#c9a25a;--text:#f4e6c8;--muted:#b9a88a;--ok:#4fae6a;--bad:#d4574a;--warn:#e0a03a;--ink:#1b120c}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif}
 a{color:var(--gold)}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -66,8 +67,60 @@ label.f input[type=color]{width:52px}
 .tabs button{border:1px solid var(--line);background:var(--panel);border-radius:99px;padding:5px 14px;cursor:pointer}
 .tabs button.on{background:var(--gold);color:var(--ink);border-color:var(--gold);font-weight:700}
 .chart{display:block;width:100%;height:auto}
-.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--gold);color:var(--ink);padding:10px 18px;border-radius:10px;font-weight:700;box-shadow:0 10px 30px rgba(0,0,0,.5);z-index:50}
-.toast.err{background:var(--bad);color:#fff}
+/* messages: a stack top right; success goes by itself, errors stay until closed */
+.toasts{position:fixed;top:14px;right:14px;z-index:90;display:grid;gap:10px;width:min(380px,calc(100vw - 28px));pointer-events:none}
+.toast{pointer-events:auto;display:grid;grid-template-columns:28px 1fr auto;gap:10px;align-items:start;background:#21160e;border:1px solid var(--line);border-left:4px solid var(--ok);border-radius:12px;padding:12px 12px 12px 12px;box-shadow:0 14px 34px rgba(0,0,0,.55);animation:tin .22s ease-out}
+.toast.err{border-left-color:var(--bad)}.toast.warn{border-left-color:var(--warn)}.toast.info{border-left-color:var(--gold2)}
+.toast .ic{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:15px;background:rgba(79,174,106,.18);color:#9fe0b0}
+.toast.err .ic{background:rgba(212,87,74,.2);color:#ff9d92}.toast.warn .ic{background:rgba(224,160,58,.2);color:#ffd08a}.toast.info .ic{background:rgba(243,205,98,.15);color:var(--gold)}
+.toast b{display:block;font-size:14px;color:#fff;line-height:1.35}.toast .d{font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.4;word-break:break-word}
+.toast .tx{background:none;border:0;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px;border-radius:6px}.toast .tx:hover{color:#fff;background:var(--panel2)}
+.toast .bar{grid-column:1/-1;height:3px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:2px}.toast .bar i{display:block;height:100%;background:var(--ok);transform-origin:left;animation:tbar linear forwards}
+.toast.warn .bar i{background:var(--warn)}.toast.info .bar i{background:var(--gold2)}
+.toast.out{animation:tout .2s ease-in forwards}
+@keyframes tin{from{opacity:0;transform:translateY(-8px)}}@keyframes tout{to{opacity:0;transform:translateX(24px)}}@keyframes tbar{to{transform:scaleX(0)}}
+/* a button at work: a spinner, and no second click */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px}
+.btn.busy{position:relative;color:transparent!important;pointer-events:none}
+.btn.busy::after{content:"";position:absolute;width:15px;height:15px;border-radius:50%;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;animation:spin .7s linear infinite}
+.btn.gold.busy::after{border-color:rgba(27,18,12,.3);border-top-color:var(--ink)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;width:16px;height:16px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--gold);animation:spin .7s linear infinite;vertical-align:-3px;margin-right:8px}
+/* dialogs (instead of the browser's confirm and prompt) */
+.modal{position:fixed;inset:0;z-index:80;display:grid;place-items:center;background:rgba(0,0,0,.6);padding:16px;animation:fin .15s ease-out}
+.modal .box{background:var(--panel);border:1px solid var(--line);border-radius:14px;width:min(460px,100%);padding:20px 20px 16px;box-shadow:0 24px 60px rgba(0,0,0,.6)}
+.modal h3{margin:0 0 8px;font-size:17px;color:#fff}.modal p{margin:0 0 14px;color:var(--muted);white-space:pre-line}
+.modal.danger h3{color:#ff9d92}.modal label.f{margin-bottom:14px}.modal .acts{display:flex;justify-content:flex-end;gap:8px}
+@keyframes fin{from{opacity:0}}
+/* inline results under a form */
+.result{display:grid;grid-template-columns:22px 1fr;gap:10px;margin-top:12px;padding:12px 14px;border-radius:10px;border:1px solid var(--ok);background:rgba(79,174,106,.1)}
+.result.err{border-color:var(--bad);background:rgba(212,87,74,.1)}.result.warn{border-color:var(--warn);background:rgba(224,160,58,.1)}
+.result .ic{font-weight:900;color:#9fe0b0}.result.err .ic{color:#ff9d92}.result.warn .ic{color:#ffd08a}
+.result b{color:#fff}.result .d{color:var(--muted);font-size:12.5px;margin-top:2px}
+.stats{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px;font-size:12.5px}.stats span b{font-size:15px}
+/* forms: what's wrong, said next to the field */
+.invalid{border-color:var(--bad)!important;box-shadow:0 0 0 1px var(--bad) inset}
+.ferr{color:#ff9d92;font-size:11.5px;min-height:0}
+.cnt{font-size:11px;color:var(--muted);text-align:right}.cnt.over{color:#ff9d92}
+/* the push page: the form, and how it looks on a phone */
+.pushgrid{display:grid;gap:16px;grid-template-columns:minmax(0,1fr) 300px;align-items:start}
+.phone{background:linear-gradient(160deg,#2b2b33,#15151a);border-radius:22px;padding:16px 12px 22px;border:1px solid #3a3a44}
+.phone .clock{color:#fff;text-align:center;font-size:30px;font-weight:300;margin:4px 0 12px}
+.notif{background:rgba(245,245,250,.93);color:#111;border-radius:14px;padding:10px 12px;display:grid;grid-template-columns:30px 1fr;gap:9px;margin-bottom:8px}
+.notif .ap{width:30px;height:30px;border-radius:8px;background:radial-gradient(circle at 50% 35%,#7a1424,#2a070c);color:var(--gold);display:grid;place-items:center;font-weight:900;font-size:13px}
+.notif .nh{font-size:11px;color:#666;display:flex;justify-content:space-between}.notif b{font-size:13px;display:block}.notif .nb{font-size:12.5px;color:#333;word-break:break-word}
+.notif .lg{font-size:10px;color:#888;margin-top:2px}
+.aud{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+.aud label{display:block;cursor:pointer;background:#0d0805;border:1px solid var(--line);border-radius:10px;padding:9px 11px}
+.aud input{display:none}.aud label:has(input:checked){border-color:var(--gold);background:rgba(243,205,98,.08)}
+.aud b{display:block;font-size:13px}.aud span{font-size:11.5px;color:var(--muted)}
+.steps{counter-reset:s}.steps>.card{position:relative}
+/* the page header */
+.pagebar{position:sticky;top:0;z-index:15;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 26px;background:rgba(18,12,8,.92);backdrop-filter:blur(6px);border-bottom:1px solid var(--line)}
+.pagebar .crumb{color:var(--muted);font-size:12.5px}.pagebar .crumb b{color:var(--text)}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media (max-width:900px){.pushgrid{grid-template-columns:1fr}.phone{max-width:320px}}
 .drawer{position:fixed;inset:0 0 0 auto;width:min(720px,100%);background:var(--bg);border-left:1px solid var(--line);overflow:auto;padding:20px 22px;z-index:40;box-shadow:-20px 0 40px rgba(0,0,0,.5)}
 .shade{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:30}
 .x{float:right}
@@ -139,7 +192,7 @@ input[type=color]{width:52px;height:36px;padding:2px;cursor:pointer}
 .dot.off{background:#6b5a45}
 .tierrow td{padding:5px 8px}
 .tierrow select,.tierrow input{padding:4px 6px}
-@media (max-width:820px){.app{grid-template-columns:1fr}nav.side{position:static;height:auto;display:flex;overflow-x:auto;gap:4px;padding:8px}nav.side .brand,nav.side .navsec,nav.side .qs{display:none}nav.side a{white-space:nowrap}main{padding:16px}.savebar{bottom:6px}}
+@media (max-width:820px){.toasts{top:auto;bottom:12px;right:12px}.pagebar{padding:8px 16px}.app{grid-template-columns:1fr}nav.side{position:static;height:auto;display:flex;overflow-x:auto;gap:4px;padding:8px}nav.side .brand,nav.side .navsec,nav.side .qs{display:none}nav.side a{white-space:nowrap}main{padding:16px}.savebar{bottom:6px}}
 </style>
 </head>
 <body>
@@ -157,19 +210,116 @@ const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 
 const GAMES = { rotate: 'Each week in turn', domino: 'Dominoes', tawla: 'Backgammon (tawla)', chess: 'Chess', ludo: 'Ludo' };
 let state = { view: 'overview', catalog: null, pending: 0 };
 
+// what each error from the server means, in words
 const ERRS = {
   nobody_signed_up: 'Nobody has signed up for this tournament yet, so it can’t start. Use “Skip this one” to move to the next week.',
   tourney_not_open: 'This tournament has already started or ended. The page is now up to date.',
+  push_off: 'Push notifications are off on the server: FIREBASE_SERVICE_ACCOUNT isn’t set.',
+  google_auth: 'Google refused the server’s Firebase key (FIREBASE_SERVICE_ACCOUNT). Nothing was sent.',
+  empty: 'Write the message first.',
+  player_not_found: 'No player with that friend code or id.',
+  no_player: 'That player doesn’t exist any more.',
+  not_found: 'Not found: it may have been removed. Refresh the page.',
+  bad_amount: 'That amount isn’t allowed.',
+  bad_name: 'That name isn’t allowed (too short, too long or not allowed words).',
+  bad_skin: 'That skin doesn’t exist.',
+  bad_title: 'That title doesn’t exist.',
+  bad_action: 'The server didn’t understand that action. Reload the page.',
+  cant_remove: 'That one can’t be removed.',
+  not_waiting: 'This prize isn’t waiting for an answer any more. The page is now up to date.',
+  wrong_key: 'Wrong key.',
+  slow_down: 'Too many tries. Wait a few minutes and try again.',
+  admin_off: 'The dashboard is off: set ADMIN_KEY on the server.',
+  too_big: 'That is too much to send at once.',
+  bad_json: 'The page sent something the server couldn’t read. Reload the page.',
 };
+// the API is next to this page (…/boardbattles/admin → …/boardbattles/api/admin)
+const BASE = location.pathname.replace(/\/admin\/?$/, '');
 async function api(path, opts = {}) {
-  const r = await fetch('/api/admin' + path, { method: opts.method || (opts.body ? 'POST' : 'GET'), headers: { 'Content-Type': 'application/json' }, body: opts.body ? JSON.stringify(opts.body) : undefined, credentials: 'same-origin' });
+  let r;
+  try {
+    r = await fetch(BASE + '/api/admin' + path, { method: opts.method || (opts.body ? 'POST' : 'GET'), headers: { 'Content-Type': 'application/json' }, body: opts.body ? JSON.stringify(opts.body) : undefined, credentials: 'same-origin' });
+  } catch { throw new Error('Couldn’t reach the server. Check your internet connection and try again.'); }
   const j = await r.json().catch(() => ({}));
-  if (r.status === 401) { showLogin(); throw new Error('Signed out'); }
-  if (!r.ok) throw new Error(ERRS[j.error] || j.error || ('HTTP ' + r.status));
+  if (r.status === 401) { showLogin('Your session ended. Sign in again to carry on.'); throw new Error('Signed out'); }
+  if (!r.ok) { const e = new Error(ERRS[j.error] || (r.status >= 500 ? 'The server had a problem (' + r.status + '). Try again in a moment.' : j.error || ('HTTP ' + r.status))); e.code = j.error; throw e; }
   return j;
 }
-function toast(msg, err) { const t = document.createElement('div'); t.className = 'toast' + (err ? ' err' : ''); t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), err ? 4500 : 2400); }
-async function act(fn, ok) { try { const r = await fn(); if (ok) toast(ok); return r; } catch (e) { if (e.message !== 'Signed out') toast(e.message, true); throw e; } }
+
+/* ---------------- messages ---------------- */
+// notify({ type: 'ok' | 'err' | 'warn' | 'info', title, detail, ms }): a message top right. Errors stay until closed.
+function notify(o) {
+  let box = $('.toasts'); if (!box) { box = document.createElement('div'); box.className = 'toasts'; box.setAttribute('aria-live', 'polite'); document.body.appendChild(box); }
+  const type = o.type || 'ok', ms = o.ms ?? (type === 'err' ? 0 : type === 'warn' ? 8000 : 4500);
+  const t = document.createElement('div'); t.className = 'toast ' + type; t.setAttribute('role', type === 'err' ? 'alert' : 'status');
+  t.innerHTML = '<span class="ic">' + ({ ok: '✓', err: '!', warn: '!', info: 'i' }[type]) + '</span><div><b>' + esc(o.title) + '</b>' + (o.detail ? '<div class="d">' + esc(o.detail) + '</div>' : '') + '</div><button class="tx" aria-label="Close">✕</button>' +
+    (ms ? '<div class="bar"><i style="animation-duration:' + ms + 'ms"></i></div>' : '');
+  const close = () => { t.classList.add('out'); setTimeout(() => t.remove(), 200); };
+  t.querySelector('.tx').onclick = close;
+  let left = ms, started = Date.now(), timer = ms ? setTimeout(close, ms) : 0;
+  // hovering holds it
+  t.onmouseenter = () => { if (!timer) return; clearTimeout(timer); left -= Date.now() - started; const i = t.querySelector('.bar i'); if (i) i.style.animationPlayState = 'paused'; };
+  t.onmouseleave = () => { if (!ms) return; started = Date.now(); timer = setTimeout(close, Math.max(800, left)); const i = t.querySelector('.bar i'); if (i) i.style.animationPlayState = 'running'; };
+  box.appendChild(t);
+  while (box.children.length > 4) box.firstChild.remove();
+  return t;
+}
+// the short form used everywhere: toast('Saved') or toast('What went wrong', true)
+function toast(msg, err) { return notify(err ? { type: 'err', title: msg, ms: 6000 } : { type: 'ok', title: msg }); }
+
+// the button that was clicked last: it shows a spinner while its action runs
+let lastBtn = null;
+document.addEventListener('click', e => { lastBtn = e.target.closest('button,.btn'); }, true);
+document.addEventListener('submit', e => { lastBtn = e.target.querySelector('button:not([type=button])'); }, true);
+/** Runs an action against the server: a spinner on its button, then a message saying how it went.
+ *  ok: the success message, or a function of the answer giving one ({ title, detail, type }). */
+async function act(fn, ok, failTitle) {
+  const btn = lastBtn && document.contains(lastBtn) ? lastBtn : null;
+  if (btn) { btn.classList.add('busy'); btn.setAttribute('aria-busy', 'true'); btn.disabled = true; }
+  try {
+    const r = await fn();
+    const m = typeof ok === 'function' ? ok(r) : ok;
+    if (m) notify(typeof m === 'string' ? { type: 'ok', title: m } : m);
+    return r;
+  } catch (e) {
+    if (e.message !== 'Signed out') notify({ type: 'err', title: failTitle || 'That didn’t work', detail: e.message });
+    throw e;
+  } finally {
+    if (btn) { btn.classList.remove('busy'); btn.removeAttribute('aria-busy'); btn.disabled = false; }
+  }
+}
+
+/* ---------------- dialogs ---------------- */
+/** ask({ title, text, ok, danger, input: { label, value, placeholder }, type: 'DELETE' }) → true / the text typed, or null. */
+function ask(o) {
+  return new Promise(resolve => {
+    const prev = document.activeElement, origin = lastBtn;
+    const m = document.createElement('div'); m.className = 'modal' + (o.danger ? ' danger' : '');
+    m.innerHTML = '<div class="box" role="dialog" aria-modal="true" aria-labelledby="mt"><h3 id="mt">' + esc(o.title) + '</h3>' + (o.text ? '<p>' + esc(o.text) + '</p>' : '') +
+      (o.input ? '<label class="f">' + esc(o.input.label || '') + '<input id="mi" value="' + esc(o.input.value || '') + '" placeholder="' + esc(o.input.placeholder || '') + '"' + (o.input.rtl ? ' dir="auto"' : '') + '></label>' : '') +
+      (o.type ? '<label class="f">Type <b style="color:#fff">' + esc(o.type) + '</b> to confirm<input id="mi" autocomplete="off"></label>' : '') +
+      '<div class="acts"><button class="btn" data-no>Cancel</button><button class="btn ' + (o.danger ? 'bad' : 'gold') + '" data-yes>' + esc(o.ok || 'OK') + '</button></div></div>';
+    document.body.appendChild(m);
+    const inp = $('#mi', m), yes = $('[data-yes]', m);
+    const done = v => { lastBtn = origin; m.remove(); document.removeEventListener('keydown', key, true); if (prev && prev.focus) prev.focus(); resolve(v); };
+    const key = e => { if (e.key === 'Escape') { e.stopPropagation(); done(null); } if (e.key === 'Enter' && !yes.disabled && (!e.target.matches('button'))) { e.preventDefault(); yes.click(); } };
+    document.addEventListener('keydown', key, true);
+    if (o.type) { yes.disabled = true; inp.oninput = () => { yes.disabled = inp.value.trim() !== o.type; }; }
+    $('[data-no]', m).onclick = () => done(null);
+    m.onclick = e => { if (e.target === m) done(null); };
+    yes.onclick = () => done(o.input ? inp.value : true);
+    (inp || yes).focus();
+  });
+}
+
+/** Marks a field as wrong, with the reason under it; cleared when it's changed. Returns false, to `return` it. */
+function bad(el, msg) {
+  el.classList.add('invalid'); el.focus();
+  let e = el.parentElement.querySelector('.ferr'); if (!e) { e = document.createElement('div'); e.className = 'ferr'; el.insertAdjacentElement('afterend', e); }
+  e.textContent = msg;
+  el.addEventListener('input', () => { el.classList.remove('invalid'); e.textContent = ''; }, { once: true });
+  return false;
+}
 
 /* ---------------- titles: drawn the same way as in the game ---------------- */
 function iconSvg(name) { const d = (state.catalog?.icons || {})[name]; return d ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="' + d + '"/></svg>' : ''; }
@@ -181,14 +331,18 @@ function badge(t, lang, big) {
 const titleById = id => (state.catalog?.titles || []).find(t => t.id === id);
 
 /* ---------------- sign in ---------------- */
-function showLogin() {
+function showLogin(why) {
+  document.querySelectorAll('.modal,.drawer,.shade').forEach(x => x.remove());
   $('#root').innerHTML = '<div class="card login"><h1>Control room</h1><p class="sub">Board Battles · enter the server\'s ADMIN_KEY</p>' +
-    '<form id="lf" class="row" style="display:grid;gap:10px"><input id="lk" type="password" placeholder="Admin key" autocomplete="current-password" required>' +
-    '<button class="btn gold">Sign in</button><div id="le" class="sub"></div></form></div>';
+    (why ? '<div class="result warn" style="margin:0 0 12px"><span class="ic">!</span><div>' + esc(why) + '</div></div>' : '') +
+    '<form id="lf" style="display:grid;gap:10px"><input id="lk" type="password" placeholder="Admin key" autocomplete="current-password" required>' +
+    '<button class="btn gold">Sign in</button><div id="le" class="ferr" role="alert"></div></form></div>';
   $('#lf').onsubmit = async e => {
     e.preventDefault();
-    try { await api('/login', { body: { key: $('#lk').value } }); start(); }
-    catch (er) { $('#le').textContent = er.message === 'admin_off' ? 'The dashboard is off: set ADMIN_KEY on the server.' : er.message === 'wrong_key' ? 'Wrong key.' : er.message; }
+    const b = $('#lf button'); b.classList.add('busy'); b.disabled = true; $('#le').textContent = '';
+    try { await api('/login', { body: { key: $('#lk').value } }); start(); notify({ type: 'ok', title: 'Signed in', detail: 'You stay signed in for 12 hours on this browser.' }); }
+    catch (er) { $('#le').textContent = er.message; $('#lk').classList.add('invalid'); $('#lk').select(); }
+    finally { b.classList.remove('busy'); b.disabled = false; }
   };
   $('#lk').focus();
 }
@@ -210,8 +364,9 @@ function frame() {
     '<form class="qs" id="qsf"><input id="qsi" placeholder="Find a player…" autocomplete="off"></form>' +
     NAV.map(([h, rows]) => (h ? '<div class="navsec">' + h + '</div>' : '<div style="height:10px"></div>') + rows.map(([k, l]) => '<a href="#' + k + '" data-v="' + k + '">' + l + '</a>').join('')).join('') +
     '<a href="#prizes" data-v="prizes" id="moneynav" hidden>Money prizes<span class="pill" id="pendpill" hidden></span></a>' +
-    '<a href="#" id="logout" style="margin-top:14px">Sign out</a></nav><main id="main"></main></div>';
-  $('#logout').onclick = async e => { e.preventDefault(); if (!leaveOk()) return; await api('/logout', { body: {} }).catch(() => {}); showLogin(); };
+    '<a href="#" id="logout" style="margin-top:14px">Sign out</a></nav><div style="min-width:0"><div class="pagebar"><span class="crumb" id="crumb"></span><span class="row" style="gap:8px"><span class="sub" id="upd"></span><button class="btn sm" id="reload" title="Load this page again">↻ Refresh</button></span></div><main id="main"></main></div></div>';
+  $('#reload').onclick = async () => { const b = $('#reload'); b.classList.add('busy'); try { await go(true); } finally { b.classList.remove('busy'); } };
+  $('#logout').onclick = async e => { e.preventDefault(); if (!leaveOk()) return; await api('/logout', { body: {} }).catch(() => {}); showLogin('You signed out.'); };
   $('#qsf').onsubmit = e => { e.preventDefault(); state.q = $('#qsi').value.trim(); if (location.hash === '#players') go(); else location.hash = 'players'; };
 }
 function setPending(n) { state.pending = n; const p = $('#pendpill'); if (p) { p.hidden = !n; p.textContent = n; } const m = $('#moneynav'); if (m) m.hidden = !(n || state.moneyOn); }
@@ -220,7 +375,7 @@ let dirtyCheck = null;
 const leaveOk = () => !dirtyCheck || !dirtyCheck() || confirm('You have unsaved changes on this page. Leave without saving?');
 window.addEventListener('beforeunload', e => { if (dirtyCheck && dirtyCheck()) { e.preventDefault(); e.returnValue = ''; } });
 let lastHash = location.hash, liveTimer = null;
-async function go() {
+async function go(quiet) {
   if (location.hash !== lastHash && !leaveOk()) { history.replaceState(null, '', lastHash || '#overview'); return; }
   lastHash = location.hash; dirtyCheck = null;
   if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
@@ -229,8 +384,12 @@ async function go() {
   v = ALIAS[v] || v;
   state.view = VIEWS.some(x => x[0] === v) ? v : 'overview';
   document.querySelectorAll('nav.side a[data-v]').forEach(a => a.classList.toggle('on', a.dataset.v === state.view));
-  const main = $('#main'); main.innerHTML = '<div class="empty">Loading…</div>';
-  try { await RENDER[state.view](main); } catch (e) { if (e.message !== 'Signed out') main.innerHTML = '<div class="card">Could not load: ' + esc(e.message) + '</div>'; }
+  const sec = NAV.find(x => x[1].some(y => y[0] === state.view)), label = (VIEWS.find(x => x[0] === state.view) || [])[1] || '';
+  if ($('#crumb')) $('#crumb').innerHTML = (sec && sec[0] ? esc(sec[0]) + ' › ' : '') + '<b>' + esc(label) + '</b>';
+  const main = $('#main'), y = window.scrollY;
+  if (quiet !== true) main.innerHTML = '<div class="empty"><span class="spin"></span>Loading…</div>';
+  try { await RENDER[state.view](main); if ($('#upd')) $('#upd').textContent = 'Updated ' + new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); if (quiet === true) window.scrollTo(0, y); }
+  catch (e) { if (e.message !== 'Signed out') main.innerHTML = '<div class="result err" style="max-width:640px"><span class="ic">!</span><div><b>This page couldn’t load</b><div class="d">' + esc(e.message) + '</div><button class="btn sm" style="margin-top:10px" onclick="go()">Try again</button></div></div>'; }
 }
 async function start() {
   frame();
@@ -271,6 +430,7 @@ RENDER.overview = async main => {
       (o.flags.gamesOff.length ? '<a class="flag warn" href="#games" style="text-decoration:none">Off: ' + o.flags.gamesOff.map(g => GNAME[g] || g).join(', ') + '</a>' : '') +
       (o.flags.minBuild ? '<a class="flag" href="#system" style="text-decoration:none;color:inherit">Oldest app allowed: ' + o.flags.minBuild + '</a>' : '') +
       (o.flags.prizes ? f(true, 'Money prizes') : '') + '</div>' +
+    '<div class="row" style="margin:0 0 14px;gap:8px"><a class="btn sm gold" href="#rewards">Send a push</a><a class="btn sm" href="#players">Find a player</a><a class="btn sm" href="#rewards">Give coins / show a notice</a><a class="btn sm" href="#live">Watch live tables</a></div>' +
     '<div class="grid">' +
       '<a href="#live" style="text-decoration:none;color:inherit">' + k(num(o.live.online), 'Online now · ' + num(o.live.tables) + ' tables · ' + num(o.live.queued) + ' waiting ›') + '</a>' +
       k(num(o.activeToday), 'Played today · ' + num(o.activeWeek) + ' this week') +
@@ -355,10 +515,10 @@ RENDER.prizes = async main => {
       '</tbody></table></div>' : '<div class="card empty">Nothing here</div>');
   main.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { location.hash = 'prizes/' + b.dataset.s; });
   main.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => { navigator.clipboard.writeText(b.dataset.copy); toast('Copied ' + b.dataset.copy); });
-  const settle = (id, action, note, ok) => act(() => api('/prizes/' + id, { body: { action, note } }), ok).then(go);
-  main.querySelectorAll('[data-pay]').forEach(b => b.onclick = () => { const note = prompt('Sent ' + b.dataset.egp + ' EGP to ' + b.dataset.phone + '?\nTransaction number (optional):', ''); if (note !== null) settle(b.dataset.pay, 'paid', note, 'Marked paid · the winner was told'); });
-  main.querySelectorAll('[data-again]').forEach(b => b.onclick = () => { const note = prompt('Ask the winner for their number again?\nWhat was wrong (they see it):', 'الرقم مش على فودافون كاش'); if (note !== null) settle(b.dataset.again, 'again', note, 'The winner was asked again'); });
-  main.querySelectorAll('[data-rej]').forEach(b => b.onclick = () => { const note = prompt('Reject this prize for good?\nReason (the winner sees it):', ''); if (note !== null) settle(b.dataset.rej, 'reject', note, 'Rejected'); });
+  const settle = (id, action, note, ok) => act(() => api('/prizes/' + id, { body: { action, note } }), ok).then(() => go(true));
+  main.querySelectorAll('[data-pay]').forEach(b => b.onclick = async () => { const note = await ask({ title: 'Mark as paid?', text: 'You sent ' + b.dataset.egp + ' EGP to ' + b.dataset.phone + ' on Vodafone Cash. The winner gets a notification.', input: { label: 'Transaction number (optional)' }, ok: 'Mark paid' }); if (note !== null) settle(b.dataset.pay, 'paid', note, 'Marked paid · the winner was told'); });
+  main.querySelectorAll('[data-again]').forEach(b => b.onclick = async () => { const note = await ask({ title: 'Ask for the number again?', text: 'The winner is asked to enter their Vodafone Cash number again.', input: { label: 'What was wrong (they see it)', value: 'الرقم مش على فودافون كاش', rtl: true }, ok: 'Ask again' }); if (note !== null) settle(b.dataset.again, 'again', note, 'The winner was asked again'); });
+  main.querySelectorAll('[data-rej]').forEach(b => b.onclick = async () => { const note = await ask({ title: 'Reject this prize?', text: 'This can’t be undone: the winner won’t be paid.', input: { label: 'Reason (the winner sees it)', rtl: true }, ok: 'Reject', danger: true }); if (note !== null) settle(b.dataset.rej, 'reject', note, 'Rejected'); });
   main.querySelectorAll('[data-player]').forEach(a => a.onclick = e => { e.preventDefault(); openPlayer(a.dataset.player); });
 };
 
@@ -419,20 +579,20 @@ async function openPlayer(id) {
       '<h2>Reports about this player (' + d.reportsAbout.length + ')</h2>' + (d.reportsAbout.length ? '<table><tbody>' + d.reportsAbout.map(x => '<tr><td>' + when(x.ts) + '</td><td>' + esc(x.reason) + '</td><td>by ' + esc(x.from_name || x.from_id) + '</td></tr>').join('') + '</tbody></table>' : '<div class="card empty">None</div>');
     const post = (body, ok) => act(() => api('/players/' + encodeURIComponent(id), { body }), ok).then(render);
     $('#cx', dr).onclick = closeDrawer;
-    $('#bc', dr).onclick = () => { const a = Number($('#pc', dr).value); if (!a) return toast('Enter an amount', true); if (Math.abs(a) >= 10000000 && !confirm('That is ' + num(a) + ' coins. Sure?')) return; post({ action: 'coins', amount: a, reason: $('#pr', dr).value }, (a > 0 ? 'Gave ' : 'Took ') + num(Math.abs(a)) + ' coins'); };
+    $('#bc', dr).onclick = async () => { const a = Number($('#pc', dr).value); if (!a) return bad($('#pc', dr), 'Enter an amount (a minus takes coins away)'); if (Math.abs(a) >= 10000000 && !await ask({ title: (a > 0 ? 'Give ' : 'Take ') + num(Math.abs(a)) + ' coins?', text: 'That is a very large amount for ' + u.name + '.', ok: a > 0 ? 'Give' : 'Take' })) return; post({ action: 'coins', amount: a, reason: $('#pr', dr).value }, (a > 0 ? 'Gave ' : 'Took ') + num(Math.abs(a)) + ' coins'); };
     $('#bs', dr).onclick = () => { const k = $('#ps', dr).value; if (k) post({ action: 'skin', skin: k }, 'Skin given'); };
     $('#bp', dr).onclick = () => post({ action: d.season.premium ? 'unpremium' : 'premium' }, 'Season pass updated');
     $('#bsp', dr).onclick = () => post({ action: 'sp', sp: Number($('#psp', dr).value) }, 'Season points set');
     $('#bn', dr).onclick = () => post({ action: 'rename', name: $('#pn', dr).value }, 'Renamed');
     if ($('#bm', dr)) $('#bm', dr).onclick = () => post({ action: 'mute', hours: 24 }, 'Muted for 24 h');
     if ($('#bum', dr)) $('#bum', dr).onclick = () => post({ action: 'unmute' }, 'Unmuted');
-    if ($('#bb', dr)) $('#bb', dr).onclick = () => { const why = prompt('Ban ' + u.name + '? Reason (they see it):', ''); if (why !== null) post({ action: 'ban', reason: why }, 'Banned'); };
+    if ($('#bb', dr)) $('#bb', dr).onclick = async () => { const why = await ask({ title: 'Ban ' + u.name + '?', text: 'They can’t play until you unban them.', input: { label: 'Reason (they see it)', rtl: true }, ok: 'Ban', danger: true }); if (why !== null) post({ action: 'ban', reason: why }, 'Banned'); };
     if ($('#bub', dr)) $('#bub', dr).onclick = () => post({ action: 'unban' }, 'Unbanned');
-    $('#bx', dr).onclick = () => { const t = $('#px', dr).value; if (t) post({ action: 'notify', title: $('#pt', dr).value, text: t }, 'Sent'); };
-    $('#bd', dr).onclick = () => { if (prompt('Type DELETE to delete ' + u.name + ' for good') === 'DELETE') act(() => api('/players/' + encodeURIComponent(id), { body: { action: 'delete' } }), 'Deleted').then(() => { closeDrawer(); go(); }); };
+    $('#bx', dr).onclick = () => { const t = $('#px', dr).value.trim(); if (!t) return bad($('#px', dr), 'Write the message first'); post({ action: 'notify', title: $('#pt', dr).value, text: t }, r => r.phones === undefined ? 'Sent' : pushReport(r, u.name)); };
+    $('#bd', dr).onclick = async () => { if (await ask({ title: 'Delete ' + u.name + ' for good?', text: 'The player and everything they have (coins, skins, titles, history) is removed. This can’t be undone.', type: 'DELETE', ok: 'Delete account', danger: true })) act(() => api('/players/' + encodeURIComponent(id), { body: { action: 'delete' } }), 'Deleted').then(() => { closeDrawer(); go(true); }); };
     $('#bti', dr).onclick = () => { const k = $('#pti', dr).value; if (k) post({ action: 'title', title: k, days: Number($('#ptd', dr).value) }, 'Title given'); };
-    dr.querySelectorAll('[data-untitle]').forEach(a => a.onclick = e => { e.preventDefault(); if (confirm('Take back this title?')) post({ action: 'untitle', title: a.dataset.untitle }, 'Title taken back'); });
-    dr.querySelectorAll('[data-unskin]').forEach(a => a.onclick = e => { e.preventDefault(); if (confirm('Take back ' + a.dataset.unskin + '?')) post({ action: 'unskin', skin: a.dataset.unskin }, 'Skin taken back'); });
+    dr.querySelectorAll('[data-untitle]').forEach(a => a.onclick = async e => { e.preventDefault(); if (await ask({ title: 'Take back this title?', ok: 'Take back', danger: true })) post({ action: 'untitle', title: a.dataset.untitle }, 'Title taken back'); });
+    dr.querySelectorAll('[data-unskin]').forEach(a => a.onclick = async e => { e.preventDefault(); if (await ask({ title: 'Take back ' + a.dataset.unskin + '?', ok: 'Take back', danger: true })) post({ action: 'unskin', skin: a.dataset.unskin }, 'Skin taken back'); });
   };
   try { await render(); } catch (e) { dr.innerHTML = '<button class="btn sm x" onclick="closeDrawer()">Close ✕</button><div class="card">' + esc(e.message) + '</div>'; }
 }
@@ -440,53 +600,100 @@ function closeDrawer() { document.querySelectorAll('.drawer,.shade').forEach(x =
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
 
 /* ---------------- rewards and notices ---------------- */
+/** What happened to a push, in words: { type, title, detail } for a message, and the same for the result box. */
+function pushReport(r, who) {
+  const n = x => num(x) + ' phone' + (x === 1 ? '' : 's');
+  if (!r.phones) return { type: 'warn', title: 'Nothing was sent', detail: (who || 'These players') + ' have no phone registered for notifications. A phone registers when the app is opened and notifications are allowed.' };
+  if (r.error === 'google_auth') return { type: 'err', title: 'Not sent: Google refused the Firebase key', detail: 'Check FIREBASE_SERVICE_ACCOUNT on the server. No phone got it.' };
+  const parts = [];
+  if (r.gone) parts.push(n(r.gone) + ' no longer had the app, so ' + (r.gone === 1 ? 'it was' : 'they were') + ' taken off the list');
+  if (r.failed) parts.push(n(r.failed) + ' failed' + (r.error ? ': ' + r.error : ''));
+  if (r.pending) parts.push('still sending to the rest in the background');
+  if (!r.sent && !r.pending) return { type: 'err', title: 'Not delivered to any phone', detail: parts.join(' · ') };
+  return { type: r.failed || r.pending ? 'warn' : 'ok', title: 'Delivered to ' + n(r.sent) + (r.players > 1 ? ' · ' + num(r.players) + ' players' : ''), detail: parts.join(' · ') || 'It shows on their phones now, in each player’s language.' };
+}
+function resultBox(m, extra) { return '<div class="result ' + (m.type === 'ok' ? '' : m.type) + '" role="status"><span class="ic">' + (m.type === 'ok' ? '✓' : '!') + '</span><div><b>' + esc(m.title) + '</b>' + (m.detail ? '<div class="d">' + esc(m.detail) + '</div>' : '') + (extra || '') + '<div class="d">' + when(Date.now()) + '</div></div></div>'; }
+
 RENDER.rewards = async main => {
   const st = await api('/settings'), ps = await api('/push');
   const live = st.notice.until > Date.now() && st.notice.text;
-  main.innerHTML = '<h1>Rewards & notices</h1>' +
-    '<h2>Push notification</h2><div class="card"' + (ps.on ? '' : ' style="border-color:var(--warn)"') + '><div class="sub" style="margin-bottom:8px">' +
-      (ps.on ? num(ps.players) + ' players can get one (' + num(ps.phones) + ' phones): ' + num(ps.week) + ' played this week, ' + num(ps.month) + ' this month, ' + num(ps.signed) + ' signed in.'
-        : 'Push is off on the server (no FIREBASE_SERVICE_ACCOUNT).') + ' Each player gets it in their language; leave English empty to send the Arabic to everyone.</div>' +
-      '<div class="form"><label class="f">Title (Arabic)<input id="pta" maxlength="80" placeholder="بورد باتلز"></label>' +
-      '<label class="f">Title (English)<input id="pte" maxlength="80" placeholder="Board Battles"></label>' +
-      '<label class="f">Message (Arabic)<textarea id="pba" rows="2" maxlength="300" placeholder="ادخل العب دور…"></textarea></label>' +
-      '<label class="f">Message (English)<textarea id="pbe" rows="2" maxlength="300" placeholder="Come and play a round…"></textarea></label>' +
-      '<label class="f">Who<select id="pw"><option value="7">Played in the last 7 days</option><option value="30">Played in the last 30 days</option><option value="signed">Signed-in players</option><option value="all">Everyone with the app</option></select></label>' +
-      '<label class="f">Test on one player first (friend code or id)<input id="pp" placeholder="optional"></label></div>' +
-      '<div class="row" style="margin-top:12px"><button class="btn" id="pst"' + (ps.on ? '' : ' disabled') + '>Send the test</button><button class="btn gold" id="psa"' + (ps.on ? '' : ' disabled') + '>Send to the group</button></div></div>' +
-    '<h2>Coins for everyone</h2><div class="card"><div class="form">' +
-      '<label class="f">Coins each<input id="gc" type="number" min="1" placeholder="e.g. 50000"></label>' +
+  const AUD = [['7', 'Played this week', ps.week], ['30', 'Played this month', ps.month], ['signed', 'Signed-in players', ps.signed], ['all', 'Everyone with the app', ps.players]];
+  const cnt = (id, max) => '<div class="cnt" data-for="' + id + '">0 / ' + max + '</div>';
+  main.innerHTML = '<h1>Push, gifts & notices</h1><div class="lead">Reach players outside the game (push), give coins to everyone, or show a notice inside the game.</div>' +
+    '<div class="sec"><h2>Push notification</h2><div class="help">' +
+      (ps.on ? '<b>' + num(ps.players) + '</b> players can get one, on <b>' + num(ps.phones) + '</b> phones. Each player gets it in their app’s language; leave English empty to send the Arabic to everyone.'
+        : '<span style="color:#ffd08a">Push is off on the server: FIREBASE_SERVICE_ACCOUNT isn’t set, so nothing can be sent.</span>') + '</div>' +
+    '<div class="pushgrid"><div class="card"' + (ps.on ? '' : ' style="opacity:.6"') + '>' +
+      '<div class="form" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))"><label class="f">Title (Arabic)<input id="pta" maxlength="80" dir="auto" placeholder="بورد باتلز">' + cnt('pta', 80) + '</label>' +
+      '<label class="f">Title (English)<input id="pte" maxlength="80" placeholder="Board Battles">' + cnt('pte', 80) + '</label>' +
+      '<label class="f">Message (Arabic)<textarea id="pba" rows="3" maxlength="300" dir="auto" placeholder="ادخل العب دور…"></textarea>' + cnt('pba', 300) + '</label>' +
+      '<label class="f">Message (English)<textarea id="pbe" rows="3" maxlength="300" placeholder="Come and play a round…"></textarea>' + cnt('pbe', 300) + '</label></div>' +
+      '<h2 style="font-size:14px;margin:16px 0 8px">1 · Test it on your phone</h2>' +
+      '<div class="row"><input id="pp" placeholder="Your friend code or player id" style="flex:1;min-width:200px"><button class="btn" id="pst"' + (ps.on ? '' : ' disabled') + '>Send the test</button></div>' +
+      '<h2 style="font-size:14px;margin:18px 0 8px">2 · Send it to a group</h2>' +
+      '<div class="aud">' + AUD.map(([v, l, n], i) => '<label><input type="radio" name="pw" value="' + v + '"' + (i === 0 ? ' checked' : '') + '><b>' + l + '</b><span>' + num(n) + ' players</span></label>').join('') + '</div>' +
+      '<div class="row" style="margin-top:12px"><button class="btn gold" id="psa"' + (ps.on ? '' : ' disabled') + '>Send to the group</button></div>' +
+      '<div id="pres"></div></div>' +
+      '<div><div class="phone" aria-label="Preview"><div class="clock">' + new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) + '</div>' +
+        '<div class="notif"><span class="ap">BB</span><div><div class="nh"><span>Board Battles</span><span>now</span></div><b id="pv1"></b><div class="nb" id="pv2"></div><div class="lg">Arabic app</div></div></div>' +
+        '<div class="notif"><span class="ap">BB</span><div><div class="nh"><span>Board Battles</span><span>now</span></div><b id="pv3"></b><div class="nb" id="pv4"></div><div class="lg">English app</div></div></div></div>' +
+        '<div class="sub" style="margin-top:6px">How it shows on players’ phones</div></div></div></div>' +
+    '<div class="sec"><h2>Coins for everyone</h2><div class="card"><div class="form">' +
+      '<label class="f">Coins each<input id="gc" type="number" min="1" placeholder="e.g. 50000"><span class="hint" id="gch" style="color:var(--gold2);font-size:11.5px"></span></label>' +
       '<label class="f">Who<select id="ga"><option value="7">Played in the last 7 days</option><option value="30">Played in the last 30 days</option><option value="0">Every player</option></select></label>' +
-      '<label class="f" style="grid-column:1/-1">Message (shown in the game and as a push)<input id="gm" placeholder="هدية بمناسبة… · A gift for…"></label>' +
-    '</div><div class="row" style="margin-top:12px"><label class="switch"><input type="checkbox" id="gp" checked> Send a push notification</label><button class="btn gold" id="gb">Send the gift</button></div></div>' +
-    '<h2>Notice in the game</h2><div class="card"><div class="sub" style="margin-bottom:8px">Shown to every player when they open the game (and right away to those playing now). ' + (live ? 'Showing now until ' + when(st.notice.until) + '.' : 'Nothing showing.') + '</div>' +
-      '<div class="form"><label class="f" style="grid-column:1/-1">Text<textarea id="nt" rows="2" maxlength="400">' + esc(live ? st.notice.text : '') + '</textarea></label>' +
+      '<label class="f" style="grid-column:1/-1">Message (shown in the game and as a push)<input id="gm" dir="auto" placeholder="هدية بمناسبة… · A gift for…"></label>' +
+    '</div><div class="row" style="margin-top:12px;justify-content:space-between"><label class="switch"><input type="checkbox" id="gp" checked> Also send a push notification</label><button class="btn gold" id="gb">Send the gift</button></div><div id="gres"></div></div></div>' +
+    '<div class="sec"><h2>Notice in the game</h2><div class="card"><div class="sub" style="margin-bottom:8px">Shown to every player when they open the game (and right away to those playing now). ' + (live ? '<span class="tag on">Showing now</span> until ' + when(st.notice.until) + '.' : '<span class="tag">Nothing showing</span>') + '</div>' +
+      '<div class="form"><label class="f" style="grid-column:1/-1">Text<textarea id="nt" rows="2" maxlength="400" dir="auto">' + esc(live ? st.notice.text : '') + '</textarea></label>' +
       '<label class="f">Show for (hours)<input id="nh" type="number" value="24" min="1" max="720"></label></div>' +
-      '<div class="row" style="margin-top:12px"><label class="switch"><input type="checkbox" id="np"> Also a push to players of the last 30 days</label><button class="btn gold" id="nb">Show notice</button>' + (live ? '<button class="btn" id="nc">Take it down</button>' : '') + '</div></div>' +
-    '<h2>Daily reward, ads and prizes</h2><div class="card"><div class="sub">Daily streak: ' + st.economy.streak.map(short).join(' · ') + ' · rewarded ad: ' + short(st.economy.adReward) + ' (' + st.economy.adsPerDay + ' a day) · weekly prize: ' + st.economy.weeklyPrizes.map(short).join(' · ') + ' · monthly top earners: ' + st.economy.monthlyPrizes.map(short).join(' · ') + '</div><a class="btn" href="#economy" style="display:inline-block;margin-top:10px">Change them</a></div>';
-  const pushBody = () => ({ titleAr: $('#pta').value, titleEn: $('#pte').value, bodyAr: $('#pba').value, bodyEn: $('#pbe').value });
+      '<div class="row" style="margin-top:12px;justify-content:space-between"><label class="switch"><input type="checkbox" id="np"> Also a push to players of the last 30 days</label><span class="row">' + (live ? '<button class="btn" id="nc">Take it down</button>' : '') + '<button class="btn gold" id="nb">' + (live ? 'Update notice' : 'Show notice') + '</button></span></div></div></div>' +
+    '<div class="sec"><h2>Daily reward, ads and prizes</h2><div class="card"><div class="sub">Daily streak: ' + st.economy.streak.map(short).join(' · ') + ' · rewarded ad: ' + short(st.economy.adReward) + ' (' + st.economy.adsPerDay + ' a day) · weekly prize: ' + st.economy.weeklyPrizes.map(short).join(' · ') + ' · monthly top earners: ' + st.economy.monthlyPrizes.map(short).join(' · ') + '</div><a class="btn" href="#economy" style="margin-top:10px">Change them</a></div></div>';
+
+  // the preview and the counters follow the typing
+  const val = id => $('#' + id).value.trim();
+  const preview = () => {
+    ['pta', 'pte', 'pba', 'pbe'].forEach(id => { const c = main.querySelector('[data-for="' + id + '"]'), el = $('#' + id); c.textContent = el.value.length + ' / ' + el.maxLength; c.classList.toggle('over', el.value.length >= el.maxLength); });
+    const arT = val('pta'), arB = val('pba'), enT = val('pte') || arT, enB = val('pbe') || arB;
+    $('#pv1').textContent = arT || enT || 'بورد باتلز'; $('#pv2').textContent = arB || enB || '…'; $('#pv1').dir = $('#pv2').dir = 'auto';
+    $('#pv3').textContent = enT || 'Board Battles'; $('#pv4').textContent = enB || '…';
+  };
+  ['pta', 'pte', 'pba', 'pbe'].forEach(id => $('#' + id).addEventListener('input', preview)); preview();
+  try { const k = localStorage.getItem('bb_test_player'); if (k) $('#pp').value = k; } catch {}
+  const pushBody = () => ({ titleAr: val('pta'), titleEn: val('pte'), bodyAr: val('pba'), bodyEn: val('pbe') });
+  const needText = () => (val('pba') || val('pbe')) ? true : bad($('#pba'), 'Write the message (in Arabic, English or both)');
+  const show = m => { $('#pres').innerHTML = resultBox(m); notify(m); };
   $('#pst').onclick = async () => {
-    if (!$('#pp').value.trim()) return toast('Enter a friend code or player id to test on', true);
-    if (!$('#pba').value.trim() && !$('#pbe').value.trim()) return toast('Write the message first', true);
-    const r = await act(() => api('/push', { body: { ...pushBody(), player: $('#pp').value.trim() } }));
-    toast(r.phones ? 'Sent to their ' + r.phones + ' phone(s)' : 'That player has no phone registered for push', !r.phones);
+    if (!needText()) return;
+    const who = val('pp'); if (!who) return bad($('#pp'), 'Enter your friend code or player id to get the test');
+    try { localStorage.setItem('bb_test_player', who); } catch {}
+    try { const r = await act(() => api('/push', { body: { ...pushBody(), player: who } }), null, 'The test wasn’t sent'); const m = pushReport(r, 'That player'); if (m.type === 'ok') m.title = 'Test ' + m.title.toLowerCase(); show(m); }
+    catch (e) { if (e.message !== 'Signed out') $('#pres').innerHTML = resultBox({ type: 'err', title: 'The test wasn’t sent', detail: e.message }); }
   };
   $('#psa').onclick = async () => {
-    if (!$('#pba').value.trim() && !$('#pbe').value.trim()) return toast('Write the message first', true);
-    const w = $('#pw'), label = w.options[w.selectedIndex].text;
-    if (!confirm('Send this push to: ' + label + '?')) return;
-    const r = await act(() => api('/push', { body: { ...pushBody(), audience: w.value } }));
-    toast('Sent to ' + num(r.players) + ' players (' + num(r.phones) + ' phones)');
+    if (!needText()) return;
+    const w = main.querySelector('[name=pw]:checked'), a = AUD.find(x => x[0] === w.value);
+    if (!await ask({ title: 'Send to ' + num(a[2]) + ' players?', text: a[1] + '.\n\n“' + (val('pba') || val('pbe')) + '”\n\nA push can’t be taken back once sent.', ok: 'Send now' })) return;
+    try { const r = await act(() => api('/push', { body: { ...pushBody(), audience: w.value } }), null, 'The push wasn’t sent'); show(pushReport(r)); }
+    catch (e) { if (e.message !== 'Signed out') $('#pres').innerHTML = resultBox({ type: 'err', title: 'The push wasn’t sent', detail: e.message }); }
   };
+  $('#gc').oninput = () => { $('#gch').textContent = coinsHint($('#gc').value); };
   $('#gb').onclick = async () => {
     const c = Number($('#gc').value), days = Number($('#ga').value);
-    if (!(c > 0)) return toast('Enter the coins', true);
-    if (!confirm('Give ' + num(c) + ' coins to ' + (days ? 'everyone who played in the last ' + days + ' days' : 'every player') + '?')) return;
-    const r = await act(() => api('/rewards', { body: { coins: c, activeDays: days, message: $('#gm').value, push: $('#gp').checked } }));
-    toast('Sent to ' + num(r.players) + ' players');
+    if (!(c > 0)) return bad($('#gc'), 'Enter how many coins each player gets');
+    if (!await ask({ title: 'Give ' + num(c) + ' coins each?', text: 'To ' + (days ? 'everyone who played in the last ' + days + ' days' : 'every player') + '. This can’t be undone.', ok: 'Send the gift' })) return;
+    try {
+      const r = await act(() => api('/rewards', { body: { coins: c, activeDays: days, message: $('#gm').value, push: $('#gp').checked } }), r => ({ type: r.players ? 'ok' : 'warn', title: r.players ? 'Gift sent to ' + num(r.players) + ' players' : 'Nobody matched: no coins were given', detail: r.players ? num(c) + ' coins each' + ($('#gp').checked ? ', with a push notification.' : '.') : '' }), 'The gift wasn’t sent');
+      $('#gres').innerHTML = resultBox({ type: r.players ? 'ok' : 'warn', title: r.players ? 'Gift sent to ' + num(r.players) + ' players' : 'Nobody matched', detail: r.players ? num(c) + ' coins each' : 'No player played in that time.' });
+      $('#gc').value = ''; $('#gch').textContent = '';
+    } catch {}
   };
-  $('#nb').onclick = async () => { await act(() => api('/notice', { body: { text: $('#nt').value, hours: Number($('#nh').value), push: $('#np').checked } }), 'Notice is showing'); go(); };
-  if ($('#nc')) $('#nc').onclick = async () => { await act(() => api('/notice', { body: { text: '' } }), 'Notice taken down'); go(); };
+  $('#nb').onclick = async () => {
+    if (!$('#nt').value.trim()) return bad($('#nt'), 'Write the notice first');
+    const h = Number($('#nh').value); if (!(h >= 1 && h <= 720)) return bad($('#nh'), 'Between 1 and 720 hours');
+    await act(() => api('/notice', { body: { text: $('#nt').value, hours: h, push: $('#np').checked } }), { type: 'ok', title: 'The notice is showing', detail: 'Players see it when they open the game, for ' + h + ' hour' + (h === 1 ? '' : 's') + ($('#np').checked ? '. A push went to players of the last 30 days.' : '.') }, 'The notice wasn’t saved');
+    go(true);
+  };
+  if ($('#nc')) $('#nc').onclick = async () => { if (!await ask({ title: 'Take the notice down?', ok: 'Take it down', danger: true })) return; await act(() => api('/notice', { body: { text: '' } }), 'Notice taken down'); go(true); };
 };
 
 /* ---------------- tournaments ---------------- */
@@ -516,22 +723,22 @@ RENDER.tourney = async main => {
       d.history.map(h => '<tr><td>' + esc(h.event) + '</td><td>' + esc(GAMES[h.game] || h.game) + '</td><td class="num">' + num(h.people) + '</td><td>' + esc(h.results?.[0]?.name || '—') + '</td><td>' + esc(h.results?.[1]?.name || '—') + '</td></tr>').join('') + '</tbody></table>' : '<div class="card empty">None yet</div>');
   if ($('#ts')) $('#ts').onclick = async () => {
     if (!v.count) return toast(ERRS.nobody_signed_up, true);
-    if (!confirm('Start the tournament now with ' + v.count + ' player' + (v.count === 1 ? '' : 's') + '? Empty places get computer players.')) return;
-    try { await act(() => api('/tourney', { body: { action: 'start' } }), 'Tournament started'); } finally { go(); }
+    if (!await ask({ title: 'Start the tournament now?', text: v.count + ' player' + (v.count === 1 ? '' : 's') + ' signed up. Empty places get computer players.', ok: 'Start now' })) return;
+    try { await act(() => api('/tourney', { body: { action: 'start' } }), 'Tournament started'); } finally { go(true); }
   };
   $('#ton').onchange = async e => {
     const want = e.target.checked;
-    if (!want && !confirm('Switch tournaments off? They disappear from the game and none start until you switch them back on.' + (v.state === 'running' ? ' The one running now still plays to the end.' : ''))) { e.target.checked = true; return; }
+    if (!want && !await ask({ title: 'Switch tournaments off?', text: 'They disappear from the game and none start until you switch them back on.' + (v.state === 'running' ? ' The one running now still plays to the end.' : ''), ok: 'Switch off', danger: true })) { e.target.checked = true; return; }
     try { await act(() => api('/settings', { method: 'PUT', body: { tourney: { enabled: want } } }), want ? 'Tournaments are on' : 'Tournaments are off'); } catch { e.target.checked = !want; return; }
-    go();
+    go(true);
   };
   if ($('#tc')) $('#tc').onclick = async () => {
-    if (!confirm(v.state === 'running' ? 'Stop the running tournament? Nobody is paid, and the next one opens.' : 'Skip this tournament? Its sign-ups are dropped and the next week’s opens.')) return;
-    try { await act(() => api('/tourney', { body: { action: 'cancel' } }), v.state === 'running' ? 'Tournament stopped' : 'Skipped: the next tournament is open'); } finally { go(); }
+    if (!await ask(v.state === 'running' ? { title: 'Stop the running tournament?', text: 'Nobody is paid, and the next one opens.', ok: 'Stop it', danger: true } : { title: 'Skip this tournament?', text: 'Its sign-ups are dropped and next week’s opens.', ok: 'Skip it', danger: true })) return;
+    try { await act(() => api('/tourney', { body: { action: 'cancel' } }), v.state === 'running' ? 'Tournament stopped' : 'Skipped: the next tournament is open'); } finally { go(true); }
   };
   $('#tsv').onclick = async () => {
     await act(() => api('/settings', { method: 'PUT', body: { tourney: { weekday: Number($('#tw').value), hour: Number($('#th').value), game: $('#tg').value,
-      prizes: [...main.querySelectorAll('.tp')].map(i => Number(i.value)), played: Number($('#tpl').value) } } }), 'Tournament settings saved'); go();
+      prizes: [...main.querySelectorAll('.tp')].map(i => Number(i.value)), played: Number($('#tpl').value) } } }), 'Tournament settings saved'); go(true);
   };
 };
 
@@ -559,8 +766,8 @@ RENDER.season = async main => {
     '</tbody></table></div><button class="btn gold" id="ssv" style="margin-top:12px">Save the season pass</button>';
   $('#sen').onchange = async e => {
     const on = e.target.checked;
-    if (!confirm(on ? 'Show the season pass in the game again?' : 'Switch the season pass off? It disappears from the game for everyone.')) { e.target.checked = !on; return; }
-    await act(() => api('/settings', { method: 'PUT', body: { season: { enabled: on } } }), on ? 'Season pass is on' : 'Season pass is off'); go();
+    if (!await ask(on ? { title: 'Show the season pass again?', ok: 'Switch on' } : { title: 'Switch the season pass off?', text: 'It disappears from the game for everyone.', ok: 'Switch off', danger: true })) { e.target.checked = !on; return; }
+    await act(() => api('/settings', { method: 'PUT', body: { season: { enabled: on } } }), on ? 'Season pass is on' : 'Season pass is off'); go(true);
   };
   main.querySelectorAll('.rk').forEach(s => s.onchange = () => { const c = main.querySelector('.rc[data-t="' + s.dataset.t + '"][data-i="' + s.dataset.i + '"]'); c.style.display = s.value ? 'none' : ''; });
   $('#ssv').onclick = async () => {
@@ -568,7 +775,7 @@ RENDER.season = async main => {
       const one = tr => { const k = main.querySelector('.rk[data-t="' + tr + '"][data-i="' + i + '"]').value; return k ? { skin: k } : { coins: Number(main.querySelector('.rc[data-t="' + tr + '"][data-i="' + i + '"]').value) || 0 }; };
       return { free: one('free'), prem: one('prem') };
     });
-    await act(() => api('/settings', { method: 'PUT', body: { season: { passCoins: Number($('#sc').value), passEgp: Number($('#se').value), tiers } } }), 'Season pass saved'); go();
+    await act(() => api('/settings', { method: 'PUT', body: { season: { passCoins: Number($('#sc').value), passEgp: Number($('#se').value), tiers } } }), 'Season pass saved'); go(true);
   };
 };
 
@@ -595,12 +802,12 @@ RENDER.titles = async main => {
       '<div class="sub">' + (t.monthly ? 'Given each month to the best ' + GNAME[t.monthly] + ' player · ' : '') + (d.counts[t.id] || 0) + ((d.counts[t.id] || 0) === 1 ? ' player has' : ' players have') + ' it now · effect: ' + esc(t.style.effect) + '</div>' +
       '<div class="row"><button class="btn sm" data-edit="' + t.id + '">Edit design</button>' + (t.monthly ? '' : '<button class="btn sm gold" data-give="' + t.id + '">Give to a player</button>') +
       '<button class="btn sm" data-hold="' + t.id + '">Who has it</button>' + (t.monthly ? '' : '<button class="btn sm bad" data-del="' + t.id + '">Delete</button>') + '</div></div>').join('') + '</div>';
-  $('#ms').onclick = async () => { await act(() => api('/settings', { method: 'PUT', body: { titles: { monthly: $('#mo').checked, minGames: Number($('#mg').value) } } }), 'Saved'); go(); };
+  $('#ms').onclick = async () => { await act(() => api('/settings', { method: 'PUT', body: { titles: { monthly: $('#mo').checked, minGames: Number($('#mg').value) } } }), 'Saved'); go(true); };
   $('#tn').onclick = () => titleEditor(null);
   main.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => titleEditor(d.list.find(t => t.id === b.dataset.edit)));
   main.querySelectorAll('[data-give]').forEach(b => b.onclick = () => titleGive(d.list.find(t => t.id === b.dataset.give)));
   main.querySelectorAll('[data-hold]').forEach(b => b.onclick = () => titleHolders(d.list.find(t => t.id === b.dataset.hold)));
-  main.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { const t = d.list.find(x => x.id === b.dataset.del); if (confirm('Delete "' + t.en + '"? Everyone who has it loses it.')) { await act(() => api('/titles/' + t.id, { method: 'DELETE' }), 'Deleted'); go(); } });
+  main.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { const t = d.list.find(x => x.id === b.dataset.del); if (await ask({ title: 'Delete “' + t.en + '”?', text: 'Everyone who has it loses it. This can’t be undone.', ok: 'Delete', danger: true })) { await act(() => api('/titles/' + t.id, { method: 'DELETE' }), 'Deleted'); go(true); } });
 };
 
 function drawer() {
@@ -646,7 +853,7 @@ function titleEditor(t) {
     if (!/^[a-z0-9_]{2,32}$/.test(v.id)) return toast('The id needs 2+ english letters, numbers or _', true);
     if (!v.ar.trim() || !v.en.trim()) return toast('Write both names', true);
     if (isNew && state.catalog.titles.some(t => t.id === v.id)) return toast('That id is taken', true);
-    await act(() => api('/titles', { method: 'PUT', body: v }), 'Saved · players see it at once'); closeDrawer(); go();
+    await act(() => api('/titles', { method: 'PUT', body: v }), 'Saved · players see it at once'); closeDrawer(); go(true);
   };
   draw();
 }
@@ -660,7 +867,7 @@ function titleGive(t, presetPlayer) {
     '<form id="gs" class="row" style="margin:10px 0"><input id="gq" placeholder="Find a player: name, code, e-mail, phone" style="flex:1"><button class="btn">Search</button></form><div id="gr"></div>';
   $('#cx', dr).onclick = closeDrawer;
   const give = async (id, name) => {
-    if (!confirm('Give "' + t.en + '" to ' + name + '?')) return;
+    if (!await ask({ title: 'Give “' + t.en + '” to ' + name + '?', ok: 'Give title' })) return;
     await act(() => api('/players/' + encodeURIComponent(id), { body: { action: 'title', title: t.id, days: Number($('#gd', dr).value), note: $('#gn', dr).value, notify: $('#gp', dr).checked } }), name + ' has the title now');
   };
   $('#gs', dr).onsubmit = async e => {
@@ -703,7 +910,7 @@ RENDER.events = async main => {
         '<td><div class="row"><button class="btn sm" data-edit="' + i + '">Edit</button><button class="btn sm bad" data-del="' + i + '">Delete</button></div></td></tr>').join('') + '</tbody></table>' : '<div class="card empty">No events yet. Add Ramadan with one click above.</div>') +
     '<h2>Limited skins</h2><div class="card"><div class="sub" style="margin-bottom:8px">On sale only while an event of their kind is on; players keep them after.</div>' +
       ['ramadan', 'eid'].map(k => '<div style="margin:6px 0"><b>' + EKIND[k] + ':</b> ' + d.limited.filter(s => s.event === k).map(s => '<span class="tag" style="margin:2px">' + esc(s.id) + ' · ' + short(s.price) + '</span>').join('') + '</div>').join('') + '</div>';
-  const save = async list => { await act(() => api('/settings', { method: 'PUT', body: { events: list } }), 'Saved · the game shows it at once'); closeDrawer(); go(); };
+  const save = async list => { await act(() => api('/settings', { method: 'PUT', body: { events: list } }), 'Saved · the game shows it at once'); closeDrawer(); go(true); };
   const editor = (ev, idx) => {
     const dr = drawer();
     const e = ev ? { ...ev } : { id: '', kind: 'custom', ar: '', en: '', from: now, to: now + 7 * 86_400_000, spMult: 2, missionMult: 1, titleId: '', titleGames: 10 };
@@ -731,7 +938,7 @@ RENDER.events = async main => {
   $('#enew').onclick = () => editor(null, -1);
   main.querySelectorAll('[data-pre]').forEach(b => b.onclick = () => { const p = EPRESETS[b.dataset.pre]; editor({ ...p, from: fromLocal(p.from), to: fromLocal(p.to) }, -1); });
   main.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => editor(d.events[b.dataset.edit], Number(b.dataset.edit)));
-  main.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { const e = d.events[b.dataset.del]; if (confirm('Delete "' + e.en + '"?')) save(d.events.filter((_, i) => i !== Number(b.dataset.del)).map(({ stats, ...x }) => x)); });
+  main.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { const e = d.events[b.dataset.del]; if (await ask({ title: 'Delete “' + e.en + '”?', ok: 'Delete', danger: true })) save(d.events.filter((_, i) => i !== Number(b.dataset.del)).map(({ stats, ...x }) => x)); });
 };
 
 /* ---------------- settings pages: one form engine ----------------
@@ -814,14 +1021,14 @@ async function settingsPage(main, title, lead, sections, opts = {}) {
   $('#sdis').onclick = () => go.call(null, dirtyCheck = null);
   $('#ssave').onclick = async () => {
     const v = current(), ch = changedPaths(), body = {};
-    if (opts.confirm) { const q = opts.confirm(v, orig, ch); if (q && !confirm(q)) return; }
+    if (opts.confirm) { const q = opts.confirm(v, orig, ch); if (q && !await ask({ title: 'Are you sure?', text: q, ok: 'Save' })) return; }
     ch.forEach(p => setAt(body, p, getAt(v, p)));
     const saved = await act(() => api('/settings', { method: 'PUT', body }), 'Saved · the game uses it now');
     dirtyCheck = null;
     // the server checks every value: show what it kept (a value out of range comes back corrected)
     const fixed = ch.filter(p => JSON.stringify(getAt(saved, p)) !== JSON.stringify(getAt(v, p)));
     if (fixed.length) toast('Adjusted to the allowed range: ' + fixed.map(labelOf).join(', '), true);
-    go();
+    go(true);
   };
   refresh();
   if (opts.after) opts.after(main, s);
@@ -924,7 +1131,7 @@ RENDER.system = async main => {
   ], {
     confirm: (v, o) => v.maintenance.on && !o.maintenance.on ? 'Switch maintenance on? No new games start until you switch it off.' : v.prizes.enabled && !o.prizes.enabled ? 'Switch money prizes on? Winners will ask you to pay them on Vodafone Cash.' : null,
     footer: () => '<div class="sec"><h2>Back to the defaults</h2><div class="card row" style="justify-content:space-between"><span class="sub">Every setting on every page back to what the game shipped with (events and titles stay).</span><button class="btn bad" id="rs">Reset all settings</button></div></div>',
-    after: () => { $('#rs').onclick = async () => { if (prompt('Type RESET to put every setting back to the defaults') === 'RESET') { await act(() => api('/settings/reset', { body: {} }), 'Back to the defaults'); dirtyCheck = null; go(); } }; },
+    after: () => { $('#rs').onclick = async () => { if (await ask({ title: 'Reset every setting?', text: 'Every setting on every page goes back to what the game shipped with (events and titles stay).', type: 'RESET', ok: 'Reset all', danger: true })) { await act(() => api('/settings/reset', { body: {} }), 'Back to the defaults'); dirtyCheck = null; go(true); } }; },
   });
 };
 
@@ -946,7 +1153,7 @@ RENDER.live = async main => {
         '<td><button class="btn sm" data-kick="' + esc(u.uid) + '" data-n="' + esc(u.name) + '" title="Closes their connection; the app reconnects by itself">Reconnect</button></td></tr>').join('') + '</tbody></table></div>' : '<div class="card empty">Nobody online</div>');
     main.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { state.liveAll = b.dataset.f === 'all'; draw(); });
     main.querySelectorAll('[data-p]').forEach(a => a.onclick = e => { e.preventDefault(); openPlayer(a.dataset.p); });
-    main.querySelectorAll('[data-kick]').forEach(b => b.onclick = async () => { if (confirm('Disconnect ' + b.dataset.n + '? Their app reconnects by itself (it helps when a player is stuck).')) { await act(() => api('/players/' + encodeURIComponent(b.dataset.kick), { body: { action: 'kick' } }), 'Disconnected'); draw(); } });
+    main.querySelectorAll('[data-kick]').forEach(b => b.onclick = async () => { if (await ask({ title: 'Disconnect ' + b.dataset.n + '?', text: 'Their app reconnects by itself (it helps when a player is stuck).', ok: 'Disconnect' })) { await act(() => api('/players/' + encodeURIComponent(b.dataset.kick), { body: { action: 'kick' } }), 'Disconnected'); draw(); } });
   };
   await draw();
   liveTimer = setInterval(() => { if (!document.querySelector('.drawer')) draw().catch(() => {}); }, 5000);

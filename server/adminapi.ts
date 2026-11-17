@@ -12,6 +12,7 @@ import { Limiter } from './auth';
 import { TITLE_ICONS, TITLE_EFFECTS } from '../shared/titles';
 import { GAMES } from '../shared/engine';
 import { seasonOf } from '../shared/season';
+import type { PushResult } from './push';
 
 export interface AdminCtx {
   store: Store; hub: Hub; settings: Settings;
@@ -20,6 +21,8 @@ export interface AdminCtx {
   /** A push to some players' phones: Arabic and English title and text. */
   push: (uids: string[], ar: [string, string], en: [string, string]) => void;
   pushOn: () => boolean;
+  /** The same, sent now, with what happened to each phone (the dashboard shows it). */
+  pushNow?: (uids: string[], ar: [string, string], en: [string, string]) => Promise<PushResult>;
 }
 
 class HttpError extends Error { constructor(public status: number, public code: string) { super(code); } }
@@ -123,7 +126,10 @@ export function adminApi(ctx: AdminCtx) {
         case 'sp': store.adminSeasonSp(id, Number(b.sp) || 0); log(req, 'season_points', id, { sp: b.sp }); hub.adminChanged(id); return { ok: true };
         case 'notify': {
           const title = String(b.title || '').slice(0, 80), body = String(b.text || '').slice(0, 300); if (!body) fail(400, 'empty');
-          ctx.push([id], [title || 'بورد باتلز', body], [title || 'Board Battles', body]); log(req, 'notify', id, { title, body }); return { ok: true };
+          const ar: [string, string] = [title || 'بورد باتلز', body], en: [string, string] = [title || 'Board Battles', body];
+          log(req, 'notify', id, { title, body });
+          if (ctx.pushNow) { if (!ctx.pushOn()) fail(400, 'push_off'); return { ok: true, ...(await ctx.pushNow([id], ar, en)) }; }
+          ctx.push([id], ar, en); return { ok: true };
         }
         case 'title': {
           const t = hub.titles.get(String(b.title || '')) ?? fail(400, 'bad_title');
@@ -158,6 +164,11 @@ export function adminApi(ctx: AdminCtx) {
         ids = store.pushAudience(who);
       }
       const phones = ids.reduce((n, id) => n + store.pushTokensOf(id).length, 0);
+      if (ctx.pushNow) {
+        const r = await ctx.pushNow(ids, ar, en);
+        log(req, 'push', b.player ? ids[0] : null, { audience: b.player ? 'one' : b.audience, players: ids.length, phones: r.phones, sent: r.sent, gone: r.gone, failed: r.failed, title: ar[0], text: ar[1] });
+        return { ok: true, players: ids.length, ...r };
+      }
       ctx.push(ids, ar, en);
       log(req, 'push', b.player ? ids[0] : null, { audience: b.player ? 'one' : b.audience, players: ids.length, title: ar[0], text: ar[1] });
       return { ok: true, players: ids.length, phones };

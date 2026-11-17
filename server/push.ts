@@ -27,6 +27,9 @@ const REMINDERS: { ar: [string, string]; en: [string, string] }[] = [
   { ar: ['الكابتن سامي عايز ماتش شطرنج ♟️', 'ادخل العب ماتش سريع'], en: ['Captain Samy wants a chess match ♟️', 'Jump in for a quick game'] },
 ];
 
+/** What happened to a dashboard push: phones it was for, sent, gone (the app was removed), failed, still sending. */
+export interface PushResult { phones: number; sent: number; gone: number; failed: number; pending: boolean; error: string }
+
 export class Push {
   private sa: ServiceAccount | null = null;
   private token: { value: string; until: number } | null = null;
@@ -88,6 +91,30 @@ export class Push {
       const [title, body] = t.lang === 'en' ? en : ar;
       await this.send(t.token, title, body).catch(e => console.error('[push]', (e as Error).message));
     }
+  }
+
+  /** A message from the dashboard: sent now (16 at a time), and what happened to each phone counted, so the team
+   *  sees whether it really went out. Waits at most `waitMs`; anything still sending after that finishes on its own. */
+  async deliver(uids: string[], ar: [string, string], en: [string, string], waitMs = 25_000): Promise<PushResult> {
+    const out: PushResult = { phones: 0, sent: 0, gone: 0, failed: 0, pending: false, error: '' };
+    if (!this.sa) return { ...out, error: 'push_off' };
+    const jobs = uids.flatMap(u => this.store.pushTokensOf(u));
+    out.phones = jobs.length;
+    if (!jobs.length) return out;
+    // the Google sign-in first: if the service account is wrong, say so instead of failing every phone
+    try { await this.accessToken(); } catch (e) { console.error('[push]', (e as Error).message); return { ...out, failed: jobs.length, error: 'google_auth' }; }
+    let next = 0;
+    const worker = async () => {
+      while (next < jobs.length) {
+        const t = jobs[next++];
+        const [title, body] = t.lang === 'en' ? en : ar;
+        try { if (await this.send(t.token, title, body, { kind: 'admin' })) out.sent++; else out.gone++; }
+        catch (e) { out.failed++; if (!out.error) out.error = (e as Error).message.slice(0, 160); console.error('[push]', (e as Error).message); }
+      }
+    };
+    const all = Promise.all(Array.from({ length: Math.min(16, jobs.length) }, worker));
+    const done = await Promise.race([all.then(() => true), new Promise<boolean>(r => setTimeout(() => r(false), waitMs))]);
+    return { ...out, pending: !done };
   }
 
   /** The current time slot that is due and not sent yet ("2026-10-20 14:00"), or null. Slots stay due for 3 hours. */
