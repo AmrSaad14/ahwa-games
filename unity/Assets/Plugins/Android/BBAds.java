@@ -27,8 +27,8 @@ public class BBAds {
     /** Why the last ad couldn't load or start (shown to the player with "not ready", to find the cause). */
     public static String lastError() { return lastError; }
 
-    /** minor: the player said they are under 18, so their ads aren't personalised. (Children, under 13, get no ads
-     *  at all: the game doesn't call this for them.) */
+    /** minor: the player said they are under 18, so their ads aren't personalised. (Under 16 get no ads at all: the
+     *  game doesn't call this for them.) */
     public static void init(String gameObject, String gameId, String interstitialId, String rewardedId, boolean test, boolean underAge) {
         go = gameObject; interId = interstitialId; rewardId = rewardedId; game = gameId == null ? "" : gameId; testMode = test; minor = underAge;
         start();

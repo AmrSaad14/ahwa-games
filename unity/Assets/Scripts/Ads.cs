@@ -25,7 +25,7 @@ public static class Ads
         }
     }
 
-    /// Ads are offered to this player at all: not to children (Age.cs), not in the browser.
+    /// Ads are offered to this player at all: 16 and over only (Age.cs), and not in the browser.
     public static bool Offered
     {
         get
@@ -33,7 +33,7 @@ public static class Ads
 #if UNITY_WEBGL && !UNITY_EDITOR
             return false;
 #else
-            return !Age.Child;
+            return Age.AdsAge;
 #endif
         }
     }
@@ -42,7 +42,7 @@ public static class Ads
     {
 #if UNITY_ANDROID && !UNITY_EDITOR
         if (started) return;
-        if (!Offered) { Debug.Log("[ads] a child: no ads, the ads SDK isn't started"); return; }
+        if (!Offered) { Debug.Log("[ads] under 16: no ads, the ads SDK isn't started"); return; }
         try
         {
             var cfg = Resources.Load<TextAsset>("AdsConfig");

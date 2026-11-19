@@ -1,6 +1,8 @@
 // The neutral age question (Google Play's Families policy, for an app played by children and adults): asked once,
 // on the first start, before any ad. The answer stays on the phone.
-//   children (under 13): no ads at all (the ads SDK isn't even started), no voice chat, no location
+//   under 16 (a child in the EU; under 13 in the US): no ads at all (the ads SDK isn't even started). Unity's
+//     rewarded video can't be closed after 5 seconds, which the Families policy asks of ads children see.
+//   children (under 13): also no voice chat and no location
 //   under 18: ads that aren't personalised (Unity Ads "non-behavioral"), and no money prizes (they need a wallet number)
 // Until it's answered the player counts as a child.
 using System;
@@ -16,6 +18,8 @@ public static class Age
     /// Years old at least (the birthday may not have come yet this year).
     public static int Years => Known ? DateTime.Now.Year - Year - 1 : 0;
     public static bool Child => Years < 13;
+    /// Old enough for ads (16 and over).
+    public static bool AdsAge => Years >= 16;
     public static bool Minor => Years < 18;
 
     public static void Set(int year) { PlayerPrefs.SetInt(Key, year); PlayerPrefs.Save(); Debug.Log("[age] set (" + (Child ? "child" : Minor ? "under 18" : "adult") + ")"); }
