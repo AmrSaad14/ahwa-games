@@ -25,9 +25,24 @@ public static class Ads
         }
     }
 
+    /// Ads are offered to this player at all: not to children (Age.cs), not in the browser.
+    public static bool Offered
+    {
+        get
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            return false;
+#else
+            return !Age.Child;
+#endif
+        }
+    }
+
     public static void Begin()
     {
 #if UNITY_ANDROID && !UNITY_EDITOR
+        if (started) return;
+        if (!Offered) { Debug.Log("[ads] a child: no ads, the ads SDK isn't started"); return; }
         try
         {
             var cfg = Resources.Load<TextAsset>("AdsConfig");
@@ -35,7 +50,7 @@ public static class Ads
             string game = d?.Str("game") ?? "", inter = d?.Str("interstitial") ?? "", reward = d?.Str("rewarded") ?? "";
             bool test = d == null || d.Bool("test");
             if (string.IsNullOrEmpty(game)) { Debug.Log("[ads] no Unity Ads game id in this build: ads are off"); return; }
-            using (var c = new AndroidJavaClass("com.ahwa.ads.BBAds")) c.CallStatic("init", "Board Battles", game, inter, reward, test);
+            using (var c = new AndroidJavaClass("com.ahwa.ads.BBAds")) c.CallStatic("init", "Board Battles", game, inter, reward, test, Age.Minor);
             started = true;
             Debug.Log("[ads] started");
         }

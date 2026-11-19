@@ -132,6 +132,7 @@ public partial class Menus
         bool ready = w?.Bool("ready") ?? false;
         if (spins >= max) { wheelButtonText.Set(Loc.T("خلصت لفّات النهارده")); info.Set(Loc.T("تعالى بكرة للفّة ببلاش")); return; }
         if (ready) { wheelButtonText.Set(spins == 0 ? Loc.T("لفّ ببلاش") : Loc.T("لفّ")); info.Set(spins == 0 ? Loc.T("لفّتك ببلاش النهارده جاهزة") : Loc.T("اللفّة جاهزة!")); return; }
+        if (!Ads.Offered) { wheelButtonText.Set(Loc.T("تعالى بكرة للفّة ببلاش")); info.Set(Loc.T("تعالى بكرة للفّة ببلاش")); return; }
         wheelButtonText.Set("▶ " + Loc.T("شوف إعلان") + "  " + ads + "/" + cost);
         info.Set(Loc.T("اللفّة الجاية بـ") + " " + cost + " " + Loc.T(cost == 1 ? "إعلان" : "إعلانات"));
     }
@@ -145,6 +146,7 @@ public partial class Menus
         if (w == null) return;
         if (w.Num("spins") >= w.Num("max")) { app.Toast(Loc.T("تعالى بكرة للفّة ببلاش")); return; }
         if (w.Bool("ready")) { wheelSpinning = true; app.Send(new Dictionary<string, object> { ["t"] = "wheelSpin" }); return; }
+        if (!Ads.Offered) { app.Toast(Loc.T("تعالى بكرة للفّة ببلاش")); return; }
         app.Send(new Dictionary<string, object> { ["t"] = "adStart", ["wheel"] = true });
     }
 

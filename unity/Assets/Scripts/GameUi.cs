@@ -842,8 +842,9 @@ public class GameUi : MonoBehaviour
     {
         if (doubleButton != null)
         {
+            if (!Ads.Offered) twice = 0;   // it's a rewarded ad: not for children
             doubleButton.SetActive(twice > 0);
-            if (twice > 0) doubleText.Set("▶ " + Loc.T("ضاعف مكسبك") + "  +" + Short((long)twice));
+            if (twice > 0) doubleText.Set("▶ " + Loc.T("إعلان") + ": " + Loc.T("ضاعف مكسبك") + "  +" + Short((long)twice));
         }
         if (delta > 0) Celebrate(Mathf.Clamp(16 + (int)(delta / 2500), 16, 80));
         payoutText.Set(delta > 0 ? "+" + Short((long)delta) + Loc.T(" عملة") : delta < 0 ? "−" + Short((long)-delta) + Loc.T(" عملة") : "");
@@ -917,7 +918,7 @@ public class GameUi : MonoBehaviour
     {
         ShowWatching(v);
         // voice chat is for people: not in a practice game against the computer
-        bool mic = !app.PracticeGame;
+        bool mic = !app.PracticeGame && !Age.Child;   // no voice chat for children (Age.cs)
         if (micButton != null && micButton.gameObject.activeSelf != mic) micButton.gameObject.SetActive(mic);
         lobby.gameObject.SetActive(v.phase == "lobby");
         if (v.phase == "lobby") { RenderLobby(v); turnText.Set(""); rollButton.SetActive(false); undoButton.SetActive(false); }

@@ -116,6 +116,11 @@ public static class Loc
         // voice chat
         ["الصوت شغال"] = "Voice on", ["الميك مقفول"] = "Mic muted", ["اسمح بالميكروفون عشان تتكلم"] = "Allow the microphone to talk",
         ["دردشة صوتية"] = "Voice chat",
+        ["سنة ميلادك كام؟"] = "What year were you born?",
+        ["عشان نظبط اللعبة على سنك"] = "So we can set up the game for your age",
+        ["اكتب السنة بالأرقام، زي "] = "Type the year in numbers, like ",
+        ["جوايز الفلوس لـ ١٨ سنة وأكبر"] = "Money prizes are for players 18 and over",
+        ["الشات الصوتي لـ ١٣ سنة وأكبر"] = "Voice chat is for players 13 and over",
         // the splash (as on the web page)
         ["القهوة المصرية على ترابيزتك"] = "The Egyptian café, at your table", ["بنجهّز القهوة…"] = "Loading the café…", ["بنرصّ الترابيزات…"] = "Setting the tables…",
         ["«العب دلوقتي» بيلاقيلك ترابيزة في ثواني."] = "“Play now” finds you a table in seconds.",

@@ -13,12 +13,13 @@ import com.unity3d.ads.IUnityAdsLoadListener;
 import com.unity3d.ads.IUnityAdsShowListener;
 import com.unity3d.ads.UnityAds;
 import com.unity3d.ads.UnityAdsShowOptions;
+import com.unity3d.ads.metadata.MetaData;
 import com.unity3d.ads.metadata.PlayerMetaData;
 import com.unity3d.player.UnityPlayer;
 
 public class BBAds {
     static String go = "Board Battles", interId = "", rewardId = "", game = "", lastError = "";
-    static boolean interReady, rewardReady, loadingInter, loadingReward, started, initializing, testMode;
+    static boolean interReady, rewardReady, loadingInter, loadingReward, started, initializing, testMode, minor;
 
     static void send(String what) { try { UnityPlayer.UnitySendMessage(go, "OnAdEvent", what); } catch (Throwable ignored) { } }
     static void fail(String why) { lastError = why; send("error:" + why); }
@@ -26,9 +27,20 @@ public class BBAds {
     /** Why the last ad couldn't load or start (shown to the player with "not ready", to find the cause). */
     public static String lastError() { return lastError; }
 
-    public static void init(String gameObject, String gameId, String interstitialId, String rewardedId, boolean test) {
-        go = gameObject; interId = interstitialId; rewardId = rewardedId; game = gameId == null ? "" : gameId; testMode = test;
+    /** minor: the player said they are under 18, so their ads aren't personalised. (Children, under 13, get no ads
+     *  at all: the game doesn't call this for them.) */
+    public static void init(String gameObject, String gameId, String interstitialId, String rewardedId, boolean test, boolean underAge) {
+        go = gameObject; interId = interstitialId; rewardId = rewardedId; game = gameId == null ? "" : gameId; testMode = test; minor = underAge;
         start();
+    }
+
+    /** Google Play's Families policy: the app is for a mixed audience (it asks the age), and players under 18 get
+     *  ads that don't use their behaviour (no interest-based ads, no remarketing). */
+    static void privacy(android.content.Context c) {
+        try {
+            MetaData p = new MetaData(c); p.set("privacy.mode", "mixed"); p.commit();
+            MetaData u = new MetaData(c); u.set("user.nonbehavioral", minor); u.commit();
+        } catch (Throwable t) { lastError = "privacy " + t; }
     }
 
     static void start() {
@@ -38,6 +50,7 @@ public class BBAds {
         final Activity a = UnityPlayer.currentActivity;
         a.runOnUiThread(() -> {
             try {
+                privacy(a.getApplicationContext());
                 UnityAds.initialize(a.getApplicationContext(), game, testMode, new IUnityAdsInitializationListener() {
                     @Override public void onInitializationComplete() { started = true; initializing = false; lastError = ""; loadInter(); loadReward(); }
                     @Override public void onInitializationFailed(UnityAds.UnityAdsInitializationError e, String msg) { initializing = false; fail("init " + e + " " + msg); }

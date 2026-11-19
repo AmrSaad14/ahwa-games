@@ -71,7 +71,7 @@ public partial class Menus : MonoBehaviour
         eventChip.gameObject.SetActive(false);
 
         // along the top, left of your name and coins: watch an ad, sign in, language
-        var ad = Chip(home, "video", "+2K", new Vector2(-252, -10), 98, new Color32(0x2f, 0x6b, 0x3a, 0xf0), Color.white, WatchAd);
+        var ad = Chip(home, "video", "+2K", new Vector2(-252, -10), 122, new Color32(0x2f, 0x6b, 0x3a, 0xf0), Color.white, WatchAd);
 #if UNITY_WEBGL && !UNITY_EDITOR
         ad.gameObject.SetActive(false);   // no video ads in the browser (they are in the app)
 #endif
@@ -180,7 +180,8 @@ public partial class Menus : MonoBehaviour
         prizeChipText.Set(Loc.T(waiting > 0 ? "جايزتك" : "جايزتك جاية"));
         int left = (int)u.Num("adsLeft");
         adReward = (long)u.Num("adReward", adReward);
-        adText.Set(left > 0 ? AdLabel : "0");
+        adText.Set(left > 0 ? AdLabel : Loc.T("إعلان") + " 0");
+        adRect.gameObject.SetActive(Ads.Offered);   // children see no ads (Age.cs)
         var eq = u.Obj("equip");
         Skins.SetUser(u);
         Billing.SetUser(u.Str("id"));
@@ -893,6 +894,11 @@ public partial class Menus : MonoBehaviour
                 stl.rectTransform.Place(new Vector2(Loc.En ? 1 : 0, 1), new Vector2(Loc.En ? 1 : 0, 1), new Vector2(170, 36), new Vector2(Loc.En ? -10 : 10, -2));
                 if (!open) continue;
                 if (!string.IsNullOrEmpty(p.Str("note"))) { var nt = Ui.Label(row, "", 11, new Color(1f, 0.7f, 0.6f), TextAnchor.MiddleCenter); nt.Set(p.Str("note")); nt.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(580, 16), new Vector2(0, -34)); }
+                if (Age.Minor)
+                {
+                    Ui.Label(row, "جوايز الفلوس لـ ١٨ سنة وأكبر", 13, Color.white, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(580, 40), new Vector2(0, 8));
+                    continue;
+                }
                 if (!signed)
                 {
                     var hint = Ui.Label(row, "سجّل دخول الأول عشان نقدر نحولك الجايزة", 13, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
@@ -954,7 +960,7 @@ public partial class Menus : MonoBehaviour
         }
         if (pendingAd == ticket) app.Send(new Dictionary<string, object> { ["t"] = "adWatched", ["ticket"] = ticket });
     }
-    string AdLabel => "+" + Loc.Short(adReward);
+    string AdLabel => Loc.T("إعلان") + " +" + Loc.Short(adReward);   // clearly an ad (Families policy)
 
     // the shop's skin tabs: boards and pieces each for dominoes, tawla and chess; then dice, hats, drinks
     static readonly string[] GameTabs = { "دومينو", "طاولة", "شطرنج" };
@@ -977,7 +983,7 @@ public partial class Menus : MonoBehaviour
             var mine = Ui.Button(area, Loc.T("مجموعتي"), new Color(1, 1, 1, 0.08f), Ui.Gold, 12, () => { Sfx.Tap(); Close(); OpenCollection(shopTab >= 1 && shopTab <= 6 ? shopTab - 1 : 0); });
             ((RectTransform)mine.transform).Place(new Vector2(Loc.En ? 1 : 0, 0), new Vector2(Loc.En ? 1 : 0, 0), new Vector2(110, 24), new Vector2(Loc.En ? -60 : 60, -4));
             var row = Ui.Rect("Cards", area); row.anchorMin = Vector2.zero; row.anchorMax = Vector2.one; row.offsetMin = new Vector2(0, 22); row.offsetMax = Vector2.zero;
-            if (shopTab == 0)
+            if (shopTab == 0 && Ads.Offered)
             {
                 // free coins: watch an ad (coins can't be bought)
                 int left = (int)(user?.Num("adsLeft") ?? 0);
@@ -1127,10 +1133,10 @@ public partial class Menus : MonoBehaviour
         nm.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(w - 4, adsNeed > 0 ? 24 : 36), new Vector2(0, adsNeed > 0 ? -86 : -96));
         nm.horizontalOverflow = HorizontalWrapMode.Wrap;
         if (adsNeed > 0) { nm.resizeTextForBestFit = true; nm.resizeTextMinSize = 9; nm.resizeTextMaxSize = 13; }
-        if (adsNeed > 0)
+        if (adsNeed > 0 && Ads.Offered)
         {
             int have = Skins.AdsWatched(s.id);
-            var ab = Ui.Button(c, "▶ " + have + "/" + adsNeed, new Color32(0x2f, 0x6b, 0x3a, 0xff), Color.white, 12, () => { Sfx.Tap(); WatchSkinAd(s.id); });
+            var ab = Ui.Button(c, "▶ " + Loc.T("إعلان") + " " + have + "/" + adsNeed, new Color32(0x2f, 0x6b, 0x3a, 0xff), Color.white, 12, () => { Sfx.Tap(); WatchSkinAd(s.id); });
             ((RectTransform)ab.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(w - 16, 26), new Vector2(0, 44));
             // how far along: a thin bar under the label
             if (have > 0)
@@ -1331,7 +1337,7 @@ public partial class Menus : MonoBehaviour
     public void WatchAd()
     {
         Sfx.Tap();
-        if (adShowing) return;
+        if (adShowing || !Ads.Offered) return;
         if (app.net == null || !app.net.Online) { app.Toast(Loc.T("مش متصل بالسيرفر لسه")); return; }
         if (user != null && user.Num("adsLeft") <= 0) { app.Toast(Loc.T("خلصت إعلانات النهارده، تعالى بكرة")); return; }
         app.Send(new Dictionary<string, object> { ["t"] = "adStart" });
@@ -1340,7 +1346,7 @@ public partial class Menus : MonoBehaviour
     /// An ad towards a skin: watch enough and it's yours (signed-in players: the progress is kept on the account).
     public void WatchSkinAd(string skin)
     {
-        if (adShowing) return;
+        if (adShowing || !Ads.Offered) return;
         if (!app.SignedIn && !App.Recording) { AskSignIn(null, false, "سجّل دخولك عشان تكسب السكينز بالإعلانات"); return; }
         if (app.net == null || !app.net.Online) { app.Toast(Loc.T("مش متصل بالسيرفر لسه")); return; }
         if (user != null && user.ContainsKey("skinAdsLeft") && user.Num("skinAdsLeft") <= 0) { app.Toast(Loc.T("خلصت إعلانات السكينز النهارده، تعالى بكرة")); return; }
