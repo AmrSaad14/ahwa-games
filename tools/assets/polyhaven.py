@@ -7,18 +7,10 @@ API = "https://api.polyhaven.com"
 OUT = sys.argv[1] if len(sys.argv) > 1 else "polyhaven"
 UA = {"User-Agent": "asset-fetch/1.0"}
 
-TEXTURES = ["marble_01", "marble_tiles", "marble_mosaic_tiles", "rosewood_veneer1", "black_walnut_veneer_01",
-            "american_walnut_veneer", "olive_veneer", "cherry_veneer", "oak_veneer_01", "patterned_terracotta_tiling",
-            "old_mosaic_floor", "square_floor_patern_01", "floor_pattern_01", "floor_pattern_02", "terrazzo_tiles",
-            "worn_tile_floor", "plastered_wall", "patterned_plaster_wall", "yellow_plaster_02", "clay_plaster",
-            "rough_linen", "velour_velvet", "brown_leather", "metal_plate", "dark_wood", "wood_table_worn"]
+TEXTURES = []
 KEYWORDS = ["marble", "brass", "copper", "gold", "fabric", "felt", "leather", "walnut", "oak", "mahogany",
             "rosewood", "veneer", "terrazzo", "mosaic", "tile", "plaster", "carpet", "rug", "baize", "linen"]
-MODELS = ["chess_set", "tea_set_01", "brass_diya_lantern", "lantern_chandelier_01", "Lantern_01", "ceiling_fan",
-          "ornate_mirror_01", "wall_clock", "vintage_radio_transceiver", "brass_pot_01", "brass_pot_02", "brass_goblets",
-          "brass_vase_03", "potted_plant_01", "fancy_picture_frame_01", "Chandelier_01", "Chandelier_03", "WoodenChair_01",
-          "painted_wooden_chair_02", "folding_wooden_stool", "wooden_table_02", "coffee_table_round_01", "vintage_oil_lamp",
-          "jug_01", "mantel_clock_01"]
+MODELS = ["large_castle_door", "rollershutter_door"]
 MODEL_WORDS = ["lantern", "lamp", "chandelier", "tea", "cup", "glass", "tray", "brass", "copper", "chair", "stool",
                "table", "bench", "vase", "pot", "kettle", "chess", "dice", "game", "clock", "mirror", "frame",
                "plant", "rug", "carpet", "cushion", "radio", "fan", "shelf", "bottle", "jug", "teapot", "hookah"]
