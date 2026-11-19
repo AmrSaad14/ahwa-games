@@ -356,6 +356,7 @@ public static class Loc
         ["بيلعبوا"] = "playing",
         ["دوس هنا وابدأ أول لعبة!"] = "Tap here to start your first game!",
         ["القهوة كلها مفتوحة ليك دلوقتي!"] = "The whole café is open to you now!",
+        ["أهلاً بيك في القهوة!"] = "Welcome to the café!",
         ["في تحديث جديد للعبة!"] = "A new version is out!",
         ["حدّث اللعبة عشان تكمل لعب"] = "Update the game to keep playing",
         ["فيها حاجات جديدة وتصليحات"] = "New things and fixes inside",

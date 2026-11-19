@@ -42,6 +42,8 @@ public class App : MonoBehaviour
     readonly Dictionary<string, int> playing = new Dictionary<string, int>();
     /// Your card on the home screen (name, coins, level): the friends and collection buttons sit in it too.
     public RectTransform MeCard => meCard;
+    /// The first-open look round the café is on (nothing pops up over it).
+    public bool Touring { get; private set; }
     CanvasGroup homeGroup, toastGroup;
     float toastUntil;
     readonly Dictionary<string, Image> gameButtons = new Dictionary<string, Image>();
@@ -161,9 +163,19 @@ public class App : MonoBehaviour
         cafe.Entrance();
         if (AdFilm.On) { gameObject.AddComponent<AdFilm>().Begin(this); yield break; }
         if (AdFilm.Salon) { gameObject.AddComponent<AdSalon>().Begin(this); yield break; }
+        // a new player's first open: a short look round the café first, then the home screen
+        if (newbie && !Recording)
+        {
+            Touring = true;
+            Toast(Loc.T("أهلاً بيك في القهوة!"), 3f);
+            yield return cafe.Tour();
+            Touring = false;
+            if (user != null) menus?.OnUser(user);   // what waited for the tour to end (the sign-in offer)
+        }
         StartCoroutine(FadeIn(homeGroup, 0.6f));
         Ads.Begin();
 
+        Perf.LogMemory("home");
         if (Recording) StartCoroutine(Shots());
     }
 
@@ -287,6 +299,7 @@ public class App : MonoBehaviour
                 }
             }
         }
+        if (Touring) return;   // (a tap only cuts the first look round short)
         if (cafe == null || !cafe.ready || !Input.GetMouseButtonDown(0) || OverUi()) return;
         if (view != null)
         {
@@ -1228,11 +1241,19 @@ public class App : MonoBehaviour
             Unpick(); yield return new WaitForSeconds(1.6f); Still("m0a-cafe-tags.png");
             menus.OpenRewards(); yield return new WaitForSeconds(0.8f); Still("m0b-rewards.png"); menus.Close();
             SetNewbie(true); yield return new WaitForSeconds(0.5f); Still("m0c-first-visit.png"); SetNewbie(false);
+            // the first-open look round the café
+            homeGroup.alpha = 0; StartCoroutine(cafe.Tour());
+            yield return new WaitForSeconds(1.9f); Still("m0i-tour-door.png");
+            yield return new WaitForSeconds(2.4f); Still("m0j-tour-sign.png");
+            yield return new WaitForSeconds(6.5f); homeGroup.alpha = 1;
             cafe.ForceHour = 2.5f; yield return new WaitForSeconds(1.5f); Still("m0d-night.png");
             cafe.ForceHour = 9f; yield return new WaitForSeconds(1.5f); Still("m0e-morning.png");
             cafe.ForceHour = 17.6f; yield return new WaitForSeconds(1.5f); Still("m0f-sunset.png");
             cafe.Ramadan = true; cafe.ForceHour = 21f; yield return new WaitForSeconds(1.5f); Still("m0g-ramadan.png");
             cafe.Ramadan = false; cafe.ForceHour = -1;
+            // the cheapest phones' level: how the café looks, and what it takes in memory
+            Perf.Choose(Perf.Lowest0); yield return new WaitForSeconds(1.5f); Still("m0h-lowest.png"); Perf.LogMemory("lowest");
+            Perf.Choose(-1); yield return new WaitForSeconds(1f); Perf.LogMemory("back to auto");
             Pick("domino"); game.HidePicker(); yield return new WaitForSeconds(0.6f);
             menus.OpenDaily(); yield return new WaitForSeconds(0.8f); Still("d1-daily.png");
             Send(new Dictionary<string, object> { ["t"] = "daily" }); yield return new WaitForSeconds(1.2f); Still("d2-daily-got.png");
@@ -1246,6 +1267,9 @@ public class App : MonoBehaviour
             menus.OpenCollection(6); yield return new WaitForSeconds(0.8f); Still("x13-titles.png");
             menus.OpenShop(6); yield return new WaitForSeconds(0.8f); Still("x15-shop-win.png");
             game.Celebrate(30, "win_fireworks"); yield return new WaitForSeconds(0.9f); Still("x16-fireworks.png");
+            // the shop's 3D previews
+            foreach (var id in new[] { "tawla_pharaoh", "pieces_gold", "tiles_ebony", "felt_royal" }) { menus.OpenPreview(id); yield return new WaitForSeconds(1.2f); Still($"x18-preview-{id}.png"); }
+            menus.Close();
             menus.ShopGame = 1; menus.OpenShop(1); yield return new WaitForSeconds(0.8f); Still("x6-shop-boards-tawla.png");
             menus.ShopGame = 2; menus.OpenShop(1); yield return new WaitForSeconds(0.8f); Still("x7-shop-boards-chess.png");
             menus.ShopGame = 1; menus.OpenShop(2); yield return new WaitForSeconds(0.8f); Still("x8-shop-checkers.png");

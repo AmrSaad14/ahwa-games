@@ -283,7 +283,7 @@ public partial class Menus : MonoBehaviour
         // a new player: the first-game guide, offered once (an easy game of dominoes with hints, and a gift)
         // once a session, on the home screen with nothing else open: the season pass, for players who don't have it
         // a new install with no saved account: offer to sign in (and get an existing account back) once
-        if (app.FreshInstall && !welcomeAsked && !app.SignedIn && !IsOpen && app.view == null && !App.Recording && !AdFilm.Any) { welcomeAsked = true; AskSignIn(null, true); }
+        if (app.FreshInstall && !welcomeAsked && !app.SignedIn && !IsOpen && !app.Touring && app.view == null && !App.Recording && !AdFilm.Any) { welcomeAsked = true; AskSignIn(null, true); }
         // (both cards are for signed-in players only: a guest sees neither)
         if (app.SignedIn && !seasonPromoShown && SeasonOn && dailyShown && u.Num("adFreeUntil") > App.LocalMs() && !IsOpen && app.view == null && !App.Recording && !AdFilm.Any && u.Obj("season") != null && !u.Obj("season").Bool("premium")) { seasonPromoShown = true; ShowSeasonPromo(); }
         if (Growth.PendingCode != null && u.Bool("canRefer")) { app.Send(new Dictionary<string, object> { ["t"] = "referral", ["code"] = Growth.PendingCode }); Growth.PendingCode = null; }
@@ -506,6 +506,7 @@ public partial class Menus : MonoBehaviour
         bool afterDaily = refreshOpen != null && refreshOpen == refreshDaily && !seasonPromoShown;
         if (open != null) Destroy(open.gameObject);
         open = null; refreshOpen = null;
+        SkinPreview.Hide();
         if (afterDaily && user != null && app.SignedIn) StartCoroutine(SeasonAfterDaily());
     }
     public bool IsOpen => open != null;
@@ -1216,6 +1217,14 @@ public partial class Menus : MonoBehaviour
         var pic = Ui.Picture(c, "Look", Skins.Picture(s.id, out var tint)); pic.color = tint;
         var size = s.cat == "tiles" ? new Vector2(Mathf.Min(96, w - 12), Mathf.Min(48, (w - 12) / 2)) : new Vector2(Mathf.Min(64, w - 16), Mathf.Min(64, w - 16));
         pic.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), size, new Vector2(0, s.cat == "tiles" ? -26 : -12));
+        // see it in 3D first: a small button over the picture (and the picture itself) opens it turning slowly
+        if (SkinPreview.Has(s.cat))
+        {
+            var see = Ui.Button(c, "3D", new Color(0, 0, 0, 0.55f), Ui.Gold, 11, () => { Sfx.Tap(); OpenPreview(s, collection); });
+            ((RectTransform)see.transform).Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(30, 20), new Vector2(-4, -4));
+            pic.raycastTarget = true;
+            pic.gameObject.AddComponent<Button>().onClick.AddListener(() => { Sfx.Tap(); OpenPreview(s, collection); });
+        }
         bool owned = Skins.Owns(s.id), wearing = Skins.Worn(s.cat) == s.id;
         // not yours yet: it can also be won by watching ads (a second button above the price)
         int adsNeed = owned || collection ? 0 : Skins.AdsFor(s);
@@ -1254,6 +1263,33 @@ public partial class Menus : MonoBehaviour
             if ((user?.Num("coins") ?? 0) < s.price) { app.Toast(Loc.T("رصيدك مش كفاية")); return; }
             app.Send(new Dictionary<string, object> { ["t"] = "buySkin", ["id"] = s.id }); Sfx.Coins();
         }, true);
+    }
+
+    /// A skin in 3D, turning slowly, with its price (or "wear") under it and a way back to where you were.
+    /// (the test run's screenshots)
+    public void OpenPreview(string id) { var d = Skins.Get(id); if (d != null) OpenPreview(d, false); }
+    void OpenPreview(Skins.Def s, bool collection)
+    {
+        int tab = shopTab;
+        Panel(Loc.T(s.name), out var body, new Vector2(560, 352));
+        var rt = SkinPreview.Show(s);
+        if (rt != null)
+        {
+            var view = Ui.Picture(body, "Preview", rt);
+            view.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(448, 280), new Vector2(0, -2));
+        }
+        var back = Ui.Button(body, Loc.T("رجوع"), new Color(1, 1, 1, 0.1f), Ui.GoldLight, 14, () => { Sfx.Tap(); if (collection) OpenCollection(0); else OpenShop(tab); });
+        ((RectTransform)back.transform).Place(new Vector2(0, 0), new Vector2(0, 0), new Vector2(120, 34), new Vector2(4, 0));
+        bool owned = Skins.Owns(s.id), wearing = Skins.Worn(s.cat) == s.id;
+        if (wearing || owned || s.pass) return;
+        var buy = Ui.Button(body, Loc.Short(s.price), Ui.Gold, Ui.Ink, 15, () =>
+        {
+            Sfx.Tap();
+            if ((user?.Num("coins") ?? 0) < s.price) { app.Toast(Loc.T("رصيدك مش كفاية")); return; }
+            app.Send(new Dictionary<string, object> { ["t"] = "buySkin", ["id"] = s.id }); Sfx.Coins();
+        });
+        ((RectTransform)buy.transform).Place(new Vector2(1, 0), new Vector2(1, 0), new Vector2(140, 34), new Vector2(-4, 0));
+        var ci = Ui.Picture(buy.transform, "Coin", Icon("coin")); ci.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(18, 18), new Vector2(10, 0));
     }
 
     static RectTransform ShopCard(RectTransform row, int i, int n)

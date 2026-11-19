@@ -91,6 +91,7 @@ public class Cafe : MonoBehaviour
         yield return null;
         foreach (var _ in People(room.transform)) yield return null;
 
+        Perf.Compress(room);   // (the room's pictures, the tables and the door: less memory on phones)
         camPos = camPosTo = Overview(out camLook); camLookTo = camLook;
         Apply();
         ready = true;
@@ -370,6 +371,7 @@ public class Cafe : MonoBehaviour
         }
         if (wall < 0) { Debug.LogWarning("[cafe] no back wall for the sign"); return; }
         var root = new GameObject("Sign").transform;
+        signT = root;
         root.SetParent(room, true);
         float h = 5.6f, w = h * tex.width / tex.height;
         root.position = new Vector3(center.x, wallBottom + 4.6f, center.z) - front * (wall - 0.12f);
@@ -409,7 +411,37 @@ public class Cafe : MonoBehaviour
         var at = spot.position;
         door.transform.position += new Vector3(at.x - mb.center.x, at.y - mb.min.y, at.z - mb.center.z) + front * (Mathf.Abs(Vector3.Dot(mb.size, front)) / 2 + 0.06f);
         door.transform.SetParent(room, true);
+        doorT = door.transform;
         foreach (var r in ds) { r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On; r.receiveShadows = true; }
+    }
+
+    Transform doorT, signT;
+
+    /// A new player's first look round the café: in at the door, the sign with the game's name, over the tables,
+    /// then the whole café. A tap anywhere cuts it short.
+    public System.Collections.IEnumerator Tour()
+    {
+        if (!ready) yield break;
+        var stops = new List<(Vector3 pos, Vector3 look, float wait)>();
+        Vector3 Before(Transform t, float back, float up) { var c = t.position + Vector3.up * 1.5f; return c + front * back + Vector3.up * up; }
+        if (doorT != null) stops.Add((Before(doorT, 13f, 3.5f), doorT.position + Vector3.up * 3.6f, 2.2f));
+        if (signT != null) stops.Add((Before(signT, 12f, 2.5f), signT.position, 2.4f));
+        foreach (var g in new[] { "domino", "estimation", "chess" })
+            if (tables.ContainsKey(g)) { var p = TableShot(g, out var l); stops.Add((p, l, 1.9f)); }
+        fixedShot = true;
+        bool skip = false;
+        foreach (var (pos, look, wait) in stops)
+        {
+            camPosTo = pos; camLookTo = look;
+            for (float t = 0; t < wait; t += Time.deltaTime)
+            {
+                if (Input.GetMouseButtonDown(0) || Input.touchCount > 0) { skip = true; break; }
+                yield return null;
+            }
+            if (skip) break;
+        }
+        fixedShot = false;
+        Focus(null);
     }
 
     /// A brass lantern, its glass (a hexagon, wider in the middle) glowing; returns the glass's material.

@@ -145,7 +145,7 @@ public static class Perf
         QualitySettings.shadowProjection = ShadowProjection.StableFit;
         QualitySettings.antiAliasing = high ? 4 : bal ? 2 : 0;
         QualitySettings.pixelLightCount = high ? 4 : bal ? 2 : 1;
-        QualitySettings.globalTextureMipmapLimit = low ? 1 : 0;    // half-size textures: much less memory
+        QualitySettings.globalTextureMipmapLimit = s ? 1 : 0;      // half-size textures (a quarter of the memory) on the saver and lowest levels
         QualitySettings.skinWeights = high ? SkinWeights.FourBones : SkinWeights.TwoBones;
         QualitySettings.anisotropicFiltering = high ? AnisotropicFiltering.ForceEnable : bal ? AnisotropicFiltering.Enable : AnisotropicFiltering.Disable;
         QualitySettings.lodBias = low ? 0.6f : s ? 0.8f : 1f;
@@ -170,6 +170,42 @@ public static class Perf
         }
         if (watch == null && Application.isMobilePlatform && app != null) watch = app.gameObject.AddComponent<Watch>();
         Debug.Log($"[perf] level {l} (phone {Detected}; ram {Ram} MB, cores {Cores}, gpu '{SystemInfo.graphicsDeviceName}' {Vram} MB, {SystemInfo.graphicsDeviceType})");
+    }
+
+    /// What the textures take in memory, written to the log (the biggest first): to keep an eye on cheap phones.
+    public static void LogMemory(string when)
+    {
+        long total = 0; var list = new System.Collections.Generic.List<(long size, string name)>();
+        foreach (var t in Resources.FindObjectsOfTypeAll<Texture>())
+        {
+            long n = UnityEngine.Profiling.Profiler.GetRuntimeMemorySizeLong(t);
+            total += n; list.Add((n, $"{t.name} {t.width}x{t.height} {(t is Texture2D t2 ? t2.format.ToString() : t.GetType().Name)}"));
+        }
+        list.Sort((a, b) => b.size.CompareTo(a.size));
+        var top = new System.Text.StringBuilder();
+        for (int i = 0; i < Mathf.Min(12, list.Count); i++) top.Append($"\n    {list[i].size / 1048576f:0.0} MB  {list[i].name}");
+        Debug.Log($"[mem] {when}: textures {total / 1048576f:0} MB in {list.Count}, all memory {UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong() / 1048576f:0} MB, level {Level}{top}");
+    }
+
+    /// The café's own pictures squeezed to the phone's compressed format (a quarter or less of the memory), when
+    /// they can be (readable ones; the rest stay as they are).
+    public static void Compress(GameObject root)
+    {
+        int done = 0;
+        var seen = new System.Collections.Generic.HashSet<Texture2D>();
+        foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+            foreach (var m in r.sharedMaterials)
+            {
+                if (m == null) continue;
+                foreach (var name in m.GetTexturePropertyNames())
+                {
+                    if (!(m.GetTexture(name) is Texture2D t) || !seen.Add(t) || !t.isReadable) continue;
+                    var f = t.format;
+                    if (f != TextureFormat.RGBA32 && f != TextureFormat.RGB24 && f != TextureFormat.ARGB32) continue;
+                    try { t.Compress(true); t.Apply(false, true); done++; } catch (System.Exception e) { Debug.LogWarning("[mem] " + t.name + ": " + e.Message); }
+                }
+            }
+        Debug.Log($"[mem] compressed {done} of {seen.Count} café textures");
     }
 
     /// How many of the café's regulars to show in the background.
