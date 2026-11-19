@@ -87,6 +87,7 @@ public class Cafe : MonoBehaviour
         Lights();
         Props(room.transform);
         Sign(room.transform);
+        Door(room.transform);
         yield return null;
         foreach (var _ in People(room.transform)) yield return null;
 
@@ -387,6 +388,43 @@ public class Cafe : MonoBehaviour
             var r = q.GetComponent<MeshRenderer>(); r.sharedMaterial = m;
             r.shadowCastingMode = k == 6 ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off;
         }
+    }
+
+    /// The café's door: Poly Haven's Large Castle Door (CC0, an old studded wooden double door) in place of the
+    /// room model's lit doorway on the back wall; the old doorway and its frame are hidden behind it.
+    void Door(Transform room)
+    {
+        var model = Resources.Load<GameObject>("Art/CafeDoor");
+        if (model == null) return;
+        var side = Vector3.Cross(Vector3.up, front);
+        var rs = room.GetComponentsInChildren<Renderer>();
+        // the doorway: a thin upright panel about 4 wide and 8 tall, far behind the tables (the back wall)
+        Renderer way = null;
+        foreach (var r in rs)
+        {
+            var b = r.bounds;
+            float thick = Mathf.Abs(Vector3.Dot(b.size, front)), wide = Mathf.Abs(Vector3.Dot(b.size, side));
+            if (thick < 0.3f && wide > 3.5f && wide < 5f && b.size.y > 7f && b.size.y < 9f && Vector3.Dot(center - b.center, front) > 12f) { way = r; break; }
+        }
+        if (way == null) { Debug.LogWarning("[cafe] no doorway found"); return; }
+        var wb = way.bounds;
+        // the old frame: whatever sits wholly around the doorway, close to the wall
+        var around = new Bounds(wb.center, wb.size + side * 3f + Vector3.up * 3f + front * 1.2f);
+        around.size = new Vector3(Mathf.Abs(around.size.x), Mathf.Abs(around.size.y), Mathf.Abs(around.size.z));
+        foreach (var r in rs)
+            if (r.bounds.size.magnitude < 14f && around.Contains(r.bounds.min) && around.Contains(r.bounds.max)) r.enabled = false;
+        var door = Instantiate(model);
+        door.name = "Door";
+        door.transform.rotation = Quaternion.LookRotation(front, Vector3.up);   // its face to the room
+        var ds = door.GetComponentsInChildren<Renderer>();
+        if (ds.Length == 0) { Destroy(door); return; }
+        Bounds Measure() { var b = ds[0].bounds; foreach (var r in ds) b.Encapsulate(r.bounds); return b; }
+        var mb = Measure();
+        door.transform.localScale *= (wb.size.y + 0.5f) / Mathf.Max(0.01f, mb.size.y);
+        mb = Measure();
+        door.transform.position += new Vector3(wb.center.x - mb.center.x, wb.min.y - mb.min.y, wb.center.z - mb.center.z) + front * (Mathf.Abs(Vector3.Dot(mb.size, front)) / 2 + 0.06f);
+        door.transform.SetParent(room, true);
+        foreach (var r in ds) { r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On; r.receiveShadows = true; }
     }
 
     /// A brass lantern, its glass (a hexagon, wider in the middle) glowing; returns the glass's material.
