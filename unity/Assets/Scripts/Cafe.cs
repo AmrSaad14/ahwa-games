@@ -84,6 +84,7 @@ public class Cafe : MonoBehaviour
         SettleProps(room.transform);
         Batch(room.transform);
         Lights();
+        Props(room.transform);
         yield return null;
         foreach (var _ in People(room.transform)) yield return null;
 
@@ -275,6 +276,84 @@ public class Cafe : MonoBehaviour
         }
         keyBase = sun.color; keyIBase = sun.intensity;
         skyBase = RenderSettings.ambientSkyColor; eqBase = RenderSettings.ambientEquatorColor; groundBase = RenderSettings.ambientGroundColor;
+    }
+
+    // ---------- the café's own things: brass lanterns along the back wall, a shisha by the back tables ----------
+    readonly List<(Material m, Color c)> lanternGlass = new List<(Material, Color)>();
+    void Props(Transform room)
+    {
+        if (!tables.ContainsKey("domino") || !tables.ContainsKey("tawla")) return;
+        var side = tables["tawla"].position - tables["domino"].position; side.y = 0; side.Normalize();
+        var brass = Art.Mat(Art.Hex("#b8893a"), 0.72f, 0.9f);
+        var sh = Shader.Find("Sprites/Default");
+        // the lanterns (fawanees): hanging in a row behind the back tables, high up, their coloured glass glowing
+        Color[] glass = { new Color(2.2f, 1.25f, 0.45f), new Color(2.0f, 0.55f, 0.35f), new Color(0.7f, 1.6f, 0.9f), new Color(2.2f, 1.25f, 0.45f) };
+        float[] across = { -1.5f, -0.5f, 0.5f, 1.5f };
+        float back = Vector3.Dot(center - tables["domino"].position, front) + 5.5f;   // behind the back tables, before the wall
+        for (int i = 0; i < 4; i++)
+        {
+            var at = new Vector3(center.x, 0, center.z) + side * across[i] * 9.5f - front * back + Vector3.up * (6.5f + (i % 2) * 0.8f);
+            var g = Lantern(room, at, brass, sh != null ? new Material(sh) { color = glass[i] } : null, 1.5f);
+            if (g != null) lanternGlass.Add((g, glass[i]));
+        }
+        // a shisha on the floor behind each back table, on its outer side
+        if (lobby == null) return;
+        foreach (var (g, dir) in new[] { ("domino", -1f), ("tawla", 1f) })
+        {
+            var at = tables[g].position - front * 4.6f + side * dir * 2.6f;
+            at.y = Person.FloorY;
+            Shisha(lobby, at, brass, sh, dir > 0 ? new Color(0.16f, 0.45f, 0.42f) : new Color(0.5f, 0.14f, 0.2f));
+        }
+    }
+
+    /// A brass lantern, its glass (a hexagon, wider in the middle) glowing; returns the glass's material.
+    static Material Lantern(Transform parent, Vector3 at, Material brass, Material glassMat, float k)
+    {
+        var root = new GameObject("Lantern").transform;
+        root.SetParent(parent, true); root.position = at; root.localScale = Vector3.one * k;
+        if (glassMat != null)
+        {
+            var g = Art.Obj("Glass", root, Art.Lathe(new[] { new Vector2(0.001f, 0), new Vector2(0.3f, 0.02f), new Vector2(0.46f, 0.55f), new Vector2(0.34f, 1.1f), new Vector2(0.001f, 1.12f) }, 6), glassMat, false);
+            g.transform.localPosition = Vector3.zero;
+        }
+        // the frame: a ring round the waist, a crown on top with its domed cap, a drop below, the chain up
+        var waist = Art.Obj("Ring", root, Art.Lathe(new[] { new Vector2(0.47f, 0.5f), new Vector2(0.5f, 0.55f), new Vector2(0.47f, 0.6f) }, 6), brass, false);
+        var crown = Art.Obj("Crown", root, Art.Lathe(new[] { new Vector2(0.4f, 1.05f), new Vector2(0.5f, 1.18f), new Vector2(0.36f, 1.3f), new Vector2(0.18f, 1.55f), new Vector2(0.05f, 1.75f), new Vector2(0.001f, 1.8f) }, 12), brass, false);
+        var drop = Art.Obj("Drop", root, Art.Lathe(new[] { new Vector2(0.001f, -0.45f), new Vector2(0.08f, -0.3f), new Vector2(0.22f, -0.08f), new Vector2(0.32f, 0.02f), new Vector2(0.001f, 0.03f) }, 12), brass, false);
+        var chain = Art.Obj("Chain", root, Art.Prim(PrimitiveType.Cylinder), brass, false);
+        chain.transform.localScale = new Vector3(0.04f, 4f, 0.04f); chain.transform.localPosition = Vector3.up * 5.8f;
+        return glassMat;
+    }
+
+    /// A shisha: a coloured glass base, a brass stem with its tray and clay bowl (a coal glowing on top), the hose.
+    static void Shisha(Transform parent, Vector3 at, Material brass, Shader glow, Color baseColor)
+    {
+        var root = new GameObject("Shisha").transform;
+        root.SetParent(parent, true); root.position = at; root.localScale = Vector3.one * 1.15f;
+        var vase = Art.Mat(baseColor, 0.9f, 0.1f);
+        Art.Obj("Base", root, Art.Lathe(new[] { new Vector2(0.001f, 0), new Vector2(0.36f, 0.02f), new Vector2(0.6f, 0.18f), new Vector2(0.7f, 0.45f), new Vector2(0.66f, 0.75f), new Vector2(0.46f, 1.05f), new Vector2(0.22f, 1.25f), new Vector2(0.15f, 1.4f), new Vector2(0.001f, 1.41f) }, 28), vase);
+        Art.Obj("Stem", root, Art.Lathe(new[] { new Vector2(0.11f, 1.35f), new Vector2(0.13f, 1.6f), new Vector2(0.07f, 1.8f), new Vector2(0.09f, 2.2f), new Vector2(0.06f, 2.6f), new Vector2(0.14f, 2.75f), new Vector2(0.06f, 2.9f), new Vector2(0.07f, 3.3f), new Vector2(0.001f, 3.31f) }, 16), brass);
+        Art.Obj("Tray", root, Art.Lathe(new[] { new Vector2(0.001f, 2.95f), new Vector2(0.55f, 2.97f), new Vector2(0.62f, 3.04f), new Vector2(0.001f, 3.0f) }, 24), brass);
+        var clay = Art.Mat(new Color(0.55f, 0.24f, 0.12f), 0.3f);
+        Art.Obj("Bowl", root, Art.Lathe(new[] { new Vector2(0.06f, 3.25f), new Vector2(0.22f, 3.5f), new Vector2(0.24f, 3.62f), new Vector2(0.001f, 3.63f) }, 16), clay);
+        if (glow != null)
+        {
+            var coal = Art.Obj("Coal", root, Art.Lathe(new[] { new Vector2(0.001f, 3.62f), new Vector2(0.14f, 3.64f), new Vector2(0.1f, 3.72f), new Vector2(0.001f, 3.74f) }, 10), new Material(glow) { color = new Color(2.4f, 0.7f, 0.2f) }, false);
+        }
+        // the hose: from the stem's side, down in a loop, its mouthpiece resting on the base
+        var hose = Art.Mat(new Color(0.22f, 0.12f, 0.08f), 0.35f);
+        Vector3 p0 = new Vector3(0.12f, 2.4f, 0), p1 = new Vector3(1.3f, 1.6f, 0.3f), p2 = new Vector3(1.2f, 0.2f, 0.8f), p3 = new Vector3(0.45f, 0.85f, 0.7f);
+        Vector3 prev = p0;
+        for (int i = 1; i <= 10; i++)
+        {
+            float t = i / 10f, u = 1 - t;
+            var q = u * u * u * p0 + 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t * p3;
+            var seg = Art.Obj("Hose", root, Art.Prim(PrimitiveType.Cylinder), hose, false);
+            seg.transform.localPosition = (prev + q) / 2;
+            seg.transform.localRotation = Quaternion.FromToRotation(Vector3.up, q - prev);
+            seg.transform.localScale = new Vector3(0.1f, (q - prev).magnitude / 2 + 0.02f, 0.1f);
+            prev = q;
+        }
     }
 
     /// The regulars in the background: all of them on good phones, fewer (or none) on cheap ones, none during a game.
@@ -792,6 +871,8 @@ public class Cafe : MonoBehaviour
             l.color = mood.lamp;
             l.intensity = 2.2f * mood.lampI * (1f + 0.025f * Mathf.Sin(t * 7.3f + i * 3.1f));
         }
+        // the lanterns' glass glows brighter as the lamps do (strongest on Ramadan nights)
+        foreach (var (m, c) in lanternGlass) if (m != null) { var k = Mathf.Lerp(0.55f, 1.15f, Mathf.InverseLerp(0.55f, 1.65f, mood.lampI)); m.color = new Color(c.r * k, c.g * k, c.b * k, 1); }
         // the steam over the glasses: soft puffs rising and fading, turned to the camera
         if (puffs.Count > 0 && cam != null)
         {

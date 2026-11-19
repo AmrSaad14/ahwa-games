@@ -133,8 +133,8 @@ public static class TileArt
     public static Material Make(Shader s, Color c)
     {
         var m = new Material(s) { color = c };
-        if (m.HasProperty("_Shininess")) m.SetFloat("_Shininess", 0.35f);
-        if (m.HasProperty("_SpecColor")) m.SetColor("_SpecColor", new Color(0.35f, 0.33f, 0.3f));
+        if (m.HasProperty("_Shininess")) m.SetFloat("_Shininess", 0.55f);   // polished: a tighter, softer shine
+        if (m.HasProperty("_SpecColor")) m.SetColor("_SpecColor", new Color(0.42f, 0.4f, 0.36f));
         return m;
     }
 
@@ -156,39 +156,85 @@ public static class TileArt
             for (int x = 0; x < TW; x++)
             {
                 var c = Ivory;
+                // a faint warm grain, and the face a touch darker toward its edges (it is very slightly domed)
+                float grain = Mathf.PerlinNoise(x * 0.02f + 5f, y * 0.09f + 1f) * 0.6f + Mathf.PerlinNoise(x * 0.08f, y * 0.3f + 7f) * 0.4f;
+                float e = Mathf.Clamp01(Mathf.Min(Mathf.Min(x, TW - 1 - x), Mathf.Min(y, TH - 1 - y)) / (TH * 0.22f));
+                e = e * e * (3 - 2 * e);
+                c *= (0.982f + 0.03f * grain) * (0.94f + 0.06f * e);
                 if (Veins)
                 {
                     float n = Mathf.PerlinNoise(x * 0.025f + 3.1f, y * 0.06f) * 6f + x * 0.03f;
                     float v = Mathf.Pow(1 - Mathf.Abs(Mathf.Sin(n)), 10f);
                     c = Color.Lerp(c, new Color(0.6f, 0.62f, 0.68f), v * 0.55f);
                 }
+                c.a = 1;
                 px[y * TW + x] = c;
             }
-        // the line between the halves
-        for (int y = 14; y < TH - 14; y++) for (int x = TW / 2 - 2; x < TW / 2 + 2; x++) px[y * TW + x] = Divider;
+        // the line between the halves: a groove cut into the face, lit along one edge
+        for (int y = 12; y < TH - 12; y++)
+        {
+            for (int x = TW / 2 - 3; x < TW / 2 + 3; x++) px[y * TW + x] = Divider * 0.55f + new Color(0, 0, 0, 0.45f);
+            for (int x = TW / 2 + 3; x < TW / 2 + 5; x++) { var c = px[y * TW + x] * 1.06f; c.a = 1; px[y * TW + x] = c; }
+        }
         DrawPips(px, TW, TH, a, 0);
         DrawPips(px, TW, TH, b, TW / 2);
+        DrawPin(px, TW, TH);
         var t = new Texture2D(TW, TH, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp, anisoLevel = 4 };
         t.SetPixels(px); t.Apply(true);
         return t;
     }
 
+    /// Hollow pips: the ink inside, lit a little on the side the light falls into, a thin shadowed lip around.
     static void DrawPips(Color[] px, int TW, int TH, int n, int x0)
     {
-        float cell = TH / 3.4f, r = TH * 0.095f;
+        float cell = TH / 3.4f, r = TH * 0.1f;
         float cx0 = x0 + TW / 4f - cell, cy0 = TH / 2f - cell;
         foreach (var p in Pips[n])
         {
             float cx = cx0 + (p % 3) * cell, cy = cy0 + (p / 3) * cell;
-            for (int y = (int)(cy - r - 2); y <= (int)(cy + r + 2); y++)
-                for (int x = (int)(cx - r - 2); x <= (int)(cx + r + 2); x++)
+            for (int y = (int)(cy - r - 5); y <= (int)(cy + r + 5); y++)
+                for (int x = (int)(cx - r - 5); x <= (int)(cx + r + 5); x++)
                 {
                     if (x < 0 || y < 0 || x >= TW || y >= TH) continue;
-                    float d = Mathf.Sqrt((x + 0.5f - cx) * (x + 0.5f - cx) + (y + 0.5f - cy) * (y + 0.5f - cy));
+                    float dx = x + 0.5f - cx, dy = y + 0.5f - cy, d = Mathf.Sqrt(dx * dx + dy * dy);
+                    var c = px[y * TW + x];
+                    float lip = Mathf.Clamp01(1 - Mathf.Abs(d - r - 1.5f) / 2.5f) * 0.16f;
+                    c *= 1 - lip;
                     float k = Mathf.Clamp01(r - d + 0.5f);
-                    if (k > 0) px[y * TW + x] = Color.Lerp(px[y * TW + x], PipInk, k);
+                    if (k > 0)
+                    {
+                        float shade = Mathf.Clamp01(-dy / r) * Mathf.Pow(Mathf.Clamp01(d / r), 2) * 0.35f;
+                        var ink = PipInk * (1 - shade) + Ivory * 0.5f * shade;
+                        c = Color.Lerp(c, ink, k);
+                    }
+                    c.a = 1;
+                    px[y * TW + x] = c;
                 }
         }
+    }
+
+    /// The brass pin in the middle of the tile.
+    static void DrawPin(Color[] px, int TW, int TH)
+    {
+        float cx = TW / 2f, cy = TH / 2f, r = TH * 0.07f;
+        var brass = new Color(0.8f, 0.62f, 0.3f);
+        for (int y = (int)(cy - r - 3); y <= (int)(cy + r + 3); y++)
+            for (int x = (int)(cx - r - 3); x <= (int)(cx + r + 3); x++)
+            {
+                float dx = x + 0.5f - cx, dy = y + 0.5f - cy, d = Mathf.Sqrt(dx * dx + dy * dy);
+                var c = px[y * TW + x];
+                float k = Mathf.Clamp01(r - d + 0.5f);
+                if (k > 0)
+                {
+                    float hx = dx + r * 0.35f, hy = dy - r * 0.35f;
+                    float hi = Mathf.Pow(Mathf.Clamp01(1 - Mathf.Sqrt(hx * hx + hy * hy) / (r * 0.9f)), 2);
+                    var b = brass * (0.75f + 0.25f * (1 - d / r)) + Color.white * hi * 0.5f;
+                    c = Color.Lerp(c, b, k);
+                }
+                c *= 1 - Mathf.Clamp01(1 - Mathf.Abs(d - r) / 1.2f) * 0.5f;
+                c.a = 1;
+                px[y * TW + x] = c;
+            }
     }
 
     public static Material FaceMat(int a, int b)

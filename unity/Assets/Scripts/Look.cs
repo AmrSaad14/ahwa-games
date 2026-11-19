@@ -100,7 +100,15 @@ public static class Look
                 float n = (Hash(x, y) - 0.5f) * 0.06f + (Hash(x / 3, y / 3) - 0.5f) * 0.04f;
                 var c = baseC * (1 + n);
                 int e = Mathf.Min(Mathf.Min(x, y), Mathf.Min(S - 1 - x, S - 1 - y));   // distance to the edge
-                if (id == "felt_royal")
+                if (id == "felt_wood")
+                {
+                    // the plain table, dressed: a dark walnut panel set in with a brass rim and a pale inlay line
+                    c = Art.Wood(x * 2.2f, y * 0.9f, new Color(0.3f, 0.17f, 0.09f), new Color(0.19f, 0.1f, 0.05f), new Color(0.4f, 0.24f, 0.13f), 55, 2.7f);
+                    if (e < 5) c = new Color(0.22f, 0.12f, 0.06f) * (1 + n);
+                    else if (e < 8) c = gold * (0.88f + n + (e == 6 ? 0.12f : 0));
+                    else if (e >= 13 && e < 15) c = new Color(0.86f, 0.76f, 0.58f) * (1 + n);
+                }
+                else if (id == "felt_royal")
                 {
                     if (e >= 10 && e < 14 || e >= 18 && e < 20) c = gold * (0.9f + n);
                     // a diamond lattice, faint
@@ -155,7 +163,7 @@ public static class Look
     /// A square of cloth on the table top (half side `half`), or none for the plain wooden table.
     public static GameObject Felt(string id, Transform parent, Vector3 center, float half, Quaternion rot)
     {
-        if (string.IsNullOrEmpty(id) || id == "felt_wood") return null;
+        if (string.IsNullOrEmpty(id)) id = "felt_wood";   // the plain table has its own inlaid panel now
         var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
         go.name = "Felt";
         Object.Destroy(go.GetComponent<Collider>());
@@ -164,7 +172,7 @@ public static class Look
         go.transform.rotation = rot * Quaternion.Euler(90, 0, 0);
         go.transform.localScale = new Vector3(half * 2, half * 2, 1);
         var r = go.GetComponent<MeshRenderer>();
-        r.sharedMaterial = Art.Mat(Color.white, 0.04f, 0, FeltTexture(id));
+        r.sharedMaterial = Art.Mat(Color.white, id == "felt_wood" || id == "felt_marble" ? 0.32f : 0.04f, 0, FeltTexture(id));   // cloth is matt, wood and stone polished
         r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         return go;
     }

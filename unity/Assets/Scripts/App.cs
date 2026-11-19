@@ -1350,7 +1350,7 @@ public class App : MonoBehaviour
                 // the board games in some of the new skins (mahbousa stays classic, to compare)
                 Skins.Force.Clear();
                 if (tag == "tawla") { Skins.Force["tawla"] = "tawla_pharaoh"; Skins.Force["checkers"] = "checkers_gold"; Skins.Force["dice"] = "dice_emerald"; }
-                if (tag == "chess") { Skins.Force["chess"] = "chess_marble"; Skins.Force["pieces"] = "pieces_porcelain"; }
+                // (chess in its classic look: the walnut and maple board, boxwood and ebony pieces everyone starts with)
                 if (tag == "ludo") Skins.Force["dice"] = "dice_pharaoh";
                 recordOn = false;
                 if (view != null) Leave();

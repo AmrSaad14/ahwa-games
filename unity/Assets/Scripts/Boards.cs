@@ -96,7 +96,7 @@ public class ChessBoard : Board
             return c;
         });
         // matte, so the light never washes a square out
-        Art.Sheet("Squares", spin, B, B, new Vector3(0, 0.303f, 0), Art.Mat(Color.white, 0.12f, 0, tex));
+        Art.Sheet("Squares", spin, B, B, new Vector3(0, 0.303f, 0), Art.Mat(Color.white, L.kind == "wood" ? 0.3f : 0.12f, 0, tex));   // a lacquered wooden board keeps a soft sheen
         coordsFor = null;
     }
 
@@ -509,12 +509,18 @@ public class TawlaBoard : Board
             return wood;
         });
         Art.Sheet("Field", spin, TW, TD, new Vector3(0, FIELD_Y + 0.001f, 0), Art.Mat(new Color(0.68f, 0.66f, 0.64f), 0.25f, 0, tex));
-        // the rails: four sides, the middle bar and the tray's divider, with a mother-of-pearl strip on top
-        var railTop = Art.Mat(L.pearl, 0.55f, 0.05f);
+        // the rails: four sides, the middle bar and the tray's divider, each with a strip of mother-of-pearl mosaic on
+        // top (pearl diamonds set in dark wood between two fine brass lines, like the inlaid boards of Damascus and Cairo)
+        var mosaic = Mosaic(L);
+        var railMats = new Dictionary<int, Material>();
         void Rail(float x, float z, float w, float d)
         {
             Art.Box("Rail", spin, w, RAIL_H, d, new Vector3(x, FIELD_Y, z), side);
-            Art.Box("Pearl", spin, Mathf.Max(0.04f, w - 0.1f), 0.01f, Mathf.Max(0.04f, d - 0.1f), new Vector3(x, FIELD_Y + RAIL_H, z), railTop);
+            float len = Mathf.Max(w, d) - 0.1f, wide = Mathf.Max(0.04f, Mathf.Min(w, d) - 0.1f);
+            int n = Mathf.Max(1, Mathf.RoundToInt(len / wide));
+            if (!railMats.TryGetValue(n, out var m)) { m = Art.Mat(Color.white, 0.62f, 0.05f, mosaic); m.mainTextureScale = new Vector2(n, 1); railMats[n] = m; }
+            var strip = Art.Sheet("Pearl", spin, len, wide, new Vector3(x, FIELD_Y + RAIL_H + 0.003f, z), m);
+            if (d > w) strip.transform.localRotation = Quaternion.Euler(90, 90, 0);   // the pattern runs along the rail
         }
         Rail(0, TD / 2 - EDGE / 2, TW, EDGE); Rail(0, -TD / 2 + EDGE / 2, TW, EDGE);
         Rail(-TW / 2 + EDGE / 2, 0, EDGE, TD - 2 * EDGE); Rail(TW / 2 - EDGE / 2, 0, EDGE, TD - 2 * EDGE);
@@ -528,6 +534,30 @@ public class TawlaBoard : Board
             hinge.transform.localRotation = Quaternion.Euler(90, 0, 0);
             hinge.transform.localScale = new Vector3(0.12f, 0.35f, 0.12f);
         }
+    }
+
+    /// One square of the rails' mosaic (it repeats along them): a pearl diamond, shimmering a little pink and
+    /// green, in dark wood, a brass line along each edge.
+    static Texture2D Mosaic(Skins.TawlaLook L)
+    {
+        const int S = 64;
+        var t = Art.Paint(S, S, (x, y) =>
+        {
+            if (y < 3 || y >= S - 3) return Color.Lerp(Art.Hex("#c9a25a"), Color.white, y == 1 || y == S - 2 ? 0.25f : 0f);   // brass
+            float u = Mathf.Abs(x + 0.5f - S / 2f) / (S / 2f), v = Mathf.Abs(y + 0.5f - S / 2f) / (S / 2f - 3);
+            float dd = u + v;   // a diamond touching the four sides
+            if (dd > 0.86f) return Color.Lerp(L.box[1], L.box[0], Mathf.PerlinNoise(x * 0.2f, y * 0.2f) * 0.6f);   // the dark wood around
+            if (dd > 0.78f) return Color.Lerp(L.box[1], Color.black, 0.3f);                                          // the cut line
+            // mother-of-pearl: small pieces, each a slightly different sheen
+            float n = Mathf.PerlinNoise(x * 0.09f + 11f, y * 0.09f + 3f), cellN = Mathf.PerlinNoise(Mathf.Floor(x / 7f) * 1.7f, Mathf.Floor(y / 7f) * 2.3f);
+            var pink = new Color(1f, 0.9f, 0.94f); var green = new Color(0.86f, 1f, 0.95f);
+            var c = Color.Lerp(L.pearl, n > 0.5f ? pink : green, Mathf.Abs(n - 0.5f) * 0.7f);
+            c *= 0.9f + cellN * 0.2f;
+            c.a = 1;
+            return c;
+        });
+        t.wrapMode = TextureWrapMode.Repeat;
+        return t;
     }
 
     static float BarX => -TW / 2 + EDGE + 6 * COLW + BARW / 2;

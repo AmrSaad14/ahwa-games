@@ -473,21 +473,23 @@ public class GameUi : MonoBehaviour
 
         var sb = Ui.Box(hud, "Scores", new Color(0.1f, 0.06f, 0.04f, 0.85f));
         // the scores sit top left, beside "leave", so the player across the table is never covered
-        sb.rectTransform.Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(300, 34), new Vector2(100, -10));
-        scoreText = Ui.Label(sb.transform, "", 15, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
+        sb.rectTransform.Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(330, 38), new Vector2(100, -8));
+        sb.gameObject.AddComponent<Outline>().effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.35f);
+        scoreText = Ui.Label(sb.transform, "", 17, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
         scoreText.rectTransform.Fill(6);
         // four players' names shrink to fit the bar instead of spilling over "leave"
         scoreText.horizontalOverflow = HorizontalWrapMode.Wrap; scoreText.verticalOverflow = VerticalWrapMode.Truncate;
-        scoreText.resizeTextForBestFit = true; scoreText.resizeTextMinSize = 9; scoreText.resizeTextMaxSize = 15;
+        scoreText.resizeTextForBestFit = true; scoreText.resizeTextMinSize = 10; scoreText.resizeTextMaxSize = 17;
         roundText = Ui.Label(hud, "", 13, Ui.GoldLight, TextAnchor.MiddleRight);
         roundText.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(200, 24), new Vector2(-14, -14));
 
         for (int p = 0; p < 4; p++)
         {
             var bg = Ui.Box(hud, "Seat" + p, new Color(0.1f, 0.06f, 0.04f, 0.8f));
-            bg.rectTransform.Place(new Vector2(0, 0), new Vector2(0.5f, 0.5f), new Vector2(160, 32), Vector2.zero);
+            bg.rectTransform.Place(new Vector2(0, 0), new Vector2(0.5f, 0.5f), new Vector2(176, 36), Vector2.zero);
+            bg.gameObject.AddComponent<Outline>().effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.3f);
             seatTagBg[p] = bg;
-            seatTags[p] = Ui.Label(bg.transform, "", 13, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
+            seatTags[p] = Ui.Label(bg.transform, "", 14, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
             seatTags[p].rectTransform.Fill(4);
             // a computer player is marked with a chip
             seatCpu[p] = Ui.Picture(bg.transform, "Cpu", Menus.Icon("cpu"));
@@ -495,8 +497,8 @@ public class GameUi : MonoBehaviour
             seatCpu[p].color = new Color(1, 1, 1, 0.8f);
             // their photo (or their character's face) at the start of the name tag
             seatFace[p] = Ui.Picture(bg.transform, "Face", Menus.Face(0));
-            seatFace[p].rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(28, 28), new Vector2(2, 0));
-            seatTags[p].rectTransform.offsetMin = new Vector2(32, 2);   // the name starts after the photo
+            seatFace[p].rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(32, 32), new Vector2(2, 0));
+            seatTags[p].rectTransform.offsetMin = new Vector2(36, 2);   // the name starts after the photo
             // tap a player: their card (stats, add friend, mute, report)
             int pos = p;
             bg.gameObject.AddComponent<Button>().onClick.AddListener(() => { int seat = app.dominoTable.posToSeat[pos]; if (seat >= 0) { Sfx.Tap(); app.menus.OpenCardSeat(seat); } });
@@ -683,7 +685,7 @@ public class GameUi : MonoBehaviour
             else if (Mathf.Abs(w.pos.x + 64) < 0.5f) w.r.anchoredPosition = new Vector2(-12, -62);
         }
         // the scores: their own row under the buttons, the width of the screen; the game's name under them
-        ((RectTransform)scoreText.transform.parent).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(406, 34), new Vector2(0, -62));
+        ((RectTransform)scoreText.transform.parent).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(420, 38), new Vector2(0, -62));
         roundText.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(406, 20), new Vector2(0, -100));
         roundText.alignment = TextAnchor.MiddleCenter;
         // whose turn: bottom left; the dice: bottom, right of the middle

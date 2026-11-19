@@ -116,7 +116,9 @@ public static class Skins
             case "tawla_ramadan": return new TawlaLook { box = W("#241a5c", "#120c34", "#3a2c80"), field = W("#efe3c4", "#d8c8a0", "#fbf3dc"), ptA = W("#3a2c80", "#1e1650", "#5a48a8"), ptB = W("#c99a30", "#8a6418", "#f0c862"), tray = H("#1e1650"), pearl = H("#f3cd62"), line = H("#f3cd62") };
             // lapis and carnelian on sandstone, gold leaf lines (calmer than bright blue on yellow)
             case "tawla_pharaoh": return new TawlaLook { box = W("#18284e", "#0c152c", "#243a6c"), field = W("#c9b07c", "#ab935f", "#d9c393"), ptA = W("#1d3b72", "#102448", "#2c518f"), ptB = W("#9a3a26", "#682417", "#b8513a"), tray = H("#0f1c3a"), pearl = H("#d8b766"), line = H("#c9a656") };
-            default: return new TawlaLook { box = W("#6b3a1e", "#3d1f0e", "#8c5530"), field = W("#c9a46c", "#a7834f", "#dcbd88"), ptA = W("#3b2414", "#24140a", "#5a3a22"), ptB = W("#8e2a1c", "#5e180e", "#b0402c"), tray = H("#1e3b26"), pearl = H("#bdb3a2"), line = H("#e7d3a8") };
+            // the classic: an Egyptian inlaid board, dark walnut round a honey-maple field, ebony and mahogany points,
+            // mother-of-pearl along the rails
+            default: return new TawlaLook { box = W("#4e2a15", "#2e170a", "#6a3a1e"), field = W("#d6b57e", "#b8955c", "#e6caa0"), ptA = W("#2a1a10", "#140c06", "#3e2a1c"), ptB = W("#9a4a26", "#6a2c12", "#b8603a"), tray = H("#1e3b26"), pearl = H("#ece4d4"), line = H("#efe2c2") };
         }
     }
 
@@ -207,7 +209,7 @@ public static class Skins
                 default: return Menus.Icon("coin");
             }
         }
-        if (d.cat == "felt") return id == "felt_wood" ? Art.WoodTex(96, 96, H("#8a5a32"), H("#5a3418"), H("#a8743e")) : Look.FeltTexture(id);
+        if (d.cat == "felt") return Look.FeltTexture(id);
         if (d.cat == "tiles") return TileArt.Preview(id);
         if (pics.TryGetValue(id, out var t) && t != null) return t;
         Texture2D p = null;

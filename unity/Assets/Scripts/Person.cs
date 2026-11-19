@@ -99,7 +99,35 @@ public class Person : MonoBehaviour
         g.name = name;
         g.transform.localScale = Vector3.one * Scale;
         foreach (var r in g.GetComponentsInChildren<SkinnedMeshRenderer>(true)) { r.updateWhenOffscreen = true; r.quality = SkinQuality.Auto; }   // follows the level (two bones on cheaper phones)
+        Soften(g);
         return g.AddComponent<Person>();
+    }
+
+    /// Skin and hair a little less shiny (the models' skin came out waxy under the café's lamps), cloth matt.
+    static readonly Dictionary<Material, Material> softened = new Dictionary<Material, Material>();
+    static void Soften(GameObject g)
+    {
+        foreach (var r in g.GetComponentsInChildren<Renderer>(true))
+        {
+            var ms = r.sharedMaterials; bool changed = false;
+            for (int i = 0; i < ms.Length; i++)
+            {
+                var m = ms[i]; if (m == null) continue;
+                string n = m.name.ToLowerInvariant();
+                float want = n.Contains("body") || n.Contains("high-poly") ? 0.78f : n.Contains("eye") || n.Contains("mouth") || n.Contains("shoe") || n.Contains("flats") || n.Contains("earring") ? -1f : 0.9f;
+                if (want < 0) continue;
+                if (!softened.TryGetValue(m, out var s))
+                {
+                    s = new Material(m) { name = m.name + " (soft)" };
+                    if (s.HasProperty("roughnessFactor")) s.SetFloat("roughnessFactor", Mathf.Max(s.GetFloat("roughnessFactor"), want));
+                    if (s.HasProperty("_Glossiness")) s.SetFloat("_Glossiness", Mathf.Min(s.GetFloat("_Glossiness"), 1 - want));
+                    if (s.HasProperty("_Smoothness")) s.SetFloat("_Smoothness", Mathf.Min(s.GetFloat("_Smoothness"), 1 - want));
+                    softened[m] = s;
+                }
+                ms[i] = s; changed = true;
+            }
+            if (changed) r.sharedMaterials = ms;
+        }
     }
 
     void Awake()
