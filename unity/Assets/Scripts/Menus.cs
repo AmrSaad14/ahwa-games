@@ -43,26 +43,41 @@ public partial class Menus : MonoBehaviour
         app = a;
         canvas = Ui.MakeCanvas("Menus", 40);
 
-        // down the left side: what's waiting for you today, your friends and the shop
-        var rail = Ui.Rect("Rail", home).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(64, 290), new Vector2(10, -80));
-        railButtons.Add(RailButton(rail, 0, "gift", "يومي", OpenDaily)); dailyDot = Dot(railButtons[0]);
-        railButtons.Add(RailButton(rail, 1, "target", "المهام", OpenMissions)); missionsDot = Dot(railButtons[1]);
-        railButtons.Add(seasonButton = RailButton(rail, 2, "pass", "الموسم", () => OpenSeason())); seasonDot = Dot(seasonButton);
-        railButtons.Add(RailButton(rail, 3, "friends", "صحابك", OpenFriends)); friendsDot = Dot(railButtons[3]);
-        railButtons.Add(RailButton(rail, 4, "shop", "المتجر", () => OpenShop(0)));
-        railButtons.Add(RailButton(rail, 5, "chest", "مجموعتي", () => OpenCollection(0)));
-        BuildWheelButton(home);
+        // everything but the big button, the sign-in chip and your card: hidden on a new player's first visit
+        extras = Ui.Rect("Extras", home); extras.Fill();
+        // down the left side: the rewards (today's, the missions, the season, in one place) and the shop
+        var rail = Ui.Rect("Rail", extras).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(64, 290), new Vector2(10, -80));
+        railButtons.Add(rewardsButton = RailButton(rail, 0, "gift", "المكافآت", OpenRewards)); rewardsDot = Dot(rewardsButton);
+        // (your daily streak: a flame with its days, on the rewards button)
+        streakBadge = Ui.Box(rewardsButton, "Streak", new Color32(0x2a, 0x12, 0x08, 0xf0)).rectTransform;
+        streakBadge.Place(new Vector2(0, 1), new Vector2(0.5f, 0.5f), new Vector2(34, 18), new Vector2(4, -4));
+        var fl = Ui.Picture(streakBadge, "Flame", Icon("t_flame")); fl.color = new Color32(0xff, 0x8a, 0x2a, 0xff);
+        fl.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(13, 13), new Vector2(3, 0));
+        streakText = Ui.Label(streakBadge, "", 10, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
+        streakText.rectTransform.Place(new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(20, 18), new Vector2(-1, 0));
+        streakBadge.gameObject.SetActive(false);
+        railButtons.Add(RailButton(rail, 1, "shop", "المتجر", () => OpenShop(0)));
+        // the rewards' own buttons are kept out of sight: their red dots light the rewards button and its rows
+        var kept = Ui.Rect("Kept", extras); kept.gameObject.SetActive(false);
+        dailyDot = Dot(RailButton(kept, 0, "gift", "يومي", OpenDaily));
+        missionsDot = Dot(RailButton(kept, 1, "target", "المهام", OpenMissions));
+        seasonButton = RailButton(kept, 2, "pass", "الموسم", () => OpenSeason()); seasonDot = Dot(seasonButton);
+        // your friends and your collection: two buttons in your card, top right
+        var card = app.MeCard;
+        meButtons[0] = MeButton(card, 0, "friends", OpenFriends); friendsDot = Dot(meButtons[0]);
+        meButtons[1] = MeButton(card, 1, "chest", () => OpenCollection(0));
+        BuildWheelButton(extras);
         // along the top, beside the logo: the tournament, the leaderboard, how to play, settings
-        var top = Ui.Rect("Top", home).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(240, 54), new Vector2(82, -8));
+        var top = Ui.Rect("Top", extras).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(240, 54), new Vector2(82, -8));
         topButtons.Add(tourneyButton = TopButton(top, 0, "cup", "البطولة", () => OpenTourney())); tourneyDot = Dot(tourneyButton);
         topButtons.Add(TopButton(top, 1, "trophy", "المتصدرين", () => OpenLeaders(0)));
         topButtons.Add(TopButton(top, 2, "help", "طريقة اللعب", () => OpenHowTo(0)));
         topButtons.Add(TopButton(top, 3, "settings", "الإعدادات", OpenSettings));
         // the monthly prize: shown when you won one (to give your Vodafone Cash number), or one is on its way
-        var prize = Chip(home, "trophy", "جايزتك", new Vector2(-252, -62), 128, new Color32(0xc0, 0x1f, 0x2a, 0xf0), Color.white, () => { Sfx.Tap(); OpenPrizes(); });
+        var prize = Chip(extras, "trophy", "جايزتك", new Vector2(-252, -62), 128, new Color32(0xc0, 0x1f, 0x2a, 0xf0), Color.white, () => { Sfx.Tap(); OpenPrizes(); });
         prizeChip = prize.gameObject; prizeChipText = prize.GetComponentInChildren<Text>(); prizeChip.SetActive(false);
         // an event on (Ramadan, Eid…): a banner at the top with what's special
-        var evb = Ui.Button(home, "", new Color32(0x3a, 0x1c, 0x66, 0xf0), Ui.Gold, 13, () => { Sfx.Tap(); OpenEvent(); });
+        var evb = Ui.Button(extras, "", new Color32(0x3a, 0x1c, 0x66, 0xf0), Ui.Gold, 13, () => { Sfx.Tap(); OpenEvent(); });
         eventChip = ((RectTransform)evb.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 38), new Vector2(0, -112));
         evb.gameObject.AddComponent<Outline>().effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.6f);
         eventIcon = Ui.Picture(eventChip, "Icon", Icon("t_lantern")); eventIcon.color = Ui.Gold;
@@ -71,7 +86,7 @@ public partial class Menus : MonoBehaviour
         eventChip.gameObject.SetActive(false);
 
         // along the top, left of your name and coins: watch an ad, sign in, language
-        var ad = Chip(home, "video", "+2K", new Vector2(-252, -10), 122, new Color32(0x2f, 0x6b, 0x3a, 0xf0), Color.white, WatchAd);
+        var ad = Chip(extras, "video", "+2K", new Vector2(-252, -10), 122, new Color32(0x2f, 0x6b, 0x3a, 0xf0), Color.white, WatchAd);
 #if UNITY_WEBGL && !UNITY_EDITOR
         ad.gameObject.SetActive(false);   // no video ads in the browser (they are in the app)
 #endif
@@ -113,6 +128,78 @@ public partial class Menus : MonoBehaviour
         dot.rectTransform.Place(new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(14, 14), new Vector2(-6, -6));
         dot.gameObject.SetActive(false);
         return dot.gameObject;
+    }
+
+    /// A small square button in your card on the home screen (bottom left of it).
+    RectTransform MeButton(RectTransform card, int i, string icon, Action onClick)
+    {
+        var b = Ui.Button(card, "", new Color(1, 1, 1, 0.08f), Ui.GoldLight, 10, () => { Sfx.Tap(); onClick(); });
+        var r = ((RectTransform)b.transform).Place(new Vector2(0, 0), new Vector2(0, 0), new Vector2(30, 26), new Vector2(8 + i * 34, 4));
+        var ic = Ui.Picture(r, "Icon", Icon(icon)); ic.color = Ui.Gold;
+        ic.rectTransform.Fill(4);
+        return r;
+    }
+
+    RectTransform extras, rewardsButton, streakBadge; GameObject rewardsDot; Text streakText; bool simple;
+    readonly RectTransform[] meButtons = new RectTransform[2];
+    /// A new player's first visit: only the big button, until the first game is played.
+    public void Simple(bool on)
+    {
+        simple = on;
+        if (extras != null) extras.gameObject.SetActive(!on);
+        foreach (var b in meButtons) if (b != null) b.gameObject.SetActive(!on);
+    }
+
+    /// Your daily streak (days in a row you collected the daily reward), on the rewards button.
+    int Streak()
+    {
+        var d = user?.Obj("daily");
+        if (d == null) return 0;
+        int day = (int)d.Num("day");
+        return d.Bool("ready") ? day - 1 : day;
+    }
+    void UpdateRewards()
+    {
+        if (rewardsDot == null) return;
+        rewardsDot.SetActive(dailyDot.activeSelf || missionsDot.activeSelf || (SeasonOn && seasonDot.activeSelf));
+        int st = Streak();
+        streakBadge.gameObject.SetActive(st >= 2);
+        if (st >= 2) streakText.text = st.ToString();
+    }
+
+    /// One place for what's waiting for you: today's reward (with your streak), the missions, the season.
+    public void OpenRewards()
+    {
+        Panel(Loc.T("المكافآت"), out var body, new Vector2(470, SeasonOn ? 292 : 222));
+        refreshOpen = OpenRewards;
+        int row = 0;
+        void Row(string icon, string title, string sub, bool dot, Action go, int streak = 0)
+        {
+            var b = Ui.Button(body, "", Card, Color.white, 10, () => { Sfx.Tap(); go(); });
+            var r = ((RectTransform)b.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(430, 62), new Vector2(0, -row++ * 70));
+            b.gameObject.AddComponent<Outline>().effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, dot ? 0.7f : 0.25f);
+            bool en = Loc.En;
+            var ic = Ui.Picture(r, "Icon", Icon(icon)); ic.color = Ui.Gold;
+            ic.rectTransform.Place(new Vector2(en ? 0 : 1, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(34, 34), new Vector2(en ? 32 : -32, 0));
+            var t = Ui.Label(r, title, 17, Color.white, en ? TextAnchor.MiddleLeft : TextAnchor.MiddleRight, Ui.Bold);
+            t.rectTransform.Place(new Vector2(en ? 0 : 1, 0.5f), new Vector2(en ? 0 : 1, 0.5f), new Vector2(250, 26), new Vector2(en ? 62 : -62, 11));
+            var u = Ui.Label(r, sub, 12, Ui.GoldLight, en ? TextAnchor.MiddleLeft : TextAnchor.MiddleRight);
+            u.rectTransform.Place(new Vector2(en ? 0 : 1, 0.5f), new Vector2(en ? 0 : 1, 0.5f), new Vector2(290, 20), new Vector2(en ? 62 : -62, -12));
+            if (streak >= 2)
+            {
+                var f = Ui.Picture(r, "Flame", Icon("t_flame")); f.color = new Color32(0xff, 0x8a, 0x2a, 0xff);
+                f.rectTransform.Place(new Vector2(en ? 1 : 0, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(24, 24), new Vector2(en ? -62 : 62, 0));
+                var n = Ui.Label(r, streak.ToString(), 18, new Color32(0xff, 0xb0, 0x5a, 0xff), TextAnchor.MiddleCenter, Ui.Bold);
+                n.rectTransform.Place(new Vector2(en ? 1 : 0, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(30, 26), new Vector2(en ? -38 : 38, 0));
+            }
+            if (dot) { var d = Dot(r); d.SetActive(true); }
+        }
+        var daily = user?.Obj("daily");
+        bool ready = daily != null && daily.Bool("ready");
+        int st = Streak();
+        Row("gift", "الجايزة اليومية", ready ? "جايزة النهارده مستنياك" : st >= 2 ? st + " " + Loc.T("أيام ورا بعض، كمّل بكرة") : "ارجع بكرة لجايزة أكبر", dailyDot.activeSelf, OpenDaily, st);
+        Row("target", "المهام", "خلّص مهام النهارده واكسب كوينز", missionsDot.activeSelf, OpenMissions);
+        if (SeasonOn) Row("pass", "الموسم", "نقط الموسم وجوايزه", seasonDot.activeSelf, () => OpenSeason());
     }
 
     RectTransform TopButton(RectTransform row, int i, string icon, string label, Action onClick)
@@ -204,8 +291,8 @@ public partial class Menus : MonoBehaviour
         // then the season pass card when it's closed
         if (app.SignedIn && !dailyShown && app.view == null && !IsOpen && !App.Recording) { dailyShown = true; OpenDaily(); return; }
         // then the lucky wheel with today's free spin, then (once a session) the no-ads plan
-        if (MaybeShowWheel(u)) return;
-        if (MaybeShowNoAdsPromo(u)) return;
+        if (!simple && MaybeShowWheel(u)) return;
+        if (!simple && MaybeShowNoAdsPromo(u)) return;
         refreshOpen?.Invoke();
     }
 
@@ -767,6 +854,7 @@ public partial class Menus : MonoBehaviour
     void Update()
     {
         if (homeRect != null && Mathf.Abs(homeRect.rect.width - lastWidth) > 1) LayoutTop();
+        UpdateRewards();
         if (dailyCountdown == null) return;
         dailyTick += Time.unscaledDeltaTime;
         if (dailyTick < 0.5f) return;

@@ -176,6 +176,7 @@ public class Cafe : MonoBehaviour
             }
             if (top == null) continue;
             var tb = top.bounds;
+            tableTop[g] = tb.max.y;
             Bounds bb = default; bool any = false;
             foreach (var r in board.GetComponentsInChildren<Renderer>()) { if (!any) { bb = r.bounds; any = true; } else bb.Encapsulate(r.bounds); }
             if (!any) continue;
@@ -270,7 +271,10 @@ public class Cafe : MonoBehaviour
             l.intensity = 2.2f;
             l.range = 14;
             l.transform.position = t.position + Vector3.up * 7.5f;
+            hanging.Add((l, l.transform.position));
         }
+        keyBase = sun.color; keyIBase = sun.intensity;
+        skyBase = RenderSettings.ambientSkyColor; eqBase = RenderSettings.ambientEquatorColor; groundBase = RenderSettings.ambientGroundColor;
     }
 
     /// The regulars in the background: all of them on good phones, fewer (or none) on cheap ones, none during a game.
@@ -294,6 +298,17 @@ public class Cafe : MonoBehaviour
             person.Face(t.position);
             var p = person.gameObject;
             regulars.Add(p);
+            // their glass of tea on the table in front of them, a little to their right, steaming
+            var toChair = chair.position - t.position; toChair.y = 0; toChair.Normalize();
+            var at = t.position + toChair * 2.5f + Vector3.Cross(Vector3.up, toChair) * 0.95f;
+            at.y = tableTop.TryGetValue(table, out var ty) ? ty : t.position.y;
+            var glass = Look.Drink(seat % 2 == 0 ? "drink_tea" : "drink_mint", t, at, 1.1f);
+            if (glass != null)
+            {
+                float ls = Mathf.Abs(t.lossyScale.x); if (ls > 1e-4f) glass.transform.localScale = Vector3.one * (1.1f / ls);   // the same size on any table
+                Steam(at + Vector3.up * 0.75f);
+            }
+            sitters.Add((person, at, table));
             yield return 0;   // one person a frame
         }
     }
@@ -313,7 +328,9 @@ public class Cafe : MonoBehaviour
         // the free part of the screen (as a share of it): the home menu is laid out on an 844 × 390 canvas that
         // grows to fill the screen ("Expand"), so its buttons' share of the width depends on the screen's shape
         float ui = Mathf.Min(Screen.width / 844f, Screen.height / 390f), w = Mathf.Max(1, Screen.width);
-        float left = Mathf.Min(0.2f, 84 * ui / w), right = Mathf.Min(0.35f, 196 * ui / w), top = 0.2f, bottom = 0.1f;
+        // (the rewards and the shop down the left; your card at the top right; the big button and the games along the bottom)
+        float left = Mathf.Min(0.2f, 84 * ui / w), right = Mathf.Min(0.1f, 24 * ui / w), top = Mathf.Min(0.3f, 84 * ui / Mathf.Max(1, Screen.height));
+        float bottom = Mathf.Min(0.32f, 94 * ui / Mathf.Max(1, Screen.height));
         const float el = 56f;   // degrees above the floor
         float e = el * Mathf.Deg2Rad;
         var dir = front * Mathf.Cos(e) + Vector3.up * Mathf.Sin(e);
@@ -425,7 +442,7 @@ public class Cafe : MonoBehaviour
         if (lobby != null) lobby.gameObject.SetActive(!on);
         Crowd();
         GameLight(on); ResetZoom(); ResetLobbyZoom();
-        if (on) camPosTo = GameShot(out camLookTo); else Focus(focus);
+        if (on) camPosTo = GameShot(out camLookTo); else { Focus(focus); moodSnap = true; }
         if (probe != null && probe.enabled) probe.RenderProbe();   // the room changed (the big table in, or out)
     }
 
@@ -437,6 +454,7 @@ public class Cafe : MonoBehaviour
     void GameLight(bool on)
     {
         if (keyLight == null) return;
+        ResetMood();   // the game's light is the same at any hour: it starts from the café's own
         if (!savedLight)
         {
             savedLight = true;
@@ -673,7 +691,158 @@ public class Cafe : MonoBehaviour
         camLook = Vector3.Lerp(camLook, camLookTo, k);
         drift += Time.deltaTime;
         Apply();
+        Life();
     }
+
+    // ---------- the café alive: its light following the hour in Cairo, the lamps swaying, the regulars ----------
+    // ---------- sipping, slamming a tile, laughing, the steam rising from their glasses ----------
+    /// The month of Ramadan is on (the event from the server): after sunset the café takes on its Ramadan night.
+    public bool Ramadan;
+    /// The hour to show instead of Cairo's (the test screenshots); below 0, the real one.
+    public float ForceHour { get => forceHour; set { forceHour = value; moodSnap = true; } }
+    float forceHour = -1;
+    readonly Dictionary<string, float> tableTop = new Dictionary<string, float>();
+    readonly List<(Light l, Vector3 at)> hanging = new List<(Light, Vector3)>();
+    readonly List<(Person p, Vector3 glass, string table)> sitters = new List<(Person, Vector3, string)>();
+    readonly List<(Transform t, Vector3 at, float phase, MeshRenderer r)> puffs = new List<(Transform, Vector3, float, MeshRenderer)>();
+    Color keyBase, skyBase, eqBase, groundBase; float keyIBase;
+    bool moodSnap = true; float nextMove = 4f;
+    static readonly Color LampColor = new Color(1f, 0.72f, 0.42f);
+    MaterialPropertyBlock puffBlock;
+
+    struct Mood
+    {
+        public Color key, amb, lamp; public float keyI, lampI;
+        public Mood(Color key, float keyI, Color amb, float lampI, Color? lamp = null) { this.key = key; this.keyI = keyI; this.amb = amb; this.lampI = lampI; this.lamp = lamp ?? LampColor; }
+        public static Mood Lerp(Mood a, Mood b, float t) => new Mood(Color.Lerp(a.key, b.key, t), Mathf.Lerp(a.keyI, b.keyI, t), Color.Lerp(a.amb, b.amb, t), Mathf.Lerp(a.lampI, b.lampI, t), Color.Lerp(a.lamp, b.lamp, t));
+    }
+    Mood mood; bool hasMood;
+
+    // the day in the café: the light through the door (the key light), the room's own light (a tint on the
+    // ambient) and the lamps (stronger as it gets dark), at hours through the day
+    static readonly (float h, Mood m)[] Day =
+    {
+        (0f,    new Mood(new Color(0.55f, 0.62f, 0.92f), 0.55f, new Color(0.62f, 0.68f, 0.95f), 1.45f)),   // night
+        (5f,    new Mood(new Color(0.55f, 0.62f, 0.92f), 0.55f, new Color(0.62f, 0.68f, 0.95f), 1.45f)),
+        (7f,    new Mood(new Color(1f, 0.92f, 0.8f), 1.05f, new Color(1.05f, 1.06f, 1.12f), 0.7f)),        // morning
+        (12f,   new Mood(new Color(1f, 0.96f, 0.88f), 1.2f, new Color(1.15f, 1.15f, 1.17f), 0.55f)),       // noon
+        (16f,   new Mood(new Color(1f, 0.9f, 0.74f), 1.12f, new Color(1.06f, 1.04f, 1.02f), 0.7f)),        // afternoon
+        (17.6f, new Mood(new Color(1f, 0.7f, 0.44f), 1.0f, new Color(1.02f, 0.88f, 0.8f), 1.0f)),          // sunset
+        (20f,   new Mood(new Color(1f, 0.86f, 0.66f), 1.0f, new Color(1f, 1f, 1f), 1.12f)),               // evening: the café's own look
+        (23f,   new Mood(new Color(0.82f, 0.78f, 0.82f), 0.75f, new Color(0.8f, 0.8f, 0.92f), 1.35f)),     // late
+        (24f,   new Mood(new Color(0.55f, 0.62f, 0.92f), 0.55f, new Color(0.62f, 0.68f, 0.95f), 1.45f)),
+    };
+    // Ramadan nights: deep blue and violet outside, the lamps glowing orange like lanterns
+    static readonly Mood RamadanNight = new Mood(new Color(0.58f, 0.52f, 0.95f), 0.6f, new Color(0.72f, 0.6f, 1.02f), 1.65f, new Color(1f, 0.6f, 0.26f));
+
+    /// The time in Cairo (Egypt: UTC+2, and UTC+3 in summer, from the last Friday of April to the last Thursday of October).
+    public static float CairoHour()
+    {
+        var u = System.DateTime.UtcNow;
+        System.DateTime Last(int month, System.DayOfWeek day)
+        {
+            var d = new System.DateTime(u.Year, month, System.DateTime.DaysInMonth(u.Year, month));
+            while (d.DayOfWeek != day) d = d.AddDays(-1);
+            return d;
+        }
+        bool summer = u >= Last(4, System.DayOfWeek.Friday).AddHours(-2) && u < Last(10, System.DayOfWeek.Thursday).AddHours(21);
+        var c = u.AddHours(summer ? 3 : 2);
+        return c.Hour + c.Minute / 60f;
+    }
+
+    Mood MoodAt(float h)
+    {
+        Mood m = Day[0].m;
+        for (int i = 0; i + 1 < Day.Length; i++)
+            if (h >= Day[i].h && h <= Day[i + 1].h) { m = Mood.Lerp(Day[i].m, Day[i + 1].m, Mathf.InverseLerp(Day[i].h, Day[i + 1].h, h)); break; }
+        if (Ramadan)
+        {
+            // from sunset (fading in over half an hour) until the dawn meal
+            float k = h >= 17.5f ? Mathf.Clamp01((h - 17.5f) / 0.5f) : h < 4f ? 1f : h < 4.5f ? 1f - (h - 4f) / 0.5f : 0f;
+            m = Mood.Lerp(m, RamadanNight, k);
+        }
+        return m;
+    }
+
+    void ResetMood()
+    {
+        if (keyLight == null || hanging.Count == 0) return;
+        keyLight.color = keyBase; keyLight.intensity = keyIBase;
+        RenderSettings.ambientSkyColor = skyBase; RenderSettings.ambientEquatorColor = eqBase; RenderSettings.ambientGroundColor = groundBase;
+        foreach (var (l, at) in hanging) if (l != null) { l.color = LampColor; l.intensity = 2.2f; l.transform.position = at; }
+    }
+
+    void Life()
+    {
+        if (inGame || AdFilm.Any || keyLight == null || hanging.Count == 0) return;
+        // the light: drifts toward the hour's (or snaps, coming back from a game)
+        var want = MoodAt(forceHour >= 0 ? forceHour : CairoHour());
+        mood = !hasMood || moodSnap ? want : Mood.Lerp(mood, want, 1 - Mathf.Exp(-Time.deltaTime * 0.5f));
+        hasMood = true; moodSnap = false;
+        keyLight.color = mood.key; keyLight.intensity = keyIBase * mood.keyI;
+        RenderSettings.ambientSkyColor = skyBase * mood.amb; RenderSettings.ambientEquatorColor = eqBase * mood.amb; RenderSettings.ambientGroundColor = groundBase * mood.amb;
+        // the lamps, each swaying a little on its chain (its pool of light swinging over the table)
+        float t = Time.time;
+        var side = Vector3.Cross(Vector3.up, front);
+        for (int i = 0; i < hanging.Count; i++)
+        {
+            var (l, at) = hanging[i]; if (l == null) continue;
+            float a = Mathf.Sin(t * 0.9f + i * 1.7f), b = Mathf.Sin(t * 0.63f + i * 2.9f);
+            l.transform.position = at + side * a * 0.45f + front * b * 0.3f;
+            l.color = mood.lamp;
+            l.intensity = 2.2f * mood.lampI * (1f + 0.025f * Mathf.Sin(t * 7.3f + i * 3.1f));
+        }
+        // the steam over the glasses: soft puffs rising and fading, turned to the camera
+        if (puffs.Count > 0 && cam != null)
+        {
+            if (puffBlock == null) puffBlock = new MaterialPropertyBlock();
+            var rot = cam.transform.rotation;
+            foreach (var (tr, at, phase, r) in puffs)
+            {
+                if (tr == null) continue;
+                float u = Mathf.Repeat(t * 0.32f + phase, 1f);
+                tr.position = at + Vector3.up * (u * 2.1f) + side * Mathf.Sin(u * 5f + phase * 9f) * 0.22f * u;
+                tr.rotation = rot;
+                tr.localScale = Vector3.one * (0.35f + u * 0.9f);
+                puffBlock.SetColor("_Color", new Color(1f, 1f, 1f, Mathf.Sin(u * Mathf.PI) * 0.26f));
+                r.SetPropertyBlock(puffBlock);
+            }
+        }
+        // now and then one of the regulars does something: reaches for their tea, slams a tile down, laughs
+        if (t < nextMove || sitters.Count == 0) return;
+        nextMove = t + Random.Range(2.2f, 5.5f);
+        var (p, glass, table) = sitters[Random.Range(0, sitters.Count)];
+        if (p == null || !p.gameObject.activeInHierarchy) return;
+        float roll = Random.value;
+        var mid = tables[table].position; mid.y = glass.y;
+        if (roll < 0.45f) p.Gesture(glass);
+        else if (roll < 0.72f)
+        {
+            var toP = p.transform.position - mid; toP.y = 0; toP.Normalize();
+            if (table == "domino" || table == "tawla") p.Slam(mid + toP * 1.3f); else p.Gesture(mid + toP * 0.8f);
+        }
+        else p.Cheer();
+    }
+
+    /// Steam over a hot glass at `at`: a few soft puffs (none on the phones that save their power).
+    void Steam(Vector3 at)
+    {
+        if (Perf.Saver) return;
+        var sh = Shader.Find("Sprites/Default");
+        if (sh == null) return;
+        if (steamMat == null) steamMat = new Material(sh) { mainTexture = Ui.Glow(64), color = Color.white };
+        for (int k = 0; k < 3; k++)
+        {
+            var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            q.name = "Steam"; Destroy(q.GetComponent<Collider>());
+            var r = q.GetComponent<MeshRenderer>();
+            r.sharedMaterial = steamMat;
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; r.receiveShadows = false;
+            if (lobby != null) q.transform.SetParent(lobby, true);
+            puffs.Add((q.transform, at, k / 3f, r));
+        }
+    }
+    Material steamMat;
 
     void Apply()
     {

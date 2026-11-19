@@ -35,7 +35,13 @@ public class App : MonoBehaviour
     Canvas ui, toastCanvas;
     Text nameText, coinsText, statusText, toastText, levelText;
     GameObject levelBox;
-    RectTransform playNow;
+    RectTransform playNow, meCard, pillsRoot, gamesRow, firstHint, xpFill;
+    RawImage playGlow; Text playSub;
+    readonly Dictionary<string, RawImage> gameIcons = new Dictionary<string, RawImage>();
+    readonly Dictionary<string, (RectTransform r, Text t, RawImage dot)> pills = new Dictionary<string, (RectTransform, Text, RawImage)>();
+    readonly Dictionary<string, int> playing = new Dictionary<string, int>();
+    /// Your card on the home screen (name, coins, level): the friends and collection buttons sit in it too.
+    public RectTransform MeCard => meCard;
     CanvasGroup homeGroup, toastGroup;
     float toastUntil;
     readonly Dictionary<string, Image> gameButtons = new Dictionary<string, Image>();
@@ -133,11 +139,12 @@ public class App : MonoBehaviour
         BuildHome();
         menus = gameObject.AddComponent<Menus>();
         menus.Build(this, homeGroup.GetComponent<RectTransform>());
-        Loc.Changed += () => { SetStatus(net != null && net.Online); Redraw(); SendPushToken(); myTitleId = null; ShowMyTitle(); };
+        Loc.Changed += () => { SetStatus(net != null && net.Online); if (user != null) ShowXp(user); Redraw(); SendPushToken(); myTitleId = null; ShowMyTitle(); };
         game = gameObject.AddComponent<GameUi>();
         game.Build(this);
 
         FreshInstall = string.IsNullOrEmpty(PlayerPrefs.GetString("ahwa.token", ""));   // no saved sign-in on this phone
+        SetNewbie(FreshInstall && !Recording && !AdFilm.Any && PlayerPrefs.GetInt("home.played", 0) == 0);
         net = new Net();
         net.OnMessage += OnMessage;
         net.OnOnline += SetStatus;
@@ -217,7 +224,7 @@ public class App : MonoBehaviour
     public void OnPurchase(string value) => Billing.OnPurchase(value);
     public void OnBillingError(string value) => Billing.OnError(value);
 
-    void SetStatus(bool on) { statusText.Set(on ? Loc.T("متصل") : Loc.T("جاري الاتصال…")); statusText.color = on ? new Color(0.55f, 0.85f, 0.5f) : Ui.GoldLight; }
+    void SetStatus(bool on) { RefreshPlayNow(); statusText.Set(on ? Loc.T("متصل") : Loc.T("جاري الاتصال…")); statusText.color = on ? new Color(0.55f, 0.85f, 0.5f) : Ui.GoldLight; }
 
     public static double LocalMs() => (System.DateTime.UtcNow - new System.DateTime(1970, 1, 1)).TotalMilliseconds;
     public double ServerNow() => LocalMs() + serverOffset;
@@ -226,7 +233,14 @@ public class App : MonoBehaviour
     {
         net?.Pump();
         PumpOffline();
-        if (playNow != null && view == null) playNow.localScale = Vector3.one * (1 + 0.035f * Mathf.Sin(Time.time * 3.2f));
+        if (playNow != null && view == null)
+        {
+            float beat = Mathf.Sin(Time.time * 3.2f);
+            playNow.localScale = Vector3.one * (1 + 0.035f * beat);
+            if (playGlow != null) { playGlow.color = new Color(1f, 0.75f, 0.3f, 0.32f + 0.2f * beat); playGlow.rectTransform.localScale = Vector3.one * (1 + 0.07f * beat); }
+            if (newbie && firstHint != null) firstHint.anchoredPosition = new Vector2(-132, 86 + 5 * Mathf.Abs(Mathf.Sin(Time.time * 2.6f)));
+        }
+        UpdatePills();
         if (Input.GetKeyDown(KeyCode.Escape) && menus != null && menus.IsOpen) { menus.Close(); return; }   // Android's back button
         if (menus != null && menus.IsOpen) return;
         if (toastGroup != null) toastGroup.alpha = Mathf.MoveTowards(toastGroup.alpha, Time.time < toastUntil ? 1 : 0, Time.deltaTime * 4);
@@ -289,8 +303,7 @@ public class App : MonoBehaviour
         picked = null;
         game.HidePicker();
         cafe.Focus(null);
-        foreach (var kv in gameButtons) kv.Value.color = Ui.Panel;
-        foreach (var kv in gameButtons) kv.Value.GetComponentInChildren<Text>().color = Ui.GoldLight;
+        PaintGames(null);
         Sfx.Tap();
     }
 
@@ -351,11 +364,21 @@ public class App : MonoBehaviour
                 {
                     nameText.Set(user.Str("name"));
                     coinsText.text = ((long)user.Num("coins")).ToString("N0");
-                    if (user.Num("level") > 0) { levelBox.SetActive(true); levelText.Set(Loc.T("مستوى") + " " + (int)user.Num("level")); }
+                    if (user.Num("level") > 0) { levelBox.SetActive(true); levelText.Set(Loc.T("مستوى") + " " + (int)user.Num("level")); ShowXp(user); }
+                    // someone who has played before (a new phone, the app's data cleared) gets the whole café at once
+                    if (newbie && (user.Num("level") > 1 || user.Num("games") > 0 || user.Num("xp") > 0)) { PlayedOnce(); SetNewbie(false); }
+                    var ev = user.Obj("event");
+                    cafe.Ramadan = ev != null && ev.Str("kind") == "ramadan";
+                    RefreshPlayNow();
                     ShowMyTitle();
                     menus?.OnUser(user);
                     Debug.Log($"[app] signed in as {user.Str("name")} with {user.Num("coins")} coins");
                 }
+                break;
+            case "lobby":
+                playing.Clear();
+                var pl = m.Obj("playing");
+                if (pl != null) foreach (var kv in pl) playing[kv.Key] = (int)System.Convert.ToDouble(kv.Value);
                 break;
             case "rtc":
                 voice.OnSignal((int)m.Num("from", -1), m.Obj("data"));
@@ -508,6 +531,7 @@ public class App : MonoBehaviour
         game.ShowQueue(null);
         game.HidePicker();
         homeGroup.alpha = 0; homeGroup.blocksRaycasts = false;
+        if (newbie) PlayedOnce();   // the rest of the café opens when this first game ends
         cafe.SetGame(true);
         Music.Home(false);
         dominoTable.Show(true);
@@ -561,6 +585,8 @@ public class App : MonoBehaviour
         Upright(false);
         Music.Home(true);
         homeGroup.alpha = 1; homeGroup.blocksRaycasts = true;
+        if (newbie && PlayerPrefs.GetInt("home.played", 0) == 1) { SetNewbie(false); Toast(Loc.T("القهوة كلها مفتوحة ليك دلوقتي!"), 3.5f); }
+        RefreshPlayNow();
     }
 
     void Redraw()
@@ -584,7 +610,7 @@ public class App : MonoBehaviour
     {
         var t = m.Str("t");
         if (offline != null && SendOffline(t, m)) return;
-        if (t != "act" && t != "ping") Debug.Log("[app] send " + t + (m.TryGetValue("mode", out var md) ? " " + md : ""));
+        if (t != "act" && t != "ping" && t != "lobby") Debug.Log("[app] send " + t + (m.TryGetValue("mode", out var md) ? " " + md : ""));
         net?.Send(m);
     }
 
@@ -621,9 +647,131 @@ public class App : MonoBehaviour
         if (g == picked && game.PickerOpen) return;   // already showing this game's choices
         picked = g;
         cafe.Focus(g);
-        foreach (var kv in gameButtons) kv.Value.color = kv.Key == g ? Ui.Gold : Ui.Panel;
-        foreach (var kv in gameButtons) kv.Value.GetComponentInChildren<Text>().color = kv.Key == g ? Ui.Ink : Ui.GoldLight;
+        PaintGames(g);
+        RefreshPlayNow();
         game.ShowPicker(g, Loc.T(GameNames[g]));
+    }
+
+    /// The game cards at the bottom: the chosen one lit gold.
+    void PaintGames(string g)
+    {
+        foreach (var kv in gameButtons)
+        {
+            bool on = kv.Key == g;
+            kv.Value.color = on ? Ui.Gold : Ui.Panel;
+            kv.Value.GetComponentInChildren<Text>().color = on ? Ui.Ink : Ui.GoldLight;
+            if (gameIcons.TryGetValue(kv.Key, out var ic)) ic.color = on ? Ui.Ink : Ui.Gold;
+        }
+    }
+
+    static Texture2D GameIcon(string g)
+    {
+        switch (g)
+        {
+            case "domino": return Menus.Icon("t_domino");
+            case "tawla": return Menus.Icon("g_tawla");
+            case "chess": return Menus.Icon("t_knight");
+            case "ludo": return Menus.Icon("g_ludo");
+            default: return Menus.Icon("g_cards");
+        }
+    }
+
+    /// The big button: the game you played last, online when you can (a guest plays the computer on the phone).
+    bool PlayOnline => (SignedIn || guestsOnline) && net != null && net.Online;
+    void RefreshPlayNow()
+    {
+        if (playSub == null) return;
+        playSub.Set(Loc.T(GameNames[LastGame]) + "  ·  " + Loc.T(PlayOnline ? "أونلاين" : "ضد الكمبيوتر"));
+    }
+
+    bool launching;
+    void PlayNow()
+    {
+        if (launching) return;
+        Sfx.Tap();
+        string g = LastGame;
+        var modes = GameUi.GameModes[g];
+        string mode = PlayerPrefs.GetString("mode." + g, modes[0].mode);
+        if (System.Array.FindIndex(modes, m => m.mode == mode) < 0) mode = modes[0].mode;
+        // signed in: straight into an online game (real people, the computer fills empty seats after a few
+        // seconds); a guest plays the computer on the phone
+        bool online = PlayOnline;
+        StartCoroutine(Launch(g, () =>
+        {
+            if (online) Quick(mode, GameUi.Stakes[Mathf.Clamp(PlayerPrefs.GetInt("ahwa.stake", 0), 0, GameUi.Stakes.Length - 1)]);
+            else Practice(mode);
+        }));
+    }
+
+    /// The camera glides over to the game's table first, then the game opens.
+    IEnumerator Launch(string g, System.Action go)
+    {
+        launching = true;
+        if (cafe != null && cafe.ready && !Recording && cafe.focus != g)
+        {
+            picked = g; game.HidePicker();
+            cafe.Focus(g); PaintGames(g);
+            for (float t = 0; t < 0.7f; t += Time.deltaTime) yield return null;
+        }
+        launching = false;
+        if (view == null) go();
+    }
+
+    /// A new player's first visit: the café with only the big button (and one hint) until the first game.
+    bool newbie;
+    void SetNewbie(bool on)
+    {
+        newbie = on;
+        if (gamesRow != null) gamesRow.gameObject.SetActive(!on);
+        if (pillsRoot != null) pillsRoot.gameObject.SetActive(!on);
+        if (firstHint != null) firstHint.gameObject.SetActive(on);
+        menus?.Simple(on);
+    }
+    void PlayedOnce()
+    {
+        if (PlayerPrefs.GetInt("home.played", 0) == 1) return;
+        PlayerPrefs.SetInt("home.played", 1); PlayerPrefs.Save();
+    }
+
+    /// Your level's bar: how far from this level to the next (the server's levels: 50 × L × (L − 1) experience).
+    void ShowXp(Dictionary<string, object> u)
+    {
+        if (xpFill == null || u == null) return;
+        double xp = u.Num("xp"); int lv = Mathf.Max(1, (int)u.Num("level"));
+        double from = 50.0 * lv * (lv - 1), to = 50.0 * (lv + 1) * lv;
+        float f = Mathf.Clamp01((float)((xp - from) / System.Math.Max(1, to - from)));
+        // Arabic fills from the right
+        xpFill.anchorMin = new Vector2(Loc.En ? 0 : 1 - f, 0); xpFill.anchorMax = new Vector2(Loc.En ? f : 1, 1);
+        xpFill.offsetMin = xpFill.offsetMax = Vector2.zero;
+    }
+
+    /// The tables' name tags over the café floor, each where its table is on the screen, with the number playing.
+    float lobbyAskAt = -100;
+    void UpdatePills()
+    {
+        if (pillsRoot == null || cafe == null || !cafe.ready) return;
+        bool show = view == null && !newbie && cafe.focus == null && homeGroup.alpha > 0.5f;
+        if (show && net != null && net.Online && Time.time - lobbyAskAt > 20f) { lobbyAskAt = Time.time; Send(new Dictionary<string, object> { ["t"] = "lobby" }); }
+        foreach (var kv in pills)
+        {
+            var (r, t, dot) = kv.Value;
+            if (!show || !cafe.tables.TryGetValue(kv.Key, out var table)) { if (r.gameObject.activeSelf) r.gameObject.SetActive(false); continue; }
+            var sp = cafe.cam.WorldToScreenPoint(table.position + cafe.Front * 4.4f);
+            if (sp.z <= 0 || !RectTransformUtility.ScreenPointToLocalPointInRectangle(pillsRoot, sp, null, out var lp)) { r.gameObject.SetActive(false); continue; }
+            if (!r.gameObject.activeSelf) r.gameObject.SetActive(true);
+            r.anchoredPosition = lp;
+            playing.TryGetValue(kv.Key, out int n);
+            string want = Loc.T(GameNames[kv.Key]) + (n > 0 ? "  ·  " + n + " " + Loc.T("بيلعبوا") : "");
+            if (t.name != want)
+            {
+                t.name = want; t.Set(want);
+                float w = t.preferredWidth + (n > 0 ? 34 : 20);
+                r.sizeDelta = new Vector2(w, 22);
+                dot.gameObject.SetActive(n > 0);
+                dot.rectTransform.Place(new Vector2(Loc.En ? 0 : 1, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(8, 8), new Vector2(Loc.En ? 11 : -11, 0));
+                t.rectTransform.offsetMin = new Vector2(n > 0 && Loc.En ? 14 : 0, 0); t.rectTransform.offsetMax = new Vector2(n > 0 && !Loc.En ? -14 : 0, 0);
+            }
+        }
     }
 
     /// A real account (Google, Apple, phone or Play Games): online games need one; guests play the computer.
@@ -873,7 +1021,7 @@ public class App : MonoBehaviour
         if (string.IsNullOrEmpty(id) || homeRoot == null) return;
         myTitle = Titles.Badge(homeRoot, id, 11);
         if (myTitle == null) { myTitleId = null; return; }
-        myTitle.Place(new Vector2(1, 1), new Vector2(1, 1), myTitle.sizeDelta, new Vector2(-14, -80));
+        myTitle.Place(new Vector2(1, 1), new Vector2(1, 1), myTitle.sizeDelta, new Vector2(-14, -88));
         myTitle.gameObject.AddComponent<Button>().onClick.AddListener(() => { Sfx.Tap(); menus?.OpenCollection(6); });
         myTitle.Find("Edge").GetComponent<Image>().raycastTarget = true;
     }
@@ -903,7 +1051,14 @@ public class App : MonoBehaviour
             r.localRotation = Quaternion.Euler(0, 0, turn);
         }
         Shade(new Vector2(0, 0), new Vector2(0, 1), new Vector2(0, 0.5f), new Vector2(150, 0), 0, 0.55f);          // left
-        Shade(new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 0.5f), new Vector2(240, 0), 180, 0.5f);        // right (turned round)
+        Shade(new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 0.5f), new Vector2(170, 0), 180, 0.42f);       // right (turned round)
+        // (the bottom: a band across, turned to fade upward, behind the big button and the games)
+        var low = Ui.Picture(root, "ShadeBottom", Ui.Fade);
+        low.raycastTarget = false; low.color = new Color(0.07f, 0.03f, 0.02f, 0.5f);
+        low.rectTransform.SetAsFirstSibling();
+        low.rectTransform.anchorMin = low.rectTransform.anchorMax = new Vector2(0.5f, 0);
+        low.rectTransform.pivot = new Vector2(0, 0.5f); low.rectTransform.anchoredPosition = Vector2.zero;
+        low.rectTransform.sizeDelta = new Vector2(120, 4000); low.rectTransform.localRotation = Quaternion.Euler(0, 0, 90);
         // (the top: a band across, turned to fade downward)
         var top = Ui.Picture(root, "ShadeTop", Ui.Fade);
         top.raycastTarget = false; top.color = new Color(0.07f, 0.03f, 0.02f, 0.45f);
@@ -916,60 +1071,89 @@ public class App : MonoBehaviour
         var logo = Ui.Picture(root, "Logo", Resources.Load<Texture2D>("UI/Logo"));
         logo.rectTransform.Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(66, 77), new Vector2(8, -4));
 
-        // you: name and coins, top right
+        // you: your card, top right: name and coins, your level and how far to the next, your friends and collection
         var me = Ui.Box(root, "Me", Ui.Panel);
-        me.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(230, 40), new Vector2(-14, -10));
+        me.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(230, 72), new Vector2(-14, -10));
+        meCard = me.rectTransform;
+        me.gameObject.AddComponent<Outline>().effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.3f);
         // tap yourself: your own player card
         me.gameObject.AddComponent<Button>().onClick.AddListener(() => { Sfx.Tap(); menus?.OpenMyCard(); });
         nameText = Ui.Label(me.transform, "…", 15, Color.white, TextAnchor.MiddleRight, Ui.Bold);
-        nameText.rectTransform.Place(new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(120, 30), new Vector2(-12, 0));
+        nameText.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 0.5f), new Vector2(120, 30), new Vector2(-12, -20));
         var coin = Ui.Box(me.transform, "Coin", Ui.Gold);
-        coin.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(18, 18), new Vector2(12, 0));
+        coin.rectTransform.Place(new Vector2(0, 1), new Vector2(0, 0.5f), new Vector2(18, 18), new Vector2(12, -20));
         coinsText = Ui.Label(me.transform, "—", 15, Ui.GoldLight, TextAnchor.MiddleLeft, Ui.Bold);
-        coinsText.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(80, 30), new Vector2(36, 0));
-
-        // your level, under your name
-        var lv = Ui.Box(root, "Level", Ui.Gold);
-        lv.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(64, 20), new Vector2(-14, -54));
+        coinsText.rectTransform.Place(new Vector2(0, 1), new Vector2(0, 0.5f), new Vector2(80, 30), new Vector2(36, -20));
+        // your level, and a bar filling up to the next one
+        var lvRow = Ui.Rect("Level", me.transform).Place(new Vector2(1, 0), new Vector2(1, 0), new Vector2(150, 24), new Vector2(-8, 5));
+        var lv = Ui.Box(lvRow, "Badge", Ui.Gold);
+        lv.rectTransform.Place(new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(60, 20), Vector2.zero);
         levelText = Ui.Label(lv.transform, "", 11, Ui.Ink, TextAnchor.MiddleCenter, Ui.Bold); levelText.rectTransform.Fill();
-        levelBox = lv.gameObject; levelBox.SetActive(false);
+        var bar = Ui.Box(lvRow, "Bar", new Color(0, 0, 0, 0.4f));
+        bar.rectTransform.Place(new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(78, 8), new Vector2(-66, 0));
+        xpFill = Ui.Box(bar.transform, "Fill", Ui.Gold).rectTransform;
+        xpFill.anchorMin = Vector2.zero; xpFill.anchorMax = new Vector2(0, 1); xpFill.offsetMin = xpFill.offsetMax = Vector2.zero;
+        levelBox = lvRow.gameObject; levelBox.SetActive(false);
 
         // connection
-        statusText = Ui.Label(root, "جاري الاتصال…", 12, Ui.GoldLight, TextAnchor.MiddleRight);
-        statusText.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(200, 20), new Vector2(-86, -54));
+        statusText = Ui.Label(root, "جاري الاتصال…", 11, Ui.GoldLight, TextAnchor.MiddleRight);
+        statusText.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(200, 18), new Vector2(-16, -114));
 
-        // the five games, down the right side (under your level, connection and title badge)
-        var list = Ui.Rect("Games", root).Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(170, 230), new Vector2(-14, -104));
-        var title = Ui.Label(list, "اختار لعبتك", 15, Ui.GoldLight, TextAnchor.MiddleRight, Ui.Bold);
-        title.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(170, 24), new Vector2(0, 0));
+        // the tables' names floating over the café floor, with how many people play each game right now
+        pillsRoot = Ui.Rect("Tables", root); pillsRoot.Fill(); pillsRoot.SetSiblingIndex(4);   // over the shades, under everything else
+        foreach (var g in HomeGames)
+        {
+            var pill = Ui.Box(pillsRoot, "Pill " + g, new Color(0.08f, 0.04f, 0.02f, 0.62f));
+            pill.raycastTarget = false;
+            pill.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(90, 22), Vector2.zero);
+            var dot = Ui.Picture(pill.transform, "Live", GameUi.Disc.texture); dot.color = new Color(0.4f, 0.9f, 0.45f);
+            var t = Ui.Label(pill.transform, GameNames[g], 12, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Bold);
+            Destroy(t.GetComponent<FitText>());
+            t.rectTransform.Fill();
+            pills[g] = (pill.rectTransform, t, dot);
+            pill.gameObject.SetActive(false);
+        }
+
+        // the games, a row of cards at the bottom right (or tap a table in the café)
+        gamesRow = Ui.Rect("Games", root).Place(new Vector2(1, 0), new Vector2(1, 0), new Vector2(HomeGames.Length * 64 - 6, 64), new Vector2(-12, 12));
+        var title = Ui.Label(gamesRow, "اختار لعبتك", 12, new Color(1, 1, 1, 0.8f), TextAnchor.MiddleCenter, Ui.Bold);
+        title.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 0), new Vector2(300, 18), new Vector2(0, 2));
         for (int i = 0; i < HomeGames.Length; i++)
         {
             var g = HomeGames[i];
-            var b = Ui.Button(list, GameNames[g], Ui.Panel, Ui.GoldLight, 18, () => Pick(g));
-            ((RectTransform)b.transform).Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(170, 36), new Vector2(0, -28 - i * 40));
+            int k = Loc.En ? i : HomeGames.Length - 1 - i;   // Arabic reads right to left: the first game on the right
+            var b = Ui.Button(gamesRow, GameNames[g], Ui.Panel, Ui.GoldLight, 11, () => { Sfx.Tap(); Pick(g); });
+            ((RectTransform)b.transform).Place(new Vector2(0, 0), new Vector2(0, 0), new Vector2(58, 64), new Vector2(k * 64, 0));
+            var lbl = b.GetComponentInChildren<Text>();
+            lbl.rectTransform.anchorMin = new Vector2(0, 0); lbl.rectTransform.anchorMax = new Vector2(1, 0); lbl.rectTransform.pivot = new Vector2(0.5f, 0);
+            lbl.rectTransform.sizeDelta = new Vector2(-4, 18); lbl.rectTransform.anchoredPosition = new Vector2(0, 5);
+            FitText.OneLine(lbl);
+            var ic = Ui.Picture(b.transform, "Icon", GameIcon(g)); ic.color = Ui.Gold;
+            ic.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(32, 32), new Vector2(0, -7));
             gameButtons[g] = b.GetComponent<Image>();
+            gameIcons[g] = ic;
             var outline = b.gameObject.AddComponent<Outline>(); outline.effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.35f);
         }
 
-        // a hint at the bottom
-        var hint = Ui.Label(root, "اضغط على أي ترابيزة في القهوة", 13, new Color(1, 1, 1, 0.75f));
-        hint.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(400, 24), new Vector2(0, 12));
-        // straight into a free game against the computer (the first thing a new player sees)
-        var now = Ui.Button(root, "العب دلوقتي", Ui.Gold, Ui.Ink, 20, () =>
-        {
-            Sfx.Tap();
-            string g = LastGame;
-            var modes = GameUi.GameModes[g];
-            string mode = PlayerPrefs.GetString("mode." + g, modes[0].mode);
-            if (System.Array.FindIndex(modes, m => m.mode == mode) < 0) mode = modes[0].mode;
-            // signed in: straight into an online game (real people, the computer fills empty seats after a few
-            // seconds); a guest plays the computer on the phone
-            if ((SignedIn || guestsOnline) && net != null && net.Online) Quick(mode, GameUi.Stakes[Mathf.Clamp(PlayerPrefs.GetInt("ahwa.stake", 0), 0, GameUi.Stakes.Length - 1)]);
-            else Practice(mode);
-        });
-        ((RectTransform)now.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(230, 50), new Vector2(-30, 42));
+        // the one big button: straight into a game (the last one you played), with a soft glow breathing behind it
+        playGlow = Ui.Picture(root, "Glow", Ui.Glow(96)); playGlow.color = new Color(1f, 0.75f, 0.3f, 0.45f);
+        playGlow.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0.5f), new Vector2(400, 150), new Vector2(-132, 44));
+        var now = Ui.Button(root, "العب دلوقتي", Ui.Gold, Ui.Ink, 22, PlayNow);
+        ((RectTransform)now.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(250, 62), new Vector2(-132, 13));
+        var nowText = now.GetComponentInChildren<Text>();
+        nowText.rectTransform.anchorMin = new Vector2(0, 0.36f); nowText.rectTransform.anchorMax = Vector2.one;
+        nowText.rectTransform.offsetMin = nowText.rectTransform.offsetMax = Vector2.zero;
+        playSub = Ui.Label(now.transform, "", 12, new Color(Ui.Ink.r, Ui.Ink.g, Ui.Ink.b, 0.78f), TextAnchor.MiddleCenter, Ui.Bold);
+        playSub.rectTransform.anchorMin = Vector2.zero; playSub.rectTransform.anchorMax = new Vector2(1, 0.42f);
+        playSub.rectTransform.offsetMin = new Vector2(8, 2); playSub.rectTransform.offsetMax = new Vector2(-8, 0);
         now.gameObject.AddComponent<Outline>().effectColor = new Color(0, 0, 0, 0.45f);
         playNow = (RectTransform)now.transform;
+        // a new player's first visit: one hint, over the one button
+        firstHint = Ui.Label(root, "دوس هنا وابدأ أول لعبة!", 15, Color.white, TextAnchor.MiddleCenter, Ui.Bold).rectTransform;
+        firstHint.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(320, 24), new Vector2(-132, 84));
+        firstHint.gameObject.AddComponent<Outline>().effectColor = new Color(0, 0, 0, 0.7f);
+        firstHint.gameObject.SetActive(false);
+        RefreshPlayNow();
 
         // toasts, over everything
         toastCanvas = Ui.MakeCanvas("Toast", 50);
@@ -1037,6 +1221,16 @@ public class App : MonoBehaviour
             Pick("domino"); game.HidePicker();
             yield return new WaitForSeconds(0.6f);
             Still("m0-home.png");
+            // the café floor: the tables' tags, the rewards, a first visit, and the café at other times of day
+            Unpick(); yield return new WaitForSeconds(1.6f); Still("m0a-cafe-tags.png");
+            menus.OpenRewards(); yield return new WaitForSeconds(0.8f); Still("m0b-rewards.png"); menus.Close();
+            SetNewbie(true); yield return new WaitForSeconds(0.5f); Still("m0c-first-visit.png"); SetNewbie(false);
+            cafe.ForceHour = 2.5f; yield return new WaitForSeconds(1.5f); Still("m0d-night.png");
+            cafe.ForceHour = 9f; yield return new WaitForSeconds(1.5f); Still("m0e-morning.png");
+            cafe.ForceHour = 17.6f; yield return new WaitForSeconds(1.5f); Still("m0f-sunset.png");
+            cafe.Ramadan = true; cafe.ForceHour = 21f; yield return new WaitForSeconds(1.5f); Still("m0g-ramadan.png");
+            cafe.Ramadan = false; cafe.ForceHour = -1;
+            Pick("domino"); game.HidePicker(); yield return new WaitForSeconds(0.6f);
             menus.OpenDaily(); yield return new WaitForSeconds(0.8f); Still("d1-daily.png");
             Send(new Dictionary<string, object> { ["t"] = "daily" }); yield return new WaitForSeconds(1.2f); Still("d2-daily-got.png");
             menus.Close();
