@@ -378,8 +378,9 @@ public class App : MonoBehaviour
                     nameText.Set(user.Str("name"));
                     coinsText.text = ((long)user.Num("coins")).ToString("N0");
                     if (user.Num("level") > 0) { levelBox.SetActive(true); levelText.Set(Loc.T("مستوى") + " " + (int)user.Num("level")); ShowXp(user); }
-                    // someone who has played before (a new phone, the app's data cleared) gets the whole café at once
-                    if (newbie && (user.Num("level") > 1 || user.Num("games") > 0 || user.Num("xp") > 0)) { PlayedOnce(); SetNewbie(false); }
+                    // someone who has played before (a new phone, the app's data cleared, an account they signed in to)
+                    // gets the whole café at once
+                    if (newbie && (SignedIn || user.Num("level") > 1 || user.Num("games") > 0 || user.Num("xp") > 0)) { PlayedOnce(); SetNewbie(false); }
                     var ev = user.Obj("event");
                     cafe.Ramadan = ev != null && ev.Str("kind") == "ramadan";
                     RefreshPlayNow();
