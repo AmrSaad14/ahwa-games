@@ -844,18 +844,18 @@ public class Cafe : MonoBehaviour
     // ambient) and the lamps (stronger as it gets dark), at hours through the day
     static readonly (float h, Mood m)[] Day =
     {
-        (0f,    new Mood(new Color(0.55f, 0.62f, 0.92f), 0.55f, new Color(0.62f, 0.68f, 0.95f), 1.45f)),   // night
-        (5f,    new Mood(new Color(0.55f, 0.62f, 0.92f), 0.55f, new Color(0.62f, 0.68f, 0.95f), 1.45f)),
+        (0f,    new Mood(new Color(0.7f, 0.72f, 0.9f), 0.6f, new Color(0.78f, 0.78f, 0.88f), 1.4f)),   // night
+        (5f,    new Mood(new Color(0.7f, 0.72f, 0.9f), 0.6f, new Color(0.78f, 0.78f, 0.88f), 1.4f)),
         (7f,    new Mood(new Color(1f, 0.92f, 0.8f), 1.05f, new Color(1.05f, 1.06f, 1.12f), 0.7f)),        // morning
         (12f,   new Mood(new Color(1f, 0.96f, 0.88f), 1.2f, new Color(1.15f, 1.15f, 1.17f), 0.55f)),       // noon
         (16f,   new Mood(new Color(1f, 0.9f, 0.74f), 1.12f, new Color(1.06f, 1.04f, 1.02f), 0.7f)),        // afternoon
-        (17.6f, new Mood(new Color(1f, 0.7f, 0.44f), 1.0f, new Color(1.02f, 0.88f, 0.8f), 1.0f)),          // sunset
+        (17.6f, new Mood(new Color(1f, 0.8f, 0.6f), 0.95f, new Color(0.98f, 0.9f, 0.84f), 1.0f)),          // sunset
         (20f,   new Mood(new Color(1f, 0.86f, 0.66f), 1.0f, new Color(1f, 1f, 1f), 1.12f)),               // evening: the café's own look
         (23f,   new Mood(new Color(0.82f, 0.78f, 0.82f), 0.75f, new Color(0.8f, 0.8f, 0.92f), 1.35f)),     // late
-        (24f,   new Mood(new Color(0.55f, 0.62f, 0.92f), 0.55f, new Color(0.62f, 0.68f, 0.95f), 1.45f)),
+        (24f,   new Mood(new Color(0.7f, 0.72f, 0.9f), 0.6f, new Color(0.78f, 0.78f, 0.88f), 1.4f)),
     };
     // Ramadan nights: deep blue and violet outside, the lamps glowing orange like lanterns
-    static readonly Mood RamadanNight = new Mood(new Color(0.58f, 0.52f, 0.95f), 0.6f, new Color(0.72f, 0.6f, 1.02f), 1.65f, new Color(1f, 0.6f, 0.26f));
+    static readonly Mood RamadanNight = new Mood(new Color(0.72f, 0.66f, 0.92f), 0.62f, new Color(0.84f, 0.76f, 0.94f), 1.6f, new Color(1f, 0.64f, 0.3f));
 
     /// The time in Cairo (Egypt: UTC+2, and UTC+3 in summer, from the last Friday of April to the last Thursday of October).
     public static float CairoHour()
@@ -987,6 +987,8 @@ public class Cafe : MonoBehaviour
     /// Nobody's head fills the screen: a regular the camera passes close to (the fly-in, zooming in on a table)
     /// fades out of view until the camera has moved on.
     bool fixedShot;
+    /// A set shot (test portraits, the advert) rather than the café view.
+    public bool FixedShot => fixedShot;
     readonly Dictionary<GameObject, Renderer[]> bodies = new Dictionary<GameObject, Renderer[]>();
     void ClearView()
     {

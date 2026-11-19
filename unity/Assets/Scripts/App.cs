@@ -750,7 +750,7 @@ public class App : MonoBehaviour
     void UpdatePills()
     {
         if (pillsRoot == null || cafe == null || !cafe.ready) return;
-        bool show = view == null && !newbie && cafe.focus == null && homeGroup.alpha > 0.5f;
+        bool show = view == null && !newbie && cafe.focus == null && !cafe.FixedShot && homeGroup.alpha > 0.5f;
         if (show && net != null && net.Online && Time.time - lobbyAskAt > 20f) { lobbyAskAt = Time.time; Send(new Dictionary<string, object> { ["t"] = "lobby" }); }
         foreach (var kv in pills)
         {
@@ -758,6 +758,9 @@ public class App : MonoBehaviour
             if (!show || !cafe.tables.TryGetValue(kv.Key, out var table)) { if (r.gameObject.activeSelf) r.gameObject.SetActive(false); continue; }
             var sp = cafe.cam.WorldToScreenPoint(table.position + cafe.Front * 4.4f);
             if (sp.z <= 0 || !RectTransformUtility.ScreenPointToLocalPointInRectangle(pillsRoot, sp, null, out var lp)) { r.gameObject.SetActive(false); continue; }
+            // (not under the bottom row of buttons, nor the top bar)
+            float half = pillsRoot.rect.height / 2;
+            if (lp.y < -half + 96 || lp.y > half - 90) { if (r.gameObject.activeSelf) r.gameObject.SetActive(false); continue; }
             if (!r.gameObject.activeSelf) r.gameObject.SetActive(true);
             r.anchoredPosition = lp;
             playing.TryGetValue(kv.Key, out int n);
