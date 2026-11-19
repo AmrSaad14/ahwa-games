@@ -56,7 +56,13 @@ public class App : MonoBehaviour
     static string ShotDir => Path.Combine(Directory.GetCurrentDirectory(), "shots");
     // a still is a copy of the video frame it was asked on (Unity takes one screenshot per frame)
     static readonly List<(int frame, string name)> stills = new List<(int, string)>();
-    public static void Still(string name) { if (I != null) stills.Add((I.frame, name)); }
+    /// A still of this moment. Past the video's length (the frames stop), the screen is captured on its own instead.
+    public static void Still(string name)
+    {
+        if (I == null) return;
+        if (I.frame < RecordFps * 330) stills.Add((I.frame, name));
+        else ScreenCapture.CaptureScreenshot(Path.Combine(ShotDir, name));
+    }
     int frame; bool recordOn = true;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

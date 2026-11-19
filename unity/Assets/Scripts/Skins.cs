@@ -114,7 +114,8 @@ public static class Skins
             case "tawla_pearl": return new TawlaLook { box = W("#2a1d14", "#120b06", "#463020"), field = W("#f2eee6", "#d8d2c6", "#ffffff"), ptA = W("#1d1d24", "#0a0a0e", "#3a3a44"), ptB = W("#1f8f86", "#0f5a54", "#3ab0a6"), tray = H("#13403c"), pearl = H("#efe8dc"), line = H("#c9a25a") };
             case "tawla_royal": return new TawlaLook { box = W("#120c0a", "#050302", "#2a1c16"), field = W("#145a45", "#0b3a2c", "#1f7a5e"), ptA = W("#e3b75a", "#a7792a", "#f6d58c"), ptB = W("#18110f", "#060303", "#30241f"), tray = H("#3a070c"), pearl = H("#f3cd62"), line = H("#f3cd62") };
             case "tawla_ramadan": return new TawlaLook { box = W("#241a5c", "#120c34", "#3a2c80"), field = W("#efe3c4", "#d8c8a0", "#fbf3dc"), ptA = W("#3a2c80", "#1e1650", "#5a48a8"), ptB = W("#c99a30", "#8a6418", "#f0c862"), tray = H("#1e1650"), pearl = H("#f3cd62"), line = H("#f3cd62") };
-            case "tawla_pharaoh": return new TawlaLook { box = W("#1f3f7a", "#10234a", "#2f5aa0"), field = W("#e2c98a", "#c4a462", "#f2dca6"), ptA = W("#1f4e9a", "#12306a", "#3a6ac0"), ptB = W("#2f8a7a", "#1a5a4e", "#46aa98"), tray = H("#12306a"), pearl = H("#f3cd62"), line = H("#f3cd62") };
+            // lapis and carnelian on sandstone, gold leaf lines (calmer than bright blue on yellow)
+            case "tawla_pharaoh": return new TawlaLook { box = W("#18284e", "#0c152c", "#243a6c"), field = W("#c9b07c", "#ab935f", "#d9c393"), ptA = W("#1d3b72", "#102448", "#2c518f"), ptB = W("#9a3a26", "#682417", "#b8513a"), tray = H("#0f1c3a"), pearl = H("#d8b766"), line = H("#c9a656") };
             default: return new TawlaLook { box = W("#6b3a1e", "#3d1f0e", "#8c5530"), field = W("#c9a46c", "#a7834f", "#dcbd88"), ptA = W("#3b2414", "#24140a", "#5a3a22"), ptB = W("#8e2a1c", "#5e180e", "#b0402c"), tray = H("#1e3b26"), pearl = H("#bdb3a2"), line = H("#e7d3a8") };
         }
     }

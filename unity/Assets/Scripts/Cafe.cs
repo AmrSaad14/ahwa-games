@@ -472,6 +472,9 @@ public class Cafe : MonoBehaviour
         {
             look.bloom = on ? 0.08f : 0.35f; look.threshold = on ? 1.8f : 1.1f;
             look.exposure = on ? 0.9f : 0.95f;
+            // at the table, the café floor around the board falls away into shadow, so the eye stays on the game
+            look.vignette = on ? 0.9f : 0.5f;
+            look.saturation = on ? 0.98f : 1.08f;
         }
     }
 
@@ -682,9 +685,29 @@ public class Cafe : MonoBehaviour
         var jolt = sh > 0 ? new Vector3(Mathf.Sin(Time.time * 61f), Mathf.Sin(Time.time * 47f + 1f), 0) * sh * 0.5f : Vector3.zero;
         cam.transform.position = camPos + sway + jolt;
         cam.transform.LookAt(camLook + jolt * 0.5f);
+        ClearView();
         // shadows only as far as the camera looks (plus a margin): the one shadow map stays sharp where it matters
         float sd = Vector3.Distance(camPos, camLook) + 28f;
         if (Mathf.Abs(sd - QualitySettings.shadowDistance) > 3f) QualitySettings.shadowDistance = sd;
+    }
+
+    /// Nobody's head fills the screen: a regular the camera passes close to (the fly-in, zooming in on a table)
+    /// fades out of view until the camera has moved on.
+    bool fixedShot;
+    readonly Dictionary<GameObject, Renderer[]> bodies = new Dictionary<GameObject, Renderer[]>();
+    void ClearView()
+    {
+        if (inGame) return;
+        var c = cam.transform.position;
+        foreach (var r in regulars)
+        {
+            if (r == null || !r.activeSelf) continue;
+            if (!bodies.TryGetValue(r, out var rs)) bodies[r] = rs = r.GetComponentsInChildren<Renderer>(true);
+            var head = r.transform.position + Vector3.up * 2.2f;
+            // (a set shot, like a portrait or the advert, means to be close)
+            bool near = !fixedShot && ((c - head).sqrMagnitude < 4.5f * 4.5f || (c - r.transform.position - Vector3.up * 1.2f).sqrMagnitude < 3.5f * 3.5f);
+            if (rs.Length > 0 && rs[0] != null && rs[0].enabled == near) foreach (var x in rs) if (x != null) x.enabled = !near;
+        }
     }
 
     float shakeUntil;
@@ -694,6 +717,7 @@ public class Cafe : MonoBehaviour
     /// A fixed shot (test portraits); null goes back to the normal camera.
     public void Shot(Vector3? pos, Vector3 look = default)
     {
+        fixedShot = pos != null;
         if (pos == null) { Focus(focus); return; }
         camPos = camPosTo = pos.Value; camLook = camLookTo = look; drift = 0;
         if (ready) Apply();
