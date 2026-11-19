@@ -86,6 +86,7 @@ public class Cafe : MonoBehaviour
         Batch(room.transform);
         Lights();
         Props(room.transform);
+        Sign(room.transform);
         yield return null;
         foreach (var _ in People(room.transform)) yield return null;
 
@@ -346,6 +347,45 @@ public class Cafe : MonoBehaviour
             var at = tables[g].position - front * 4.6f + side * dir * 2.6f;
             at.y = Person.FloorY;
             Shisha(lobby, at, brass, sh, dir > 0 ? new Color(0.16f, 0.45f, 0.42f) : new Color(0.5f, 0.14f, 0.2f));
+        }
+    }
+
+    /// The game's logo and name on the café's back wall, between the back tables: a cut-out plaque standing off the
+    /// wall, its edge given depth by layers of darker brass behind the picture.
+    void Sign(Transform room)
+    {
+        var tex = Resources.Load<Texture2D>("UI/Logo");
+        var sh = Shader.Find("Legacy Shaders/Transparent/Diffuse") ?? Shader.Find("Sprites/Default");
+        if (tex == null || sh == null) return;
+        // the back wall: the room's widest thin piece behind the tables, facing them
+        var side = Vector3.Cross(Vector3.up, front);
+        float wall = -1; float wallBottom = Person.FloorY;
+        foreach (var r in room.GetComponentsInChildren<Renderer>())
+        {
+            var b = r.bounds;
+            float thick = Mathf.Abs(Vector3.Dot(b.size, front)), wide = Mathf.Abs(Vector3.Dot(b.size, side));
+            float back = Vector3.Dot(center - b.center, front);
+            if (thick < 1.2f && wide > 25f && b.size.y > 8f && back > 12f && (wall < 0 || back < wall)) { wall = back - thick / 2; wallBottom = b.min.y; }
+        }
+        if (wall < 0) { Debug.LogWarning("[cafe] no back wall for the sign"); return; }
+        var root = new GameObject("Sign").transform;
+        root.SetParent(room, true);
+        float h = 5.6f, w = h * tex.width / tex.height;
+        root.position = new Vector3(center.x, wallBottom + 5.5f, center.z) - front * (wall - 0.12f);
+        root.rotation = Quaternion.LookRotation(-front, Vector3.up);   // its face toward the room
+        for (int k = 6; k >= 0; k--)
+        {
+            var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            q.name = k == 0 ? "Logo" : "Edge"; Destroy(q.GetComponent<Collider>());
+            q.transform.SetParent(root, false);
+            q.transform.localScale = new Vector3(w, h, 1);
+            q.transform.localPosition = new Vector3(0, 0, k * 0.035f);   // (behind the face, toward the wall)
+            // (a quad shows its face toward -z: here, the room)
+            float d = k == 0 ? 1f : 0.32f + 0.04f * (6 - k);
+            var m = new Material(sh) { mainTexture = tex, color = k == 0 ? Color.white : new Color(0.62f * d * 1.4f, 0.45f * d * 1.4f, 0.16f * d * 1.4f, 1) };
+            m.renderQueue = 3000 + (6 - k);   // drawn back to front
+            var r = q.GetComponent<MeshRenderer>(); r.sharedMaterial = m;
+            r.shadowCastingMode = k == 6 ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off;
         }
     }
 
