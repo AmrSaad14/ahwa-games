@@ -69,6 +69,7 @@ public class Cafe : MonoBehaviour
         }
         lobby = Find(room.transform, "Tables");
         chairModel = Find(room.transform, "Seat_domino_0");
+        DressTables();   // (before the layout: the estimation table is a copy of the domino one, so it gets it too)
         if (tables.ContainsKey("domino") && tables.ContainsKey("tawla") && tables.ContainsKey("chess") && tables.ContainsKey("ludo"))
         {
             var backMid = (tables["domino"].position + tables["tawla"].position) * 0.5f;
@@ -156,6 +157,48 @@ public class Cafe : MonoBehaviour
             var tex = Resources.Load<Texture2D>("UI/Cards/c" + trick[i]);
             Card(tex != null ? Art.Mat(Color.white, 0.3f, 0, tex) : backMat, dir * 0.55f, 90 * i + (i % 2 == 0 ? 8 : -6), 1);
             for (int k = 0; k < 3; k++) Card(backMat, dir * 1.75f + Quaternion.Euler(0, 90 * i, 0) * Vector3.right * (k - 1) * 0.28f, 90 * i + (k - 1) * 9, k);
+        }
+    }
+
+    /// The four game tables in a real wooden café table (Poly Haven's Wooden Table 02, CC0): the model's own table
+    /// is hidden and the new one stands in its place, as tall as it and with a top as wide, so the boards, the
+    /// chairs and the regulars stay just where they were.
+    void DressTables()
+    {
+        var model = Resources.Load<GameObject>("Art/WoodTable");
+        if (model == null) { Debug.LogWarning("[cafe] no Art/WoodTable"); return; }
+        foreach (var g in Games)
+        {
+            if (!tables.TryGetValue(g, out var t)) continue;
+            var own = new List<Renderer>();
+            foreach (var r in t.GetComponentsInChildren<Renderer>())
+            {
+                bool skip = false;
+                for (var p = r.transform; p != null && p != t; p = p.parent) if (p.name.StartsWith("Seat_") || p.name.StartsWith("Board_")) { skip = true; break; }
+                if (!skip) own.Add(r);
+            }
+            if (own.Count == 0) continue;
+            Bounds all = own[0].bounds, top = own[0].bounds; float area = 0;
+            foreach (var r in own)
+            {
+                all.Encapsulate(r.bounds);
+                float a = r.bounds.size.x * r.bounds.size.z;
+                if (a > area) { area = a; top = r.bounds; }
+            }
+            var nt = Instantiate(model);
+            nt.name = "WoodTable";
+            var rs = nt.GetComponentsInChildren<Renderer>();
+            if (rs.Length == 0) { Destroy(nt); continue; }
+            Bounds Measure() { var b = rs[0].bounds; foreach (var r in rs) b.Encapsulate(r.bounds); return b; }
+            var mb = Measure();
+            if (mb.size.y < 1e-4f || mb.size.x < 1e-4f || mb.size.z < 1e-4f) { Destroy(nt); continue; }
+            var s0 = nt.transform.localScale;
+            nt.transform.localScale = new Vector3(s0.x * top.size.x / mb.size.x, s0.y * all.size.y / mb.size.y, s0.z * top.size.z / mb.size.z);
+            mb = Measure();
+            nt.transform.position += new Vector3(all.center.x - mb.center.x, all.min.y - mb.min.y, all.center.z - mb.center.z);
+            nt.transform.SetParent(t, true);
+            foreach (var r in rs) { r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On; r.receiveShadows = true; }
+            foreach (var r in own) { if (r.transform == t) r.enabled = false; else r.gameObject.SetActive(false); }
         }
     }
 
