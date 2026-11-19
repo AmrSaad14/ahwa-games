@@ -7,6 +7,9 @@
   <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
   <!-- a rough location (city-sized), only to find the player's governorate for its ranking -->
   <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+  <!-- Google Play's Families policy (children play too): no advertising ID. The ads SDK asks for it; it's taken out,
+       and Unity Ads is set to "directed to children" (no personalised ads) on its dashboard. -->
+  <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
   <application>
     <activity android:name="com.unity3d.player.UnityPlayerActivity"
               android:theme="@style/UnityThemeSelector"

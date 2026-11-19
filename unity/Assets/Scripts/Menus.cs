@@ -883,7 +883,7 @@ public partial class Menus : MonoBehaviour
                 string st = p.Str("status"), game = p.Str("game");
                 int id = (int)p.Num("id"), egp = (int)p.Num("egp");
                 bool open = st == "unclaimed";
-                var row = Row(rows, open ? 100 : 40, open ? new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.16f) : Card);
+                var row = Row(rows, open ? 130 : 40, open ? new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.16f) : Card);
                 var what = Ui.Label(row, "", 15, Color.white, StartAlign, Ui.Bold);
                 var tt = Titles.List.Find(x => x.monthly == game);
                 what.Set(egp + " " + Loc.T("جنيه") + "  ·  " + (tt != null ? tt.Name : game) + "  ·  " + p.Str("month"));
@@ -904,9 +904,16 @@ public partial class Menus : MonoBehaviour
                 }
                 var field = WalletField(row);
                 ((RectTransform)field.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(300, 42), new Vector2(Loc.En ? -90 : 90, 8));
+                // a phone number is personal data: only from a grown-up (Google Play's Families policy, COPPA)
+                var adult = Ui.Button(row, "☐ " + Loc.T("عندي ١٨ سنة أو أكتر، أو ولي أمري بيكتب الرقم"), new Color(1, 1, 1, 0.06f), Color.white, 11, null);
+                ((RectTransform)adult.transform).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(580, 22), new Vector2(0, 54));
+                bool grown = false;
+                var adultText = adult.GetComponentInChildren<Text>();
+                adult.onClick.AddListener(() => { Sfx.Tap(); grown = !grown; adultText.Set((grown ? "☑ " : "☐ ") + Loc.T("عندي ١٨ سنة أو أكتر، أو ولي أمري بيكتب الرقم")); });
                 var go = Ui.Button(row, "ابعت الرقم", Ui.Gold, Ui.Ink, 16, () =>
                 {
                     Sfx.Tap();
+                    if (!grown) { app.Toast(Loc.T("الجوايز الفلوس لازم يستلمها حد عنده ١٨ سنة أو ولي الأمر")); return; }
                     var phone = field.text.Trim();
                     if (phone.Length < 10) { app.Toast(Loc.T("اكتب رقم فودافون صحيح يبدأ بـ 010")); return; }
                     PlayerPrefs.SetString("wallet", phone);
