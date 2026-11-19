@@ -1,7 +1,8 @@
-// Unity Ads (Plugins/Android/BBAds.java): an interstitial after a game when you play again, and a
-// rewarded video for coins. The game id and ad units come from Resources/AdsConfig.json (written at build time
-// from the UNITY_ADS_* settings; test ads until UNITY_ADS_TEST is 0). No game id: no ads. Off the phone there are no real ads: the game's own
-// short spot stands in for the rewarded video, and the interstitial is skipped.
+// Unity Ads (Plugins/Android/BBAds.java): an interstitial after a game when you play again, and the same skippable
+// ad for coins (watched to the end: the coins). Every ad is child-safe and closable after 5 seconds (Google Play's
+// Families policy; see BBAds.java). The game id and ad units come from Resources/AdsConfig.json (written at build time
+// from the UNITY_ADS_* settings; test ads until UNITY_ADS_TEST is 0). No game id: no ads. Off the phone there are no
+// real ads: the game's own short spot stands in for the coins ad, and the interstitial is skipped.
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -25,7 +26,7 @@ public static class Ads
         }
     }
 
-    /// Ads are offered to this player at all: 16 and over only (Age.cs), and not in the browser.
+    /// Ads are offered at all: everywhere but the browser.
     public static bool Offered
     {
         get
@@ -33,7 +34,7 @@ public static class Ads
 #if UNITY_WEBGL && !UNITY_EDITOR
             return false;
 #else
-            return Age.AdsAge;
+            return true;
 #endif
         }
     }
@@ -42,7 +43,6 @@ public static class Ads
     {
 #if UNITY_ANDROID && !UNITY_EDITOR
         if (started) return;
-        if (!Offered) { Debug.Log("[ads] under 16: no ads, the ads SDK isn't started"); return; }
         try
         {
             var cfg = Resources.Load<TextAsset>("AdsConfig");
@@ -50,7 +50,7 @@ public static class Ads
             string game = d?.Str("game") ?? "", inter = d?.Str("interstitial") ?? "", reward = d?.Str("rewarded") ?? "";
             bool test = d == null || d.Bool("test");
             if (string.IsNullOrEmpty(game)) { Debug.Log("[ads] no Unity Ads game id in this build: ads are off"); return; }
-            using (var c = new AndroidJavaClass("com.ahwa.ads.BBAds")) c.CallStatic("init", "Board Battles", game, inter, reward, test, Age.Minor);
+            using (var c = new AndroidJavaClass("com.ahwa.ads.BBAds")) c.CallStatic("init", "Board Battles", game, inter, reward, test);
             started = true;
             Debug.Log("[ads] started");
         }

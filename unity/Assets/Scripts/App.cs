@@ -149,8 +149,6 @@ public class App : MonoBehaviour
         if (AdFilm.On) { gameObject.AddComponent<AdFilm>().Begin(this); yield break; }
         if (AdFilm.Salon) { gameObject.AddComponent<AdSalon>().Begin(this); yield break; }
         StartCoroutine(FadeIn(homeGroup, 0.6f));
-        // the age first (once): the ads, voice chat, location and money prizes follow it (Age.cs)
-        if (!Age.Known) yield return Age.Ask(this);
         Ads.Begin();
 
         if (Recording) StartCoroutine(Shots());

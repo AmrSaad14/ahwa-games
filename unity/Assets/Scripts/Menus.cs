@@ -894,11 +894,6 @@ public partial class Menus : MonoBehaviour
                 stl.rectTransform.Place(new Vector2(Loc.En ? 1 : 0, 1), new Vector2(Loc.En ? 1 : 0, 1), new Vector2(170, 36), new Vector2(Loc.En ? -10 : 10, -2));
                 if (!open) continue;
                 if (!string.IsNullOrEmpty(p.Str("note"))) { var nt = Ui.Label(row, "", 11, new Color(1f, 0.7f, 0.6f), TextAnchor.MiddleCenter); nt.Set(p.Str("note")); nt.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(580, 16), new Vector2(0, -34)); }
-                if (Age.Minor)
-                {
-                    Ui.Label(row, "جوايز الفلوس لـ ١٨ سنة وأكبر", 13, Color.white, TextAnchor.MiddleCenter, Ui.Bold).rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(580, 40), new Vector2(0, 8));
-                    continue;
-                }
                 if (!signed)
                 {
                     var hint = Ui.Label(row, "سجّل دخول الأول عشان نقدر نحولك الجايزة", 13, Color.white, TextAnchor.MiddleCenter, Ui.Bold);

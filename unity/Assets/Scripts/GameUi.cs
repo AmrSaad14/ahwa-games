@@ -918,7 +918,7 @@ public class GameUi : MonoBehaviour
     {
         ShowWatching(v);
         // voice chat is for people: not in a practice game against the computer
-        bool mic = !app.PracticeGame && !Age.Child;   // no voice chat for children (Age.cs)
+        bool mic = !app.PracticeGame;
         if (micButton != null && micButton.gameObject.activeSelf != mic) micButton.gameObject.SetActive(mic);
         lobby.gameObject.SetActive(v.phase == "lobby");
         if (v.phase == "lobby") { RenderLobby(v); turnText.Set(""); rollButton.SetActive(false); undoButton.SetActive(false); }

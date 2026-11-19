@@ -1,4 +1,7 @@
-// Unity Ads for Board Battles: an interstitial between games and a rewarded video for coins.
+// Unity Ads for Board Battles: an interstitial between games, and the same kind of ad for coins.
+// Google Play's Families policy (the game is for children too, with no age question): every ad is for a child —
+// not personalised (Unity "non-behavioral") and closable after 5 seconds. Unity's rewarded videos can't be closed,
+// so the coins come from the skippable interstitial instead: watched to the end, the coins; closed early, none.
 // The game calls these from C# (Scripts/Ads.cs); results come back as UnitySendMessage("Board Battles", "OnAdEvent", …):
 //   inter_closed          the interstitial is gone (shown, or there was none to show)
 //   reward_earned         the player watched the rewarded video to the end
@@ -19,7 +22,7 @@ import com.unity3d.player.UnityPlayer;
 
 public class BBAds {
     static String go = "Board Battles", interId = "", rewardId = "", game = "", lastError = "";
-    static boolean interReady, rewardReady, loadingInter, loadingReward, started, initializing, testMode, minor;
+    static boolean interReady, rewardReady, loadingInter, loadingReward, started, initializing, testMode;
 
     static void send(String what) { try { UnityPlayer.UnitySendMessage(go, "OnAdEvent", what); } catch (Throwable ignored) { } }
     static void fail(String why) { lastError = why; send("error:" + why); }
@@ -27,19 +30,18 @@ public class BBAds {
     /** Why the last ad couldn't load or start (shown to the player with "not ready", to find the cause). */
     public static String lastError() { return lastError; }
 
-    /** minor: the player said they are under 18, so their ads aren't personalised. (Under 16 get no ads at all: the
-     *  game doesn't call this for them.) */
-    public static void init(String gameObject, String gameId, String interstitialId, String rewardedId, boolean test, boolean underAge) {
-        go = gameObject; interId = interstitialId; rewardId = rewardedId; game = gameId == null ? "" : gameId; testMode = test; minor = underAge;
+    public static void init(String gameObject, String gameId, String interstitialId, String rewardedId, boolean test) {
+        // the coins come from the skippable ad too (see the top); the rewarded unit is only a fallback
+        go = gameObject; interId = interstitialId; rewardId = interstitialId.isEmpty() ? rewardedId : interstitialId; game = gameId == null ? "" : gameId; testMode = test;
         start();
     }
 
-    /** Google Play's Families policy: the app is for a mixed audience (it asks the age), and players under 18 get
-     *  ads that don't use their behaviour (no interest-based ads, no remarketing). */
+    /** Google Play's Families policy: anyone may be a child, so nobody gets ads that use their behaviour (no
+     *  interest-based ads, no remarketing). */
     static void privacy(android.content.Context c) {
         try {
             MetaData p = new MetaData(c); p.set("privacy.mode", "mixed"); p.commit();
-            MetaData u = new MetaData(c); u.set("user.nonbehavioral", minor); u.commit();
+            MetaData u = new MetaData(c); u.set("user.nonbehavioral", true); u.commit();
         } catch (Throwable t) { lastError = "privacy " + t; }
     }
 
@@ -81,6 +83,12 @@ public class BBAds {
         });
     }
 
+    /** One loaded ad was taken: the coins and the between-games ad may be the same unit, so both wait for the next. */
+    static void used(String id) {
+        if (id.equals(interId)) interReady = false;
+        if (id.equals(rewardId)) rewardReady = false;
+    }
+
     public static boolean interstitialReady() { return interReady; }
     public static boolean rewardedReady() { return rewardReady; }
 
@@ -88,12 +96,12 @@ public class BBAds {
         final Activity a = UnityPlayer.currentActivity;
         a.runOnUiThread(() -> {
             if (!interReady) { send("inter_closed"); loadInter(); return; }
-            interReady = false;
+            used(interId);
             UnityAds.show(a, interId, new UnityAdsShowOptions(), new IUnityAdsShowListener() {
                 @Override public void onUnityAdsShowFailure(String p, UnityAds.UnityAdsShowError e, String msg) { send("inter_closed"); loadInter(); }
                 @Override public void onUnityAdsShowStart(String p) { }
                 @Override public void onUnityAdsShowClick(String p) { }
-                @Override public void onUnityAdsShowComplete(String p, UnityAds.UnityAdsShowCompletionState s) { send("inter_closed"); loadInter(); }
+                @Override public void onUnityAdsShowComplete(String p, UnityAds.UnityAdsShowCompletionState s) { send("inter_closed"); loadInter(); loadReward(); }
             });
         });
     }
@@ -121,7 +129,7 @@ public class BBAds {
         final Activity a = UnityPlayer.currentActivity;
         a.runOnUiThread(() -> {
             if (!rewardReady) { send("reward_unavailable"); loadReward(); return; }
-            rewardReady = false;
+            used(rewardId);
             try { PlayerMetaData md = new PlayerMetaData(a); md.setServerId(userId + ":" + ticket); md.commit(); } catch (Throwable ignored) { }
             UnityAds.show(a, rewardId, new UnityAdsShowOptions(), new IUnityAdsShowListener() {
                 @Override public void onUnityAdsShowFailure(String p, UnityAds.UnityAdsShowError e, String msg) { lastError = "show " + e + " " + msg; send("reward_unavailable"); loadReward(); }
@@ -129,7 +137,7 @@ public class BBAds {
                 @Override public void onUnityAdsShowClick(String p) { }
                 @Override public void onUnityAdsShowComplete(String p, UnityAds.UnityAdsShowCompletionState s) {
                     if (s == UnityAds.UnityAdsShowCompletionState.COMPLETED) send("reward_earned");
-                    send("reward_closed"); loadReward();
+                    send("reward_closed"); loadReward(); loadInter();
                 }
             });
         });

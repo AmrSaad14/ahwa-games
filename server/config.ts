@@ -25,7 +25,9 @@ export const config = {
   trustProxy: process.env.TRUST_PROXY === '1',             // read client IPs from X-Forwarded-For (behind Caddy/nginx)
   maxConnectionsPerIp: num(process.env.MAX_CONNECTIONS_PER_IP, 20),
   // Rewarded ads: ADS_SSV=1 once AdMob's server-side verification calls PUBLIC_URL/ads/ssv (README → Ads)
-  adsSsv: process.env.ADS_SSV === '1' || !!process.env.UNITY_ADS_SECRET,
+  // (Unity's server callback only comes for rewarded videos; the app now earns coins from the skippable ad, which
+  // Google Play's Families policy asks for, so the app reports the watched ad itself, once per ticket)
+  adsSsv: process.env.ADS_SSV === '1',
   unityAdsSecret: process.env.UNITY_ADS_SECRET || '',
   // online games (matchmaking, rooms, invitations, the tournament) need a signed-in account; guests play the
   // computer on their phone. GUESTS_ONLINE=1 lets guests play online too (the default when not in production).

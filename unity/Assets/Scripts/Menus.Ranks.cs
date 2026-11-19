@@ -206,7 +206,7 @@ public partial class Menus
     static bool CanLocate()
     {
 #if UNITY_ANDROID && !UNITY_EDITOR
-        return !Age.Child;   // no location for children (Age.cs): they are not placed in a governorate
+        return true;
 #else
         return false;
 #endif
