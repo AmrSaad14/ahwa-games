@@ -16,7 +16,7 @@ function page(title: string, body: string): string {
 <nav><a href="privacy">Privacy</a><a href="terms">Terms</a><a href="delete-account">Delete account</a></nav>${body}</main></body></html>`;
 }
 
-const UPDATED = '7 November 2026';
+const UPDATED = '19 November 2026';
 
 /** The monthly prizes right now (the dashboard's settings). */
 export interface PrizeTerms { enabled: boolean; egp: number; claimDays?: number }
@@ -31,14 +31,15 @@ export function privacyPage(c?: PrizeTerms): string {
 <li><b>Purchases:</b> what you bought on Google Play and its order number, to credit it once. We never see your card or payment details.</li>
 <li><b>Messages to support</b> and reports you send about other players, with your player id.</li>
 <li><b>Notifications:</b> your device's push token, if you allow reminders.</li>
+<li><b>Your governorate:</b> if you allow it, your phone's rough location (city-sized) is used once to find your governorate for its ranking; we keep the governorate, not the location.</li>
 ${c?.enabled ? '<li><b>Monthly prizes:</b> if you win one, the Vodafone Cash number you give us, the amount and the date, to pay you and keep a record.</li>' : ''}</ul>
 <h2>What we don't keep</h2><ul><li>Voice chat goes directly between the players' phones (or through our relay when a direct route is blocked); it is never recorded.</li>
 <li>Table chat is quick phrases and emojis, not stored after the game.</li><li>We don't sell your data and don't use it for anything but running the game.</li></ul>
 <h2>Services we use</h2><ul>
-<li><b>Google Play</b> (purchases, the install referrer for invite codes), <b>Unity Ads</b> (ads; Unity may use your device's advertising id, approximate location from your IP address and device information to show and measure ads, see <a href="https://unity.com/legal/game-player-and-app-user-privacy-policy">Unity's privacy policy</a>; you can reset or delete your advertising id in your phone's settings), <b>Firebase Cloud Messaging</b> (reminders).</li>
+<li><b>Google Play</b> (purchases, the install referrer for invite codes), <b>Unity Ads</b> (ads; the game is set up for children: ads are not personalised, there is no interest-based advertising or remarketing, and the app does not use your device's advertising id; Unity uses device information and approximate location from your IP address only to deliver and measure ads, see <a href="https://unity.com/legal/game-player-and-app-user-privacy-policy">Unity's privacy policy</a>), <b>Firebase Cloud Messaging</b> (reminders).</li>
 <li><b>Google</b> and <b>Apple</b> sign-in, and an SMS provider for mobile-number codes, only when you choose them.</li></ul>
 <h2>How long</h2><p>As long as your account exists. Delete it any time: in the app, Settings → Delete my account, or on the <a href="delete-account">delete-account page</a>. Everything above is removed; purchase records the law requires us to keep are kept for that time only.</p>
-<h2>Children</h2><p>The game is for players 13 and over${c?.enabled ? '; the monthly cash prizes are for adults (18+) living in Egypt' : ''}. Coins can't be cashed out.</p>
+<h2>Children</h2><p>Board Battles is for players of all ages, including children, and follows Google Play's Families policy: every ad is child-appropriate and not personalised, ads can be closed, and we don't use advertising ids. We collect only what the game needs to work (above); signing in, notifications, the microphone and the governorate are all optional. ${c?.enabled ? 'Monthly cash prizes are for adults (18+) living in Egypt: a prize number must be given by someone 18 or over or by a parent. ' : ''}Coins can't be cashed out. A parent can ask us to delete a child's account at any time on the <a href="delete-account">delete-account page</a> or through Settings → Contact support.</p>
 <h2>Contact</h2><p>In the app: Settings → Contact support.</p>
 <div class="ar"><h1>سياسة الخصوصية</h1>
 <h2>بنحتفظ بإيه</h2><ul><li>حسابك في اللعبة: رقم اللاعب، الاسم والشخصية، الكوينز، المستوى، النتايج، السكينز، الصحاب، المهام والموسم.</li>
@@ -46,7 +47,9 @@ ${c?.enabled ? '<li><b>Monthly prizes:</b> if you win one, the Vodafone Cash num
 <li>المشتريات من Google Play ورقم الطلب، عشان تتحسب مرة واحدة. عمرنا ما بنشوف بيانات الكارت.</li>
 <li>رسايل الدعم والبلاغات، وتوكن الإشعارات لو سمحت بيها.</li>${c?.enabled ? '<li>لو كسبت جايزة الشهر: رقم فودافون كاش اللي بتكتبه، عشان نحولك ونحتفظ بسجل.</li>' : ''}</ul>
 <h2>مش بنحتفظ بـ</h2><ul><li>الكلام الصوتي مش بيتسجل. شات الترابيزة مش بيتخزن. مش بنبيع بياناتك.</li></ul>
-<h2>خدمات بنستخدمها</h2><ul><li>Google Play، Unity Ads للإعلانات، Firebase للإشعارات، وتسجيل الدخول بجوجل أو أبل أو الموبايل لو اخترته.</li></ul>
+<h2>خدمات بنستخدمها</h2><ul><li>Google Play، Unity Ads للإعلانات (إعلانات مناسبة للأطفال ومش مخصصة، ومن غير معرّف الإعلانات)، Firebase للإشعارات، وتسجيل الدخول بجوجل أو أبل أو الموبايل لو اخترته.</li>
+<li>لو سمحت: موقعك التقريبي مرة واحدة عشان نعرف محافظتك (بنحتفظ بالمحافظة بس).</li></ul>
+<h2>الأطفال</h2><p>اللعبة لكل الأعمار ومتوافقة مع سياسة العائلات في Google Play. جوايز الفلوس للكبار (١٨ سنة وأكبر) أو ولي الأمر.</p>
 <h2>امسح حسابك</h2><p>من اللعبة: الإعدادات ← امسح حسابي، أو من <a href="delete-account">صفحة مسح الحساب</a>.</p></div>`);
 }
 
