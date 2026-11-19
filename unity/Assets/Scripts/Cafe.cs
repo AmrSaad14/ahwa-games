@@ -708,7 +708,7 @@ public class Cafe : MonoBehaviour
         if (look != null)
         {
             look.bloom = on ? 0.08f : 0.35f; look.threshold = on ? 1.8f : 1.1f;
-            look.exposure = on ? 0.9f : 0.95f;
+            look.exposure = on ? 0.9f : 1.06f;   // (the café floor and walls are darker wood and clay now)
             // at the table, the café floor around the board falls away into shadow, so the eye stays on the game
             look.vignette = on ? 0.9f : 0.5f;
             look.saturation = on ? 0.98f : 1.08f;
