@@ -30,8 +30,8 @@ public partial class Menus
     /// From "welcome": a guest signed in to Play Games on this phone is signed in quietly, once per launch.
     void OnLoginPlayGames(Dictionary<string, object> login)
     {
+        // (only remembered: Play Games signs you in when you choose it under "Sign in", never by itself)
         pgClient = login?.Str("playGames");
-        if (!pgTriedQuiet && PlayGamesOn) { pgTriedQuiet = true; StartCoroutine(PlayGamesIn(false)); }
     }
 
     /// ask: the player tapped the button (Play Games shows its own sign-in); otherwise only if already signed in.

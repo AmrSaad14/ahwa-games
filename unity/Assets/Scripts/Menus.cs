@@ -325,7 +325,7 @@ public partial class Menus : MonoBehaviour
             case "welcome":
                 var login = m.Obj("login");
                 if (login != null) { googleOn = login.Bool("google"); appleOn = login.Bool("apple"); }
-                OnLoginPlayGames(login);   // a guest signed in to Play Games on this phone: their account at once
+                OnLoginPlayGames(login);   // (which sign-ins the server offers; Play Games only when chosen)
                 // the connection dropped while the video played: tell the new one (the old message was lost)
                 if (pendingAd != null) app.Send(new Dictionary<string, object> { ["t"] = "adWatched", ["ticket"] = pendingAd });
                 if (pendingTicket != null) { var tk = pendingTicket; pendingTicket = null; app.Send(new Dictionary<string, object> { ["t"] = "ticket", ["ticket"] = tk }); }
