@@ -546,7 +546,7 @@ public class Cafe : MonoBehaviour
         // grows to fill the screen ("Expand"), so its buttons' share of the width depends on the screen's shape
         float ui = Mathf.Min(Screen.width / 844f, Screen.height / 390f), w = Mathf.Max(1, Screen.width);
         // (the rewards and the shop down the left; your card at the top right; the big button and the games along the bottom)
-        float left = Mathf.Min(0.2f, 84 * ui / w), right = Mathf.Min(0.1f, 24 * ui / w), top = Mathf.Min(0.3f, 84 * ui / Mathf.Max(1, Screen.height));
+        float left = Mathf.Min(0.2f, 84 * ui / w), right = Mathf.Min(0.1f, 24 * ui / w), top = Mathf.Min(0.3f, 76 * ui / Mathf.Max(1, Screen.height));
         float bottom = Mathf.Min(0.32f, 94 * ui / Mathf.Max(1, Screen.height));
         const float el = 56f;   // degrees above the floor
         float e = el * Mathf.Deg2Rad;
@@ -556,11 +556,13 @@ public class Cafe : MonoBehaviour
         var pts = new List<Vector3>();
         foreach (var kv in tables)
         {
-            var t = kv.Value; float hz = kv.Key == "estimation" ? 5f : 4.2f;   // chairs at its front and back too
-            foreach (float y in new[] { 0f, 2.6f })
+            // (held close: the table, its chairs' seats and the people's shoulders; a little of a chair's back may
+            // touch the edge, but every table and everyone at it is in the picture)
+            var t = kv.Value; float hz = kv.Key == "estimation" ? 4.3f : 3.6f;   // chairs at its front and back too
+            foreach (float y in new[] { 0f, 1.6f })
                 foreach (float sx in new[] { -1f, 1f })
                     foreach (float sz in new[] { -1f, 1f })
-                        pts.Add(new Vector3(t.position.x, center.y, t.position.z) + side * 5f * sx + front * hz * sz + Vector3.up * y);
+                        pts.Add(new Vector3(t.position.x, center.y, t.position.z) + side * 4.4f * sx + front * hz * sz + Vector3.up * y);
         }
         var tr = cam.transform; var p0 = tr.position; var r0 = tr.rotation;
         Vector3 aim = center;
