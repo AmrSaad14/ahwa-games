@@ -151,7 +151,7 @@ public partial class Menus : MonoBehaviour
     }
 
     /// Your daily streak (days in a row you collected the daily reward), on the rewards button.
-    int Streak()
+    int StreakDays()
     {
         var d = user?.Obj("daily");
         if (d == null) return 0;
@@ -162,7 +162,7 @@ public partial class Menus : MonoBehaviour
     {
         if (rewardsDot == null) return;
         rewardsDot.SetActive(dailyDot.activeSelf || missionsDot.activeSelf || (SeasonOn && seasonDot.activeSelf));
-        int st = Streak();
+        int st = StreakDays();
         streakBadge.gameObject.SetActive(st >= 2);
         if (st >= 2) streakText.text = st.ToString();
     }
@@ -196,7 +196,7 @@ public partial class Menus : MonoBehaviour
         }
         var daily = user?.Obj("daily");
         bool ready = daily != null && daily.Bool("ready");
-        int st = Streak();
+        int st = StreakDays();
         Row("gift", "الجايزة اليومية", ready ? "جايزة النهارده مستنياك" : st >= 2 ? st + " " + Loc.T("أيام ورا بعض، كمّل بكرة") : "ارجع بكرة لجايزة أكبر", dailyDot.activeSelf, OpenDaily, st);
         Row("target", "المهام", "خلّص مهام النهارده واكسب كوينز", missionsDot.activeSelf, OpenMissions);
         if (SeasonOn) Row("pass", "الموسم", "نقط الموسم وجوايزه", seasonDot.activeSelf, () => OpenSeason());
