@@ -1,0 +1,29 @@
+# Downloads free CC0 assets (Poly Haven textures and models) for design previews and publishes them as the
+# polyhaven-assets release. Nothing goes into the game from here.
+name: Fetch free assets
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['tools/assets/**', '.github/workflows/fetch-assets.yml']
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download from Poly Haven
+        run: python3 tools/assets/polyhaven.py polyhaven
+      - name: Pack
+        run: |
+          cd polyhaven
+          zip -qr ../polyhaven-textures.zip textures textures-index.json
+          zip -qr ../polyhaven-models.zip models models-index.json
+          cd .. && ls -la *.zip
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete polyhaven-assets --yes --cleanup-tag || true
+          gh release create polyhaven-assets polyhaven-textures.zip polyhaven-models.zip --title "Poly Haven assets (CC0, for previews)" --notes "Free CC0 textures and models from polyhaven.com, fetched for design previews."
