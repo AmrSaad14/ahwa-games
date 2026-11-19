@@ -419,6 +419,8 @@ export class Hub {
         return;
       }
       /* ---------- friends ---------- */
+      /* ---------- the café floor: how many people play each game right now (the tables' badges) ---------- */
+      case 'lobby': return s.conn.send({ t: 'lobby', playing: this.playingByGame() });
       case 'friends': return this.sendFriends(uid);
       case 'friendAdd': {
         if (!this.friendLimiter.allow(uid)) return err('slow_down');
@@ -1140,6 +1142,16 @@ export class Hub {
       return { uid, name: u?.name ?? '?', coins: u?.coins ?? 0, table: t && !t.closed ? t.id : null, mode: t && !t.closed ? t.mode : null };
     });
     return { tables, online, queued: [...this.queues.entries()].map(([k, q]) => ({ key: k, players: q.length })).filter(q => q.players > 0) };
+  }
+  /** Real people at a game right now (online, at an open table that has started), for each game. */
+  playingByGame(): Record<string, number> {
+    const n: Record<string, number> = {};
+    for (const t of this.tables.values()) {
+      if (t.closed || t.phase === 'lobby') continue;
+      const k = gameOf(t.mode);
+      n[k] = (n[k] ?? 0) + t.humans().filter(h => h.online).length;
+    }
+    return n;
   }
   /** Closes a player's connection (the app reconnects by itself: a fresh start for a stuck player). */
   kick(uid: string) { const ss = this.byUser.get(uid); if (!ss) return false; ss.conn.close(4000, 'kicked'); return true; }
