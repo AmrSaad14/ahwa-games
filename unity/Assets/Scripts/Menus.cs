@@ -62,20 +62,21 @@ public partial class Menus : MonoBehaviour
         dailyDot = Dot(RailButton(kept, 0, "gift", "يومي", OpenDaily));
         missionsDot = Dot(RailButton(kept, 1, "target", "المهام", OpenMissions));
         seasonButton = RailButton(kept, 2, "pass", "الموسم", () => OpenSeason()); seasonDot = Dot(seasonButton);
-        // your friends and your collection: two buttons in your card, top right
+        // your collection: a small button in your card, top right
         var card = app.MeCard;
-        meButtons[0] = MeButton(card, 0, "friends", OpenFriends); friendsDot = Dot(meButtons[0]);
-        meButtons[1] = MeButton(card, 1, "chest", () => OpenCollection(0));
+        meButtons[0] = MeButton(card, 0, "chest", () => OpenCollection(0));
         BuildWheelButton(extras);
         // along the top, beside the logo: the tournament, the leaderboard, how to play, settings
-        var top = Ui.Rect("Top", extras).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(240, 54), new Vector2(82, -8));
+        var top = Ui.Rect("Top", extras).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(300, 54), new Vector2(82, -8));
         topButtons.Add(tourneyButton = TopButton(top, 0, "cup", "البطولة", () => OpenTourney())); tourneyDot = Dot(tourneyButton);
         topButtons.Add(TopButton(top, 1, "trophy", "المتصدرين", () => OpenLeaders(0)));
         topButtons.Add(TopButton(top, 2, "help", "طريقة اللعب", () => OpenHowTo(0)));
         topButtons.Add(TopButton(top, 3, "settings", "الإعدادات", OpenSettings));
+        // your friends, right there to invite to a game
+        topButtons.Add(friendsButton = TopButton(top, 4, "friends", "صحابك", OpenFriends)); friendsDot = Dot(friendsButton);
         // the monthly prize: shown when you won one (to give your Vodafone Cash number), or one is on its way
-        var prize = Chip(extras, "trophy", "جايزتك", new Vector2(-252, -62), 128, new Color32(0xc0, 0x1f, 0x2a, 0xf0), Color.white, () => { Sfx.Tap(); OpenPrizes(); });
-        prizeChip = prize.gameObject; prizeChipText = prize.GetComponentInChildren<Text>(); prizeChip.SetActive(false);
+        var prize = Tile(extras, "trophy", "جايزتك", new Color32(0xc0, 0x1f, 0x2a, 0xf0), Color.white, () => { Sfx.Tap(); OpenPrizes(); }, out prizeChipText);
+        prizeChip = prize.gameObject; prizeChip.SetActive(false);
         // an event on (Ramadan, Eid…): a banner at the top with what's special
         var evb = Ui.Button(extras, "", new Color32(0x3a, 0x1c, 0x66, 0xf0), Ui.Gold, 13, () => { Sfx.Tap(); OpenEvent(); });
         eventChip = ((RectTransform)evb.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(300, 38), new Vector2(0, -112));
@@ -86,14 +87,15 @@ public partial class Menus : MonoBehaviour
         eventChip.gameObject.SetActive(false);
 
         // along the top, left of your name and coins: watch an ad, sign in, language
-        var ad = Chip(extras, "video", "+2K", new Vector2(-252, -10), 122, new Color32(0x2f, 0x6b, 0x3a, 0xf0), Color.white, WatchAd);
+        var ad = Tile(extras, "video", "+2K", new Color32(0x2f, 0x6b, 0x3a, 0xf0), Color.white, WatchAd, out adText);
 #if UNITY_WEBGL && !UNITY_EDITOR
         ad.gameObject.SetActive(false);   // no video ads in the browser (they are in the app)
 #endif
-        adText = ad.GetComponentInChildren<Text>(); adRect = (RectTransform)ad.transform; prizeRect = (RectTransform)prize.transform; homeRect = home;
+        adRect = ad; prizeRect = prize; homeRect = home;
         // (the language is changed in Settings only)
-        var sign = Chip(home, "google", "دخول", new Vector2(-388, -10), 92, new Color(1, 1, 1, 0.94f), Ui.Ink, SignIn);
-        signChip = sign.gameObject; signText = sign.GetComponentInChildren<Text>();
+        // signing in: a gold button in the game's own style (Google, Apple, phone or e-mail are chosen after it)
+        var sign = Tile(home, "user", "دخول", Ui.Gold, Ui.Ink, SignIn, out signText);
+        signChip = sign.gameObject;
         LayoutTop();
 
         Loc.Changed += () => { refreshOpen?.Invoke(); };
@@ -104,7 +106,7 @@ public partial class Menus : MonoBehaviour
     /// A red dot in the corner of a button: something is waiting there.
     // the home screen's buttons, so a section the dashboard switched off can be hidden and the rest close up
     readonly List<RectTransform> railButtons = new List<RectTransform>(), topButtons = new List<RectTransform>();
-    RectTransform seasonButton, tourneyButton;
+    RectTransform seasonButton, tourneyButton, friendsButton;
     /// The tournament section and the season pass, as the server says (the dashboard switches them).
     public bool TourneyOn { get; private set; } = true;
     public bool SeasonOn { get; private set; } = true;
@@ -116,9 +118,9 @@ public partial class Menus : MonoBehaviour
         seasonButton.gameObject.SetActive(SeasonOn);
         tourneyButton.gameObject.SetActive(TourneyOn);
         int k = 0;
-        foreach (var b in railButtons) if (b.gameObject.activeSelf) b.anchoredPosition = new Vector2(0, -(k++) * 48);
+        foreach (var b in railButtons) if (b.gameObject.activeSelf) b.anchoredPosition = new Vector2(0, -(k++) * (Btn.y + 4));
         k = 0;
-        foreach (var b in topButtons) if (b.gameObject.activeSelf) b.anchoredPosition = new Vector2((k++) * 60, 0);
+        foreach (var b in topButtons) if (b.gameObject.activeSelf) b.anchoredPosition = new Vector2((k++) * (Btn.x + 4), 0);
     }
 
     static GameObject Dot(RectTransform b)
@@ -202,10 +204,28 @@ public partial class Menus : MonoBehaviour
         if (SeasonOn) Row("pass", "الموسم", "نقط الموسم وجوايزه", seasonDot.activeSelf, () => OpenSeason());
     }
 
+    /// Every square button on the home screen has this size (the top row, the left side, the ones by your card).
+    static readonly Vector2 Btn = new Vector2(56, 52);
+
+    /// A square button by your card at the top right (sign in, an ad for coins, your prize): the same size and
+    /// look as the others; LayoutTop puts the ones showing in a row.
+    RectTransform Tile(RectTransform parent, string icon, string label, Color bg, Color fg, Action onClick, out Text text)
+    {
+        var b = Ui.Button(parent, "", bg, fg, 10, () => { onClick(); });
+        var r = ((RectTransform)b.transform).Place(new Vector2(1, 1), new Vector2(1, 1), Btn, new Vector2(-252, -8));
+        b.gameObject.AddComponent<Outline>().effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.45f);
+        var ic = Ui.Picture(r, "Icon", Icon(icon)); ic.color = fg;
+        ic.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(24, 24), new Vector2(0, -6));
+        text = Ui.Label(r, label, 9, fg, TextAnchor.MiddleCenter, Ui.Bold);
+        text.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(Btn.x + 4, 16), new Vector2(0, 2));
+        FitText.OneLine(text);
+        return r;
+    }
+
     RectTransform TopButton(RectTransform row, int i, string icon, string label, Action onClick)
     {
         var b = Ui.Button(row, "", Ui.Panel, Ui.GoldLight, 10, () => { Sfx.Tap(); onClick(); });
-        var r = ((RectTransform)b.transform).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(56, 52), new Vector2(i * 60, 0));
+        var r = ((RectTransform)b.transform).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(Btn.x, Btn.y), new Vector2(i * (Btn.x + 4), 0));
         b.gameObject.AddComponent<Outline>().effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.3f);
         var ic = Ui.Picture(r, "Icon", Icon(icon)); ic.color = Ui.Gold;
         ic.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(24, 24), new Vector2(0, -6));
@@ -217,12 +237,12 @@ public partial class Menus : MonoBehaviour
     RectTransform RailButton(RectTransform rail, int i, string icon, string label, Action onClick)
     {
         var b = Ui.Button(rail, "", Ui.Panel, Ui.GoldLight, 10, () => { Sfx.Tap(); onClick(); });
-        var r = ((RectTransform)b.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(60, 44), new Vector2(0, -i * 48));
+        var r = ((RectTransform)b.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(Btn.x, Btn.y), new Vector2(0, -i * (Btn.y + 4)));
         b.gameObject.AddComponent<Outline>().effectColor = new Color(Ui.Gold.r, Ui.Gold.g, Ui.Gold.b, 0.3f);
         var ic = Ui.Picture(r, "Icon", Icon(icon)); ic.color = Ui.Gold;
-        ic.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(22, 22), new Vector2(0, -4));
+        ic.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(24, 24), new Vector2(0, -6));
         var t = Ui.Label(r, label, 9, Ui.GoldLight, TextAnchor.MiddleCenter, Ui.Bold);
-        t.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(60, 16), new Vector2(0, 1));
+        t.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(Btn.x + 4, 16), new Vector2(0, 2));
         return r;
     }
 
@@ -269,6 +289,7 @@ public partial class Menus : MonoBehaviour
         adReward = (long)u.Num("adReward", adReward);
         adText.Set(left > 0 ? AdLabel : Loc.T("إعلان") + " 0");
         adRect.gameObject.SetActive(Ads.Offered);   // children see no ads (Age.cs)
+        LayoutTop();
         var eq = u.Obj("equip");
         Skins.SetUser(u);
         Billing.SetUser(u.Str("id"));
@@ -843,12 +864,14 @@ public partial class Menus : MonoBehaviour
     {
         if (homeRect == null || adRect == null) return;
         lastWidth = homeRect.rect.width;
-        int n = 0; foreach (var b in topButtons) if (b.gameObject.activeSelf) n++;
-        float topEnd = 82 + n * 60;
-        bool narrow = signChip.activeSelf && lastWidth > 0 && lastWidth - 480 < topEnd + 6;
-        ((RectTransform)signChip.transform).anchoredPosition = narrow ? new Vector2(-252, -10) : new Vector2(-388, -10);
-        adRect.anchoredPosition = narrow ? new Vector2(-252, -58) : new Vector2(-252, -10);
-        prizeRect.anchoredPosition = narrow ? new Vector2(-356, -64) : new Vector2(-252, -62);
+        // the square buttons by your card, right to left: sign in, the ad, your prize (the ones showing)
+        float x = -252;
+        foreach (var r in new[] { (RectTransform)signChip.transform, adRect, prizeRect })
+        {
+            if (!r.gameObject.activeSelf) continue;
+            r.anchoredPosition = new Vector2(x, -8);
+            x -= Btn.x + 4;
+        }
     }
 
     float dailyTick;
