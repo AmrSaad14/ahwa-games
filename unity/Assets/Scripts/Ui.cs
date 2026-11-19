@@ -183,6 +183,22 @@ public static class Ui
         return t;
     }
 
+    /// A soft shade, dark at the left edge fading to nothing at the right (smoothly): behind the home screen's
+    /// button columns, so they read clearly over the café.
+    static Texture2D fade;
+    public static Texture2D Fade
+    {
+        get
+        {
+            if (fade != null) return fade;
+            fade = new Texture2D(128, 1, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            var px = new Color32[128];
+            for (int x = 0; x < 128; x++) { float u = x / 127f, a = 1 - u * u * (3 - 2 * u); px[x] = new Color32(0, 0, 0, (byte)(a * 255)); }
+            fade.SetPixels32(px); fade.Apply();
+            return fade;
+        }
+    }
+
     /// The splash background: bordeaux, brighter in the middle.
     public static Texture2D Radial(Color inner, Color mid, Color outer, int size = 256)
     {

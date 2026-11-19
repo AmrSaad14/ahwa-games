@@ -893,6 +893,25 @@ public class App : MonoBehaviour
         homeGroup = root.gameObject.AddComponent<CanvasGroup>();
         homeGroup.alpha = 0;
 
+        // soft shades behind the button columns (left and right) and the top bar, so they stand out from the café
+        void Shade(Vector2 anchorMin, Vector2 anchorMax, Vector2 pivot, Vector2 size, float turn, float alpha)
+        {
+            var sh = Ui.Picture(ui.transform, "Shade", Ui.Fade);
+            sh.raycastTarget = false; sh.color = new Color(0.07f, 0.03f, 0.02f, alpha);
+            var r = sh.rectTransform; r.SetParent(root, false); r.SetAsFirstSibling();
+            r.anchorMin = anchorMin; r.anchorMax = anchorMax; r.pivot = pivot; r.sizeDelta = size; r.anchoredPosition = Vector2.zero;
+            r.localRotation = Quaternion.Euler(0, 0, turn);
+        }
+        Shade(new Vector2(0, 0), new Vector2(0, 1), new Vector2(0, 0.5f), new Vector2(150, 0), 0, 0.55f);          // left
+        Shade(new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 0.5f), new Vector2(240, 0), 180, 0.5f);        // right (turned round)
+        // (the top: a band across, turned to fade downward)
+        var top = Ui.Picture(root, "ShadeTop", Ui.Fade);
+        top.raycastTarget = false; top.color = new Color(0.07f, 0.03f, 0.02f, 0.45f);
+        top.rectTransform.SetAsFirstSibling();
+        top.rectTransform.anchorMin = new Vector2(0.5f, 1); top.rectTransform.anchorMax = new Vector2(0.5f, 1);
+        top.rectTransform.pivot = new Vector2(0, 0.5f); top.rectTransform.anchoredPosition = Vector2.zero;
+        top.rectTransform.sizeDelta = new Vector2(110, 4000); top.rectTransform.localRotation = Quaternion.Euler(0, 0, -90);
+
         // the logo, top left
         var logo = Ui.Picture(root, "Logo", Resources.Load<Texture2D>("UI/Logo"));
         logo.rectTransform.Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(66, 77), new Vector2(8, -4));

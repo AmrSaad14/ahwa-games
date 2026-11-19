@@ -327,7 +327,7 @@ public class ChessBoard : Board
         var pts = new List<Vector2>();
         foreach (var p in o) if (pts.Count == 0 || (pts[pts.Count - 1] - p).sqrMagnitude > 1e-5f) pts.Add(p);
         if ((pts[0] - pts[pts.Count - 1]).sqrMagnitude < 1e-5f) pts.RemoveAt(pts.Count - 1);
-        var m = Art.Extrude(pts, 0.3f);
+        var m = Inflate(pts, 0.15f, 0.13f);
         // turn it so the muzzle (shape -x) faces +z, the thickness runs along x; then carve it narrower to the front and top
         var vs = m.vertices;
         for (int i = 0; i < vs.Length; i++)
@@ -340,6 +340,75 @@ public class ChessBoard : Board
         }
         m.vertices = vs;   // (x, y, z) → (z, y, −x) is a turn, not a mirror: the triangles still face out
         m.RecalculateNormals(); m.RecalculateBounds();
+        return m;
+    }
+
+    /// A flat outline blown up like a cushion: thickest in the middle, rounding off to a soft edge all the way
+    /// round (so the horse's head has a rounded cheek and neck, not the flat sides of a cut-out). The outline lies
+    /// in x/y; the thickness (up to ±half) runs along z, reaching full thickness `round` in from the edge.
+    static Mesh Inflate(List<Vector2> outline, float half, float round)
+    {
+        float minX = float.MaxValue, minY = float.MaxValue, maxX = float.MinValue, maxY = float.MinValue;
+        foreach (var p in outline) { minX = Mathf.Min(minX, p.x); maxX = Mathf.Max(maxX, p.x); minY = Mathf.Min(minY, p.y); maxY = Mathf.Max(maxY, p.y); }
+        const int N = 44;
+        float step = Mathf.Max(maxX - minX, maxY - minY) / (N - 1);
+        int nx = Mathf.CeilToInt((maxX - minX) / step) + 3, ny = Mathf.CeilToInt((maxY - minY) / step) + 3;
+        float ox = minX - step, oy = minY - step;
+        bool Inside(Vector2 q)
+        {
+            bool c = false;
+            for (int i = 0, j = outline.Count - 1; i < outline.Count; j = i++)
+            {
+                var a = outline[i]; var b = outline[j];
+                if ((a.y > q.y) != (b.y > q.y) && q.x < (b.x - a.x) * (q.y - a.y) / (b.y - a.y) + a.x) c = !c;
+            }
+            return c;
+        }
+        Vector2 Nearest(Vector2 q, out float dist)
+        {
+            Vector2 best = q; dist = float.MaxValue;
+            for (int i = 0, j = outline.Count - 1; i < outline.Count; j = i++)
+            {
+                var a = outline[j]; var b = outline[i]; var ab = b - a;
+                float t = Mathf.Clamp01(Vector2.Dot(q - a, ab) / Mathf.Max(1e-8f, ab.sqrMagnitude));
+                var c = a + ab * t; float d = (q - c).magnitude;
+                if (d < dist) { dist = d; best = c; }
+            }
+            return best;
+        }
+        var inside = new bool[nx, ny];
+        for (int i = 0; i < nx; i++) for (int j = 0; j < ny; j++) inside[i, j] = Inside(new Vector2(ox + i * step, oy + j * step));
+        // a cell is drawn when any corner is inside; its corners outside are pulled onto the outline (a smooth edge)
+        var verts = new List<Vector3>(); var tris = new List<int>();
+        var index = new int[nx, ny, 2];
+        for (int i = 0; i < nx; i++) for (int j = 0; j < ny; j++) { index[i, j, 0] = -1; index[i, j, 1] = -1; }
+        int Vert(int i, int j, int side)
+        {
+            if (index[i, j, side] >= 0) return index[i, j, side];
+            var q = new Vector2(ox + i * step, oy + j * step);
+            float d; var near = Nearest(q, out d);
+            float z;
+            if (!inside[i, j]) { q = near; z = 0; }
+            else { float k = Mathf.Clamp01(d / round); z = half * Mathf.Sqrt(k * (2 - k)); }   // a quarter circle in profile
+            verts.Add(new Vector3(q.x, q.y, side == 0 ? z : -z));
+            return index[i, j, side] = verts.Count - 1;
+        }
+        for (int i = 0; i < nx - 1; i++)
+            for (int j = 0; j < ny - 1; j++)
+            {
+                if (!(inside[i, j] || inside[i + 1, j] || inside[i, j + 1] || inside[i + 1, j + 1])) continue;
+                for (int side = 0; side < 2; side++)
+                {
+                    int a = Vert(i, j, side), b = Vert(i + 1, j, side), c = Vert(i + 1, j + 1, side), e = Vert(i, j + 1, side);
+                    if (side == 0) { tris.Add(a); tris.Add(c); tris.Add(b); tris.Add(a); tris.Add(e); tris.Add(c); }
+                    else { tris.Add(a); tris.Add(b); tris.Add(c); tris.Add(a); tris.Add(c); tris.Add(e); }
+                }
+            }
+        var m = new Mesh();
+        if (verts.Count > 65000) m.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        m.SetVertices(verts); m.SetTriangles(tris, 0);
+        m.RecalculateNormals(); m.RecalculateBounds();
+        Art.FaceOutward3D(m);
         return m;
     }
 

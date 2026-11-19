@@ -1134,7 +1134,7 @@ public partial class Menus : MonoBehaviour
         var nm = Ui.Label(c, Loc.T(s.name), 13, Color.white, TextAnchor.MiddleCenter, Ui.Bold);
         nm.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(w - 4, adsNeed > 0 ? 24 : 36), new Vector2(0, adsNeed > 0 ? -86 : -96));
         nm.horizontalOverflow = HorizontalWrapMode.Wrap;
-        if (adsNeed > 0) { nm.resizeTextForBestFit = true; nm.resizeTextMinSize = 9; nm.resizeTextMaxSize = 13; }
+        if (adsNeed > 0) FitText.OneLine(nm);   // one line, smaller if long (two lines ran under the ad button)
         if (adsNeed > 0 && Ads.Offered)
         {
             int have = Skins.AdsWatched(s.id);

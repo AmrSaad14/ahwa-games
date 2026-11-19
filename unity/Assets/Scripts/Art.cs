@@ -177,7 +177,7 @@ public static class Art
     }
 
     /// Like FaceOut, measured from the centre in all three directions.
-    static void FaceOutward3D(Mesh m)
+    public static void FaceOutward3D(Mesh m)
     {
         var v = m.vertices; var t = m.triangles; var c = m.bounds.center;
         float score = 0;
