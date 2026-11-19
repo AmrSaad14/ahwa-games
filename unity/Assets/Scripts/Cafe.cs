@@ -371,7 +371,7 @@ public class Cafe : MonoBehaviour
         var root = new GameObject("Sign").transform;
         root.SetParent(room, true);
         float h = 5.6f, w = h * tex.width / tex.height;
-        root.position = new Vector3(center.x, wallBottom + 5.5f, center.z) - front * (wall - 0.12f);
+        root.position = new Vector3(center.x, wallBottom + 4.6f, center.z) - front * (wall - 0.12f);
         root.rotation = Quaternion.LookRotation(-front, Vector3.up);   // its face toward the room
         for (int k = 6; k >= 0; k--)
         {
