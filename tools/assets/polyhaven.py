@@ -7,14 +7,18 @@ API = "https://api.polyhaven.com"
 OUT = sys.argv[1] if len(sys.argv) > 1 else "polyhaven"
 UA = {"User-Agent": "asset-fetch/1.0"}
 
-TEXTURES = ["dark_wood", "wood_table_worn", "fine_grained_wood", "plastered_wall", "yellow_plaster_02",
-            "beige_wall_001", "red_plaster_weathered", "patterned_clay_wall", "worn_tile_floor", "tiled_floor_001",
-            "concrete_tiles", "painted_concrete_02"]
+TEXTURES = ["marble_01", "marble_tiles", "marble_mosaic_tiles", "rosewood_veneer1", "black_walnut_veneer_01",
+            "american_walnut_veneer", "olive_veneer", "cherry_veneer", "oak_veneer_01", "patterned_terracotta_tiling",
+            "old_mosaic_floor", "square_floor_patern_01", "floor_pattern_01", "floor_pattern_02", "terrazzo_tiles",
+            "worn_tile_floor", "plastered_wall", "patterned_plaster_wall", "yellow_plaster_02", "clay_plaster",
+            "rough_linen", "velour_velvet", "brown_leather", "metal_plate", "dark_wood", "wood_table_worn"]
 KEYWORDS = ["marble", "brass", "copper", "gold", "fabric", "felt", "leather", "walnut", "oak", "mahogany",
             "rosewood", "veneer", "terrazzo", "mosaic", "tile", "plaster", "carpet", "rug", "baize", "linen"]
-MODELS = ["Chandelier_01", "Chandelier_03", "brass_vase_01", "WoodenChair_01", "painted_wooden_chair_02",
-          "wooden_table_02", "WoodenTable_03", "painted_wooden_table", "folding_wooden_stool", "bar_chair_round_01",
-          "chinese_tea_table"]
+MODELS = ["chess_set", "tea_set_01", "brass_diya_lantern", "lantern_chandelier_01", "Lantern_01", "ceiling_fan",
+          "ornate_mirror_01", "wall_clock", "vintage_radio_transceiver", "brass_pot_01", "brass_pot_02", "brass_goblets",
+          "brass_vase_03", "potted_plant_01", "fancy_picture_frame_01", "Chandelier_01", "Chandelier_03", "WoodenChair_01",
+          "painted_wooden_chair_02", "folding_wooden_stool", "wooden_table_02", "coffee_table_round_01", "vintage_oil_lamp",
+          "jug_01", "mantel_clock_01"]
 MODEL_WORDS = ["lantern", "lamp", "chandelier", "tea", "cup", "glass", "tray", "brass", "copper", "chair", "stool",
                "table", "bench", "vase", "pot", "kettle", "chess", "dice", "game", "clock", "mirror", "frame",
                "plant", "rug", "carpet", "cushion", "radio", "fan", "shelf", "bottle", "jug", "teapot", "hookah"]
@@ -68,11 +72,11 @@ def main():
     want_t = [t for t in TEXTURES if t in tex]
     for k, v in tex.items():
         words = " ".join([k] + (v.get("tags") or []) + (v.get("categories") or [])).lower()
-        if k not in want_t and any(w in words for w in KEYWORDS) and len(want_t) < 60: want_t.append(k)
+        if k not in want_t and any(w in words for w in KEYWORDS) and False: want_t.append(k)
     want_m = [m for m in MODELS if m in mod]
     for k, v in mod.items():
         words = " ".join([k, v.get("name") or ""] + (v.get("tags") or []) + (v.get("categories") or [])).lower()
-        if k not in want_m and any(w in words for w in MODEL_WORDS) and len(want_m) < 45: want_m.append(k)
+        if k not in want_m and any(w in words for w in MODEL_WORDS) and False: want_m.append(k)
     print("textures:", want_t); print("models:", want_m)
     for t in want_t:
         try: print(t, texture(t))
