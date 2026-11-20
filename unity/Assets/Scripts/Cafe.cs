@@ -788,7 +788,7 @@ public class Cafe : MonoBehaviour
     void ResetZoom() { zoom = 1f; pan = Vector3.zero; pinching = false; }
 
     // the café floor (the lobby): two fingers (or the wheel) bring the camera nearer or farther and move it
-    const float LobbyMin = 0.35f, LobbyMax = 1.15f;
+    const float LobbyMin = 0.35f, LobbyMax = 1f;   // never farther than the fitted view: no dark space past the walls
     float lobbyZoom = 1f; Vector3 lobbyPan, lobbyBase, lobbyLook; bool lobbyHasBase;
     void ResetLobbyZoom() { lobbyZoom = 1f; lobbyPan = Vector3.zero; lobbyHasBase = false; }
 
