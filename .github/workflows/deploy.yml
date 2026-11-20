@@ -50,6 +50,8 @@ jobs:
           # the Firebase service-account key as its own secret (paste the downloaded JSON file as it is)
           FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           UNITY_SECRET: ${{ secrets.UNITY_ADS_SECRET }}
+          # the Google Play purchases service-account key as its own secret (paste the downloaded JSON file as it is)
+          PLAY_SA: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT }}
         run: |
           ssh root@"$HOST" 'mkdir -p /opt/board-battles && rm -rf /opt/board-battles/app.new && mkdir /opt/board-battles/app.new'
           git archive --format=tar HEAD -- . ':(exclude)unity' ':(exclude)design' | ssh root@"$HOST" 'tar -x -C /opt/board-battles/app.new'
@@ -57,6 +59,7 @@ jobs:
           { printf '%s\n' "$SERVER_ENV" | tr -d '\r'
             # one line, base64 (the server reads either); a value in SERVER_ENV comes first and wins
             if [ -n "$FIREBASE_SA" ] && ! printf '%s' "$SERVER_ENV" | grep -q '^FIREBASE_SERVICE_ACCOUNT='; then echo "FIREBASE_SERVICE_ACCOUNT=$(printf '%s' "$FIREBASE_SA" | base64 -w0)"; echo "push: on (FIREBASE_SERVICE_ACCOUNT secret)" >&2; fi
+            if [ -n "$PLAY_SA" ] && ! printf '%s' "$SERVER_ENV" | grep -q '^GOOGLE_PLAY_SERVICE_ACCOUNT='; then echo "GOOGLE_PLAY_SERVICE_ACCOUNT=$(printf '%s' "$PLAY_SA" | base64 -w0)"; echo "purchases: on (GOOGLE_PLAY_SERVICE_ACCOUNT secret)" >&2; fi
             if [ -n "$UNITY_SECRET" ] && ! printf '%s' "$SERVER_ENV" | grep -q '^UNITY_ADS_SECRET='; then echo "UNITY_ADS_SECRET=$(printf '%s' "$UNITY_SECRET" | tr -d '\r\n ')"; echo "ad rewards: Unity S2S on (UNITY_ADS_SECRET secret)" >&2; fi
           } | ssh root@"$HOST" 'umask 077; cat > /opt/board-battles/env.github'
       - name: Build and start

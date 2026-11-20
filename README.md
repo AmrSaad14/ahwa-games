@@ -127,7 +127,7 @@ To switch it on after the app is on Play:
    one-time product: a player can buy it again next season).
 2. In Google Cloud, create a service account and a JSON key; in Play Console → Users and permissions, invite its
    email with "View financial data" and "Manage orders and subscriptions".
-3. Put the JSON key in the server's `GOOGLE_PLAY_SERVICE_ACCOUNT` setting (the `SERVER_ENV` secret).
+3. Paste the downloaded JSON key file, as it is, into the GitHub secret `GOOGLE_PLAY_SERVICE_ACCOUNT` and run Deploy server (or put `GOOGLE_PLAY_SERVICE_ACCOUNT=` and the JSON on one line in `SERVER_ENV`: that one wins).
 Until then buying says the product isn't on Google Play yet. Coins can't be cashed out.
 
 A full-screen ad (video when AdMob has one; AdMob decides the length, usually up to 30 seconds) shows after

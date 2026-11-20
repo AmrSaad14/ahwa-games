@@ -6,7 +6,7 @@
 //   GOOGLE_PLAY_SERVICE_ACCOUNT   the service account key (JSON, or the same JSON base64-encoded) of a Google
 //                                 Cloud service account invited to the Play Console with "View financial data"
 //                                 and "Manage orders and subscriptions"
-//   ANDROID_PACKAGE               the app ID (default com.ahwa.domino)
+//   ANDROID_PACKAGE               the app ID (default com.ahwa.boardbattles)
 //   PURCHASES_TEST=1              development only: accept tokens starting with "test:" without asking Google
 import crypto from 'node:crypto';
 import { NO_ADS, packById } from '../shared/gifts';
